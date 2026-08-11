@@ -151,6 +151,14 @@ The editor imports the registry entrypoint here:
 
 - products/workflows/frontend/Workflows/hogflows/panel/HogFlowEditorPanelBuild.tsx
 
+### 3) (Optional) Give the step a bespoke configuration panel
+
+A `function` step renders its `inputs_schema` through the generic input renderer. When that is not enough (a picker fed by the workflow's own variables, a preview button, a grouped model list), branch on the template id in:
+
+- products/workflows/frontend/Workflows/hogflows/steps/components/HogFlowFunctionConfiguration.tsx
+
+The file already holds `isEmailStep`, `isPushStep`, and `isLlmStep` literal-id consts and returns a different body per branch. This is the cheap route: no new step type, no schema change, no backend work. Keep the generic renderer for the inputs that do not need custom UI (the "Generate text" step renders its `prompt` that way and hands only the rest to `LlmGenerateConfiguration`). Put the panel's business logic in a kea logic beside the component, not in hooks.
+
 ## Backend: adding a Hog function template (`template_id`)
 
 Workflow “function” nodes run Hog code via Hog function templates. For a new action node, you typically add a new destination template and reference it by `template_id`.
@@ -233,6 +241,12 @@ Notes:
 - `mock` is product-facing in test tooling; keep its shape consistent with the real implementation.
 - If you need a fetch request, follow the established `queueParameters` pattern used in:
   - nodejs/src/cdp/async-functions/conversations.ts
+- A queue-parameter type that is not a plain fetch needs four edits, and skipping any one of them fails at run time rather than at build time. `llmGenerate` (the "Generate text" step) is the worked example:
+  1. **Schema.** Add the variant schema, its `z.infer` type export, and its membership in the `CyclotronInvocationQueueParametersType` union in nodejs/src/cdp/schema/cyclotron.ts. The async function `.parse()`s the args into `result.invocation.queueParameters`; it does not touch the VM stack.
+  2. **Dispatch.** In nodejs/src/cdp/services/hog-executor-async.service.ts, add the type string to the allowlist array in `executeWithAsyncFunctions` **and** a branch that calls your service. The array alone throws `Unknown queue type`; the branch alone leaves the type unrouted, so the VM resumes on an empty stack ("Invalid HogQL bytecode, stack is empty, can not pop"). Add the service to `HogExecutorAsyncDependencies`, construct it in nodejs/src/cdp/cdp-services.ts, and stub it in nodejs/src/cdp/templates/test/test-helpers.ts, which builds the executor for every template test.
+  3. **Test runs.** The branch forwards `options?.isTest ?? false` to the service. `llmGenerate` uses it to take a bounded in-process path: the editor's preview runs in the API process and is never dequeued again, so it polls in-process until the generation finishes instead of rescheduling. Only `mock_async_functions=false` reaches the service at all; with mocking on, the async function's own `mock` answers and no queue parameters are ever staged.
+  4. **Rescheduling.** A call that is still pending comes back as a reschedule, never as a wait: `createInvocationResult` clears `queueParameters`, `queueMetadata`, `queuePriority`, and `queueScheduledAt`, so re-assign the ones you need and set `result.finished = false`. `llmGenerate` restores its queue parameters, carries its poll state (generation id, poll count, deadline) on `queueMetadata`, and sets `queueScheduledAt` 2 seconds out (`POLL_INTERVAL_SECONDS`) for as long as the endpoint answers 202. On the terminal answer it pushes the result envelope onto `result.invocation.state.vmState.stack` itself.
+  - Service and shape to copy: nodejs/src/cdp/services/llm-generation.service.ts.
 
 ### 2) Import it so it actually registers
 
@@ -280,7 +294,7 @@ Add your type string to `CyclotronJobInputSchemaType.type` in:
 
 - frontend/src/types.ts
 - nodejs/src/cdp/types.ts
-- nodejs/src/schema/cyclotron.ts
+- nodejs/src/cdp/schema/cyclotron.ts
 - products/workflows/frontend/Workflows/hogflows/steps/types.ts
 
 ### 4) Use it in a template
