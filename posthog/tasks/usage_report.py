@@ -1614,6 +1614,7 @@ POSTHOG_AI_PRODUCTS = [
     "product_analytics",
     "surveys",
     "replay_vision",
+    "workflows",
 ]
 
 # ai_product values billed as PostHog Desktop credits.

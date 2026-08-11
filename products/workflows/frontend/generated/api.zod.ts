@@ -2603,3 +2603,37 @@ export const HogFlowsUserBlastRadiusCreateBody = /* @__PURE__ */ zod.object({
             "When 'email', count unique email addresses instead of persons, matching how batch email sends deduplicate recipients.\n\n\* `email` - email"
         ),
 })
+
+/**
+ * Runs a workflow Generate text step. Submit returns a handle; retrieve polls it.
+ * @summary Submit a workflow text generation
+ */
+export const workflowLlmGenerationsCreateBodyInvocationIdMax = 200
+
+export const workflowLlmGenerationsCreateBodyHogFlowIdMax = 200
+
+export const workflowLlmGenerationsCreateBodyPromptMax = 100000
+
+export const workflowLlmGenerationsCreateBodyModelMax = 200
+
+export const workflowLlmGenerationsCreateBodyOutputFieldsMaxOne = 1000
+
+export const WorkflowLlmGenerationsCreateBody = /* @__PURE__ */ zod.object({
+    invocation_id: zod
+        .string()
+        .max(workflowLlmGenerationsCreateBodyInvocationIdMax)
+        .describe('Id of the workflow run this step belongs to.'),
+    hog_flow_id: zod
+        .string()
+        .max(workflowLlmGenerationsCreateBodyHogFlowIdMax)
+        .nullish()
+        .describe('Id of the saved workflow, absent in a preview.'),
+    prompt: zod
+        .string()
+        .max(workflowLlmGenerationsCreateBodyPromptMax)
+        .describe('The prompt, already rendered by the caller.'),
+    model: zod.string().max(workflowLlmGenerationsCreateBodyModelMax).describe('Model to run the prompt on.'),
+    output_fields: zod
+        .record(zod.string(), zod.string().max(workflowLlmGenerationsCreateBodyOutputFieldsMaxOne))
+        .describe('Instruction per workflow variable key. Empty skips extraction.'),
+})

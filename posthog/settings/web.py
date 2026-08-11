@@ -662,6 +662,8 @@ SPECTACULAR_SETTINGS = {
         "TargetTypeEnum": "products.exports.backend.models.subscription.Subscription.SubscriptionTarget",
         # --- Inline value lists (type-hint enums, no x-spec-enum-id) ---
         "PropertyGroupOperator": ["AND", "OR"],
+        # `status` is a heavily reused field name; name the workflow generation set explicitly.
+        "WorkflowLLMGenerationStatusEnum": ["pending", "succeeded", "failed"],
         # `bucket` is a generic field name; name the experiment recordings bucket set explicitly.
         "ExperimentSessionBucketEnum": ["fired_any", "no_metric_activity", "funnel_dropoff"],
         # Account.slack_summary_cadence and AccountChannelSummary.cadence share the same

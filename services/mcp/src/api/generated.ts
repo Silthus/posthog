@@ -75591,6 +75591,88 @@ export namespace Schemas {
       estimated_cost_usd: number | null;
     }
 
+    /**
+     * * `pending` - pending
+     * * `succeeded` - succeeded
+     * * `failed` - failed
+     */
+    export type WorkflowLLMGenerationStatusEnum = typeof WorkflowLLMGenerationStatusEnum[keyof typeof WorkflowLLMGenerationStatusEnum];
+
+
+    export const WorkflowLLMGenerationStatusEnum = {
+      Pending: 'pending',
+      Succeeded: 'succeeded',
+      Failed: 'failed',
+    } as const;
+
+    /**
+     * One extracted value per declared output field. Empty when no fields are declared.
+     */
+    export type WorkflowLLMGenerationResultFields = {[key: string]: string};
+
+    export interface WorkflowLLMGenerationResult {
+      /** The generated text. */
+      text: string;
+      /** One extracted value per declared output field. Empty when no fields are declared. */
+      fields: WorkflowLLMGenerationResultFields;
+    }
+
+    export interface WorkflowLLMGenerationError {
+      /** Machine-readable failure reason, shown in the workflow run log. */
+      code: string;
+      /** What went wrong and what to do next. */
+      message: string;
+    }
+
+    export interface WorkflowLLMGeneration {
+      /**
+         * Handle to poll, absent when the request was rejected outright.
+         * @nullable
+         */
+      id: string | null;
+      /** Whether the generation is still running.
+       *
+       * * `pending` - pending
+       * * `succeeded` - succeeded
+       * * `failed` - failed */
+      status: WorkflowLLMGenerationStatusEnum;
+      /** Present once the generation succeeded. */
+      result: WorkflowLLMGenerationResult | null;
+      /** Present when the generation failed. */
+      error: WorkflowLLMGenerationError | null;
+    }
+
+    /**
+     * Instruction per workflow variable key. Empty skips extraction.
+     */
+    export type WorkflowLLMGenerationSubmitOutputFields = {[key: string]: string};
+
+    export interface WorkflowLLMGenerationSubmit {
+      /**
+         * Id of the workflow run this step belongs to.
+         * @maxLength 200
+         */
+      invocation_id: string;
+      /**
+         * Id of the saved workflow, absent in a preview.
+         * @maxLength 200
+         * @nullable
+         */
+      hog_flow_id?: string | null;
+      /**
+         * The prompt, already rendered by the caller.
+         * @maxLength 100000
+         */
+      prompt: string;
+      /**
+         * Model to run the prompt on.
+         * @maxLength 200
+         */
+      model: string;
+      /** Instruction per workflow variable key. Empty skips extraction. */
+      output_fields: WorkflowLLMGenerationSubmitOutputFields;
+    }
+
     export interface WorkflowRunActivityPoint {
       /** GitHub Actions run id. */
       run_id: number;
