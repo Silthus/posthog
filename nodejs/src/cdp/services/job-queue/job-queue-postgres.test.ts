@@ -84,4 +84,30 @@ describe('CyclotronJobQueue - postgres', () => {
             expect(jobsArg[0].id).toBeUndefined()
         })
     })
+
+    describe('queueInvocations - queue parameters', () => {
+        it('carries llmGenerate parameters onto the job so a poll comes back knowing what to run', async () => {
+            const { queue, bulkCreateJobs } = createQueue()
+
+            const queueParameters = {
+                type: 'llmGenerate',
+                prompt: 'Write a subject line',
+                model: 'gpt-5-mini',
+                output_fields: { subject: 'A subject line' },
+            }
+            const invocation: any = {
+                teamId: 1,
+                functionId: '0196a6b9-1104-0000-f099-9cf11985a307',
+                id: uuidv4(),
+                queue: 'hogflow',
+                queuePriority: 0,
+                queueParameters,
+                state: { globals: {}, timings: [], vmState: { bytecodes: {}, stack: [], upvalues: [] } },
+            }
+
+            await queue.queueInvocations([invocation])
+
+            expect(bulkCreateJobs.mock.calls[0][0][0].parameters).toEqual(queueParameters)
+        })
+    })
 })
