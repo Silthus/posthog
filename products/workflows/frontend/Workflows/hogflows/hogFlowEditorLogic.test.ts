@@ -561,6 +561,62 @@ describe('hogFlowEditorLogic', () => {
         })
     })
 
+    // Everything a registry entry declares beyond name and config reaches the workflow only through
+    // this one creation path. A step created without its `on_error: 'abort'` continues after a
+    // failure it was declared to stop on.
+    describe('creating an action from the palette', () => {
+        const trigger: HogFlowAction = {
+            id: 'trigger',
+            name: 'Trigger',
+            description: '',
+            type: 'trigger',
+            created_at: 1,
+            updated_at: 1,
+            config: { type: 'event', filters: {} },
+        }
+        const exit: HogFlowAction = {
+            id: 'exit',
+            name: 'Exit',
+            description: '',
+            type: 'exit',
+            created_at: 1,
+            updated_at: 1,
+            config: { reason: '' },
+        }
+
+        it('keeps the defaults the registry entry declared', () => {
+            logic.actions.setWorkflowInfo({
+                actions: [trigger, exit],
+                edges: [{ from: 'trigger', to: 'exit', type: 'continue' }],
+                variables: [],
+            })
+            logic.actions.setDropzoneNodes([
+                {
+                    id: 'dropzone',
+                    type: 'dropzone',
+                    position: { x: 0, y: 0 },
+                    data: { edge: { id: 'trigger->exit continue', target: 'exit' } },
+                } as unknown as (typeof logic.values.dropzoneNodes)[number],
+            ])
+            logic.actions.setHighlightedDropzoneNodeId('dropzone')
+            logic.actions.setNodeToBeAdded({
+                type: 'function',
+                name: 'Generate text',
+                description: 'Run a prompt and store the result in workflow variables.',
+                config: { template_id: 'template-workflow-llm', inputs: {} },
+                on_error: 'abort',
+                output_variable: { key: 'summary', result_path: 'text' },
+            })
+
+            logic.actions.onDrop()
+
+            expect(logic.values.workflow.actions.find((a) => a.name === 'Generate text')).toMatchObject({
+                on_error: 'abort',
+                output_variable: { key: 'summary', result_path: 'text' },
+            })
+        })
+    })
+
     describe('showDropzones branch-join placement', () => {
         const makeNode = (id: string): HogFlowActionNode =>
             ({

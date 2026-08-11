@@ -14,6 +14,8 @@ import { CyclotronJobInputType, HogFunctionMappingType } from '~/types'
 
 import { workflowLogic } from '../../../workflowLogic'
 import { HogFlowFunctionMappings } from './HogFlowFunctionMappings'
+import { LlmGenerateConfiguration } from './LlmGenerateConfiguration'
+import { LLM_TEMPLATE_ID } from './llmGenerateLogic'
 
 // Builds the sample globals the input editor uses for autocomplete and unknown-global warnings.
 // The available globals depend on the trigger type: batch runs have no external triggering event,
@@ -113,6 +115,7 @@ export function HogFlowFunctionConfiguration({
     const template = hogFunctionTemplatesById[templateId]
     const isEmailStep = templateId === 'template-email'
     const isPushStep = templateId === 'template-native-push'
+    const isLlmStep = templateId === LLM_TEMPLATE_ID
     const engagementEventsEnabled = !!currentTeam?.workflows_config?.capture_workflows_engagement_events
     useEffect(() => {
         // oxlint-disable-next-line exhaustive-deps
@@ -161,6 +164,17 @@ export function HogFlowFunctionConfiguration({
             onInputChange={(key, value) => setInputs({ ...inputs, [key]: value })}
         />
     )
+
+    // The prompt keeps the generic renderer (templating, autocomplete and all), and everything below
+    // it is bespoke: the output fields point at declared variables and the model is grouped by provider.
+    if (isLlmStep) {
+        return (
+            <>
+                {renderInputs(inputsSchema.filter((schema) => schema.key === 'prompt'))}
+                <LlmGenerateConfiguration inputsSchema={inputsSchema} />
+            </>
+        )
+    }
 
     return (
         <>

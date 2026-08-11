@@ -12,6 +12,7 @@ import {
     IconLetter,
     IconNotification,
     IconPercentage,
+    IconSparkles,
     IconWebhooks,
 } from '@posthog/icons'
 
@@ -22,6 +23,7 @@ import { HogFunctionTemplateType } from '~/types'
 
 import { workflowLogic } from '../../workflowLogic'
 import { HogFlowAction } from '../types'
+import { LLM_TEMPLATE_ID } from './components/llmGenerateLogic'
 import { StepConditionalBranchConfiguration } from './StepConditionalBranch'
 import { StepDelayConfiguration } from './StepDelay'
 import { StepExitConfiguration } from './StepExit'
@@ -129,6 +131,10 @@ const HogFlowStepConfigs: Partial<{
                 return <IconNotification />
             }
 
+            if (action.config.template_id === LLM_TEMPLATE_ID) {
+                return <IconSparkles />
+            }
+
             const template = hogFunctionTemplatesById[action.config.template_id]
             return template?.icon_url ? (
                 <img className="LemonIcon rounded" src={template.icon_url} alt={template.name} />
@@ -143,6 +149,10 @@ const HogFlowStepConfigs: Partial<{
 
             if (action.config.template_id === 'template-webhook') {
                 return isDarkModeOn ? '#B52AD9' : '#6500ae'
+            }
+
+            if (action.config.template_id === LLM_TEMPLATE_ID) {
+                return isDarkModeOn ? '#8F79FF' : '#5B3FCE'
             }
 
             return isDarkModeOn ? '#F8BE2A' : '#F44D01'

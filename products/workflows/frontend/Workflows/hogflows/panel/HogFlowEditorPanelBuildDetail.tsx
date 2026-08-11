@@ -12,6 +12,8 @@ import {
     LemonLabel,
     LemonSelect,
     LemonSwitch,
+    LemonTag,
+    Tooltip,
 } from '@posthog/lemon-ui'
 
 import { EditableField } from 'lib/components/EditableField/EditableField'
@@ -26,6 +28,8 @@ import { CategorySelect } from 'products/workflows/frontend/OptOuts/CategorySele
 import { workflowLogic } from '../../workflowLogic'
 import { HogFlowPropertyFilters } from '../filters/HogFlowFilters'
 import { hogFlowEditorLogic } from '../hogFlowEditorLogic'
+import { LlmPreviewSections } from '../steps/components/LlmGenerateConfiguration'
+import { LLM_TEMPLATE_ID, isFieldOwnedMapping, llmGenerateLogic } from '../steps/components/llmGenerateLogic'
 import { useHogFlowStep } from '../steps/HogFlowSteps'
 import { isEmailAction, isOptOutEligibleAction, isScheduleTrigger } from '../steps/types'
 import type { HogFlowAction } from '../types'
@@ -50,9 +54,12 @@ export function HogFlowEditorPanelBuildDetail(): JSX.Element | null {
         runOutputTest,
         applySuggestion,
     } = useActions(hogFlowOutputMappingLogic(logicProps))
+    const { previewLoading, previewLoadingForSelected, previewElapsedSeconds } = useValues(llmGenerateLogic(logicProps))
+    const { runPreview, setSelectedActionId: setLlmSelectedActionId } = useActions(llmGenerateLogic(logicProps))
 
     useEffect(() => {
         setSelectedActionId(selectedNode?.data.id ?? null)
+        setLlmSelectedActionId(selectedNode?.data.id ?? null)
     }, [selectedNode?.data.id]) // oxlint-disable-line react-hooks/exhaustive-deps
 
     const Step = useHogFlowStep(selectedNode?.data)
@@ -63,6 +70,7 @@ export function HogFlowEditorPanelBuildDetail(): JSX.Element | null {
 
     const action = selectedNode.data
 
+    const isLlmStep = 'template_id' in action.config && action.config.template_id === LLM_TEMPLATE_ID
     const isBranchingStep = ['conditional_branch', 'wait_until_condition', 'random_cohort_branch'].includes(action.type)
     const actionFilters = action.filters ?? {}
     const numberOfActionFilters =
@@ -208,6 +216,13 @@ export function HogFlowEditorPanelBuildDetail(): JSX.Element | null {
                                                     key={index}
                                                     className="flex flex-col gap-1 w-full rounded border border-border p-2"
                                                 >
+                                                    {isLlmStep && isFieldOwnedMapping(mapping) && (
+                                                        <Tooltip title="This mapping comes from an output field above. To change it, edit the output field.">
+                                                            <span className="self-start">
+                                                                <LemonTag type="muted">Set by this step</LemonTag>
+                                                            </span>
+                                                        </Tooltip>
+                                                    )}
                                                     <div className="flex items-center gap-1">
                                                         <LemonField.Pure label="Variable" className="flex-1">
                                                             <LemonSelect
@@ -293,20 +308,35 @@ export function HogFlowEditorPanelBuildDetail(): JSX.Element | null {
                                                     icon={<IconPlay />}
                                                     size="small"
                                                     type="primary"
-                                                    className={shakePickButton ? 'animate-shake' : ''}
-                                                    loading={testLoading}
-                                                    tooltip="Executes a real HTTP request to this step's endpoint and shows the response so you can pick which property to store."
-                                                    onClick={runOutputTest}
+                                                    className={!isLlmStep && shakePickButton ? 'animate-shake' : ''}
+                                                    loading={isLlmStep ? previewLoadingForSelected : testLoading}
+                                                    disabledReason={
+                                                        isLlmStep && previewLoading
+                                                            ? 'A preview is already running.'
+                                                            : undefined
+                                                    }
+                                                    tooltip={
+                                                        isLlmStep
+                                                            ? 'Runs your prompt against the selected model and shows the result. This uses your AI credits.'
+                                                            : "Executes a real HTTP request to this step's endpoint and shows the response so you can pick which property to store."
+                                                    }
+                                                    onClick={isLlmStep ? runPreview : runOutputTest}
                                                 >
-                                                    Pick from response
+                                                    {isLlmStep ? 'Run preview' : 'Pick from response'}
                                                 </LemonButton>
+                                                {isLlmStep && previewLoadingForSelected && (
+                                                    <span className="self-center text-xs text-secondary">
+                                                        {previewElapsedSeconds}s
+                                                    </span>
+                                                )}
                                             </div>
-                                            {testError && (
+                                            {isLlmStep && <LlmPreviewSections />}
+                                            {!isLlmStep && testError && (
                                                 <LemonBanner type="error" className="w-full">
                                                     {testError}
                                                 </LemonBanner>
                                             )}
-                                            {testResultData !== null && (
+                                            {!isLlmStep && testResultData !== null && (
                                                 <div
                                                     className="w-full"
                                                     ref={(el) =>
