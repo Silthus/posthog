@@ -105,6 +105,7 @@ describe('Hogflow Executor', () => {
                 emailService,
                 recipientTokensService,
                 pushNotificationService: undefined as any,
+                llmGenerationService: undefined as any,
             }
         )
         const hogFunctionTemplateManager = new HogFunctionTemplateManagerService(hub.postgres)

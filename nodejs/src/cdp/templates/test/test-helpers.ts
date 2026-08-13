@@ -233,6 +233,7 @@ export class TemplateTester {
                 emailService,
                 recipientTokensService,
                 pushNotificationService: undefined as any,
+                llmGenerationService: undefined as any,
             }
         )
     }

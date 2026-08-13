@@ -273,6 +273,9 @@ function invocationToCyclotronJobInitial(invocation: CyclotronJobInvocation): Cy
         } else if (queueParameters.type === 'email') {
             parameters = queueParameters
             blob = null
+        } else if (queueParameters.type === 'llmGenerate') {
+            parameters = queueParameters
+            blob = null
         }
     }
 

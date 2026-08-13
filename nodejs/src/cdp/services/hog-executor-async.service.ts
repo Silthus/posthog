@@ -23,6 +23,7 @@ import { createInvocationResult } from '../utils/invocation-utils'
 import { isNonFailureStatus } from '../utils/non-failure-status-codes'
 import { HogExecutorExecuteOptions, HogExecutorPreviousResult, HogExecutorService } from './hog-executor.service'
 import { HogInputsService } from './hog-inputs.service'
+import { LlmGenerationService } from './llm-generation.service'
 import { EmailService } from './messaging/email.service'
 import { PushNotificationService } from './messaging/push-notification.service'
 import { RecipientTokensService } from './messaging/recipient-tokens.service'
@@ -59,6 +60,7 @@ export interface HogExecutorAsyncDependencies {
     emailService: EmailService
     recipientTokensService: RecipientTokensService
     pushNotificationService: PushNotificationService
+    llmGenerationService: LlmGenerationService
 }
 
 export type HogExecutorExecuteAsyncOptions = HogExecutorExecuteOptions & {
@@ -103,7 +105,7 @@ export class HogExecutorAsyncService {
             const nextInvocation: CyclotronJobInvocationHogFunction = result?.invocation ?? invocation
 
             const queueParamsType = nextInvocation.queueParameters?.type
-            if (['fetch', 'sendPushNotification', 'email'].includes(queueParamsType ?? '')) {
+            if (['fetch', 'sendPushNotification', 'email', 'llmGenerate'].includes(queueParamsType ?? '')) {
                 asyncFunctionCount++
 
                 if (result && asyncFunctionCount > maxAsyncFunctions) {
@@ -135,6 +137,10 @@ export class HogExecutorAsyncService {
                         nextInvocation,
                         options?.isTest ?? false
                     )
+                } else if (queueParamsType === 'llmGenerate') {
+                    // Runs inline and reschedules itself while the generation is pending, like push
+                    // rather than email: there is no queue to route to, only a wait to sit out.
+                    result = await this.deps.llmGenerationService.execute(nextInvocation, options?.isTest ?? false)
                 } else if (queueParamsType === 'email') {
                     // Route to the email queue unless this is a test run: tests execute in-process and
                     // never enqueue, so routing would leave the job unworked.

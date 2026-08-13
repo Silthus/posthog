@@ -149,6 +149,16 @@ export const CyclotronInvocationQueueParametersSendPushNotificationSchema = z.ob
     timeoutMs: z.number().optional(),
 })
 
+// The prompt arrives already rendered, and the generation itself runs in Django - the queue payload
+// only has to survive a reschedule intact, which is why the poll state lives in `queueMetadata`
+// instead of here.
+export const CyclotronInvocationQueueParametersLlmGenerateSchema = z.object({
+    type: z.literal('llmGenerate'),
+    prompt: z.string(),
+    model: z.string(),
+    output_fields: z.record(z.string(), z.string()),
+})
+
 export type PushNotificationPayloadType = z.infer<typeof PushNotificationPayloadSchema>
 
 export type CyclotronInvocationQueueParametersFetchAwsSigV4Type = z.infer<
@@ -159,8 +169,12 @@ export type CyclotronInvocationQueueParametersEmailType = z.infer<typeof Cyclotr
 export type CyclotronInvocationQueueParametersSendPushNotificationType = z.infer<
     typeof CyclotronInvocationQueueParametersSendPushNotificationSchema
 >
+export type CyclotronInvocationQueueParametersLlmGenerateType = z.infer<
+    typeof CyclotronInvocationQueueParametersLlmGenerateSchema
+>
 
 export type CyclotronInvocationQueueParametersType =
     | CyclotronInvocationQueueParametersFetchType
     | CyclotronInvocationQueueParametersEmailType
     | CyclotronInvocationQueueParametersSendPushNotificationType
+    | CyclotronInvocationQueueParametersLlmGenerateType
