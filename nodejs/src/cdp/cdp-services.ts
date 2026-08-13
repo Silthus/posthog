@@ -6,6 +6,7 @@ import { PostgresRouter } from '~/common/utils/db/postgres'
 import { getRedisHost } from '~/common/utils/db/redis'
 import { logger } from '~/common/utils/logger'
 import { PubSub } from '~/common/utils/pubsub'
+import { fetch } from '~/common/utils/request'
 import { TeamManager } from '~/common/utils/team-manager'
 
 import type { CommonConfig } from '../common/config'
@@ -27,6 +28,7 @@ import { HogFlowExecutorService } from './services/hogflows/hogflow-executor.ser
 import { HogFlowFunctionsService } from './services/hogflows/hogflow-functions.service'
 import { HogFlowManagerService } from './services/hogflows/hogflow-manager.service'
 import { InvocationResultsService } from './services/invocation-results.service'
+import { LlmGenerationService } from './services/llm-generation.service'
 import { HogFunctionManagerService } from './services/managers/hog-function-manager.service'
 import { HogFunctionTemplateManagerService } from './services/managers/hog-function-template-manager.service'
 import { IntegrationManagerService } from './services/managers/integration-manager.service'
@@ -444,6 +446,10 @@ export function createCdpCoreServices(
         valkeyShadow?.writer ?? null
     )
 
+    // Deliberately not cdpTrackedFetch: this talks to PostHog's own API, so it inherits neither the
+    // destination fetch timeout nor the retry policy meant for customer endpoints.
+    const llmGenerationService = new LlmGenerationService(deps.teamManager, fetch, { siteUrl: config.SITE_URL })
+
     const hogExecutorAsync = new HogExecutorAsyncService(
         new HogExecutorService({ executionTimeoutMs: config.CDP_WATCHER_HOG_COST_TIMING_UPPER_MS }, hogInputsService),
         {
@@ -459,6 +465,7 @@ export function createCdpCoreServices(
             emailService,
             recipientTokensService,
             pushNotificationService,
+            llmGenerationService,
         }
     )
 

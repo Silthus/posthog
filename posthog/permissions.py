@@ -344,6 +344,8 @@ def _is_request_for_team_secret_token_secured_endpoint(request: Request) -> bool
             "project_feature_flags-remote-config",
             "project_feature_flags-local-evaluation",
             "project_live_debugger_breakpoints-active-breakpoints",
+            "project_workflow_llm_generations-list",
+            "project_workflow_llm_generations-detail",
         }
     )
 

@@ -49,6 +49,8 @@ import type {
     PatchedHogFlowScheduleApi,
     PatchedHogFlowTemplateApi,
     TeamEmailReputationResponseApi,
+    WorkflowLLMGenerationApi,
+    WorkflowLLMGenerationSubmitApi,
     WorkflowStatsRowApi,
 } from './api.schemas'
 
@@ -928,6 +930,46 @@ export const hogFlowsUserBlastRadiusCreate = async (
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...options?.headers },
         body: JSON.stringify(blastRadiusRequestApi),
+    })
+}
+
+export const getWorkflowLlmGenerationsCreateUrl = (projectId: string) => {
+    return `/api/projects/${projectId}/workflow_llm_generations/`
+}
+
+/**
+ * Runs a workflow Generate text step. Submit returns a handle; retrieve polls it.
+ * @summary Submit a workflow text generation
+ */
+export const workflowLlmGenerationsCreate = async (
+    projectId: string,
+    workflowLLMGenerationSubmitApi: WorkflowLLMGenerationSubmitApi,
+    options?: RequestInit
+): Promise<WorkflowLLMGenerationApi> => {
+    return apiMutator<WorkflowLLMGenerationApi>(getWorkflowLlmGenerationsCreateUrl(projectId), {
+        ...options,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        body: JSON.stringify(workflowLLMGenerationSubmitApi),
+    })
+}
+
+export const getWorkflowLlmGenerationsRetrieveUrl = (projectId: string, id: string) => {
+    return `/api/projects/${projectId}/workflow_llm_generations/${id}/`
+}
+
+/**
+ * Runs a workflow Generate text step. Submit returns a handle; retrieve polls it.
+ * @summary Read a workflow text generation
+ */
+export const workflowLlmGenerationsRetrieve = async (
+    projectId: string,
+    id: string,
+    options?: RequestInit
+): Promise<WorkflowLLMGenerationApi> => {
+    return apiMutator<WorkflowLLMGenerationApi>(getWorkflowLlmGenerationsRetrieveUrl(projectId, id), {
+        ...options,
+        method: 'GET',
     })
 }
 
