@@ -152,6 +152,7 @@ export type OutputMappingSuggestion = {
 
 export type CreateActionType = Pick<HogFlowAction, 'type' | 'config' | 'name' | 'description'> & {
     branchEdges?: number
+    on_error?: HogFlowAction['on_error']
     output_variable?: HogFlowAction['output_variable']
     getDefaultInputs?: () => Record<string, CyclotronInputType> | undefined
     getOutputMappingSuggestions?: () => Promise<OutputMappingSuggestion[]>
@@ -2493,6 +2494,9 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                         config,
                         created_at: Date.now(),
                         updated_at: Date.now(),
+                        ...(!isHogFlowActionNode && (partialNewAction as CreateActionType).on_error
+                            ? { on_error: (partialNewAction as CreateActionType).on_error }
+                            : {}),
                         ...(!isHogFlowActionNode && (partialNewAction as CreateActionType).output_variable
                             ? { output_variable: (partialNewAction as CreateActionType).output_variable }
                             : {}),

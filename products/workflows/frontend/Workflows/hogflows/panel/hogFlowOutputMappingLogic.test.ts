@@ -211,6 +211,37 @@ describe('hogFlowOutputMappingLogic', () => {
             })
         })
 
+        // The editor's node trails the workflow by a layout pass, so persisting the whole node back
+        // would undo any config write made since that pass. The mappings are the only part of the
+        // action this logic owns.
+        it('keeps a config change made since the editor node was last built', async () => {
+            const node = makeActionNode('action-fresh')
+            wfLogic.actions.setWorkflowInfo({
+                actions: [
+                    { ...node.data, id: 'trigger', type: 'trigger', config: { type: 'event', filters: {} } },
+                    node.data,
+                    { ...node.data, id: 'exit', type: 'exit', config: { reason: '' } },
+                ] as HogFlowAction[],
+                edges: [
+                    { from: 'trigger', to: 'action-fresh', type: 'continue' },
+                    { from: 'action-fresh', to: 'exit', type: 'continue' },
+                ],
+            })
+            await expectLogic(editorLogic, () => {
+                editorLogic.actions.setNodesRaw([node])
+                editorLogic.actions.setSelectedNodeId('action-fresh')
+            }).toMatchValues({ selectedNode: node })
+
+            wfLogic.actions.setWorkflowActionConfig('action-fresh', {
+                inputs: { model: { value: 'gpt-5-mini' } },
+            } as any)
+            logic.actions.setMappings([{ key: 'foo', result_path: 'bar' }])
+
+            const action = wfLogic.values.workflow.actions.find((a) => a.id === 'action-fresh')
+            expect(action?.config).toEqual({ inputs: { model: { value: 'gpt-5-mini' } } })
+            expect(action?.output_variable).toEqual({ key: 'foo', result_path: 'bar' })
+        })
+
         describe('persistMappings format (output_variable in workflow)', () => {
             const ACTION_ID = 'persist-format-action'
 
