@@ -23,6 +23,7 @@ from products.workflows.backend.services.llm_generation import (
 from products.workflows.backend.tasks.llm_generate import CONCURRENCY_SLOT_TTL, run_workflow_llm_generation
 
 TASK = "products.workflows.backend.tasks.llm_generate"
+SERVICE = "products.workflows.backend.services.llm_generation"
 
 
 @pytest.fixture
@@ -41,7 +42,7 @@ class TestWorkflowLLMGenerationConcurrency(BaseTest):
     def _bind(self, limiter_redis):
         self.limiter_redis = limiter_redis
 
-    def _pending(self) -> GenerationRecord:
+    def _pending(self, wake_token: str | None = None) -> GenerationRecord:
         request = GenerationRequest(
             invocation_id="0195f0a0-0000-7000-8000-000000000001",
             hog_flow_id=None,
@@ -49,7 +50,9 @@ class TestWorkflowLLMGenerationConcurrency(BaseTest):
             model="gpt-5-mini",
             output_fields={},
         )
-        return write_record(self.team.id, GenerationRecord(id="gen-1", status="pending", request=request))
+        return write_record(
+            self.team.id, GenerationRecord(id="gen-1", status="pending", request=request, wake_token=wake_token)
+        )
 
     def _occupy(self, key_suffix: str, slots: int) -> None:
         # The limiter scores a slot by when it expires, and evicts everything scored at or before
@@ -89,22 +92,27 @@ class TestWorkflowLLMGenerationConcurrency(BaseTest):
         assert stored.status == ("succeeded" if runs else "pending")
 
     def test_a_generation_that_expired_in_the_queue_records_capacity_unavailable(self):
-        record = self._pending()
+        record = self._pending(wake_token="wake-secret-1")
 
         # Celery discards an expired task without running it, so the on_failure hook below never
         # fires and only this signal is left to release the caller.
-        task_revoked.send(
-            sender=run_workflow_llm_generation,
-            request=Context(kwargs={"team_id": self.team.id, "generation_id": record.id}),
-            terminated=False,
-            signum=None,
-            expired=True,
-        )
+        with patch(f"{SERVICE}.produce_internal_event") as produce:
+            task_revoked.send(
+                sender=run_workflow_llm_generation,
+                request=Context(kwargs={"team_id": self.team.id, "generation_id": record.id}),
+                terminated=False,
+                signum=None,
+                expired=True,
+            )
 
         stored = read_record(self.team.id, record.id)
         assert stored is not None
         assert stored.status == "failed"
         assert stored.error_code == "capacity_unavailable"
+        # The caller parked on the wake event, so a discarded task that stayed silent would leave
+        # it waiting out the whole backup ladder.
+        assert produce.call_count == 1
+        assert produce.call_args.kwargs["event"].properties["wake_token"] == "wake-secret-1"
 
     def test_an_exhausted_retry_budget_records_capacity_unavailable(self):
         record = self._pending()

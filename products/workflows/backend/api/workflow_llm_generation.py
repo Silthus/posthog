@@ -54,6 +54,13 @@ class WorkflowLLMGenerationSubmitSerializer(serializers.Serializer):
         child=serializers.CharField(max_length=MAX_FIELD_INSTRUCTION_CHARS),
         help_text="Instruction per workflow variable key. Empty skips extraction.",
     )
+    wake_token = serializers.CharField(
+        required=False,
+        allow_null=True,
+        default=None,
+        max_length=200,
+        help_text="One-time secret from the submitting job. Echoed on the finished event so only that job wakes.",
+    )
 
     def validate_output_fields(self, value: dict[str, str]) -> dict[str, str]:
         if len(value) > MAX_OUTPUT_FIELDS:
@@ -162,7 +169,9 @@ class WorkflowLLMGenerationViewSet(TeamAndOrgViewSetMixin, viewsets.ViewSet):
         if is_team_over_ai_credit_budget(self.team.api_token):
             return _terminal_failure(self.team_id, record_id, generation_request, "quota_exceeded")
 
-        record = GenerationRecord(id=record_id, status="pending", request=generation_request)
+        record = GenerationRecord(
+            id=record_id, status="pending", request=generation_request, wake_token=data["wake_token"]
+        )
         if not claim_pending(self.team_id, record):
             # The read above raced a concurrent submit of the same payload, which is what the
             # caller's own submit timeout produces. Hand back its handle rather than paying twice.

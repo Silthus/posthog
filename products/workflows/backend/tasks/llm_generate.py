@@ -22,6 +22,7 @@ from posthog.scoping_audit import skip_team_scope_audit
 from products.workflows.backend.services.llm_generation import (
     GenerationRecord,
     GenerationRequest,
+    emit_generation_finished,
     failed_record,
     read_record,
     write_record,
@@ -184,7 +185,9 @@ def _write_capacity_unavailable(team_id: int, generation_id: str) -> None:
     record = read_record(team_id, generation_id)
     if record is None or record.status != "pending":
         return
-    write_record(team_id, failed_record(record.id, record.request, "capacity_unavailable"))
+    terminal = failed_record(record.id, record.request, "capacity_unavailable", wake_token=record.wake_token)
+    write_record(team_id, terminal)
+    emit_generation_finished(team_id, terminal)
 
 
 def _record_capacity_unavailable(
@@ -223,7 +226,9 @@ def run_workflow_llm_generation(*, team_id: int, generation_id: str) -> None:
         return
 
     team = Team.objects.get(id=team_id)
-    write_record(team_id, _generate(team, record))
+    terminal = _generate(team, record)
+    write_record(team_id, terminal)
+    emit_generation_finished(team_id, terminal)
 
 
 @task_revoked.connect
@@ -247,16 +252,16 @@ def _generate(team: Team, record: GenerationRecord) -> GenerationRecord:
         except GenerationFailed as failure:
             if attempt == 1 and failure.code in MODEL_FIXABLE_CODES:
                 continue
-            return failed_record(record.id, record.request, failure.code)
+            return failed_record(record.id, record.request, failure.code, wake_token=record.wake_token)
         except SoftTimeLimitExceeded:
             # A pass that outran the worker, not a provider that broke. The run log has to say so:
             # its copy sends the author to a faster model rather than to a retry they pay for.
-            return failed_record(record.id, record.request, "deadline_exceeded")
+            return failed_record(record.id, record.request, "deadline_exceeded", wake_token=record.wake_token)
         except Exception:
             # Transport is never retried here: the caller reschedules, and a second call would
             # bill the team for the same failure twice.
             logger.exception("workflows.llm_generation.gateway_call_failed", team_id=team.id)
-            return failed_record(record.id, record.request, "gateway_unavailable")
+            return failed_record(record.id, record.request, "gateway_unavailable", wake_token=record.wake_token)
     raise AssertionError("unreachable")
 
 

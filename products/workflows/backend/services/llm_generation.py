@@ -7,6 +7,8 @@ from typing import Any, Literal
 import structlog
 import posthoganalytics
 
+from posthog.cdp.internal_events import InternalEventEvent, produce_internal_event
+from posthog.exceptions_capture import capture_exception
 from posthog.models.team.team import Team
 from posthog.redis import get_client
 
@@ -29,12 +31,16 @@ ERROR_MESSAGES: dict[str, str] = {
     "feature_unavailable": "Generate text is not available for this project. Contact support to request access.",
 }
 
-# A success is worth replaying for a whole flow run; a failure is cached only long enough to keep
-# a retry storm off the gateway. Pending outlives the caller's own 90-second give-up so a poll
-# never races the record away.
+# A success is worth replaying for a whole flow run. Every TTL has to outlive the caller's backup
+# poll ladder (marks at 1, 3 and 5 minutes): a record that expires between two marks answers the
+# next poll with a 404 the caller can only read as the feature being off.
 SUCCESS_TTL_SECONDS = 600
-FAILURE_TTL_SECONDS = 30
-PENDING_TTL_SECONDS = 300
+FAILURE_TTL_SECONDS = 300
+PENDING_TTL_SECONDS = 600
+
+# Produced when a generation reaches a terminal state, so the parked caller wakes without polling.
+# The nodejs subscription matcher pins the same name and property keys.
+GENERATION_FINISHED_EVENT = "$workflows_llm_generation_finished"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -55,6 +61,9 @@ class GenerationRecord:
     fields: dict[str, str] = field(default_factory=dict)
     error_code: str | None = None
     error_message: str | None = None
+    # One-time secret minted by the submitting CDP job. The finished event echoes it, and the
+    # subscription matcher only wakes a parked job whose stored metadata carries the same value.
+    wake_token: str | None = None
 
     def envelope(self) -> dict[str, Any]:
         return {
@@ -105,10 +114,42 @@ def claim_pending(team_id: int, record: GenerationRecord) -> bool:
     return bool(claimed)
 
 
-def failed_record(record_id: str, request: GenerationRequest, code: str) -> GenerationRecord:
+def failed_record(
+    record_id: str, request: GenerationRequest, code: str, wake_token: str | None = None
+) -> GenerationRecord:
     return GenerationRecord(
-        id=record_id, status="failed", request=request, error_code=code, error_message=ERROR_MESSAGES[code]
+        id=record_id,
+        status="failed",
+        request=request,
+        error_code=code,
+        error_message=ERROR_MESSAGES[code],
+        wake_token=wake_token,
     )
+
+
+def emit_generation_finished(team_id: int, record: GenerationRecord) -> None:
+    """Wake-only signal for the parked CDP job: it carries no generation output, so the woken job
+    still collects the result through the authenticated retrieve. Best effort - a produce failure
+    must not fail the write it follows, because the caller's backup polls cover a missed wake."""
+    if record.status == "pending" or not record.wake_token:
+        return
+    try:
+        produce_internal_event(
+            team_id=team_id,
+            event=InternalEventEvent(
+                event=GENERATION_FINISHED_EVENT,
+                distinct_id=record.request.invocation_id,
+                properties={
+                    "generation_id": record.id,
+                    "invocation_id": record.request.invocation_id,
+                    "wake_token": record.wake_token,
+                    "status": record.status,
+                },
+            ),
+        )
+    except Exception as error:
+        capture_exception(error, {"team_id": team_id, "generation_id": record.id, "feature": "workflows_llm_action"})
+        logger.exception("workflows.llm_generation.finished_event_failed", team_id=team_id, generation_id=record.id)
 
 
 def is_llm_action_enabled(team: Team) -> bool:

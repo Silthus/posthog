@@ -2618,6 +2618,8 @@ export const workflowLlmGenerationsCreateBodyModelMax = 200
 
 export const workflowLlmGenerationsCreateBodyOutputFieldsMaxOne = 1000
 
+export const workflowLlmGenerationsCreateBodyWakeTokenMax = 200
+
 export const WorkflowLlmGenerationsCreateBody = /* @__PURE__ */ zod.object({
     invocation_id: zod
         .string()
@@ -2636,4 +2638,9 @@ export const WorkflowLlmGenerationsCreateBody = /* @__PURE__ */ zod.object({
     output_fields: zod
         .record(zod.string(), zod.string().max(workflowLlmGenerationsCreateBodyOutputFieldsMaxOne))
         .describe('Instruction per workflow variable key. Empty skips extraction.'),
+    wake_token: zod
+        .string()
+        .max(workflowLlmGenerationsCreateBodyWakeTokenMax)
+        .nullish()
+        .describe('One-time secret from the submitting job. Echoed on the finished event so only that job wakes.'),
 })

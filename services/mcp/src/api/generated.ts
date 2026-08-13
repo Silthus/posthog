@@ -75671,6 +75671,12 @@ export namespace Schemas {
       model: string;
       /** Instruction per workflow variable key. Empty skips extraction. */
       output_fields: WorkflowLLMGenerationSubmitOutputFields;
+      /**
+         * One-time secret from the submitting job. Echoed on the finished event so only that job wakes.
+         * @maxLength 200
+         * @nullable
+         */
+      wake_token?: string | null;
     }
 
     export interface WorkflowRunActivityPoint {

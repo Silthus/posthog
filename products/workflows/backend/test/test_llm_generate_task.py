@@ -1,4 +1,5 @@
 import os
+import json
 from itertools import count
 from typing import Any
 
@@ -13,6 +14,7 @@ from parameterized import parameterized
 from posthog.tasks.usage_report import POSTHOG_AI_PRODUCTS
 
 from products.workflows.backend.services.llm_generation import (
+    GENERATION_FINISHED_EVENT,
     GenerationRecord,
     GenerationRequest,
     read_record,
@@ -26,6 +28,7 @@ from products.workflows.backend.tasks.llm_generate import (
 )
 
 TASK = "products.workflows.backend.tasks.llm_generate"
+SERVICE = "products.workflows.backend.services.llm_generation"
 
 
 def _completion(content: str | None, refusal: str | None = None) -> MagicMock:
@@ -47,7 +50,7 @@ class TestRunWorkflowLLMGeneration(BaseTest):
         # the task before the call ever returns.
         assert client.timeout == WALL_CLOCK_BUDGET_SECONDS
 
-    def _pending(self, **overrides: Any) -> GenerationRecord:
+    def _pending(self, wake_token: str | None = None, **overrides: Any) -> GenerationRecord:
         request = GenerationRequest(
             **{
                 "invocation_id": "0195f0a0-0000-7000-8000-000000000001",
@@ -58,7 +61,9 @@ class TestRunWorkflowLLMGeneration(BaseTest):
                 **overrides,
             }
         )
-        return write_record(self.team.id, GenerationRecord(id="gen-1", status="pending", request=request))
+        return write_record(
+            self.team.id, GenerationRecord(id="gen-1", status="pending", request=request, wake_token=wake_token)
+        )
 
     def _run(self, record: GenerationRecord) -> GenerationRecord:
         run_workflow_llm_generation.apply(kwargs={"team_id": self.team.id, "generation_id": record.id}).get()
@@ -242,3 +247,44 @@ class TestRunWorkflowLLMGeneration(BaseTest):
         assert stored.status == "succeeded"
         assert stored.fields == {"subject": "Your report is ready"}
         assert client.chat.completions.create.call_count == 4
+
+    @parameterized.expand(
+        [
+            ("a success", _completion("Hello Ada"), "succeeded"),
+            ("a terminal failure", _completion(None, refusal="no"), "failed"),
+        ]
+    )
+    def test_a_terminal_write_emits_one_wake_event_echoing_the_stored_token(self, _name, completion, status):
+        record = self._pending(wake_token="wake-secret-1")
+        client = MagicMock()
+        client.chat.completions.create.return_value = completion
+
+        with (
+            patch(f"{TASK}.build_llm_client", return_value=client),
+            patch(f"{SERVICE}.produce_internal_event") as produce,
+        ):
+            self._run(record)
+
+        assert produce.call_count == 1
+        event = produce.call_args.kwargs["event"]
+        assert produce.call_args.kwargs["team_id"] == self.team.id
+        assert event.event == GENERATION_FINISHED_EVENT
+        assert event.properties["generation_id"] == record.id
+        assert event.properties["wake_token"] == "wake-secret-1"
+        assert event.properties["status"] == status
+        # The event is a wake-only signal: the woken job collects the result through the
+        # authenticated retrieve, so generated text must never ride the event bus.
+        assert "Hello Ada" not in json.dumps(event.properties)
+
+    def test_a_record_without_a_wake_token_emits_no_event(self):
+        record = self._pending()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _completion("Hello Ada")
+
+        with (
+            patch(f"{TASK}.build_llm_client", return_value=client),
+            patch(f"{SERVICE}.produce_internal_event") as produce,
+        ):
+            self._run(record)
+
+        produce.assert_not_called()
