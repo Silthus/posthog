@@ -31,6 +31,7 @@ import { template as posthogUpdateAccountPropertyTemplate } from './_destination
 import { template as posthogUpdateAccountRelationshipsTemplate } from './_destinations/posthog_customer_analytics/posthog-update-account-relationships.template'
 import { template as posthogUpdateAccountTemplate } from './_destinations/posthog_customer_analytics/posthog-update-account.template'
 import { template as posthogSetHogflowVariableTemplate } from './_destinations/posthog_workflows/posthog-set-variable.template'
+import { template as workflowLlmTemplate } from './_destinations/posthog_workflows/workflow-llm.template'
 import { template as pushTemplate } from './_destinations/push/push.template'
 import { template as redditAdsTemplate } from './_destinations/reddit_ads/reddit.template'
 import { template as snapchatAdsTemplate } from './_destinations/snapchat_ads/snapchat.template'
@@ -84,6 +85,7 @@ export const HOG_FUNCTION_TEMPLATES_DESTINATIONS: HogFunctionTemplate[] = [
     posthogGroupIdentifyTemplate,
     posthogUpdatePersonPropertiesTemplate,
     posthogSetHogflowVariableTemplate,
+    workflowLlmTemplate,
     posthogGetTicketTemplate,
     posthogUpdateTicketTemplate,
     posthogCreateAccountTemplate,

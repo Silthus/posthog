@@ -31,6 +31,7 @@ import {
     matchesWaitUntilCondition,
     runFilterBytecode,
 } from '../services/hogflows/hogflow-utils'
+import { LlmGenerationMetadata, WORKFLOW_LLM_GENERATION_FINISHED_EVENT } from '../services/llm-generation.service'
 import { CyclotronPerson, HogFlowInvocationContext, HogFunctionInvocationGlobals, MinimalAppMetric } from '../types'
 import {
     convertInternalEventToHogFunctionInvocationGlobals,
@@ -61,6 +62,14 @@ const counterHogflowMatcherJobsWoken = new Counter({
 const counterHogflowMatcherConversionsCounted = new Counter({
     name: 'cdp_hogflow_matcher_conversions_counted',
     help: 'Event-based conversions counted by the matcher (deduped to once per run via conversionCounted).',
+})
+
+// One wake per generation is the expected shape; the gap to the started counter on the CDP side is
+// how many generations fell through to the backup poll ladder.
+const counterHogflowMatcherLlmGenerationWakes = new Counter({
+    name: 'cdp_hogflow_matcher_llm_generation_wakes',
+    help: 'Parked llmGenerate jobs woken by a generation-finished event, by outcome.',
+    labelNames: ['outcome'],
 })
 
 // A person merge repoints the merged-away person's distinct_ids at the survivor. A wait parked while
@@ -111,6 +120,16 @@ type ParkedCandidate = {
     distinctId: string | null
     personId: string | null
 }
+
+// A generation-finished signal addressed to one parked llmGenerate job. The job id is the
+// invocation id the CDP submitted with; the token must match the one in the job's own metadata.
+type LlmGenerationWake = {
+    teamId: number
+    jobId: string
+    wakeToken: string
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // A distinct_id repointed by a merge: the distinct_id and the survivor person it now resolves to.
 // version orders repoints for the same distinct_id — the highest wins when a batch carries several.
@@ -671,6 +690,11 @@ export class CdpHogflowSubscriptionMatcherConsumer<
             messages.map(async (message) => {
                 try {
                     const parsed = CdpInternalEventSchema.parse(parseJSON(message.value!.toString()))
+                    if (parsed.event.event === WORKFLOW_LLM_GENERATION_FINISHED_EVENT) {
+                        // A machine signal addressed to one parked job by id; _parseLlmGenerationWakes
+                        // handles it, and it must not enter person-keyed wait matching.
+                        return
+                    }
                     if (!parsed.event.distinct_id && !parsed.person?.id) {
                         counterHogflowMatcherEventSkipped.labels({ reason: 'no_identifiers' }).inc()
                         return
@@ -694,6 +718,88 @@ export class CdpHogflowSubscriptionMatcherConsumer<
         )
 
         return events
+    }
+
+    // Synchronous like _parsePersonDistinctIdBatch: a wake only carries ids, no globals conversion.
+    // Prefilters on the raw bytes so the (rare) wake events are the only ones parsed twice.
+    public _parseLlmGenerationWakes(messages: Message[]): LlmGenerationWake[] {
+        const wakes: LlmGenerationWake[] = []
+        for (const message of messages) {
+            const raw = message.value?.toString()
+            if (!raw?.includes(WORKFLOW_LLM_GENERATION_FINISHED_EVENT)) {
+                continue
+            }
+            try {
+                const parsed = CdpInternalEventSchema.parse(parseJSON(raw))
+                if (parsed.event.event !== WORKFLOW_LLM_GENERATION_FINISHED_EVENT) {
+                    continue
+                }
+                const { invocation_id: jobId, wake_token: wakeToken } = parsed.event.properties
+                if (typeof jobId !== 'string' || !UUID_RE.test(jobId) || typeof wakeToken !== 'string' || !wakeToken) {
+                    counterHogflowMatcherLlmGenerationWakes.labels({ outcome: 'malformed' }).inc()
+                    continue
+                }
+                wakes.push({ teamId: parsed.team_id, jobId, wakeToken })
+            } catch (e) {
+                logger.error('Error parsing llm generation wake message', e)
+                counterParseError.labels({ error: e.message }).inc()
+            }
+        }
+        return wakes
+    }
+
+    /**
+     * Wakes the parked llmGenerate jobs a generation-finished event addresses. The event is a
+     * wake-only signal: the job is pulled to `scheduled = NOW()` untouched, re-enters the
+     * generation service, and collects its result through the authenticated retrieve. A missed or
+     * lost wake is therefore never fatal - the job's own backup poll ladder still runs.
+     */
+    private async wakeLlmGenerationJobs(wakes: LlmGenerationWake[]): Promise<void> {
+        if (wakes.length === 0) {
+            return
+        }
+        const byJobId = new Map(wakes.map((wake) => [wake.jobId, wake]))
+        const rows = await this.cyclotronPool.query(
+            `SELECT id, team_id, state FROM cyclotron_jobs
+             WHERE id = ANY($1::uuid[]) AND status = 'available'`,
+            [[...byJobId.keys()]]
+        )
+
+        const toWake: string[] = []
+        for (const row of rows.rows) {
+            const wake = byJobId.get(row.id)
+            if (!wake || !row.state || wake.teamId !== row.team_id) {
+                continue
+            }
+            // The token in the parked job's own metadata is the authority; an event whose token does
+            // not match is for another incarnation of this step (e.g. a lost first submit) and must
+            // not pull the job forward off its schedule.
+            let blob: { queueParameters?: { type?: string }; queueMetadata?: LlmGenerationMetadata }
+            try {
+                blob = parseJSON(row.state.toString('utf-8'))
+            } catch {
+                continue
+            }
+            if (blob.queueParameters?.type !== 'llmGenerate') {
+                continue
+            }
+            if (!blob.queueMetadata?.wakeToken || blob.queueMetadata.wakeToken !== wake.wakeToken) {
+                counterHogflowMatcherLlmGenerationWakes.labels({ outcome: 'token_mismatch' }).inc()
+                continue
+            }
+            toWake.push(row.id)
+        }
+
+        if (toWake.length > 0) {
+            // No state write and no transaction: the guard makes a lost race with the worker (job
+            // already dequeued) a no-op, and waking an already-due job changes nothing.
+            const result = await this.cyclotronPool.query(
+                `UPDATE cyclotron_jobs SET scheduled = NOW()
+                 WHERE id = ANY($1::uuid[]) AND status = 'available'`,
+                [toWake]
+            )
+            counterHogflowMatcherLlmGenerationWakes.labels({ outcome: 'woken' }).inc(result.rowCount ?? 0)
+        }
     }
 
     // Synchronous (no getTeam/globals conversion — a repoint only carries ids), so unlike the other
@@ -900,10 +1006,10 @@ export class CdpHogflowSubscriptionMatcherConsumer<
             this.internalEventsKafkaConsumer.connect(async (messages) => {
                 return await instrumentFn('cdpHogflowSubscriptionMatcher.handleInternalEventsBatch', async () => {
                     return {
-                        backgroundTask: this.processBatch(
-                            await this._parseInternalEventsBatch(messages),
-                            'internal_events'
-                        ),
+                        backgroundTask: Promise.all([
+                            this.processBatch(await this._parseInternalEventsBatch(messages), 'internal_events'),
+                            this.wakeLlmGenerationJobs(this._parseLlmGenerationWakes(messages)),
+                        ]),
                     }
                 })
             }),

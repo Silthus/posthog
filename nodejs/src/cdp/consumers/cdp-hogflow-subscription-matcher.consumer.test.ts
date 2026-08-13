@@ -109,6 +109,7 @@ class MatcherUnderTest extends CdpHogflowSubscriptionMatcherConsumer {
     public calls: QueryCall[] = []
     public findRows: MockRow[] = []
     public wakeRows: MockRow[] = []
+    public llmWakeRows: { id: string; team_id: number; state: Buffer | null }[] = []
     public moveRows: MockRow[] = []
     public updateRowCount = 0
 
@@ -127,6 +128,9 @@ class MatcherUnderTest extends CdpHogflowSubscriptionMatcherConsumer {
             }
             if (sql.includes('SELECT id, state FROM cyclotron_jobs')) {
                 return Promise.resolve({ rows: this.wakeRows, rowCount: this.wakeRows.length })
+            }
+            if (sql.includes('SELECT id, team_id, state FROM cyclotron_jobs')) {
+                return Promise.resolve({ rows: this.llmWakeRows, rowCount: this.llmWakeRows.length })
             }
             if (sql.includes('SELECT id, team_id, distinct_id, function_id, action_id, state')) {
                 return Promise.resolve({ rows: this.moveRows, rowCount: this.moveRows.length })
@@ -1408,6 +1412,85 @@ describe('CdpHogflowSubscriptionMatcherConsumer', () => {
             // The bad message is dropped; the valid one still parses.
             expect(result).toHaveLength(1)
             expect((result[0] as HogFunctionInvocationGlobals).event.event).toBe('$insight_alert_firing')
+        })
+
+        it('keeps a generation-finished signal out of person-keyed wait matching', async () => {
+            const result = await (matcher as any)._parseInternalEventsBatch([
+                rawInternalEvent({ event: { event: '$workflows_llm_generation_finished' } }),
+            ])
+
+            expect(result).toEqual([])
+        })
+    })
+
+    describe('llm generation wakes', () => {
+        const JOB_ID = '0195f0a0-0000-7000-8000-000000000001'
+
+        const wakeMessage = (properties: Record<string, any> = {}): any => ({
+            value: Buffer.from(
+                JSON.stringify({
+                    team_id: 1,
+                    event: {
+                        uuid: 'evt-uuid-1',
+                        event: '$workflows_llm_generation_finished',
+                        distinct_id: JOB_ID,
+                        properties: {
+                            generation_id: 'gen-1',
+                            invocation_id: JOB_ID,
+                            wake_token: 'token-1',
+                            status: 'succeeded',
+                            ...properties,
+                        },
+                        timestamp: '2024-01-01T00:00:00Z',
+                    },
+                })
+            ),
+        })
+
+        const parkedLlmRow = (metadataToken: string | undefined, paramsType = 'llmGenerate') => ({
+            id: JOB_ID,
+            team_id: 1,
+            state: Buffer.from(
+                JSON.stringify({
+                    state: {},
+                    queueParameters: { type: paramsType },
+                    queueMetadata: metadataToken
+                        ? { wakeToken: metadataToken, startedAt: '2024-01-01T00:00:00Z', polls: 1, throttles: 0 }
+                        : { startedAt: '2024-01-01T00:00:00Z', polls: 1, throttles: 0 },
+                })
+            ),
+        })
+
+        const runWakes = async (messages: any[]): Promise<void> => {
+            await (matcher as any).wakeLlmGenerationJobs((matcher as any)._parseLlmGenerationWakes(messages))
+        }
+
+        it('wakes the parked job whose metadata carries the token the event echoes', async () => {
+            matcher.llmWakeRows = [parkedLlmRow('token-1')]
+
+            await runWakes([wakeMessage()])
+
+            const update = matcher.calls.find((call) => call.sql.includes('SET scheduled = NOW()'))
+            expect(update).toBeTruthy()
+            expect(update!.params[0]).toEqual([JOB_ID])
+        })
+
+        it.each([
+            ['the token does not match the parked metadata', parkedLlmRow('other-token')],
+            ['the job is not an llmGenerate job', parkedLlmRow('token-1', 'fetch')],
+            ['the parked job never got a token', parkedLlmRow(undefined)],
+        ])('does not pull a job off its schedule when %s', async (_case, row) => {
+            matcher.llmWakeRows = [row]
+
+            await runWakes([wakeMessage()])
+
+            expect(matcher.calls.find((call) => call.sql.includes('SET scheduled = NOW()'))).toBeUndefined()
+        })
+
+        it('ignores a wake whose job id is not a uuid without querying cyclotron', async () => {
+            await runWakes([wakeMessage({ invocation_id: 'not-a-uuid' })])
+
+            expect(matcher.calls).toEqual([])
         })
     })
 
