@@ -570,6 +570,14 @@ class SessionBucketsSustainedRateThrottle(_TeamBucketRateThrottle):
     rate = "200/hour"
 
 
+# Workflow text generation is submitted by the CDP with a team secret token, whose synthetic user
+# would otherwise share one global bucket across every project. One project's worth of concurrent
+# runs stays well inside this, while a runaway flow cannot outrun the worker pool by enqueue rate.
+class WorkflowLLMGenerationSubmitThrottle(_TeamBucketRateThrottle):
+    scope = "workflow_llm_generation_submit"
+    rate = "60/minute"
+
+
 class _AIThrottleBase(UserRateThrottle):
     action_name: str
 

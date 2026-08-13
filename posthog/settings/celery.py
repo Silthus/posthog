@@ -4,6 +4,7 @@ from kombu import Exchange, Queue
 
 from posthog.settings.base_variables import TEST
 from posthog.settings.data_stores import REDIS_URL
+from posthog.settings.utils import get_from_env
 
 # Only listen to the default queue "celery", unless overridden via the CLI
 CELERY_QUEUES = (Queue("celery", Exchange("celery"), "celery"),)
@@ -24,6 +25,15 @@ CELERY_IMPORTS: list[str] = [
     "posthog.models.scoping",
     "posthog.scoping_audit",
 ]
+# Workflow text generation holds a worker for up to 90 seconds per task, so occupancy on the
+# shared long_running pool is capped fleet-wide and again per project.
+WORKFLOW_LLM_MAX_CONCURRENT_GENERATIONS: int = get_from_env(
+    "WORKFLOW_LLM_MAX_CONCURRENT_GENERATIONS", 30, type_cast=int
+)
+WORKFLOW_LLM_MAX_CONCURRENT_GENERATIONS_PER_TEAM: int = get_from_env(
+    "WORKFLOW_LLM_MAX_CONCURRENT_GENERATIONS_PER_TEAM", 5, type_cast=int
+)
+
 CELERY_BROKER_URL = REDIS_URL  # celery connects to redis
 CELERY_BEAT_MAX_LOOP_INTERVAL = 30  # sleep max 30sec before checking for new periodic events
 CELERY_RESULT_BACKEND = REDIS_URL  # stores results for lookup when processing
