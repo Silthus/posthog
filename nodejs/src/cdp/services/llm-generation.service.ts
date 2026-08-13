@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { randomUUID } from 'node:crypto'
 import { Counter, Histogram } from 'prom-client'
 
 import { CyclotronInvocationQueueParametersLlmGenerateType } from '~/cdp/schema/cyclotron'
@@ -15,21 +16,36 @@ import { createInvocationResult } from '../utils/invocation-utils'
 // short control-plane requests and must not wait out a destination-length fetch timeout.
 const SUBMIT_TIMEOUT_MS = 5000
 const RETRIEVE_TIMEOUT_MS = 3000
+// Only the inline preview loop and a transport retry wait this short. A queued job parks on the
+// backup ladder instead and is normally woken by the finished event long before the first mark.
 const POLL_INTERVAL_SECONDS = 2
 
+// The wake event is the transport; these polls are the safety net for a swallowed error anywhere
+// along it (a dead worker, a dropped event, a matcher that was down). Measured from acceptance.
+// A generation still pending at the last mark is failed as deadline_exceeded: the backend's own
+// 60-second budget means by then the outcome was lost, not still coming.
+const BACKUP_POLL_MARKS_SECONDS = [60, 180, 300]
+
 const MAX_THROTTLE_BOUNCES = 10
-const GIVE_UP_SECONDS = 90
-const MAX_POLLS = 50
+// Backstop against runaway execution, not the schedule: the ladder bounds a healthy run to a
+// handful of executions, and this only stops a job whose reschedules misfire faster than asked.
+const MAX_EXECUTIONS = 20
 // A blip is worth waiting out; a gateway that is still down three tries later is not going to answer
 // inside this step's budget, and the run log should say so rather than time the generation out.
 const MAX_TRANSPORT_FAILURES = 3
+
+// Produced by the Django task when a generation reaches a terminal state. The subscription matcher
+// consumes it and wakes the parked job; the Python side pins the same name and property keys.
+export const WORKFLOW_LLM_GENERATION_FINISHED_EVENT = '$workflows_llm_generation_finished'
 
 // A retrieve for a record that no longer exists answers DRF's own 404 body, which carries no message
 // of its own. Neither does a throttle, so both messages are written here rather than read off the wire.
 const FEATURE_UNAVAILABLE_MESSAGE =
     'Generate text is not available for this project. Contact support to request access.'
 const THROTTLED_MESSAGE = 'Text generation is busy right now, so this step could not run. Try again in a few minutes.'
-const DEADLINE_EXCEEDED_MESSAGE = `Generation ran longer than ${GIVE_UP_SECONDS} seconds and stopped. Try a shorter prompt or a faster model.`
+const DEADLINE_EXCEEDED_MESSAGE = `Generation did not report a result within ${
+    BACKUP_POLL_MARKS_SECONDS[BACKUP_POLL_MARKS_SECONDS.length - 1] / 60
+} minutes and stopped. Run the workflow again, or try a faster model.`
 const GATEWAY_UNAVAILABLE_MESSAGE = 'Could not reach PostHog to run this step. Try again later.'
 const PREVIEW_DEADLINE_SECONDS = 25
 const PREVIEW_DEADLINE_MESSAGE = `The preview stopped after ${PREVIEW_DEADLINE_SECONDS} seconds. The step gets longer when the workflow runs. Try a shorter prompt or a faster model.`
@@ -66,31 +82,41 @@ export interface LlmGenerationConfig {
  * Poll state, carried across reschedules on the invocation's queue metadata. `generationId` is absent
  * until a submit is accepted, and its absence is what tells the next run to submit rather than poll.
  * `polls` counts every execution this step has spent, submits included, so it bounds the loop even
- * when no generation was ever accepted.
+ * when no generation was ever accepted. `wakeToken` is minted on the first execution and sent with
+ * every submit; the finished event echoes it, and the subscription matcher only wakes a parked job
+ * whose stored metadata carries the same value.
  */
-type LlmGenerationMetadata = {
+export type LlmGenerationMetadata = {
     generationId?: string
+    wakeToken?: string
     startedAt: string
     polls: number
     throttles: number
     transportFailures?: number
 }
 
+/** The invocation as this service runs it: parameters proven `llmGenerate`, metadata typed. */
+type LlmGenerationInvocation = CyclotronJobInvocationHogFunction & {
+    queueParameters: CyclotronInvocationQueueParametersLlmGenerateType
+    queueMetadata?: LlmGenerationMetadata
+}
+
 /**
- * Whether this generation has used up its budget. Wall-clock time is the real bound; the iteration
- * count is the backstop for a run whose reschedules land faster than the interval asks for.
+ * Backstop only. The backup ladder is what bounds a healthy run; this stops a job whose
+ * reschedules or wakes misfire faster than the schedule asks for.
  */
-function isSpent(metadata: LlmGenerationMetadata): boolean {
-    if (metadata.polls >= MAX_POLLS) {
-        return true
-    }
-    // The wall clock measures a generation, so it cannot run before one exists. A step that has only
-    // been throttled so far has not run long, it has not run at all, and its bound is the bounce cap -
-    // one Retry-After off the submit throttle can be a whole minute on its own.
-    if (!metadata.generationId) {
-        return false
-    }
-    return DateTime.utc().diff(DateTime.fromISO(metadata.startedAt), 'seconds').seconds > GIVE_UP_SECONDS
+function hasExhaustedInvocationBudget(metadata: LlmGenerationMetadata): boolean {
+    return metadata.polls >= MAX_EXECUTIONS
+}
+
+/**
+ * Seconds until the next backup mark, measured from acceptance. Undefined means the ladder is
+ * exhausted: a generation still pending past the last mark has lost its outcome for good.
+ */
+function secondsUntilNextBackupPoll(startedAt: string): number | undefined {
+    const elapsed = DateTime.utc().diff(DateTime.fromISO(startedAt), 'seconds').seconds
+    const mark = BACKUP_POLL_MARKS_SECONDS.find((m) => m > elapsed)
+    return mark === undefined ? undefined : mark - elapsed
 }
 
 function observeDuration(startedAt: string): void {
@@ -136,65 +162,85 @@ export class LlmGenerationService {
         invocation: CyclotronJobInvocationHogFunction,
         isTest: boolean
     ): Promise<CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>> {
-        const params = invocation.queueParameters
-        if (params?.type !== 'llmGenerate') {
+        if (invocation.queueParameters?.type !== 'llmGenerate') {
             throw new Error('Bad invocation')
         }
+        const typedInvocation = invocation as LlmGenerationInvocation
+        const params = typedInvocation.queueParameters
 
         const result = createInvocationResult<CyclotronJobInvocationHogFunction>(invocation, {}, { finished: true })
 
         if (isTest) {
-            return await this.executePreview(invocation, params, result)
+            return await this.executePreview(typedInvocation, params, result)
         }
 
-        const metadata = invocation.queueMetadata as LlmGenerationMetadata | undefined
+        const metadata = typedInvocation.queueMetadata
         const startedAt = metadata?.startedAt ?? DateTime.utc().toISO()!
+        // Minted before the first submit and carried through every reschedule, so a submit retried
+        // after a transport failure lands with the same token the stored record will echo back.
+        const wakeToken = metadata?.wakeToken ?? randomUUID()
 
-        if (metadata && isSpent(metadata)) {
+        if (metadata && hasExhaustedInvocationBudget(metadata)) {
             return this.fail(result, 'deadline_exceeded', DEADLINE_EXCEEDED_MESSAGE, startedAt)
         }
 
-        const outcome = await this.step(invocation, params, metadata?.generationId)
+        const outcome = await this.step(typedInvocation, params, wakeToken, metadata?.generationId)
 
-        if (outcome.kind === 'failed') {
-            return this.fail(result, outcome.code, outcome.message, startedAt)
-        }
-        if (outcome.kind === 'succeeded') {
-            return this.succeed(result, outcome.envelope, startedAt)
-        }
-        if (outcome.kind === 'unreachable') {
-            if ((metadata?.transportFailures ?? 0) >= MAX_TRANSPORT_FAILURES) {
-                return this.fail(result, 'gateway_unavailable', GATEWAY_UNAVAILABLE_MESSAGE, startedAt)
+        switch (outcome.kind) {
+            case 'failed':
+                return this.fail(result, outcome.code, outcome.message, startedAt)
+            case 'succeeded':
+                return this.succeed(result, outcome.envelope, startedAt)
+            case 'unreachable': {
+                if ((metadata?.transportFailures ?? 0) >= MAX_TRANSPORT_FAILURES) {
+                    return this.fail(result, 'gateway_unavailable', GATEWAY_UNAVAILABLE_MESSAGE, startedAt)
+                }
+                this.reschedule(result, invocation, {
+                    generationId: outcome.generationId,
+                    wakeToken,
+                    startedAt,
+                    polls: (metadata?.polls ?? 0) + 1,
+                    throttles: metadata?.throttles ?? 0,
+                    transportFailures: (metadata?.transportFailures ?? 0) + 1,
+                })
+                return result
             }
-            this.reschedule(result, invocation, {
-                generationId: outcome.generationId,
-                startedAt,
-                polls: (metadata?.polls ?? 0) + 1,
-                throttles: metadata?.throttles ?? 0,
-                transportFailures: (metadata?.transportFailures ?? 0) + 1,
-            })
-            return result
-        }
-        if (outcome.throttled && (metadata?.throttles ?? 0) >= MAX_THROTTLE_BOUNCES) {
-            return this.fail(result, 'throttled', THROTTLED_MESSAGE, startedAt)
-        }
+            case 'pending': {
+                if (outcome.throttled && (metadata?.throttles ?? 0) >= MAX_THROTTLE_BOUNCES) {
+                    return this.fail(result, 'throttled', THROTTLED_MESSAGE, startedAt)
+                }
 
-        const accepted = outcome.generationId && !metadata?.generationId
-        this.reschedule(
-            result,
-            invocation,
-            {
-                generationId: outcome.generationId,
-                // The give-up budget belongs to the generation, so its clock starts when one is
-                // accepted rather than when a step that spent a minute in the throttle first tried.
-                startedAt: accepted ? DateTime.utc().toISO()! : startedAt,
-                polls: (metadata?.polls ?? 0) + 1,
-                throttles: (metadata?.throttles ?? 0) + (outcome.throttled ? 1 : 0),
-                transportFailures: metadata?.transportFailures ?? 0,
-            },
-            outcome.waitSeconds
-        )
-        return result
+                const accepted = outcome.generationId && !metadata?.generationId
+                // The ladder belongs to the generation, so its clock starts when one is accepted
+                // rather than when a step that spent a minute in the throttle first tried.
+                const ladderStartedAt = accepted ? DateTime.utc().toISO()! : startedAt
+                // A throttle bounce keeps the Retry-After it was given; an accepted generation
+                // parks until its next backup mark and normally wakes on the finished event first.
+                const waitSeconds = outcome.throttled
+                    ? outcome.waitSeconds
+                    : secondsUntilNextBackupPoll(ladderStartedAt)
+                if (waitSeconds === undefined) {
+                    return this.fail(result, 'deadline_exceeded', DEADLINE_EXCEEDED_MESSAGE, startedAt)
+                }
+
+                this.reschedule(
+                    result,
+                    invocation,
+                    {
+                        generationId: outcome.generationId,
+                        wakeToken,
+                        startedAt: ladderStartedAt,
+                        polls: (metadata?.polls ?? 0) + 1,
+                        throttles: (metadata?.throttles ?? 0) + (outcome.throttled ? 1 : 0),
+                        // A poll that reached the endpoint proves the gateway is back, so the next
+                        // blip gets a full retry budget rather than the tail of an old one.
+                        transportFailures: 0,
+                    },
+                    waitSeconds
+                )
+                return result
+            }
+        }
     }
 
     /**
@@ -208,10 +254,11 @@ export class LlmGenerationService {
     ): Promise<CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>> {
         const startedAt = DateTime.utc().toISO()!
         const deadline = DateTime.utc().plus({ seconds: PREVIEW_DEADLINE_SECONDS })
+        const wakeToken = randomUUID()
         let generationId: string | undefined
 
         for (;;) {
-            const outcome = await this.step(invocation, params, generationId)
+            const outcome = await this.step(invocation, params, wakeToken, generationId)
 
             if (outcome.kind === 'failed') {
                 return this.fail(result, outcome.code, outcome.message, startedAt)
@@ -233,13 +280,14 @@ export class LlmGenerationService {
     private async step(
         invocation: CyclotronJobInvocationHogFunction,
         params: CyclotronInvocationQueueParametersLlmGenerateType,
+        wakeToken: string,
         generationId?: string
     ): Promise<StepOutcome> {
         let response: FetchResponse
         try {
             response = generationId
                 ? await this.retrieve(invocation, generationId)
-                : await this.submit(invocation, params)
+                : await this.submit(invocation, params, wakeToken)
         } catch {
             // A timeout, a reset connection or a DNS failure says nothing about the generation, which
             // is running in Celery either way. Coming back later is the only answer that does not throw
@@ -358,7 +406,8 @@ export class LlmGenerationService {
 
     private async submit(
         invocation: CyclotronJobInvocationHogFunction,
-        params: CyclotronInvocationQueueParametersLlmGenerateType
+        params: CyclotronInvocationQueueParametersLlmGenerateType,
+        wakeToken: string
     ): Promise<FetchResponse> {
         const hogFlow = (invocation as { hogFlow?: HogFlow }).hogFlow
 
@@ -369,12 +418,16 @@ export class LlmGenerationService {
             body: JSON.stringify({
                 // One invocation id spans a whole flow run; Django separates two Generate text steps
                 // of the same run by hashing this payload alongside it. Steps whose configuration is
-                // byte-identical therefore share one generation for the run.
+                // byte-identical therefore share one generation for the run. The invocation id is
+                // also the cyclotron job id, which is how the finished event finds the parked job.
                 invocation_id: invocation.id,
                 hog_flow_id: hogFlow?.id ?? null,
                 prompt: params.prompt,
                 model: params.model,
                 output_fields: params.output_fields,
+                // The dedupe hash excludes this, so a token minted after a lost submit still joins
+                // the generation the first submit created (whose stored token then wins).
+                wake_token: wakeToken,
             }),
         })
     }
