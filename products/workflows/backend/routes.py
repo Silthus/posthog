@@ -1,6 +1,6 @@
 from posthog.api.routing import RouterRegistry
 
-from products.workflows.backend.api import hog_flow, hog_flow_template
+from products.workflows.backend.api import hog_flow, hog_flow_template, workflow_llm_generation
 
 
 def register_routes(routers: RouterRegistry) -> None:
@@ -9,5 +9,11 @@ def register_routes(routers: RouterRegistry) -> None:
         r"hog_flow_templates",
         hog_flow_template.HogFlowTemplateViewSet,
         "project_hog_flow_templates",
+        ["team_id"],
+    )
+    routers.projects.register(
+        r"workflow_llm_generations",
+        workflow_llm_generation.WorkflowLLMGenerationViewSet,
+        "project_workflow_llm_generations",
         ["team_id"],
     )

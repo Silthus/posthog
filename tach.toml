@@ -876,6 +876,7 @@ depends_on = [
     "ee",
     "posthog",
     "products.actions",
+    "products.ai_observability",
     "products.cdp",
     "products.feature_flags",
     "products.messaging",
