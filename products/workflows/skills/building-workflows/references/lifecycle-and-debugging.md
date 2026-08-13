@@ -41,7 +41,7 @@ The MCP tools for the workflows product, grouped by job. The lifecycle that stri
 
 - `cdp-function-templates-list` — the live catalog of function templates (filter `type=destination`). Source of truth for which integrations exist; don't hardcode template ids.
 - `cdp-function-templates-retrieve` — one template's full detail including its `inputs_schema`. Read this before building a `function` node's `inputs`.
-- Don't come here for `webhook` / `manual` / `tracking_pixel` triggers or `function_email` / `function_sms` / `function_push` steps — those take fixed literal template ids that this catalog never lists. See [graph-schema.md](graph-schema.md).
+- Don't come here to pick the template id for `webhook` / `manual` / `tracking_pixel` triggers, `function_email` / `function_sms` / `function_push` steps, or the "Generate text" step. Those take fixed literal ids you write from memory. The trigger templates are `source_webhook` type, and this catalog is `type=destination`, so it never lists them. The step templates are marked `hidden`, which strips them from the anonymous public catalog only, so a `type=destination` list here does include `template-email`, `template-twilio`, `template-native-push`, and `template-workflow-llm`. See [graph-schema.md](graph-schema.md).
 
 **Email templates** (compose and edit with the `designing-email-templates` skill)
 
