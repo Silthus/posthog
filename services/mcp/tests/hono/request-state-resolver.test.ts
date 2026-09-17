@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockSessionStore, mockTokenStore } = vi.hoisted(() => ({
+const { mockSessionStore, mockTokenStore, mockApiKey } = vi.hoisted(() => ({
     mockSessionStore: new Map<string, unknown>(),
     mockTokenStore: new Map<string, unknown>(),
+    mockApiKey: { scopes: ['*'], scoped_teams: [] },
 }))
 
 vi.mock('@/lib/posthog/flags', () => ({
@@ -63,7 +64,7 @@ vi.mock('@/hono/request-context', () => {
                 getContext: vi.fn(async () => ({
                     stateManager: {
                         setDefaultOrganizationAndProject: vi.fn(async () => {}),
-                        getApiKey: vi.fn(async () => ({ scopes: ['*'], scoped_teams: [] })),
+                        getApiKey: vi.fn(async () => mockApiKey),
                         getAiConsentGiven: vi.fn(async () => undefined),
                         getOrFetchGroupTypes: vi.fn(async () => undefined),
                         getEnvironmentPrompt: vi.fn(async () => undefined),
@@ -79,9 +80,12 @@ vi.mock('@/hono/request-context', () => {
 })
 
 import type { RedisLike } from '@/hono/cache/RedisCache'
+import { MCP_EXEC_SKILLS_FEATURE_FLAG } from '@/hono/constants'
 import { RequestStateResolver } from '@/hono/request-state-resolver'
-import { resolveFeatureFlagOverrides } from '@/lib/posthog/flags'
+import { ToolCatalog } from '@/hono/tool-catalog'
+import { evaluateFeatureFlags, resolveFeatureFlagOverrides } from '@/lib/posthog/flags'
 import type { RequestProperties } from '@/lib/request-properties'
+import { TASKS_CONTEXT_TOOL_NAMES } from '@/tools/tasksContext'
 import type { Env } from '@/tools/types'
 
 function makeProps(overrides: Partial<RequestProperties> = {}): RequestProperties {
@@ -100,16 +104,51 @@ function makeProps(overrides: Partial<RequestProperties> = {}): RequestPropertie
 }
 
 function makeResolver(): RequestStateResolver {
+    return makeResolverWithCatalog().resolver
+}
+
+function makeResolverWithCatalog(): {
+    resolver: RequestStateResolver
+    getFilteredTools: ReturnType<typeof vi.fn>
+} {
+    const getFilteredTools = vi.fn(() => [])
     const catalog = {
-        getFilteredTools: vi.fn(() => []),
+        getFilteredTools,
     }
-    return new RequestStateResolver(catalog as any, {} as RedisLike, {} as Env)
+    return {
+        resolver: new RequestStateResolver(catalog as any, {} as RedisLike, {} as Env),
+        getFilteredTools,
+    }
 }
 
 describe('RequestStateResolver MCP client contexts', () => {
     beforeEach(() => {
         mockSessionStore.clear()
         mockTokenStore.clear()
+        mockApiKey.scopes = ['*']
+    })
+
+    it.each([
+        ['cli', false],
+        ['cli', true],
+        ['tools', false],
+        ['tools', true],
+    ] as const)('filters run-start tools in %s mode with sandbox=%s', async (mode, sandbox) => {
+        if (sandbox) {
+            mockApiKey.scopes.push('internal_run:read')
+        }
+        vi.mocked(evaluateFeatureFlags).mockResolvedValueOnce({ 'tasks-mcp-agent-run-start': true, tasks: true })
+        const catalog = new ToolCatalog()
+        await catalog.warmup()
+        const resolver = new RequestStateResolver(catalog, {} as RedisLike, {} as Env)
+
+        const result = await resolver.resolve(makeProps({ mode }))
+        const names = result.allTools.map((tool) => tool.name)
+
+        for (const name of ['tasks-run-create', 'tasks-create-and-run']) {
+            expect(names.includes(name)).toBe(!sandbox)
+        }
+        expect(names).toContain('tasks-create')
     })
 
     it('stores client props, but not resolved mode, for a new MCP session', async () => {
@@ -161,14 +200,22 @@ describe('RequestStateResolver MCP client contexts', () => {
         expect(result.clientProfile.clientName).toBe('cursor')
     })
 
-    it('auto-selects tools mode from the ChatGPT user-agent', async () => {
-        // ChatGPT's clientInfo.name is generic; the surface only shows up in the
+    it('auto-selects tools mode from a name-less Cursor user-agent', async () => {
+        // Older Cursor builds omit clientInfo.name and identify only through the
         // User-Agent. Guards the `userAgent: props.clientUserAgent` profile plumbing.
-        const props = makeProps({ mcpClientName: undefined, clientUserAgent: 'openai-mcp/1.0.0 (ChatGPT)' })
+        const props = makeProps({ mcpClientName: undefined, clientUserAgent: 'Cursor/3.1.15 (darwin arm64)' })
         const result = await makeResolver().resolve(props)
 
         expect(result.useSingleExec).toBe(false)
         expect(props.mode).toBe('tools')
+    })
+
+    it('keeps the labeled ChatGPT user-agent on the cli default', async () => {
+        const props = makeProps({ mcpClientName: undefined, clientUserAgent: 'openai-mcp/1.0.0 (ChatGPT)' })
+        const result = await makeResolver().resolve(props)
+
+        expect(result.useSingleExec).toBe(true)
+        expect(props.mode).toBe('cli')
     })
 
     it('defaults to cli mode when no client hints are present', async () => {
@@ -305,6 +352,19 @@ describe('RequestStateResolver MCP client contexts', () => {
         expect(props.mode).toBe('cli')
     })
 
+    it('evaluates the exec skills flag even though no generated tool declares it', async () => {
+        vi.mocked(evaluateFeatureFlags).mockResolvedValueOnce({ [MCP_EXEC_SKILLS_FEATURE_FLAG]: true })
+
+        const result = await makeResolver().resolve(makeProps())
+
+        expect(evaluateFeatureFlags).toHaveBeenCalledWith(
+            expect.arrayContaining([MCP_EXEC_SKILLS_FEATURE_FLAG]),
+            'distinct-id',
+            undefined
+        )
+        expect(result.toolFeatureFlags?.[MCP_EXEC_SKILLS_FEATURE_FLAG]).toBe(true)
+    })
+
     it('honors a dev/test flag override even when evaluation returns nothing', async () => {
         // Evaluation stays empty (analytics client disabled, as in local dev/evals);
         // the override seam is what flips a tool flag on so it reaches the tool layer.
@@ -335,5 +395,38 @@ describe('RequestStateResolver MCP client contexts', () => {
         expect(result.requestContext.mcpConsumer).toBe('posthog-code')
         expect(result.sessionContext?.mcpConsumer).toBe('posthog-code')
         expect(mockSessionStore.get('mcpConsumer')).toBe('posthog-code')
+    })
+
+    it.each([
+        ['a Desktop task', { taskOriginProduct: undefined }, true],
+        ['a support reply task', { taskOriginProduct: 'support_reply' }, true],
+        // Scout sandboxes mount gateway servers directly as `mcp__<server>__<tool>`; a second
+        // `<slug>__<tool>` spelling inside exec resolves for a member but not for the service
+        // account, so skills learned interactively fail on the schedule.
+        ['a scout run', { taskOriginProduct: 'signals_scout' }, false],
+    ] as const)('surfaces gateway tools through exec for %s', async (_label, overrides, enabled) => {
+        vi.mocked(resolveFeatureFlagOverrides).mockReturnValueOnce({ 'mcp-gateway': true })
+
+        const result = await makeResolver().resolve(makeProps({ mcpConsumer: 'posthog-code', ...overrides }))
+
+        expect(result.useSingleExec).toBe(true)
+        expect(result.gatewayToolsEnabled).toBe(enabled)
+    })
+
+    it.each([
+        ['PostHog Code task', { mcpConsumer: 'posthog-code', taskId: 'task-1' }, false],
+        ['PostHog Code without a task', { mcpConsumer: 'posthog-code', taskId: undefined }, true],
+        ['non-PostHog Code task', { mcpConsumer: 'other', taskId: 'task-1' }, true],
+    ] as const)('advertises task artifacts and comments for %s', async (_label, overrides, excluded) => {
+        const { resolver, getFilteredTools } = makeResolverWithCatalog()
+
+        await resolver.resolve(makeProps(overrides))
+
+        const options = getFilteredTools.mock.calls[0]?.[0]
+        expect(options?.excludeTools).toEqual(
+            excluded
+                ? expect.arrayContaining([...TASKS_CONTEXT_TOOL_NAMES])
+                : expect.not.arrayContaining([...TASKS_CONTEXT_TOOL_NAMES])
+        )
     })
 })

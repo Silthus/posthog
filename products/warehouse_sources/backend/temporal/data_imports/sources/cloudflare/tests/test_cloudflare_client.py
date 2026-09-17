@@ -231,12 +231,18 @@ class TestZoneFanout:
 
     @pytest.mark.parametrize(
         ("endpoint", "status_code"),
-        [("rate_limits", 410), ("custom_certificates", 400)],
+        [
+            ("rate_limits", 410),
+            ("custom_certificates", 400),
+            ("firewall_rules", 400),
+            ("filters", 400),
+        ],
     )
     @mock.patch(CLIENT_SESSION_PATCH)
     def test_skips_zone_missing_plan_feature_and_continues(self, MockSession, endpoint, status_code) -> None:
         # Cloudflare returns a non-403/404 error when a zone's plan doesn't include a
-        # feature (e.g. legacy rate limiting is 410 Gone, custom certs are 400) rather
+        # feature, or when it has moved off a deprecated API (legacy rate limiting is
+        # 410 Gone, custom certs and the legacy firewall rules/filters are 400), rather
         # than an empty list — one such zone must not abort the whole stream.
         session = MockSession.return_value
         _wire(
@@ -368,6 +374,29 @@ class TestAccountFanout:
         rows = _rows(cloudflare_source("token", "billing_usage", team_id=1, job_id="j"))
 
         assert [(r["ts"], r["_account_id"]) for r in rows] == [(1, "a2")]
+
+    @mock.patch(CLIENT_SESSION_PATCH)
+    def test_audit_logs_stops_on_400_past_a_full_last_page(self, MockSession) -> None:
+        # audit_logs has no result_info.total_pages, so a "short page" is the only way the
+        # paginator learns it has reached the end. When an account's true count is an exact
+        # multiple of PAGE_SIZE, the page right past the end is requested anyway, and
+        # Cloudflare answers it with a 400 instead of an empty list. The rows already fetched
+        # must survive rather than the whole sync failing.
+        session = MockSession.return_value
+        full_page = [{"id": str(i)} for i in range(PAGE_SIZE)]
+        _wire(
+            session,
+            [
+                _response([{"id": "a1"}], total_pages=1),
+                _response(full_page),
+                _error_response(400),
+            ],
+        )
+
+        rows = _rows(cloudflare_source("token", "audit_logs", team_id=1, job_id="j"))
+
+        assert len(rows) == PAGE_SIZE
+        assert {r["_account_id"] for r in rows} == {"a1"}
 
 
 class TestSinglePageEndpoints:

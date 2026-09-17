@@ -1,14 +1,12 @@
 from typing import Optional, cast
 
-from posthog.schema import (
+from products.warehouse_sources.backend.facade.source_config import (
     DataWarehouseSourceCategory,
-    ExternalDataSourceType as SchemaExternalDataSourceType,
     ReleaseStatus,
     SourceConfig,
     SourceFieldInputConfig,
     SourceFieldInputConfigType,
 )
-
 from products.warehouse_sources.backend.temporal.data_imports.sources.common.base import FieldType, ResumableSource
 from products.warehouse_sources.backend.temporal.data_imports.sources.common.canonical_descriptions import (
     CanonicalDescriptions,
@@ -47,7 +45,7 @@ class MistralAISource(ResumableSource[MistralAISourceConfig, MistralAIResumeConf
     @property
     def get_source_config(self) -> SourceConfig:
         return SourceConfig(
-            name=SchemaExternalDataSourceType.MISTRAL_AI,
+            name=ExternalDataSourceType.MISTRALAI,
             category=DataWarehouseSourceCategory.ENGINEERING___MONITORING,
             label="Mistral AI",
             releaseStatus=ReleaseStatus.ALPHA,
@@ -86,6 +84,10 @@ You can create an API key in [La Plateforme](https://console.mistral.ai/api-keys
             # stable status text and base host, not the per-request path/query.
             "401 Client Error: Unauthorized for url: https://api.mistral.ai": "Your Mistral AI API key is invalid or has been revoked. Create a new key in La Plateforme, then reconnect.",
             "403 Client Error: Forbidden for url: https://api.mistral.ai": "Your Mistral AI API key is missing the permissions needed to sync this data. Check the key's permissions in La Plateforme, then reconnect.",
+            # Mistral returns 410 (permanently gone, not a transient 404/5xx) when fine-tuning is not
+            # available for the workspace — retrying can never make a gone resource reappear. Match the
+            # base path, not the page/page_size query, so it catches the error on every page.
+            "410 Client Error: Gone for url: https://api.mistral.ai/v1/fine_tuning/jobs": "Fine-tuning is not available for your Mistral AI workspace, so the Fine tuning jobs table can't sync. Disable that table, or check your workspace's fine-tuning access in La Plateforme.",
         }
 
     def get_schemas(

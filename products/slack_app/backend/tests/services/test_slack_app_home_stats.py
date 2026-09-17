@@ -25,7 +25,6 @@ from products.slack_app.backend.services.slack_app_home_stats import (
     build_stats_state,
     coerce_window_days,
 )
-from products.slack_app.backend.services.slack_settings import AIPreferences
 
 WORKSPACE = "T_STATS"
 SLACK_USER = "U_ADMIN"
@@ -147,13 +146,7 @@ def _column(view: dict, heading: str) -> str:
 
 
 def _render(state: StatsState | None) -> dict:
-    return render_home_view(
-        effective=AIPreferences(),
-        user_row=None,
-        workspace_row=None,
-        is_admin=True,
-        stats_state=state,
-    )
+    return render_home_view(is_admin=True, stats_state=state)
 
 
 class TestWindowCoercion:
@@ -489,7 +482,7 @@ class TestStatsCardGating:
             "products.slack_app.backend.services.slack_app_home.is_slack_workspace_admin",
             return_value=is_admin,
         ):
-            handle_app_home_opened({"user": SLACK_USER}, WORKSPACE)
+            handle_app_home_opened({"user": SLACK_USER}, WORKSPACE, integration=slack_integration)
 
         view = mock_slack_client.views_publish.call_args.kwargs["view"]
         assert ("Workspace activity" in str(view)) is expected_visible

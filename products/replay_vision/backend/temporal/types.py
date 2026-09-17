@@ -2,17 +2,20 @@ import datetime as dt
 from typing import Annotated, Any, TypedDict
 from uuid import UUID
 
-from pydantic import BaseModel, Field, ValidationError, model_validator
-from temporalio.exceptions import ApplicationError
+from pydantic import BaseModel, Field, model_validator
 
 from products.replay_vision.backend.models.replay_observation import ObservationTrigger
 from products.replay_vision.backend.models.replay_scanner import ScannerType
-from products.replay_vision.backend.temporal.constants import MAX_SESSION_ID_LENGTH
+from products.replay_vision.backend.session_limits import MAX_SESSION_ID_LENGTH
 from products.replay_vision.backend.temporal.scanners.base import SignalFinding
 from products.replay_vision.backend.temporal.scanners.classifier import ClassifierOutput
-from products.replay_vision.backend.temporal.scanners.monitor import MonitorOutput
+from products.replay_vision.backend.temporal.scanners.monitor import MonitorOutput, MonitorVerdict
 from products.replay_vision.backend.temporal.scanners.scorer import ScorerOutput
 from products.replay_vision.backend.temporal.scanners.summarizer import SummarizerOutput
+from products.replay_vision.backend.temporal.snapshots import (
+    BackfillScannerSnapshot as BackfillScannerSnapshot,
+    ScannerSnapshot as ScannerSnapshot,
+)
 
 AnyScannerOutput = Annotated[
     ClassifierOutput | MonitorOutput | ScorerOutput | SummarizerOutput,
@@ -20,27 +23,17 @@ AnyScannerOutput = Annotated[
 ]
 
 
-class ScannerSnapshot(BaseModel, frozen=True):
-    """Frozen view of a `ReplayScanner` at observation-create time, persisted into `ReplayObservation.scanner_snapshot`."""
+class VerificationRecord(BaseModel, frozen=True):
+    """Audit of the extra draws taken to verify a monitor `yes` verdict. Absent when no verdict was verified."""
 
-    name: str
-    scanner_type: ScannerType
-    scanner_version: int = Field(ge=1)
-    # Plain strings, not live enums: retiring a ScannerModel/ScannerProvider member must not break old-row loads.
-    model: str
-    provider: str
-    emits_signals: bool
-    scanner_config: dict[str, Any]
-
-    @classmethod
-    def load_for(cls, observation_id: UUID, raw: dict[str, Any] | None) -> "ScannerSnapshot":
-        """Validate a persisted `scanner_snapshot` blob, raising a non-retryable error tagged with the observation id."""
-        try:
-            return cls.model_validate(raw or {})
-        except ValidationError as exc:
-            raise ApplicationError(
-                f"ReplayObservation {observation_id} has malformed scanner_snapshot: {exc}", non_retryable=True
-            ) from exc
+    mode: str
+    # Verdicts in draw order; the first entry is the pass that triggered verification.
+    draws: list[MonitorVerdict]
+    # The verdict verification settled on: the first pass when the second draw agrees, else the dissent.
+    # `served_verdict` is what `model_output` carries: the same value under `enforce`, the first draw under `shadow`.
+    resolved_verdict: MonitorVerdict
+    served_verdict: MonitorVerdict
+    skipped_reason: str | None = None
 
 
 class ScannerResult(BaseModel, frozen=True):
@@ -48,6 +41,7 @@ class ScannerResult(BaseModel, frozen=True):
 
     model_output: AnyScannerOutput
     signals_count: int = Field(default=0, ge=0)
+    verification: VerificationRecord | None = None
 
 
 class ApplyScannerInputs(BaseModel, frozen=True):
@@ -58,6 +52,8 @@ class ApplyScannerInputs(BaseModel, frozen=True):
     team_id: int
     triggered_by: ObservationTrigger
     triggered_by_user_id: int | None = None
+    # Set only for backfill-triggered applies; routes observation creation to the backfill's frozen snapshot.
+    backfill_id: UUID | None = None
 
 
 class CreateObservationInputs(BaseModel, frozen=True):
@@ -67,6 +63,7 @@ class CreateObservationInputs(BaseModel, frozen=True):
     triggered_by: ObservationTrigger
     triggered_by_user_id: int | None
     workflow_id: str
+    backfill_id: UUID | None = None
 
 
 class CreateObservationOutput(BaseModel, frozen=True):
@@ -109,6 +106,12 @@ class MarkObservationIneligibleInputs(BaseModel, frozen=True):
 
 
 class FetchSessionEventsInputs(BaseModel, frozen=True):
+    observation_id: UUID
+    team_id: int
+    session_id: str
+
+
+class FetchSessionNetworkInputs(BaseModel, frozen=True):
     observation_id: UUID
     team_id: int
     session_id: str
@@ -161,6 +164,36 @@ class SessionMetadata(BaseModel, frozen=True):
         return self.model_dump(mode="json", exclude_none=True)
 
 
+class SessionGroup(BaseModel, frozen=True):
+    """One group the recorded session belongs to, ready to render: the group type's label and the group's name."""
+
+    label: str
+    name: str
+
+
+class SessionIdentity(BaseModel, frozen=True):
+    """Who the recorded session belongs to, resolved from the customer's own person and group data.
+
+    Kept separate from `SessionMetadata` because it is personal data: it is rendered into the prompt so a
+    scanner can attribute the session, and the preamble governs whether the model may name it in output.
+    """
+
+    person_email: str | None = None
+    person_name: str | None = None
+    person_organization: str | None = None
+    groups: list[SessionGroup] = Field(default_factory=list)
+
+    def as_prompt_dict(self) -> dict[str, Any] | None:
+        """Renderable form, or None when nothing was resolved so the preamble omits the block entirely.
+
+        Unset fields stay in as `None` rather than being dropped: the template renders under `StrictUndefined`,
+        where a missing key raises instead of reading as falsy.
+        """
+        if not self.person_email and not self.person_name and not self.person_organization and not self.groups:
+            return None
+        return self.model_dump(mode="json")
+
+
 class NavigationEntry(BaseModel, frozen=True):
     """One page-URL change in the session, precomputed for the prompt's navigation timeline."""
 
@@ -194,6 +227,11 @@ class ScannerLlmInputs(BaseModel, frozen=True):
     metadata: SessionMetadata
     # Carried for signal emission, not the prompt — kept off `SessionMetadata` so it never reaches the LLM.
     distinct_id: str | None = None
+    # Who the session belongs to. Rendered into the preamble, and persisted onto the observation row.
+    # Defaults keep Redis blobs written before this field existed loadable.
+    identity: SessionIdentity = Field(default_factory=SessionIdentity)
+    # Group keys by group type index, for the observation row's group attribution.
+    group_keys: dict[int, str] = Field(default_factory=dict)
 
 
 class EnsureSessionAssetInputs(BaseModel, frozen=True):
@@ -218,6 +256,8 @@ class UploadedVideo(BaseModel, frozen=True):
 class CallScannerProviderInputs(BaseModel, frozen=True):
     team_id: int
     observation_id: UUID  # locates the ScannerLlmInputs blob in Redis AND the scanner_snapshot on the row
+    # The rendered asset behind `file_uri`; its export context carries the map for converting cited moments.
+    exported_asset_id: int
     file_uri: str
     mime_type: str
     # When set, replaces the observation row's snapshot (evaluations re-run rated sessions with the suggested prompt).
@@ -230,6 +270,7 @@ class ScannerCallOutput(BaseModel, frozen=True):
     model_output: AnyScannerOutput
     # Extracted from the LLM response before `finalize` so per-type output mapping can't drop them.
     signals: list[SignalFinding] = Field(default_factory=list)
+    verification: VerificationRecord | None = None
 
 
 class CleanupGeminiFileInputs(BaseModel, frozen=True):

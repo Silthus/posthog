@@ -1,6 +1,5 @@
 import { objectCleanWithEmpty, objectsEqual, removeUndefinedAndNull } from 'lib/utils/objects'
 import { isValidRE2 } from 'lib/utils/regexp'
-import { isFunnelWithEnoughSteps, isFunnelWithIncompleteDataWarehouseStep } from 'scenes/funnels/funnelUtils'
 
 import { Variable } from '~/queries/nodes/DataVisualization/types'
 import { nodeKindToInsightType } from '~/queries/nodes/InsightQuery/utils/queryNodeToFilter'
@@ -33,6 +32,11 @@ import {
     isWebAnalyticsInsightQuery,
 } from '~/queries/utils'
 import { BaseMathType, ChartDisplayType } from '~/types'
+
+import {
+    isFunnelWithEnoughSteps,
+    isFunnelWithIncompleteDataWarehouseStep,
+} from 'products/product_analytics/frontend/insights/funnels/funnelUtils'
 
 type CompareQueryOpts = { ignoreVisualizationOnlyChanges: boolean }
 
@@ -135,13 +139,30 @@ export const haveVariablesOrFiltersChanged = (a: Node, b: Node): boolean => {
     return false
 }
 
+/** Query log metadata, stripped from result caching on the backend too, so it can never change what
+ * comes back. Comparing it would refetch every tile whenever a tag alone changes. */
+const withoutQueryLogTags = <T extends Node>(node: T): T => {
+    // dataNodeLogic compares against oldProps.query, which is undefined on the first props change.
+    if (!node || typeof node !== 'object' || !('tags' in node)) {
+        return node
+    }
+    const { tags: _tags, ...rest } = node as T & { tags?: unknown }
+    return rest as T
+}
+
 /** Compares two queries for semantic equality to prevent double-fetching of data. */
 export const compareDataNodeQuery = (a: Node, b: Node, opts?: CompareQueryOpts): boolean => {
     if (isInsightQueryNode(a) && isInsightQueryNode(b)) {
-        return objectsEqual(cleanInsightQuery(a, opts), cleanInsightQuery(b, opts))
+        return objectsEqual(
+            cleanInsightQuery(withoutQueryLogTags(a), opts),
+            cleanInsightQuery(withoutQueryLogTags(b), opts)
+        )
     }
 
-    return objectsEqual(objectCleanWithEmpty(a as any), objectCleanWithEmpty(b as any))
+    return objectsEqual(
+        objectCleanWithEmpty(withoutQueryLogTags(a) as any),
+        objectCleanWithEmpty(withoutQueryLogTags(b) as any)
+    )
 }
 
 /**
@@ -240,6 +261,7 @@ const groupedChartDisplayTypes: Record<ChartDisplayType, ChartDisplayType> = {
     [ChartDisplayType.ActionsUnstackedBar]: ChartDisplayType.ActionsLineGraph,
     [ChartDisplayType.ActionsStackedBar]: ChartDisplayType.ActionsLineGraph,
     [ChartDisplayType.TwoDimensionalHeatmap]: ChartDisplayType.ActionsLineGraph,
+    [ChartDisplayType.ScatterPlot]: ChartDisplayType.ActionsLineGraph,
     [ChartDisplayType.Metric]: ChartDisplayType.ActionsLineGraph,
 
     // cumulative time series
@@ -249,6 +271,7 @@ const groupedChartDisplayTypes: Record<ChartDisplayType, ChartDisplayType> = {
     [ChartDisplayType.BoldNumber]: ChartDisplayType.ActionsBarValue,
     [ChartDisplayType.ActionsBarValue]: ChartDisplayType.ActionsBarValue,
     [ChartDisplayType.ActionsPie]: ChartDisplayType.ActionsBarValue,
+    [ChartDisplayType.ActionsDonut]: ChartDisplayType.ActionsBarValue,
     [ChartDisplayType.ActionsTable]: ChartDisplayType.ActionsBarValue,
 
     // separate: different breakdown limit (250)
@@ -303,6 +326,9 @@ export const cleanInsightQuery = (query: InsightQueryNode, opts?: CompareQueryOp
             showMean: undefined,
             meanRetentionCalculation: undefined,
             yAxisScaleType: undefined,
+            yAxisStartAtZero: undefined,
+            yAxisMin: undefined,
+            yAxisMax: undefined,
             hiddenLegendIndexes: undefined,
             hiddenLegendBreakdowns: undefined,
             resultCustomizations: undefined,
@@ -312,12 +338,14 @@ export const cleanInsightQuery = (query: InsightQueryNode, opts?: CompareQueryOp
             showConfidenceIntervals: undefined,
             confidenceLevel: undefined,
             showTrendLines: undefined,
+            showMeanLine: undefined,
             showMovingAverage: undefined,
             movingAverageIntervals: undefined,
             stacked: undefined,
             detailedResultsAggregationType: undefined,
             excludeBoxPlotOutliers: undefined,
             showAnnotations: undefined,
+            annotationsScope: undefined,
             showFullUrls: undefined,
             selectedInterval: undefined,
             funnelStepReference: undefined,

@@ -10,6 +10,7 @@ from django.views.generic import RedirectView
 from django_otp.plugins.otp_static.models import StaticDevice
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
+from posthog.admin import register_all_admin
 from posthog.middleware import impersonated_session_logout
 from posthog.views import api_key_search_view, redis_edit_ttl_view, redis_values_view
 
@@ -34,7 +35,7 @@ def extend_api_router() -> None:
         router as root_router,
     )
 
-    from ee.api import hands_free, max_tools, session_summaries
+    from ee.api import hands_free, max_tools
 
     root_router.register(r"billing", billing.BillingViewset, "billing")
     root_router.register(r"license", license.LicenseViewSet)
@@ -71,13 +72,14 @@ def extend_api_router() -> None:
 
     projects_router.register(r"max_hands_free", hands_free.MaxHandsFreeViewSet, "project_max_hands_free", ["team_id"])
 
-    projects_router.register(
-        r"session_summaries", session_summaries.SessionSummariesViewSet, "project_session_summaries", ["team_id"]
-    )
-
 
 # The admin interface is disabled on self-hosted instances, as its misuse can be unsafe
 if settings.ADMIN_PORTAL_ENABLED:
+    # `AdminSite.get_urls()` derives the `admin:app_list` URL pattern from the registry
+    # when `admin.site.urls` below is read, and never rebuilds it. `LazyAdminRegistry`
+    # fills the registry first, but `posthog/apps.py` skips it under `settings.TEST`.
+    register_all_admin()
+
     # these models are auto-registered but we don't want to expose them to staff
     for model in (StaticDevice, TOTPDevice):
         try:
@@ -85,10 +87,6 @@ if settings.ADMIN_PORTAL_ENABLED:
         except NotRegistered:
             pass
 
-    from posthog.admin.admins.backfill_precalculated_events_admin import backfill_precalculated_events_view
-    from posthog.admin.admins.backfill_precalculated_person_properties_admin import (
-        backfill_precalculated_person_properties_view,
-    )
     from posthog.admin.admins.code_based_verification_bypass_admin import (
         CodeBasedVerificationBypassViewSet,
         CodeBasedVerificationGlobalDisableViewSet,
@@ -106,7 +104,6 @@ if settings.ADMIN_PORTAL_ENABLED:
         notebook_markdown_migration_view,
     )
     from posthog.admin.admins.radar_bypass_admin import RadarBypassViewSet, radar_bypass_view
-    from posthog.admin.admins.realtime_cohort_calculation_admin import analyze_realtime_cohort_calculation_view
     from posthog.admin.admins.resave_cohorts_admin import resave_cohorts_view
     from posthog.admin.admins.tophog_admin import tophog_dashboard_view, tophog_restrictions_view
 
@@ -119,11 +116,6 @@ if settings.ADMIN_PORTAL_ENABLED:
         path("admin/redisvalues", redis_values_view, name="redis_values"),
         path("admin/redis/edit-ttl", redis_edit_ttl_view, name="redis_edit_ttl"),
         path("admin/apikeysearch", api_key_search_view, name="api_key_search"),
-        path(
-            "admin/realtime-cohorts-calculation/",
-            admin.site.admin_view(analyze_realtime_cohort_calculation_view),
-            name="realtime-cohorts-calculation",
-        ),
         path(
             "admin/radar-bypass/",
             admin.site.admin_view(radar_bypass_view),
@@ -163,16 +155,6 @@ if settings.ADMIN_PORTAL_ENABLED:
             "admin/resave-cohorts/",
             admin.site.admin_view(resave_cohorts_view),
             name="resave-cohorts",
-        ),
-        path(
-            "admin/backfill-precalculated-events/",
-            admin.site.admin_view(backfill_precalculated_events_view),
-            name="backfill-precalculated-events",
-        ),
-        path(
-            "admin/backfill-precalculated-person-properties/",
-            admin.site.admin_view(backfill_precalculated_person_properties_view),
-            name="backfill-precalculated-person-properties",
         ),
         path(
             "admin/distinct-id-usage/",
@@ -264,29 +246,29 @@ urlpatterns: list[Any] = [
         vercel_connect.VercelConnectLinkViewSet.as_view({"get": "session_info"}),
     ),
     path("webhooks/vercel", csrf_exempt(vercel_webhooks.vercel_webhook), name="vercel_webhooks"),
-    path("scim/v2/<uuid:domain_id>/Users", csrf_exempt(scim_views.SCIMUsersView.as_view()), name="scim_users"),
+    path("scim/v2/<str:scim_slug>/Users", csrf_exempt(scim_views.SCIMUsersView.as_view()), name="scim_users"),
     path(
-        "scim/v2/<uuid:domain_id>/Users/<int:user_id>",
+        "scim/v2/<str:scim_slug>/Users/<int:user_id>",
         csrf_exempt(scim_views.SCIMUserDetailView.as_view()),
         name="scim_user_detail",
     ),
-    path("scim/v2/<uuid:domain_id>/Groups", csrf_exempt(scim_views.SCIMGroupsView.as_view()), name="scim_groups"),
+    path("scim/v2/<str:scim_slug>/Groups", csrf_exempt(scim_views.SCIMGroupsView.as_view()), name="scim_groups"),
     path(
-        "scim/v2/<uuid:domain_id>/Groups/<uuid:group_id>",
+        "scim/v2/<str:scim_slug>/Groups/<uuid:group_id>",
         csrf_exempt(scim_views.SCIMGroupDetailView.as_view()),
         name="scim_group_detail",
     ),
     path(
-        "scim/v2/<uuid:domain_id>/ServiceProviderConfig",
+        "scim/v2/<str:scim_slug>/ServiceProviderConfig",
         csrf_exempt(scim_views.SCIMServiceProviderConfigView.as_view()),
         name="scim_service_provider_config",
     ),
     path(
-        "scim/v2/<uuid:domain_id>/ResourceTypes",
+        "scim/v2/<str:scim_slug>/ResourceTypes",
         csrf_exempt(scim_views.SCIMResourceTypesView.as_view()),
         name="scim_resource_types",
     ),
-    path("scim/v2/<uuid:domain_id>/Schemas", csrf_exempt(scim_views.SCIMSchemasView.as_view()), name="scim_schemas"),
+    path("scim/v2/<str:scim_slug>/Schemas", csrf_exempt(scim_views.SCIMSchemasView.as_view()), name="scim_schemas"),
     # Stripe Projects provisioning (APP 0.1d)
     path("api/partners/stripe/", include("ee.partners.stripe.api.provisioning.urls")),
     # Agentic provisioning (partner account/resource provisioning + deep-link login)

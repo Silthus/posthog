@@ -1,13 +1,14 @@
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 
 import { useMocks } from '~/mocks/jest'
-import type { SourceConfig } from '~/queries/schema/schema-general'
 import { initKeaTests } from '~/test/init'
+
+import type { SourceConfigResponseApi } from 'products/warehouse_sources/frontend/generated/api.schemas'
 
 import { availableSourcesLogic } from '../availableSourcesLogic'
 import { sourceCatalogLogic } from '../sourceCatalogLogic'
 
-const AVAILABLE_SOURCES: Record<string, SourceConfig> = {
+const AVAILABLE_SOURCES: Record<string, SourceConfigResponseApi> = {
     // Featured, so it must lead the browse list even though `Stripe` sorts after `Mango`.
     Stripe: {
         name: 'Stripe',
@@ -15,15 +16,29 @@ const AVAILABLE_SOURCES: Record<string, SourceConfig> = {
         caption: '',
         featured: true,
         fields: [],
-    } as unknown as SourceConfig,
+    } as unknown as SourceConfigResponseApi,
     // `Apple` sorts alphabetically first but is unreleased, so connectable-first ordering must
     // still push it below the two available sources.
-    Zebra: { name: 'Zebra', label: 'Zebra', fields: [] } as unknown as SourceConfig,
-    Mango: { name: 'Mango', label: 'Mango', fields: [] } as unknown as SourceConfig,
-    Apple: { name: 'Apple', label: 'Apple', unreleasedSource: true, fields: [] } as unknown as SourceConfig,
+    Zebra: { name: 'Zebra', label: 'Zebra', fields: [] } as unknown as SourceConfigResponseApi,
+    Mango: { name: 'Mango', label: 'Mango', fields: [] } as unknown as SourceConfigResponseApi,
+    Apple: { name: 'Apple', label: 'Apple', unreleasedSource: true, fields: [] } as unknown as SourceConfigResponseApi,
     // Connectable, and shares the "apple" token with the unreleased `Apple` above so a search for
     // "apple" fuzzy-matches both — used to assert connectable results outrank "Coming soon" ones.
-    ApplePay: { name: 'ApplePay', label: 'Apple Pay', fields: [] } as unknown as SourceConfig,
+    ApplePay: { name: 'ApplePay', label: 'Apple Pay', fields: [] } as unknown as SourceConfigResponseApi,
+    // Two sources in distinct categories, used to assert that a category-filtered search which only
+    // matches a source in another category flags a cross-category hint instead of dead-ending.
+    Salesforce: {
+        name: 'Salesforce',
+        label: 'Salesforce',
+        category: 'Sales',
+        fields: [],
+    } as unknown as SourceConfigResponseApi,
+    Datadog: {
+        name: 'Datadog',
+        label: 'Datadog',
+        category: 'Engineering & monitoring',
+        fields: [],
+    } as unknown as SourceConfigResponseApi,
 }
 
 describe('sourceCatalogLogic', () => {
@@ -106,6 +121,22 @@ describe('sourceCatalogLogic', () => {
         // find them instead of dead-ending on "no sources match".
         const names = logic.values.filteredItems.map((item) => item.name)
         expect(names).toContain('aws')
+    })
+
+    it('flags a cross-category match when a filtered search only hits another category', () => {
+        const logic = sourceCatalogLogic()
+        logic.actions.setSelectedCategory('Sales')
+        logic.actions.setSearch('Datadog')
+
+        // The category filter hides the only match, so the list dead-ends...
+        expect(logic.values.filteredItems).toHaveLength(0)
+        // ...but the hint knows the source exists in another category and can point the user there.
+        expect(logic.values.hasCrossCategoryMatches).toBe(true)
+
+        // The same search across all categories finds it, so the hint is no longer needed.
+        logic.actions.setSelectedCategory('all')
+        expect(logic.values.filteredItems.map((item) => item.name)).toContain('Datadog')
+        expect(logic.values.hasCrossCategoryMatches).toBe(false)
     })
 
     it('clears the request text when the modal is closed', () => {

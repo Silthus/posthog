@@ -18,26 +18,31 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
-from typing import Any, Literal
+from typing import Any
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse, JsonResponse
 
 import structlog
 
-from posthog.models.integration import Integration, SlackIntegration
+from posthog.models.integration import SLACK_INTEGRATION_KINDS, Integration, SlackIntegration
 from posthog.models.organization import OrganizationMembership
+from posthog.models.user import User
 from posthog.models.user_integration import UserIntegration
 from posthog.user_permissions import UserPermissions
 
-from products.slack_app.backend.feature_flags import is_slack_app_home_enabled, is_slack_app_oauth_enabled
-from products.slack_app.backend.models import SlackSettings, SlackUserProfileCache
+from products.slack_app.backend.analytics import capture_slack_event
+from products.slack_app.backend.feature_flags import is_slack_app_oauth_enabled
+from products.slack_app.backend.models import SlackSettings, SlackUserProfileCache, UntaggedFollowupMode
+from products.slack_app.backend.services.integration_resolver import load_integrations, resolve_from_candidates
 from products.slack_app.backend.services.model_catalogue import (
     REASONING_EFFORT_DISPLAY_NAMES,
     RUNTIME_ADAPTER_DISPLAY_NAMES,
     available_model_choices,
     describe_run_model,
-    format_model_id,
+    display_name_for_model,
+    group_by_runtime,
     label_for,
 )
 from products.slack_app.backend.services.run_preferences import SLACK_DEFAULT_MODEL
@@ -54,12 +59,7 @@ from products.slack_app.backend.services.slack_app_home_stats import (
     build_stats_state,
     coerce_window_days,
 )
-from products.slack_app.backend.services.slack_settings import (
-    AIPreferences,
-    build_ai_preferences_payload,
-    resolve_ai_preferences,
-    validate_ai_preferences,
-)
+from products.slack_app.backend.services.slack_settings import AIPreferences, resolve_untagged_followup_mode
 from products.slack_app.backend.services.slack_user_info import is_slack_workspace_admin
 from products.slack_app.backend.services.slack_user_oauth import build_invite_url, find_linked_posthog_user
 
@@ -70,7 +70,6 @@ logger = structlog.get_logger(__name__)
 HOME_CALLBACK_ID = "slack_app_home"
 
 ACTION_EDIT_PERSONAL = "slack_app_home:edit_personal"
-ACTION_EDIT_WORKSPACE = "slack_app_home:edit_workspace"
 ACTION_RESET_PERSONAL = "slack_app_home:reset_personal"
 ACTION_UNLINK_ACCOUNT = "slack_app_home:unlink_account"
 ACTION_SET_PROJECT_PERSONAL = "slack_app_home:set_project_personal"
@@ -85,6 +84,36 @@ ACTION_TASKS_PAGE_PREV = "slack_app_home:tasks_page_prev"
 ACTION_TASKS_PAGE_NEXT = "slack_app_home:tasks_page_next"
 ACTION_STATS_WINDOW = "slack_app_home:stats_window"
 ACTION_STATS_REFRESH = "slack_app_home:stats_refresh"
+ACTION_SET_UNTAGGED_FOLLOWUP_MODE = "slack_app_home:set_untagged_followup_mode"
+# URL buttons: Slack opens the link itself and posts a block_actions payload we
+# only ack — the ids exist so the clicks still reach the usage-analytics capture.
+ACTION_GITHUB_SETTINGS = "slack_app_home:github_settings"
+ACTION_CONNECT_ACCOUNT = "slack_app_home:connect_account"
+
+# Every control the Home tab renders, in one place. The interactivity endpoint reads
+# this to claim region ownership and to dispatch, so a control that isn't listed here
+# renders as a button that silently does nothing. Adding an action id above without
+# adding it here is the failure this set exists to prevent.
+HOME_ACTION_IDS: frozenset[str] = frozenset(
+    {
+        ACTION_EDIT_PERSONAL,
+        ACTION_RESET_PERSONAL,
+        ACTION_UNLINK_ACCOUNT,
+        ACTION_SET_PROJECT_PERSONAL,
+        ACTION_SET_PROJECT_WORKSPACE,
+        ACTION_RESET_PROJECT_PERSONAL,
+        ACTION_TASKS_FILTER_REPO,
+        ACTION_TASKS_FILTER_STATUS,
+        ACTION_TASKS_REFRESH,
+        ACTION_TASKS_PAGE_PREV,
+        ACTION_TASKS_PAGE_NEXT,
+        ACTION_STATS_WINDOW,
+        ACTION_STATS_REFRESH,
+        ACTION_SET_UNTAGGED_FOLLOWUP_MODE,
+        ACTION_GITHUB_SETTINGS,
+        ACTION_CONNECT_ACCOUNT,
+    }
+)
 
 # Single block_id for the whole controls row. Block Kit only persists
 # state in `view.state.values` under blocks that carry a `block_id`, so
@@ -110,17 +139,19 @@ TASKS_STATUS_OPTIONS: tuple[tuple[str, str], ...] = (
 )
 
 EDIT_MODAL_PERSONAL_CALLBACK_ID = "slack_app_ai_prefs:personal"
-EDIT_MODAL_WORKSPACE_CALLBACK_ID = "slack_app_ai_prefs:workspace"
 
 MODAL_ACTION_RUNTIME_ADAPTER = "ai_prefs:runtime_adapter"
 MODAL_ACTION_MODEL = "ai_prefs:model"
 MODAL_ACTION_REASONING_EFFORT = "ai_prefs:reasoning_effort"
 
 MODAL_BLOCK_RUNTIME_ADAPTER = "block_runtime_adapter"
+# Prefixes, not literal block ids: Slack carries a block's state across `views.update`
+# whenever the `block_id` is unchanged, which is how a model picked under the previous
+# runtime used to survive a runtime switch and get submitted. Suffixing each dependent
+# block with what it depends on makes the re-rendered block a new one to Slack, so the
+# stale pick is dropped instead of hiding behind the fresh options. See `_scoped_block_id`.
 MODAL_BLOCK_MODEL = "block_model"
 MODAL_BLOCK_REASONING_EFFORT = "block_reasoning_effort"
-
-EditScope = Literal["personal", "workspace"]
 
 
 @dataclass(frozen=True)
@@ -144,24 +175,25 @@ class PickerAdapter:
 
 
 def get_picker_choices() -> tuple[PickerAdapter, ...]:
-    """Group the model catalogue into the runtime → model → effort tree the modal's
-    linked dropdowns render. Adapters with no available models are omitted entirely."""
-    by_adapter: dict[str, list[PickerModel]] = {}
-    for choice in available_model_choices():
-        efforts = tuple(
-            PickerEffort(value=e, label=label_for(e, REASONING_EFFORT_DISPLAY_NAMES)) for e in choice.supported_efforts
-        )
-        by_adapter.setdefault(choice.runtime_adapter, []).append(
-            PickerModel(value=choice.model, label=choice.label, supported_efforts=efforts)
-        )
-
+    """Dress the catalogue's runtime → model tree in the effort labels the modal's linked
+    dropdowns render. Adapters with no available models are omitted entirely."""
     return tuple(
         PickerAdapter(
-            value=adapter_value,
-            label=label_for(adapter_value, RUNTIME_ADAPTER_DISPLAY_NAMES),
-            models=tuple(models),
+            value=group.runtime_adapter,
+            label=group.label,
+            models=tuple(
+                PickerModel(
+                    value=choice.model,
+                    label=choice.label,
+                    supported_efforts=tuple(
+                        PickerEffort(value=e, label=label_for(e, REASONING_EFFORT_DISPLAY_NAMES))
+                        for e in choice.supported_efforts
+                    ),
+                )
+                for choice in group.choices
+            ),
         )
-        for adapter_value, models in by_adapter.items()
+        for group in group_by_runtime(available_model_choices())
     )
 
 
@@ -176,45 +208,6 @@ def _models_for(runtime_adapter: str) -> tuple[tuple[str, str], ...]:
 def _runtime_adapter_options() -> tuple[tuple[str, str], ...]:
     """Return `(value, label)` pairs for the modal's runtime dropdown."""
     return tuple((a.value, a.label) for a in get_picker_choices())
-
-
-@dataclass(frozen=True)
-class PreferenceSource:
-    """Which row contributed the effective `(runtime_adapter, model)` pair.
-
-    Used to render the "Source: …" line on the active-model card so the
-    precedence (personal → workspace → unset) is visible at a glance.
-    """
-
-    label: str
-
-    @classmethod
-    def personal(cls) -> PreferenceSource:
-        return cls(label="Your personal override")
-
-    @classmethod
-    def workspace(cls) -> PreferenceSource:
-        return cls(label="Workspace default")
-
-    @classmethod
-    def unset(cls) -> PreferenceSource:
-        return cls(label="System default")
-
-
-def resolve_source(
-    user_row: SlackSettings | None,
-    workspace_row: SlackSettings | None,
-) -> PreferenceSource:
-    """Return where the effective pair came from.
-
-    Mirrors the same atomic-pair rule the resolver uses: a row only "sources"
-    the pair when both halves are set on it.
-    """
-    if user_row and user_row.runtime_adapter and user_row.model:
-        return PreferenceSource.personal()
-    if workspace_row and workspace_row.runtime_adapter and workspace_row.model:
-        return PreferenceSource.workspace()
-    return PreferenceSource.unset()
 
 
 @dataclass(frozen=True)
@@ -249,7 +242,13 @@ class TaskItem:
     """One row on the Tasks card."""
 
     title: str
-    posthog_url: str
+    # The desktop link is `None` for a viewer without PostHog Desktop access, matching
+    # the reply footer. The web link is always present: the task page enforces access
+    # itself, so at worst it asks the viewer to sign in. Stated at every construction
+    # rather than defaulted, so a row can't lose its links by omission and render as
+    # plain text.
+    posthog_url: str | None
+    desktop_url: str | None
     status: str | None  # TaskRun.Status value or None when there's no run yet
     repository: str | None
     pr_url: str | None
@@ -329,23 +328,90 @@ class AccountState:
     link_url: str | None = None
 
 
+@dataclass(frozen=True)
+class GitHubAccount:
+    """One personal GitHub App installation the user has connected."""
+
+    installation_id: str
+    login: str | None = None
+    account_name: str | None = None
+
+    @property
+    def label(self) -> str:
+        """`login` is the GitHub user who authorized; `account_name` is the org
+        or user the App is installed on. Show both when they differ."""
+        if self.login and self.account_name and self.login != self.account_name:
+            return f"`{self.login}` on *{self.account_name}*"
+        return f"`{self.login or self.account_name or self.installation_id}`"
+
+
+@dataclass(frozen=True)
+class GitHubState:
+    """Inputs the renderer needs to draw the GitHub half of the accounts card.
+
+    ``user_resolved`` is False when we couldn't tell which PostHog user is
+    behind this Slack identity — the card then asks them to link PostHog first
+    instead of claiming they have no GitHub connection.
+
+    ``credentials_usable`` carries the same judgment the task flow gates on,
+    so a row whose tokens have gone stale reads as needing a reconnect rather
+    than as a working connection.
+    """
+
+    user_resolved: bool = False
+    accounts: tuple[GitHubAccount, ...] = ()
+    credentials_usable: bool = False
+    settings_url: str | None = None
+
+
+@dataclass(frozen=True)
+class RunDefaultsState:
+    """The central PostHog default a Slack run resolves to; only a model named in
+    the mention sits above it, and Slack's hardcoded floor below. The card reads
+    it so what it names is what a mention would actually launch on."""
+
+    model: str | None = None
+    reasoning_effort: str | None = None
+    runtime_adapter: str | None = None
+    #: Which level supplied it — "user", "team", or "none".
+    source: str = "none"
+    settings_url: str | None = None
+
+    @property
+    def applies(self) -> bool:
+        return bool(self.model)
+
+    @property
+    def source_label(self) -> str:
+        return "Your PostHog default" if self.source == "user" else "The project default"
+
+
 def render_home_view(
     *,
-    effective: AIPreferences,
-    user_row: SlackSettings | None,
-    workspace_row: SlackSettings | None,
     is_admin: bool,
+    run_defaults: RunDefaultsState | None = None,
     account_state: AccountState | None = None,
+    github_state: GitHubState | None = None,
     project_state: ProjectState | None = None,
     tasks_state: TasksState | None = None,
     stats_state: StatsState | None = None,
+    untagged_followup_mode: UntaggedFollowupMode | None = None,
+    has_project_access: bool = True,
 ) -> dict:
     """Render the Block Kit payload for `views.publish` on the App Home tab."""
 
-    source = resolve_source(user_row, workspace_row)
+    run_defaults = run_defaults or RunDefaultsState()
     blocks: list[dict] = []
 
     blocks.extend(_header_blocks())
+
+    # Nothing below the fold means anything to someone who can't reach a project: the
+    # cards are scoped to one, and mentioning @PostHog won't work either. Say so once
+    # and stop, rather than drawing empty cards that read as "you have no tasks yet".
+    if not has_project_access:
+        blocks.append({"type": "divider"})
+        blocks.extend(_no_project_access_blocks())
+        return {"type": "home", "callback_id": HOME_CALLBACK_ID, "blocks": blocks}
 
     # Section 1 — workspace activity: aggregates across everyone's Slack-started work,
     # rather than the calling user's own. Admin-only, and first because it's the reason
@@ -361,20 +427,27 @@ def render_home_view(
         blocks.extend(_project_section_blocks(project_state, is_admin=is_admin))
 
     # Section 3 — AI model settings: which model handles those mentions.
-    # Headline shows the effective triple (and its source); personal /
-    # workspace controls underneath mirror the project routing layout.
+    # Headline shows the resolved central default (and its source), with the
+    # personal editor underneath.
     blocks.append({"type": "divider"})
-    blocks.extend(_active_model_blocks(effective, source))
-    blocks.extend(_personal_section_blocks(user_row))
-    blocks.extend(_workspace_section_blocks(workspace_row, is_admin=is_admin))
+    blocks.extend(_active_model_blocks(run_defaults))
+    blocks.extend(_personal_section_blocks(run_defaults))
 
-    # Section 4 — account linking: shown before Tasks so the connect
-    # prompt is visible while the Tasks list is still empty. Flag-gated.
-    if account_state and account_state.enabled:
+    # Section 4 — thread follow-ups: whether replies other people leave in the
+    # threads you started reach PostHog on their own. Absent when the workspace
+    # hasn't been opted into untagged follow-ups at all.
+    if untagged_followup_mode is not None:
         blocks.append({"type": "divider"})
-        blocks.extend(_account_section_blocks(account_state))
+        blocks.extend(_untagged_followups_section_blocks(untagged_followup_mode))
 
-    # Section 5 — your tasks: a quiet list of tasks the calling user
+    # Section 5 — linked accounts: PostHog and GitHub side by side, shown
+    # before Tasks so the connect prompts are visible while the Tasks list
+    # is still empty. The PostHog half is flag-gated.
+    if (account_state and account_state.enabled) or github_state is not None:
+        blocks.append({"type": "divider"})
+        blocks.extend(_linked_accounts_section_blocks(account_state, github_state))
+
+    # Section 6 — your tasks: a quiet list of tasks the calling user
     # started via @PostHog mentions, so they can see status without
     # the bot pinging the activity feed for every transition.
     if tasks_state is not None:
@@ -453,51 +526,87 @@ def _header_blocks() -> list[dict]:
     ]
 
 
-def _active_model_blocks(effective: AIPreferences, source: PreferenceSource) -> list[dict]:
-    """Headline that shows which model is actually running, and why.
+def _no_project_access_blocks() -> list[dict]:
+    """Shown when the viewer can't reach any PostHog project connected to this workspace.
 
-    With nothing set the run falls back to the Slack default, named here from the
-    same constant the run resolves against so the card can't drift from it.
+    Covers both halves of the same dead end — no project is connected yet, or one is but
+    the viewer isn't a member of its organization — because from Slack the two are
+    indistinguishable and the next step is the same page either way.
+    """
+    site_url = (settings.SITE_URL or "").rstrip("/")
+    blocks: list[dict] = [
+        _section_title(
+            "🔒 No project to show yet",
+            "This Slack workspace isn't connected to a PostHog project you can see, "
+            "so there's nothing to set up here and @PostHog mentions won't run.",
+        ),
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": ("Connect a project in PostHog, or ask an admin to add you to one that's already connected."),
+            },
+        },
+    ]
+    if site_url:
+        blocks.append(
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "url": f"{site_url}/settings/project-integrations",
+                        "text": {"type": "plain_text", "text": "Connect PostHog to Slack", "emoji": True},
+                        "style": "primary",
+                    }
+                ],
+            }
+        )
+    return blocks
+
+
+def _active_model_blocks(run_defaults: RunDefaultsState) -> list[dict]:
+    """Headline that shows which model handles this viewer's mentions, and why.
+
+    Two rungs, in resolution order: the central PostHog default (personal or
+    project), else Slack's own floor.
     """
     header = _section_title(
         "🤖 AI model",
         "Which Claude / Codex configuration handles your @PostHog mentions.",
     )
-    source_blurb = {"type": "context", "elements": [{"type": "mrkdwn", "text": f"Source: {source.label}"}]}
 
-    if effective.is_empty:
-        return [
-            header,
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
-                        f"Defaulting to {format_model_id(SLACK_DEFAULT_MODEL)}. "
-                        "Pick personal or workspace settings to override."
-                    ),
-                },
-            },
-            source_blurb,
-        ]
+    if run_defaults.applies:
+        headline = (
+            # Same phrasing as the notice a mention override posts, so the card and the
+            # thread describe a run the same way.
+            f"Currently running {describe_run_model(run_defaults.model, run_defaults.reasoning_effort)}"
+            f" · {label_for(run_defaults.runtime_adapter, RUNTIME_ADAPTER_DISPLAY_NAMES)}"
+        )
+        source_label = run_defaults.source_label
+    else:
+        headline = f"Defaulting to {display_name_for_model(SLACK_DEFAULT_MODEL)}. Pick your own settings to override."
+        source_label = "System default"
 
-    runtime_label = label_for(effective.runtime_adapter, RUNTIME_ADAPTER_DISPLAY_NAMES)
-    return [
+    blocks: list[dict] = [
         header,
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                # Same phrasing as the notice a mention override posts, so the card and
-                # the thread describe a run the same way.
-                "text": (
-                    f"Currently running "
-                    f"{describe_run_model(effective.model, effective.reasoning_effort)} · {runtime_label}"
-                ),
-            },
-        },
-        source_blurb,
+        {"type": "section", "text": {"type": "mrkdwn", "text": headline}},
+        {"type": "context", "elements": [{"type": "mrkdwn", "text": f"Source: {source_label}"}]},
     ]
+    if run_defaults.settings_url:
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"<{run_defaults.settings_url}|Task agent defaults in PostHog> apply everywhere: "
+                        "the task composer, PostHog Desktop, and Slack.",
+                    }
+                ],
+            }
+        )
+    return blocks
 
 
 def _project_section_blocks(state: ProjectState, *, is_admin: bool) -> list[dict]:
@@ -568,72 +677,126 @@ def _project_section_blocks(state: ProjectState, *, is_admin: bool) -> list[dict
     return blocks
 
 
-def _account_section_blocks(account_state: AccountState) -> list[dict]:
-    """Render the Sign-in-with-Slack account card.
+def _linked_accounts_section_blocks(
+    account_state: AccountState | None,
+    github_state: GitHubState | None,
+) -> list[dict]:
+    """Render the linked-accounts card: one row per account.
 
-    Visible only when `is_slack_app_oauth_enabled` returned True. Linked
-    state mirrors the Claude home pattern: ✅ + email, with a danger-styled
-    Disconnect button at the bottom.
+    A row is a section carrying that account's status, with its button as the
+    right-aligned `accessory`. Block Kit allows at most one accessory per
+    section and renders `actions` blocks full width, so a row apiece is the
+    only layout that keeps each button next to the account it acts on.
+    The PostHog row only appears when `is_slack_app_oauth_enabled` returned
+    True; the GitHub row is independent of that flag.
     """
+    rows: list[dict] = []
+
+    if account_state and account_state.enabled:
+        rows.append(_account_row(_posthog_account_text(account_state), _posthog_account_button(account_state)))
+
+    if github_state is not None:
+        rows.append(_account_row(_github_account_text(github_state), _github_account_button(github_state)))
+
+    if not rows:
+        return []
+
+    return [
+        _section_title(
+            "🔗 Linked accounts",
+            "Who @PostHog acts as: your PostHog user, and the GitHub account it opens pull requests with.",
+        ),
+        *rows,
+    ]
+
+
+def _account_row(text: str, button: dict | None) -> dict:
+    row: dict[str, Any] = {"type": "section", "text": {"type": "mrkdwn", "text": text}}
+    if button:
+        row["accessory"] = button
+    return row
+
+
+def _posthog_account_text(account_state: AccountState) -> str:
     if account_state.linked_email:
-        return [
-            _section_title("🔗 Linked PostHog account"),
-            {
-                "type": "section",
+        return f"*PostHog*\n✅ Connected as {account_state.linked_email}"
+    return "*PostHog*\nNot connected. Link your Slack identity so @PostHog knows it's you without matching on email."
+
+
+def _posthog_account_button(account_state: AccountState) -> dict | None:
+    if account_state.linked_email:
+        return {
+            "type": "button",
+            "action_id": ACTION_UNLINK_ACCOUNT,
+            "style": "danger",
+            "text": {"type": "plain_text", "text": "Disconnect", "emoji": True},
+            "confirm": {
+                "title": {"type": "plain_text", "text": "Disconnect your PostHog account?"},
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"✅ Connected as *{account_state.linked_email}*",
+                    "text": "@PostHog will fall back to matching your Slack email against PostHog users until you link again.",
                 },
+                "confirm": {"type": "plain_text", "text": "Disconnect"},
+                "deny": {"type": "plain_text", "text": "Cancel"},
             },
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "action_id": ACTION_UNLINK_ACCOUNT,
-                        "style": "danger",
-                        "text": {"type": "plain_text", "text": "Disconnect", "emoji": True},
-                        "confirm": {
-                            "title": {"type": "plain_text", "text": "Disconnect your PostHog account?"},
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": "@PostHog will fall back to matching your Slack email against PostHog users until you link again.",
-                            },
-                            "confirm": {"type": "plain_text", "text": "Disconnect"},
-                            "deny": {"type": "plain_text", "text": "Cancel"},
-                        },
-                    }
-                ],
-            },
-        ]
-    blocks: list[dict] = [
-        _section_title(
-            "🔗 Connect your PostHog account",
-            "Link your Slack identity to a PostHog user so @PostHog knows it's you without falling back to email matching.",
-        ),
-    ]
-    if account_state.link_url:
-        blocks.append(
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "url": account_state.link_url,
-                        "text": {"type": "plain_text", "text": "Connect to PostHog", "emoji": True},
-                        "style": "primary",
-                    }
-                ],
-            }
-        )
-    return blocks
+        }
+    if not account_state.link_url:
+        return None
+    return {
+        "type": "button",
+        "action_id": ACTION_CONNECT_ACCOUNT,
+        "url": account_state.link_url,
+        "text": {"type": "plain_text", "text": "Connect to PostHog", "emoji": True},
+        "style": "primary",
+    }
 
 
-def _personal_section_blocks(user_row: SlackSettings | None) -> list[dict]:
-    """Personal AI override sub-card. Always editable by the user themselves."""
+def _github_account_text(github_state: GitHubState) -> str:
+    if not github_state.user_resolved:
+        return "*GitHub*\nLink your PostHog account first, so we know whose GitHub to look up."
+    if not github_state.accounts:
+        return "*GitHub*\nNot connected. Connect it so @PostHog opens pull requests as you."
+    marker = "✅" if github_state.credentials_usable else "⚠️"
+    listed = "\n".join(f"{marker} {account.label}" for account in github_state.accounts)
+    if github_state.credentials_usable:
+        return f"*GitHub*\n{listed}"
+    return f"*GitHub*\n{listed}\nYour access has expired. Reconnect it, or @PostHog can't open pull requests as you."
 
-    has_override = bool(user_row and user_row.runtime_adapter and user_row.model)
-    summary = _row_summary(user_row) if has_override else "_No personal override — inheriting the workspace default._"
+
+def _github_account_button(github_state: GitHubState) -> dict | None:
+    if not github_state.user_resolved or not github_state.settings_url:
+        return None
+    if not github_state.accounts:
+        label, style = "Connect GitHub", "primary"
+    elif not github_state.credentials_usable:
+        label, style = "Reconnect GitHub", "primary"
+    else:
+        label, style = "Manage GitHub", ""
+    button: dict[str, Any] = {
+        "type": "button",
+        "action_id": ACTION_GITHUB_SETTINGS,
+        "value": label.lower().replace(" ", "_"),
+        "url": github_state.settings_url,
+        "text": {"type": "plain_text", "text": label, "emoji": True},
+    }
+    if style:
+        button["style"] = style
+    return button
+
+
+def _personal_section_blocks(run_defaults: RunDefaultsState) -> list[dict]:
+    """Personal default sub-card. Always editable by the user themselves.
+
+    Edits land on the viewer's central per-(user, project) tasks config, so
+    whether they have a personal default is read off `run_defaults.source`.
+    """
+
+    has_preference = run_defaults.source == "user"
+    summary = (
+        "_Your personal default (shown above) applies to Slack, the task composer, and PostHog Desktop._"
+        if has_preference
+        else "_No personal default. Inheriting the project default._"
+    )
 
     actions: list[dict] = [
         {
@@ -642,18 +805,19 @@ def _personal_section_blocks(user_row: SlackSettings | None) -> list[dict]:
             "text": {"type": "plain_text", "text": "Edit my settings", "emoji": True},
         }
     ]
-    if has_override:
+    if has_preference:
         actions.append(
             {
                 "type": "button",
                 "action_id": ACTION_RESET_PERSONAL,
                 "style": "danger",
-                "text": {"type": "plain_text", "text": "Reset to workspace default", "emoji": True},
+                "text": {"type": "plain_text", "text": "Reset to default", "emoji": True},
                 "confirm": {
-                    "title": {"type": "plain_text", "text": "Clear your override?"},
+                    "title": {"type": "plain_text", "text": "Clear your personal default?"},
                     "text": {
                         "type": "mrkdwn",
-                        "text": "You'll inherit the workspace default until you set new personal preferences.",
+                        "text": "This clears your task agent default, which the composer and PostHog "
+                        "Desktop use too. You'll inherit the project default until you set a new one.",
                     },
                     "confirm": {"type": "plain_text", "text": "Reset"},
                     "deny": {"type": "plain_text", "text": "Cancel"},
@@ -662,43 +826,47 @@ def _personal_section_blocks(user_row: SlackSettings | None) -> list[dict]:
         )
 
     return [
-        _subsection_label("Your override"),
+        _subsection_label("Your default"),
         {"type": "section", "text": {"type": "mrkdwn", "text": summary}},
         {"type": "actions", "elements": actions},
     ]
 
 
-def _workspace_section_blocks(
-    workspace_row: SlackSettings | None,
-    *,
-    is_admin: bool,
-) -> list[dict]:
-    """Workspace AI default sub-card — admin-only; non-admins don't see it."""
+UNTAGGED_FOLLOWUP_MODE_LABELS: dict[str, str] = {
+    UntaggedFollowupMode.AUTO: "Pick them up automatically",
+    UntaggedFollowupMode.ASK: "Ask them first",
+    UntaggedFollowupMode.NEVER: "Leave them alone",
+}
 
-    if not is_admin:
-        return []
 
-    has_default = bool(workspace_row and workspace_row.runtime_adapter and workspace_row.model)
-    summary = (
-        _row_summary(workspace_row)
-        if has_default
-        else "_No workspace default set — falls back to PostHog's system default._"
-    )
-    blocks: list[dict] = [
-        _subsection_label("Workspace default"),
-        {"type": "section", "text": {"type": "mrkdwn", "text": summary}},
+def _untagged_followups_section_blocks(mode: UntaggedFollowupMode) -> list[dict]:
+    """Picker for how untagged replies land in the threads you started.
+
+    Off until picked, so the card doubles as the only way to turn the behaviour
+    on for your own threads. The choice covers every reply in those threads,
+    including the ones you write yourself.
+    """
+    options = [
+        {"text": {"type": "plain_text", "text": label, "emoji": True}, "value": value}
+        for value, label in UNTAGGED_FOLLOWUP_MODE_LABELS.items()
+    ]
+    select: dict[str, Any] = {
+        "type": "static_select",
+        "action_id": ACTION_SET_UNTAGGED_FOLLOWUP_MODE,
+        "options": options,
+        "initial_option": next(o for o in options if o["value"] == mode.value),
+    }
+    return [
+        _section_title(
+            "💬 Thread follow-ups",
+            "What I do with replies in a thread you started, when nobody tags @PostHog.",
+        ),
+        {"type": "actions", "elements": [select]},
         {
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "action_id": ACTION_EDIT_WORKSPACE,
-                    "text": {"type": "plain_text", "text": "Edit workspace default", "emoji": True},
-                }
-            ],
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": "Applies to every reply in those threads, yours included."}],
         },
     ]
-    return blocks
 
 
 def _footer_blocks() -> list[dict]:
@@ -745,25 +913,32 @@ def _task_item_block(item: TaskItem) -> list[dict]:
     """One task row split across two Block Kit blocks for visual hierarchy.
 
     The title goes in a `section` (full-size mrkdwn); the optional error
-    message and the status · repo · thread · PR · updated meta go in a single
+    message and the status · repo · links · PR · updated meta go in a single
     `context` block underneath. Context renders text noticeably smaller and
     dimmer than section, so the supporting detail recedes while the title
     stays scannable.
+
+    The title opens the Slack thread, because that is where the conversation the
+    row summarises actually happened and it keeps the reader in Slack. The web
+    and desktop views are the alternatives, so they sit in the meta line.
 
     Failed tasks surface the error and the meta line — error context never
     replaces the surrounding state. Newlines in the upstream error message
     collapse to spaces so a traceback doesn't blow the row open vertically.
     """
     status_label = _TASK_STATUS_LABELS.get(item.status or "", "")
-    title_line = f"*<{item.posthog_url}|{item.title}>*" if item.posthog_url else f"*{item.title}*"
+    title_target = item.thread_url or item.posthog_url
+    title_line = f"*<{title_target}|{item.title}>*" if title_target else f"*{item.title}*"
 
     meta_parts: list[str] = []
     if status_label:
         meta_parts.append(status_label)
     if item.repository:
         meta_parts.append(f"`{item.repository}`")
-    if item.thread_url:
-        meta_parts.append(f"<{item.thread_url}|Thread>")
+    if item.posthog_url:
+        meta_parts.append(f"<{item.posthog_url}|View on web>")
+    if item.desktop_url:
+        meta_parts.append(f"<{item.desktop_url}|View on desktop>")
     if item.pr_url:
         meta_parts.append(f"<{item.pr_url}|PR>")
     if item.updated_at_label:
@@ -1083,7 +1258,7 @@ def _bar(value: int, peak: int, width: int = _STATS_BAR_WIDTH) -> str:
 
 def _stats_model_label(usage: ModelUsage) -> str:
     """Display label for a model, truncated so the bar column stays aligned."""
-    label = format_model_id(usage.model)
+    label = display_name_for_model(usage.model)
     return _truncate(label, _STATS_COLUMN_LABEL_CHARS)
 
 
@@ -1108,18 +1283,6 @@ def _stats_footnote_blocks(state: StatsState) -> list[dict]:
     return blocks
 
 
-def _row_summary(row: SlackSettings | None) -> str:
-    if not row or not row.runtime_adapter or not row.model:
-        return "_(none)_"
-    parts = [
-        f"*Model:* {format_model_id(row.model)}",
-        f"*Runtime:* {label_for(row.runtime_adapter, RUNTIME_ADAPTER_DISPLAY_NAMES)}",
-    ]
-    if row.reasoning_effort:
-        parts.append(f"*Reasoning:* {label_for(row.reasoning_effort, REASONING_EFFORT_DISPLAY_NAMES)}")
-    return " · ".join(parts)
-
-
 # ---------------------------------------------------------------------------
 # Edit modal
 # ---------------------------------------------------------------------------
@@ -1127,11 +1290,10 @@ def _row_summary(row: SlackSettings | None) -> str:
 
 def render_edit_modal(
     *,
-    scope: EditScope,
     current: AIPreferences,
     supported_efforts: list[str] | None = None,
 ) -> dict:
-    """Build the Block Kit modal payload for personal or workspace editing.
+    """Build the Block Kit modal payload for editing your personal preferences.
 
     `supported_efforts` lets the caller pre-compute which efforts are valid for
     the currently selected model (using
@@ -1139,11 +1301,6 @@ def render_edit_modal(
     When `None`, the effort block is omitted entirely; the modal re-renders via
     `block_actions` on runtime_adapter / model change to fill it in.
     """
-
-    callback_id = EDIT_MODAL_PERSONAL_CALLBACK_ID if scope == "personal" else EDIT_MODAL_WORKSPACE_CALLBACK_ID
-    # Slack caps modal titles at 24 characters; longer ones get rejected with
-    # `invalid_arguments` on `views.open`.
-    title = "Personal AI preferences" if scope == "personal" else "Workspace AI preferences"
 
     runtime_pairs = _runtime_adapter_options()
     runtime_options = [
@@ -1189,7 +1346,7 @@ def render_edit_modal(
                 model_element["initial_option"] = next(o for o in model_options if o["value"] == current.model)
             model_block = {
                 "type": "input",
-                "block_id": MODAL_BLOCK_MODEL,
+                "block_id": _scoped_block_id(MODAL_BLOCK_MODEL, current.runtime_adapter),
                 "label": {"type": "plain_text", "text": "Model"},
                 "dispatch_action": True,
                 "element": model_element,
@@ -1214,7 +1371,7 @@ def render_edit_modal(
             effort_element["initial_option"] = next(o for o in effort_options if o["value"] == current.reasoning_effort)
         effort_block = {
             "type": "input",
-            "block_id": MODAL_BLOCK_REASONING_EFFORT,
+            "block_id": _scoped_block_id(MODAL_BLOCK_REASONING_EFFORT, current.model),
             "label": {"type": "plain_text", "text": "Reasoning effort"},
             "optional": True,
             "element": effort_element,
@@ -1226,11 +1383,7 @@ def render_edit_modal(
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": (
-                        "Pick the runtime and model that should handle PostHog Slack requests for you."
-                        if scope == "personal"
-                        else "Set the default runtime and model for everyone in this Slack workspace."
-                    ),
+                    "text": "Pick the runtime and model that should handle PostHog Slack requests for you.",
                 }
             ],
         },
@@ -1243,19 +1396,26 @@ def render_edit_modal(
 
     return {
         "type": "modal",
-        "callback_id": callback_id,
-        "title": {"type": "plain_text", "text": title, "emoji": True},
+        "callback_id": EDIT_MODAL_PERSONAL_CALLBACK_ID,
+        # Slack caps modal titles at 24 characters; longer ones get rejected
+        # with `invalid_arguments` on `views.open`.
+        "title": {"type": "plain_text", "text": "Personal AI preferences", "emoji": True},
         "submit": {"type": "plain_text", "text": "Save"},
         "close": {"type": "plain_text", "text": "Cancel"},
         "blocks": blocks,
     }
 
 
+def _scoped_block_id(prefix: str, depends_on: str | None) -> str:
+    """Block id for an input whose options are derived from another input's value."""
+    return f"{prefix}:{depends_on}" if depends_on else prefix
+
+
 def parse_modal_submission(view: dict) -> tuple[str | None, str | None, str | None]:
     """Pull `(runtime_adapter, model, reasoning_effort)` out of a Slack view_submission payload.
 
     Returns `(None, None, None)` for any block the user didn't fill in. The
-    caller validates the triple via `validate_ai_preferences`.
+    central config write validates the triple.
     """
 
     state = view.get("state", {}).get("values", {})
@@ -1266,12 +1426,14 @@ def parse_modal_submission(view: dict) -> tuple[str | None, str | None, str | No
     return runtime_adapter, model, reasoning_effort
 
 
-def _selected_value(state: dict, block_id: str, action_id: str) -> str | None:
-    block = state.get(block_id, {})
-    action = block.get(action_id, {})
-    selected = action.get("selected_option")
-    if isinstance(selected, dict):
-        return selected.get("value")
+def _selected_value(state: dict, block_prefix: str, action_id: str) -> str | None:
+    """Read a select's value out of view state, matching the scoped block id it was rendered under."""
+    for block_id, actions in state.items():
+        if block_id != block_prefix and not block_id.startswith(f"{block_prefix}:"):
+            continue
+        selected = (actions.get(action_id) or {}).get("selected_option")
+        if isinstance(selected, dict):
+            return selected.get("value")
     return None
 
 
@@ -1288,54 +1450,39 @@ def _selected_value(state: dict, block_id: str, action_id: str) -> str | None:
 # here.
 
 
-def handle_app_home_opened(event: dict, slack_team_id: str) -> None:
+def handle_app_home_opened(event: dict, slack_team_id: str, *, integration: Integration) -> None:
     """Publish the Home tab for the user who just opened it.
 
-    Gated by the slack-app-home flag — when off, the publish is skipped so
-    installs without the manifest changes (and workspaces that haven't opted
-    in) keep getting Slack's default blank Home tab instead of seeing an
-    interactive UI for a feature that doesn't fire downstream.
+    The caller resolves the integration through the shared region gate, so this
+    region owns the workspace by the time we get here.
     """
 
     slack_user_id = event.get("user")
     if not slack_user_id:
         return
 
-    integration = _get_slack_integration(slack_team_id)
-    if integration is None:
-        return
-
-    if not is_slack_app_home_enabled(integration):
-        return
-
-    effective = resolve_ai_preferences(integration, slack_user_id)
-    user_row, workspace_row = _load_rows(integration, slack_user_id)
-
     slack = SlackIntegration(integration)
-    is_admin = _is_admin(slack, integration, slack_user_id)
-    accessible = _accessible_integrations(integration, slack_user_id)
-    account_state = _resolve_account_state(integration, slack_user_id)
-    project_state = _resolve_project_state(integration, slack_user_id, accessible=accessible)
-    tasks_state = _resolve_tasks_state(integration, slack_user_id, accessible=accessible)
-    stats_state = _resolve_stats_state(integration, accessible=accessible, is_admin=is_admin)
-
-    view = render_home_view(
-        effective=effective,
-        user_row=user_row,
-        workspace_row=workspace_row,
-        is_admin=is_admin,
-        account_state=account_state,
-        project_state=project_state,
-        tasks_state=tasks_state,
-        stats_state=stats_state,
-    )
+    render = _build_home_view(slack, integration, slack_user_id)
     try:
-        slack.client.views_publish(user_id=slack_user_id, view=view)
+        slack.client.views_publish(user_id=slack_user_id, view=render.view)
     except Exception:
         logger.exception(
             "slack_app_home_publish_failed",
             slack_user_id=slack_user_id,
             slack_team_id=slack_team_id,
+        )
+    else:
+        logger.info(
+            "slack_app_home_published",
+            slack_user_id=slack_user_id,
+            slack_team_id=slack_team_id,
+        )
+        capture_slack_event(
+            integration,
+            "slack app home opened",
+            slack_user_id=slack_user_id,
+            account_linked=bool(render.account_state.linked_email),
+            has_project_access=render.has_project_access,
         )
 
 
@@ -1347,15 +1494,19 @@ def handle_ai_preferences_block_action(payload: dict, action: dict) -> HttpRespo
     slack_user_id = (payload.get("user") or {}).get("id", "")
     trigger_id = payload.get("trigger_id")
 
-    integration = _get_slack_integration(slack_team_id)
+    integration = _resolve_interaction_integration(slack_team_id, slack_user_id)
     if integration is None:
         return HttpResponse(status=200)
 
-    # The flag is the kill-switch for the whole feature — writes and modal
-    # opens must respect it too, otherwise a flipped-off flag silently
-    # accumulates rows that the resolver will ignore.
-    if not is_slack_app_home_enabled(integration):
-        return HttpResponse(status=200)
+    capture_slack_event(
+        integration,
+        "slack app home action clicked",
+        slack_user_id=slack_user_id,
+        action=action_id,
+        # Which option the control carried: the follow-up mode, the picked project id,
+        # the stats window, the tasks page, or the GitHub button's connect/manage state.
+        value=(action.get("selected_option") or {}).get("value") or action.get("value"),
+    )
 
     # The Home tab keeps no server-side view state — every payload carries the whole
     # view's inputs instead. Read them all back once so any action republishes with the
@@ -1366,19 +1517,11 @@ def handle_ai_preferences_block_action(payload: dict, action: dict) -> HttpRespo
         _republish_home(integration, slack_user_id, view_state=state)
 
     if action_id == ACTION_EDIT_PERSONAL and trigger_id:
-        _open_edit_modal(integration, slack_user_id, scope="personal", trigger_id=trigger_id)
-        return HttpResponse(status=200)
-
-    if action_id == ACTION_EDIT_WORKSPACE and trigger_id:
-        slack = SlackIntegration(integration)
-        if not _is_admin(slack, integration, slack_user_id):
-            _post_ephemeral_admin_only(slack, payload)
-            return HttpResponse(status=200)
-        _open_edit_modal(integration, slack_user_id, scope="workspace", trigger_id=trigger_id)
+        _open_edit_modal(integration, slack_user_id, trigger_id=trigger_id)
         return HttpResponse(status=200)
 
     if action_id == ACTION_RESET_PERSONAL:
-        _clear_personal_override(integration, slack_user_id)
+        _reset_personal_preferences(integration, slack_user_id)
         republish()
         return HttpResponse(status=200)
 
@@ -1401,11 +1544,16 @@ def handle_ai_preferences_block_action(payload: dict, action: dict) -> HttpRespo
         republish()
         return HttpResponse(status=200)
 
+    if action_id == ACTION_SET_UNTAGGED_FOLLOWUP_MODE:
+        _apply_untagged_followup_mode_pick(integration, slack_user_id, action)
+        republish()
+        return HttpResponse(status=200)
+
     if action_id == ACTION_UNLINK_ACCOUNT:
-        # Only act when the OAuth-link feature is on for this workspace —
+        # Only act when the OAuth-link feature is available for this install —
         # otherwise the button shouldn't have been rendered, and a stale
         # cached view shouldn't be allowed to drive deletes.
-        if is_slack_app_oauth_enabled(integration, integration.integration_id):
+        if is_slack_app_oauth_enabled(integration):
             _unlink_user_account(integration, slack_user_id)
         republish()
         return HttpResponse(status=200)
@@ -1438,55 +1586,48 @@ def handle_ai_preferences_block_action(payload: dict, action: dict) -> HttpRespo
     if action_id in (MODAL_ACTION_RUNTIME_ADAPTER, MODAL_ACTION_MODEL):
         # Modal re-render: a runtime / model change updates which downstream
         # blocks (model list, effort options) are valid. Push an updated view.
-        return _update_modal_after_input_change(payload)
+        return _update_modal_after_input_change(payload, integration)
 
     return HttpResponse(status=200)
 
 
 def handle_app_home_view_submission(payload: dict) -> HttpResponse | JsonResponse:
-    """Handle the Save click on the personal or workspace edit modal."""
+    """Handle the Save click on the personal edit modal."""
 
     view = payload.get("view", {})
-    callback_id = view.get("callback_id")
-    if callback_id not in (EDIT_MODAL_PERSONAL_CALLBACK_ID, EDIT_MODAL_WORKSPACE_CALLBACK_ID):
+    if view.get("callback_id") != EDIT_MODAL_PERSONAL_CALLBACK_ID:
         return HttpResponse(status=200)
 
     slack_team_id = (payload.get("team") or {}).get("id", "")
     slack_user_id = (payload.get("user") or {}).get("id", "")
 
-    integration = _get_slack_integration(slack_team_id)
+    integration = _resolve_interaction_integration(slack_team_id, slack_user_id)
     if integration is None:
         return _modal_error_response("This Slack workspace is no longer connected to PostHog.")
 
-    if not is_slack_app_home_enabled(integration):
-        return _modal_error_response("AI preferences are not available for this workspace right now.")
-
     runtime_adapter, model, reasoning_effort = parse_modal_submission(view)
 
+    # Triple validation happens inside the central write — the tasks config's
+    # `validate_ai_run_preferences` runs the same pair/effort rules.
     try:
-        validate_ai_preferences(runtime_adapter, model, reasoning_effort)
+        _apply_personal_preferences(
+            integration,
+            slack_user_id,
+            runtime_adapter=runtime_adapter,
+            model=model,
+            reasoning_effort=reasoning_effort,
+        )
     except ValidationError as exc:
         return _modal_error_response(_first_validation_message(exc))
 
-    if callback_id == EDIT_MODAL_PERSONAL_CALLBACK_ID:
-        _write_row(
-            integration,
-            slack_user_id=slack_user_id,
-            runtime_adapter=runtime_adapter,
-            model=model,
-            reasoning_effort=reasoning_effort,
-        )
-    else:
-        slack = SlackIntegration(integration)
-        if not _is_admin(slack, integration, slack_user_id):
-            return _modal_error_response("Only Slack workspace admins can change the workspace default.")
-        _write_row(
-            integration,
-            slack_user_id=None,
-            runtime_adapter=runtime_adapter,
-            model=model,
-            reasoning_effort=reasoning_effort,
-        )
+    capture_slack_event(
+        integration,
+        "slack app ai preferences saved",
+        slack_user_id=slack_user_id,
+        runtime_adapter=runtime_adapter,
+        model=model,
+        reasoning_effort=reasoning_effort,
+    )
 
     _republish_home(integration, slack_user_id)
     return JsonResponse({"response_action": "clear"})
@@ -1497,35 +1638,45 @@ def handle_app_home_view_submission(payload: dict) -> HttpResponse | JsonRespons
 # ---------------------------------------------------------------------------
 
 
-def _get_slack_integration(slack_team_id: str) -> Integration | None:
+def _resolve_interaction_integration(slack_team_id: str, slack_user_id: str) -> Integration | None:
+    """The integration the viewer's Home tab is rendered against.
+
+    Same resolver the publish path runs, so a click is answered for the project the viewer
+    was looking at. Any row of the workspace would do for fetching a bot token, but the
+    rollout flag is scoped to an organization and the task list to a team, so answering
+    against an arbitrary one makes the tab disagree with itself.
+    """
     if not slack_team_id:
         return None
-    return (
-        Integration.objects.select_related("team", "team__organization")
-        .filter(kind="slack", integration_id=slack_team_id)
-        .first()
+    result = load_integrations(
+        slack_team_id=slack_team_id,
+        kinds=list(SLACK_INTEGRATION_KINDS),
+        slack_user_id=slack_user_id,
+    )
+    return result.resolved_or_first()
+
+
+def _stored_personal_preferences(integration: Integration, slack_user_id: str) -> AIPreferences:
+    """The viewer's stored central preference, for prefilling the edit modal.
+
+    Deliberately the stored per-user value rather than the resolved default: the
+    modal edits their personal preference, so a project default must not appear
+    preselected as if they had chosen it. Empty for a viewer with no resolvable
+    target — the modal still opens, and the save then reports what is missing.
+    """
+    from products.tasks.backend.facade import (  # noqa: PLC0415 — keep tasks deps off the slack_app import path
+        ai_run_defaults,
     )
 
-
-def _load_rows(integration: Integration, slack_user_id: str) -> tuple[SlackSettings | None, SlackSettings | None]:
-    user_row = SlackSettings.objects.filter(
-        slack_workspace_id=integration.integration_id,
-        slack_user_id=slack_user_id,
-    ).first()
-    workspace_row = SlackSettings.objects.filter(
-        slack_workspace_id=integration.integration_id,
-        slack_user_id__isnull=True,
-    ).first()
-    return user_row, workspace_row
-
-
-def _row_to_settings(row: SlackSettings | None) -> AIPreferences:
-    if row is None:
+    try:
+        user, target = _personal_preference_target(integration, slack_user_id)
+    except ValidationError:
         return AIPreferences()
+    stored = ai_run_defaults.get_user_ai_run_preferences(target.team_id, user.id)
     return AIPreferences(
-        runtime_adapter=row.runtime_adapter,
-        model=row.model,
-        reasoning_effort=row.reasoning_effort,
+        runtime_adapter=stored.get("runtime_adapter"),
+        model=stored.get("model"),
+        reasoning_effort=stored.get("reasoning_effort"),
     )
 
 
@@ -1541,9 +1692,8 @@ def _is_admin(slack: SlackIntegration, integration: Integration, slack_user_id: 
         return False
 
 
-def _open_edit_modal(integration: Integration, slack_user_id: str, *, scope: EditScope, trigger_id: str) -> None:
-    user_row, workspace_row = _load_rows(integration, slack_user_id)
-    current = _row_to_settings(user_row if scope == "personal" else workspace_row)
+def _open_edit_modal(integration: Integration, slack_user_id: str, *, trigger_id: str) -> None:
+    current = _stored_personal_preferences(integration, slack_user_id)
     supported = _supported_efforts(current.runtime_adapter, current.model)
     slack = SlackIntegration(integration)
 
@@ -1554,16 +1704,12 @@ def _open_edit_modal(integration: Integration, slack_user_id: str, *, scope: Edi
     if not _runtime_adapter_options():
         view = _render_unavailable_modal()
     else:
-        view = render_edit_modal(scope=scope, current=current, supported_efforts=supported)
+        view = render_edit_modal(current=current, supported_efforts=supported)
 
     try:
         slack.client.views_open(trigger_id=trigger_id, view=view)
     except Exception:
-        logger.exception(
-            "slack_app_home_open_modal_failed",
-            slack_user_id=slack_user_id,
-            scope=scope,
-        )
+        logger.exception("slack_app_home_open_modal_failed", slack_user_id=slack_user_id)
 
 
 def _render_unavailable_modal() -> dict:
@@ -1583,31 +1729,23 @@ def _render_unavailable_modal() -> dict:
     }
 
 
-def _update_modal_after_input_change(payload: dict) -> HttpResponse:
+def _update_modal_after_input_change(payload: dict, integration: Integration) -> HttpResponse:
     """Re-render the modal in response to a runtime_adapter or model change.
 
-    Reads the in-flight state from `payload["view"]`, derives the new supported
-    efforts (changes when the model changes), and pushes the updated view via
-    `views.update`. Nothing is persisted here — the user still has to Save to
-    commit.
+    Reads the in-flight state from `payload["view"]`, drops whatever the change
+    invalidated, derives the efforts the surviving model supports, and pushes the
+    updated view via `views.update`. Nothing is persisted here — the user still has
+    to Save to commit.
     """
 
     view = payload.get("view", {})
-    callback_id = view.get("callback_id")
-    if callback_id not in (EDIT_MODAL_PERSONAL_CALLBACK_ID, EDIT_MODAL_WORKSPACE_CALLBACK_ID):
+    if view.get("callback_id") != EDIT_MODAL_PERSONAL_CALLBACK_ID:
         return HttpResponse(status=200)
 
-    runtime_adapter, model, reasoning_effort = parse_modal_submission(view)
-    current = AIPreferences(runtime_adapter=runtime_adapter, model=model, reasoning_effort=reasoning_effort)
-    supported = _supported_efforts(runtime_adapter, model)
+    current = _drop_invalidated_selections(*parse_modal_submission(view))
+    supported = _supported_efforts(current.runtime_adapter, current.model)
 
-    scope: EditScope = "personal" if callback_id == EDIT_MODAL_PERSONAL_CALLBACK_ID else "workspace"
-    updated_view = render_edit_modal(scope=scope, current=current, supported_efforts=supported)
-
-    slack_team_id = (payload.get("team") or {}).get("id", "")
-    integration = _get_slack_integration(slack_team_id)
-    if integration is None:
-        return HttpResponse(status=200)
+    updated_view = render_edit_modal(current=current, supported_efforts=supported)
 
     slack = SlackIntegration(integration)
     try:
@@ -1615,6 +1753,24 @@ def _update_modal_after_input_change(payload: dict) -> HttpResponse:
     except Exception:
         logger.exception("slack_app_home_modal_update_failed")
     return HttpResponse(status=200)
+
+
+def _drop_invalidated_selections(
+    runtime_adapter: str | None,
+    model: str | None,
+    reasoning_effort: str | None,
+) -> AIPreferences:
+    """Keep only the parts of an in-flight selection the current runtime still allows.
+
+    Switching runtime orphans the model picked under the old one, and that orphans the
+    effort. The scoped block ids stop Slack handing those back on the next interaction;
+    this stops the view we render from the same payload showing them in the meantime.
+    """
+    if model and model not in {value for value, _ in _models_for(runtime_adapter or "")}:
+        model = None
+    if reasoning_effort and reasoning_effort not in (_supported_efforts(runtime_adapter, model) or ()):
+        reasoning_effort = None
+    return AIPreferences(runtime_adapter=runtime_adapter, model=model, reasoning_effort=reasoning_effort)
 
 
 def _supported_efforts(runtime_adapter: str | None, model: str | None) -> list[str] | None:
@@ -1625,39 +1781,134 @@ def _supported_efforts(runtime_adapter: str | None, model: str | None) -> list[s
     return [e.value for e in get_supported_reasoning_efforts(runtime_adapter, model)] or None
 
 
-def _write_row(
+def _routed_project_integration(
+    integration: Integration, slack_user_id: str, *, accessible: list[Integration] | None = None
+) -> Integration | None:
+    """The integration of the project this viewer's mentions currently route to,
+    restricted to projects the viewer can access. None when they can reach none.
+    Pass `accessible` when the caller already resolved it, to skip the repeat
+    permissions build."""
+    if accessible is None:
+        accessible = _accessible_integrations(integration, slack_user_id)
+    try:
+        return resolve_from_candidates(
+            accessible,
+            slack_team_id=integration.integration_id,
+            slack_user_id=slack_user_id,
+        ).resolved_or_first()
+    except Exception:
+        logger.exception("slack_app_home_routed_project_resolution_failed", slack_user_id=slack_user_id)
+        return None
+
+
+def _personal_preference_target(integration: Integration, slack_user_id: str) -> tuple[User, Integration]:
+    """The PostHog user behind this viewer and the project whose central config
+    they edit — the one their mentions route to, restricted to this user's own
+    access via `resolve_from_candidates(user=...)`.
+
+    Fail-closed on purpose: the result picks the tenant for a team-scoped
+    write, so an unmapped viewer, an unauthorized workspace, or an ambiguous
+    route each raise a `ValidationError` naming the next step instead of
+    falling back to an arbitrary project.
+    """
+    user = _resolve_home_user(integration, slack_user_id)
+    if user is None:
+        raise ValidationError(
+            "Link your PostHog account first. You can do that from the Linked accounts card on the Home tab."
+        )
+    result = resolve_from_candidates(
+        _workspace_integrations(integration.integration_id),
+        slack_team_id=integration.integration_id,
+        slack_user_id=slack_user_id,
+        user=user,
+    )
+    target = result.integration
+    if target is None and len(result.candidates) == 1:
+        target = result.candidates[0]
+    if target is None:
+        raise ValidationError(
+            "Pick a default project first. You can do that from the Project routing card on the Home tab."
+        )
+    return user, target
+
+
+def _apply_personal_preferences(
     integration: Integration,
+    slack_user_id: str,
     *,
-    slack_user_id: str | None,
     runtime_adapter: str | None,
     model: str | None,
     reasoning_effort: str | None,
 ) -> None:
-    """Upsert a SlackSettings row with the given AI preferences.
+    """Persist the modal's triple as the viewer's central tasks preference.
 
-    `default_integration` is left untouched on existing rows so saving AI
-    preferences doesn't accidentally overwrite the user's routing pick.
+    The central per-(user, project) config — the same store the web composer,
+    PostHog Desktop, and the MCP config tools edit — is the only place a model
+    preference lives.
+
+    Raises `ValidationError` when the viewer has no authorized target project
+    (see `_personal_preference_target`) or picks a model their account is not
+    entitled to — storing it would only produce runs the resolver skips.
     """
+    from products.tasks.backend.facade import (  # noqa: PLC0415 — keep tasks deps off the slack_app import path
+        ai_run_defaults,
+    )
+    from products.tasks.backend.facade.run_config import (  # noqa: PLC0415 — keep tasks deps off the slack_app import path
+        get_model_access_error,
+    )
 
-    payload = build_ai_preferences_payload(runtime_adapter, model, reasoning_effort)
-    SlackSettings.objects.update_or_create(
-        slack_workspace_id=integration.integration_id,
-        slack_user_id=slack_user_id,
-        defaults={"ai_preferences": payload or None},
+    user, target = _personal_preference_target(integration, slack_user_id)
+
+    access_error = get_model_access_error(model, distinct_id=user.distinct_id)
+    if access_error is not None:
+        raise ValidationError(access_error)
+
+    ai_run_defaults.update_user_ai_run_preferences(
+        target.team_id,
+        user.id,
+        runtime_adapter=runtime_adapter,
+        model=model,
+        reasoning_effort=reasoning_effort,
     )
 
 
-def _clear_personal_override(integration: Integration, slack_user_id: str) -> None:
-    """Clear just the AI fields on the user's row. Leaves routing alone."""
+def _reset_personal_preferences(integration: Integration, slack_user_id: str) -> None:
+    """Clear the viewer's central per-(user, project) preference, which resets
+    them to the project default. The reset button only renders for viewers with
+    such a preference, so an unmapped viewer is a no-op here."""
+    from products.tasks.backend.facade import (  # noqa: PLC0415 — keep tasks deps off the slack_app import path
+        ai_run_defaults,
+    )
 
-    SlackSettings.objects.filter(
+    try:
+        user, target = _personal_preference_target(integration, slack_user_id)
+    except ValidationError:
+        # Nothing central to clear for this viewer.
+        return
+    ai_run_defaults.update_user_ai_run_preferences(
+        target.team_id,
+        user.id,
+        runtime_adapter=None,
+        model=None,
+        reasoning_effort=None,
+    )
+
+
+def _apply_untagged_followup_mode_pick(integration: Integration, slack_user_id: str, action: dict) -> None:
+    """Persist the picked mode. An unrecognised value is ignored rather than stored."""
+
+    picked = (action.get("selected_option") or {}).get("value")
+    if picked not in UntaggedFollowupMode.values:
+        return
+    SlackSettings.objects.update_or_create(
         slack_workspace_id=integration.integration_id,
         slack_user_id=slack_user_id,
-    ).update(ai_preferences=None)
+        defaults={"untagged_followup_mode": picked},
+    )
 
 
 def _clear_project_personal(integration: Integration, slack_user_id: str) -> None:
-    """Clear the personal routing override; drop the row if no AI overrides remain."""
+    """Clear the personal routing override; drop the row once it holds nothing else."""
 
     row = SlackSettings.objects.filter(
         slack_workspace_id=integration.integration_id,
@@ -1665,26 +1916,42 @@ def _clear_project_personal(integration: Integration, slack_user_id: str) -> Non
     ).first()
     if row is None:
         return
-    if not row.ai_preferences:
+    if not row.untagged_followup_mode:
         row.delete()
         return
     row.default_integration = None
     row.save(update_fields=["default_integration", "updated_at"])
 
 
-def _republish_home(
+@dataclass(frozen=True)
+class _HomeRender:
+    """One viewer's rendered Home tab, plus the card states the callers log
+    and report analytics on."""
+
+    view: dict
+    tasks_state: TasksState
+    account_state: AccountState
+    has_project_access: bool
+
+
+def _build_home_view(
+    slack: SlackIntegration,
     integration: Integration,
     slack_user_id: str,
     *,
     view_state: HomeViewState | None = None,
-) -> None:
+) -> _HomeRender:
+    """Resolve every card's state for this viewer and render the Home tab payload.
+
+    Shared by the first publish and every interaction republish. `view_state`
+    carries the controls a click resolved to; its defaults match the resolvers'
+    own, so the first publish can omit it.
+    """
     view_state = view_state or HomeViewState()
-    user_row, workspace_row = _load_rows(integration, slack_user_id)
-    effective = resolve_ai_preferences(integration, slack_user_id)
-    slack = SlackIntegration(integration)
     is_admin = _is_admin(slack, integration, slack_user_id)
     accessible = _accessible_integrations(integration, slack_user_id)
     account_state = _resolve_account_state(integration, slack_user_id)
+    github_state = _resolve_github_state(integration, slack_user_id)
     project_state = _resolve_project_state(integration, slack_user_id, accessible=accessible)
     tasks_state = _resolve_tasks_state(
         integration,
@@ -1702,19 +1969,51 @@ def _republish_home(
         force_refresh=view_state.stats_force_refresh,
     )
     view = render_home_view(
-        effective=effective,
-        user_row=user_row,
-        workspace_row=workspace_row,
         is_admin=is_admin,
+        run_defaults=_resolve_run_defaults_state(integration, slack_user_id, accessible=accessible),
         account_state=account_state,
+        github_state=github_state,
         project_state=project_state,
         tasks_state=tasks_state,
         stats_state=stats_state,
+        untagged_followup_mode=resolve_untagged_followup_mode(integration, slack_user_id),
+        has_project_access=bool(accessible),
     )
+    return _HomeRender(
+        view=view,
+        tasks_state=tasks_state,
+        account_state=account_state,
+        has_project_access=bool(accessible),
+    )
+
+
+def _republish_home(
+    integration: Integration,
+    slack_user_id: str,
+    *,
+    view_state: HomeViewState | None = None,
+) -> None:
+    view_state = view_state or HomeViewState()
+    slack = SlackIntegration(integration)
+    render = _build_home_view(slack, integration, slack_user_id, view_state=view_state)
     try:
-        slack.client.views_publish(user_id=slack_user_id, view=view)
+        slack.client.views_publish(user_id=slack_user_id, view=render.view)
     except Exception:
         logger.exception("slack_app_home_republish_failed")
+        return
+    # Carries the controls the click resolved to, so a report of "the filter does
+    # nothing" can be told apart from a click that never reached us at all.
+    logger.info(
+        "slack_app_home_republished",
+        slack_user_id=slack_user_id,
+        slack_team_id=integration.integration_id,
+        slack_app_home_tasks_page=render.tasks_state.page,
+        slack_app_home_tasks_total_pages=render.tasks_state.total_pages,
+        slack_app_home_tasks_shown=len(render.tasks_state.items),
+        slack_app_home_selected_repo=view_state.selected_repo,
+        slack_app_home_selected_status=view_state.selected_status,
+        slack_app_home_stats_window_days=view_state.stats_window_days,
+    )
 
 
 _TASKS_PAGE_SIZE = 10
@@ -1742,10 +2041,10 @@ def _resolve_tasks_state(
     accessible-team scoping) does not generalise.
     """
 
-    from django.conf import settings
     from django.utils import timezone as django_timezone
 
     from products.slack_app.backend.models import SlackThreadTaskMapping
+    from products.slack_app.backend.services.slack_messages import viewer_has_code_access
     from products.tasks.backend.facade import api as tasks_facade
 
     slack_team_id = integration.integration_id
@@ -1779,6 +2078,11 @@ def _resolve_tasks_state(
     mapping_by_task = {str(m["task_id"]): m for m in mappings}
 
     site_url = (settings.SITE_URL or "").rstrip("/")
+    # Only the desktop link answers to the viewer, the same check the reply footer's
+    # desktop link uses. It goes through the `/code/task` web bridge, which opens the app
+    # when installed and offers a download when not. The web link is always shown — the
+    # task page enforces access itself.
+    can_open_desktop_links = viewer_has_code_access(integration, slack_user_id)
     now = django_timezone.now()
     all_items: list[TaskItem] = []
     repos_seen: list[str] = []
@@ -1789,10 +2093,13 @@ def _resolve_tasks_state(
             continue
         run = runs_by_task.get(str(t.id))
         mapping: Mapping[str, Any] = mapping_by_task.get(str(t.id), {})
+        posthog_url = f"{site_url}/project/{t.team_id}/tasks/{t.id}"
+        desktop_url = f"{site_url}/code/task/{t.id}" if can_open_desktop_links else None
         all_items.append(
             TaskItem(
                 title=t.title,
-                posthog_url=f"{site_url}/project/{t.team_id}/tasks/{t.id}",
+                posthog_url=posthog_url,
+                desktop_url=desktop_url,
                 status=run.status if run else None,
                 repository=t.repository,
                 pr_url=pr_urls_by_task.get(str(t.id)),
@@ -1868,9 +2175,53 @@ def _format_relative(when: datetime | None, *, now: datetime) -> str:
     return when.strftime("%b %d")
 
 
+def _resolve_run_defaults_state(
+    integration: Integration, slack_user_id: str, *, accessible: list[Integration]
+) -> RunDefaultsState:
+    """The PostHog default this person's Slack runs fall back to, plus where to change it.
+
+    Resolves the viewer through the same cascade the run path uses (`_resolve_home_user`),
+    so an unlinked but email-matched identity reflects its own personal default rather than
+    dropping to the project rung, matching the model a mention of theirs would actually run.
+
+    Routed and access-filtered like a run, too: the card reads the default for the
+    project this person's mentions would actually launch in — their saved project
+    default, else the workspace's, else the oldest install, all within `accessible`.
+    Reading `integration.team_id` directly both exposed a project the viewer may not
+    reach and described a default their runs would not use.
+    """
+    from products.tasks.backend.facade import (  # noqa: PLC0415 — keep tasks deps off the slack_app import path
+        ai_run_defaults,
+    )
+
+    target = _routed_project_integration(integration, slack_user_id, accessible=accessible)
+    if target is None:
+        # No reachable project: nothing to describe and no settings page to offer.
+        return RunDefaultsState()
+
+    site_url = (settings.SITE_URL or "").rstrip("/")
+    settings_url = f"{site_url}/project/{target.team_id}/settings/environment-task-agents" if site_url else None
+
+    try:
+        home_user = _resolve_home_user(integration, slack_user_id)
+        resolved = ai_run_defaults.resolve_ai_run_defaults(target.team_id, home_user.id if home_user else None)
+    except Exception:
+        # The card is informational; a lookup failure must not cost the whole Home tab.
+        logger.exception("slack_app_home_run_defaults_resolution_failed", slack_user_id=slack_user_id)
+        return RunDefaultsState(settings_url=settings_url)
+
+    return RunDefaultsState(
+        model=resolved.model,
+        reasoning_effort=resolved.reasoning_effort,
+        runtime_adapter=resolved.runtime_adapter,
+        source=resolved.source,
+        settings_url=settings_url,
+    )
+
+
 def _resolve_account_state(integration: Integration, slack_user_id: str) -> AccountState:
     slack_team_id = integration.integration_id
-    if not is_slack_app_oauth_enabled(integration, slack_team_id):
+    if not is_slack_app_oauth_enabled(integration):
         return AccountState(enabled=False)
 
     candidate_org_ids = _workspace_org_ids(slack_team_id)
@@ -1898,6 +2249,97 @@ def _resolve_account_state(integration: Integration, slack_user_id: str) -> Acco
         )
         link_url = None
     return AccountState(enabled=True, linked_email=None, link_url=link_url)
+
+
+def _resolve_home_user(integration: Integration, slack_user_id: str) -> User | None:
+    """Identify the PostHog user behind this Slack identity.
+
+    Mirrors the event-path cascade in `resolve_posthog_user_from_event`: the
+    OAuth link wins, otherwise we match the cached Slack profile email against
+    members of the organizations connected to this workspace. Deactivated
+    users count as no match on both paths, so an offboarded account can't be
+    reached through a Slack identity that still maps to it. Reading the
+    profile cache instead of calling `users.info` keeps the Home render free
+    of a Slack API roundtrip.
+    """
+    slack_team_id = integration.integration_id
+    candidate_org_ids = _workspace_org_ids(slack_team_id)
+    if not candidate_org_ids:
+        return None
+
+    if is_slack_app_oauth_enabled(integration):
+        linked_user = find_linked_posthog_user(
+            slack_user_id=slack_user_id,
+            slack_team_id=slack_team_id,
+            candidate_org_ids=candidate_org_ids,
+        )
+        if linked_user is not None:
+            return linked_user if linked_user.is_active else None
+
+    profile = SlackUserProfileCache.objects.filter(integration_id=integration.id, slack_user_id=slack_user_id).first()
+    if profile is None or not profile.email:
+        return None
+    membership = (
+        OrganizationMembership.objects.filter(
+            organization_id__in=candidate_org_ids,
+            user__email__iexact=profile.email,
+            user__is_active=True,
+        )
+        .select_related("user")
+        .first()
+    )
+    return membership.user if membership else None
+
+
+def _resolve_github_state(integration: Integration, slack_user_id: str) -> GitHubState:
+    """List the personal GitHub installations of the user opening the Home tab.
+
+    Usability comes from the tasks facade, the same judgment
+    `should_block_task_for_missing_user_github` gates on, so the card and the
+    task flow never disagree about whether a connection works.
+
+    Connecting GitHub needs an authenticated PostHog session, so the button
+    deep-links to Personal integrations settings — the same target the
+    in-thread "Connect GitHub" prompt uses.
+    """
+    from products.slack_app.backend.services.slack_messages import personal_integrations_url
+    from products.tasks.backend.facade import api as tasks_facade
+
+    settings_url = personal_integrations_url(integration.team_id)
+    try:
+        user = _resolve_home_user(integration, slack_user_id)
+        if user is None:
+            return GitHubState(user_resolved=False, settings_url=settings_url)
+        rows = UserIntegration.objects.filter(
+            user=user,
+            kind=UserIntegration.IntegrationKind.GITHUB,
+        ).order_by("created_at")
+        accounts = tuple(_github_account_from_row(row) for row in rows)
+        credentials_usable = bool(accounts) and tasks_facade.user_has_usable_personal_github(user.id)
+    except Exception:
+        logger.exception(
+            "slack_app_home_resolve_github_state_failed",
+            slack_user_id=slack_user_id,
+            integration_id=integration.id,
+        )
+        return GitHubState(user_resolved=False, settings_url=settings_url)
+    return GitHubState(
+        user_resolved=True,
+        accounts=accounts,
+        credentials_usable=credentials_usable,
+        settings_url=settings_url,
+    )
+
+
+def _github_account_from_row(row: UserIntegration) -> GitHubAccount:
+    config = row.config or {}
+    github_user = config.get("github_user")
+    account = config.get("account")
+    return GitHubAccount(
+        installation_id=row.integration_id,
+        login=github_user.get("login") if isinstance(github_user, dict) else None,
+        account_name=account.get("name") if isinstance(account, dict) else None,
+    )
 
 
 def _workspace_integrations(slack_team_id: str) -> list[Integration]:

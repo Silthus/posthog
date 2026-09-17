@@ -11,7 +11,7 @@ import { HealthCheckResult, HealthCheckResultOk, PluginsServerConfig } from '../
 import { createHogFlowInvocation } from '../services/hogflows/hogflow-executor.service'
 import { actionIdForLogging } from '../services/hogflows/hogflow-utils'
 import { JobQueue } from '../services/job-queue/job-queue.interface'
-import { HogWatcherFunctionState, HogWatcherState } from '../services/monitoring/hog-watcher.service'
+import { HogWatcherFunctionState, HogWatcherState, sameWatcherState } from '../services/monitoring/hog-watcher.service'
 import {
     CyclotronJobInvocationHogFunction,
     CyclotronJobInvocationResult,
@@ -22,8 +22,8 @@ import {
     MinimalAppMetric,
 } from '../types'
 import { logEntry } from '../utils'
+import { dualRead, dualWrite } from '../utils/dual-store'
 import { createInvocation, createInvocationResult } from '../utils/invocation-utils'
-import { mirrorCall, mirrorCompare } from '../utils/mirror-call'
 import { CdpConsumerBase, CdpConsumerBaseDeps } from './cdp-base.consumer'
 
 const DISALLOWED_HEADERS = [
@@ -299,11 +299,13 @@ export class CdpSourceWebhooksConsumer extends CdpConsumerBase<PluginsServerConf
                     count: 1,
                 })
 
-                addMetric({
-                    metric_kind: 'billing',
-                    metric_name: 'billable_invocation',
-                    count: 1,
-                })
+                // Queued before queueInvocations serializes the invocation, because
+                // queueLifecycleRow stamps `state.firstScheduledAt` and only a stamp set before
+                // serialization reaches cyclotron.
+                this.invocationResultsService.invocationResultsRowsService.queueLifecycleRow(
+                    hogFlowInvocation,
+                    'running'
+                )
 
                 await this.hogflowQueue.queueInvocations([hogFlowInvocation])
             } else {
@@ -319,6 +321,9 @@ export class CdpSourceWebhooksConsumer extends CdpConsumerBase<PluginsServerConf
             return functionResult
         } catch (error) {
             logger.error('Error triggering hog flow', { error })
+            // The 'running' row is queued before the invocation reaches cyclotron, so a throw after
+            // that point leaves a row for a run that does not exist and would never terminate.
+            this.invocationResultsService.invocationResultsRowsService.dropQueuedRowsFor([invocationId])
             addMetric({
                 metric_kind: 'failure',
                 metric_name: 'trigger_failed',
@@ -439,10 +444,11 @@ export class CdpSourceWebhooksConsumer extends CdpConsumerBase<PluginsServerConf
 
         const [webhook, hogFunctionState] = await Promise.all([
             this.getWebhook(webhookId),
-            mirrorCompare(
+            dualRead(
                 'hog-watcher.getCachedEffectiveState',
                 () => this.hogWatcher.getCachedEffectiveState(webhookId),
-                () => this.hogWatcherMirror?.getCachedEffectiveState(webhookId)
+                () => this.hogWatcherMirror.getCachedEffectiveState(webhookId),
+                sameWatcherState
             ),
         ])
 
@@ -472,9 +478,10 @@ export class CdpSourceWebhooksConsumer extends CdpConsumerBase<PluginsServerConf
 
         void this.promiseScheduler.schedule(
             this.invocationResultsService.flush(),
-            this.hogWatcher.observeResultsBuffered(result),
-            mirrorCall('hog-watcher.observeResultsBuffered', () =>
-                this.hogWatcherMirror?.observeResultsBuffered(result)
+            dualWrite(
+                'hog-watcher.observeResultsBuffered',
+                () => this.hogWatcher.observeResultsBuffered(result),
+                () => this.hogWatcherMirror.observeResultsBuffered(result)
             )
         )
 

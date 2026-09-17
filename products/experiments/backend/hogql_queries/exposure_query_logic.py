@@ -19,13 +19,11 @@ from posthog.schema import (
 )
 
 from posthog.hogql import ast
-from posthog.hogql.parser import parse_expr
 from posthog.hogql.property import action_to_expr, property_to_expr
 
 from posthog.models.team.team import Team
 
 from products.actions.backend.models.action import Action
-from products.experiments.backend.hogql_queries import MULTIPLE_VARIANT_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +43,7 @@ EXPERIMENT_EXPOSURE_EVENT_FLAG = "experiment-exposure-event"
 # (at least partly) without the new event, so they must keep counting exposures via
 # $feature_flag_called even where the two overlap. Only experiments whose start_date is at or
 # after the cutoff can rely on $experiment_exposure covering their whole exposure window.
-EXPERIMENT_EXPOSURE_EVENT_CUTOFF = datetime(2026, 8, 5, tzinfo=UTC)
+EXPERIMENT_EXPOSURE_EVENT_CUTOFF = datetime(2026, 9, 1, tzinfo=UTC)
 
 
 def resolve_default_exposure_event(team: Team, start_date: Optional[datetime]) -> str:
@@ -112,18 +110,40 @@ def normalize_to_exposure_criteria(
 
     # Convert dict to typed object
     if isinstance(exposure_criteria, dict):
-        # Create a copy to avoid mutating the input
-        criteria_copy = exposure_criteria.copy()
-        # Also normalize nested exposure_config if present
-        if criteria_copy.get("exposure_config"):
-            exposure_config = criteria_copy["exposure_config"]
-            if isinstance(exposure_config, dict):
-                if _is_actions_node_dict(exposure_config):
-                    criteria_copy["exposure_config"] = ActionsNode.model_validate(exposure_config)
+        criteria_copy = dict(exposure_criteria)
+        # Also normalize nested configs if present
+        for config_key in ("exposure_config", "activation_config"):
+            config = criteria_copy.get(config_key)
+            if config and isinstance(config, dict):
+                if _is_actions_node_dict(config):
+                    criteria_copy[config_key] = ActionsNode.model_validate(config)
                 else:
-                    criteria_copy["exposure_config"] = ExperimentEventExposureConfig.model_validate(exposure_config)
+                    criteria_copy[config_key] = ExperimentEventExposureConfig.model_validate(config)
 
         return ExperimentExposureCriteria.model_validate(criteria_copy)
+
+
+def is_default_exposure_config(config: Union[ActionsNode, ExperimentEventExposureConfig, None]) -> bool:
+    """A missing config or one naming a default exposure event is the default exposure, not a
+    custom one (same convention as get_exposure_event_and_property)."""
+    if config is None:
+        return True
+    return isinstance(config, ExperimentEventExposureConfig) and config.event in (
+        DEFAULT_EXPOSURE_EVENT,
+        EXPERIMENT_EXPOSURE_EVENT,
+    )
+
+
+def has_activation_config(exposure_criteria: Union[ExperimentExposureCriteria, dict, None]) -> bool:
+    """Whether the criteria put the experiment in activation mode: an activation event on top of
+    the default exposure. A custom exposure_config disables activation (validation rejects the
+    combination, but stored data predating it must not change semantics)."""
+    criteria = normalize_to_exposure_criteria(exposure_criteria)
+    return (
+        criteria is not None
+        and criteria.activation_config is not None
+        and is_default_exposure_config(criteria.exposure_config)
+    )
 
 
 def get_multiple_variant_handling_from_experiment(
@@ -139,39 +159,6 @@ def get_multiple_variant_handling_from_experiment(
 
     # Default to "exclude" if not specified
     return MultipleVariantHandling.EXCLUDE
-
-
-def get_variant_selection_expr(
-    feature_flag_variant_property: str, multiple_variant_handling: MultipleVariantHandling
-) -> ast.Expr:
-    """
-    Returns the appropriate variant selection expression based on multiple_variant_handling configuration.
-
-    Args:
-        feature_flag_variant_property: The property name containing the variant value
-        multiple_variant_handling: How to handle multiple exposures (EXCLUDE or FIRST_SEEN)
-    """
-    variant_property_field = ast.Field(chain=["properties", feature_flag_variant_property])
-
-    match multiple_variant_handling:
-        case MultipleVariantHandling.FIRST_SEEN:
-            # Use variant from earliest exposure (minimum timestamp)
-            return parse_expr(
-                "argMin({variant_property}, timestamp)",
-                placeholders={
-                    "variant_property": variant_property_field,
-                },
-            )
-        case _:
-            # Default behavior is EXCLUDE. Users who have seen more than one variant is assigned to the
-            # MULTIPLE_VARIANT_KEY group
-            return parse_expr(
-                "if(count(distinct {variant_property}) > 1, {multiple_variant_key}, any({variant_property}))",
-                placeholders={
-                    "variant_property": variant_property_field,
-                    "multiple_variant_key": ast.Constant(value=MULTIPLE_VARIANT_KEY),
-                },
-            )
 
 
 def get_test_accounts_filter(

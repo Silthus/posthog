@@ -25,10 +25,20 @@ from urllib.parse import urlparse
 
 import pyarrow as pa
 import structlog
-from google.api_core.exceptions import BadRequest, Forbidden, InternalServerError, NotFound, ServiceUnavailable
+from google.api_core.exceptions import (
+    BadRequest,
+    DeadlineExceeded,
+    Forbidden,
+    InternalServerError,
+    NotFound,
+    ServiceUnavailable,
+)
 from google.api_core.retry import Retry, if_exception_type
 from google.auth.exceptions import RefreshError
-from google.auth.transport.requests import AuthorizedSession
+from google.auth.transport.requests import (
+    AuthorizedSession,
+    Request as GoogleAuthRequest,
+)
 from google.cloud import bigquery, bigquery_storage
 from google.cloud.bigquery.job import QueryJobConfig
 from google.cloud.bigquery.retry import DEFAULT_JOB_RETRY, _job_should_retry
@@ -53,7 +63,9 @@ from products.warehouse_sources.backend.temporal.data_imports.sources.common.grp
 from products.warehouse_sources.backend.temporal.data_imports.sources.common.http import (
     DEFAULT_RETRY,
     TrackedHTTPAdapter,
+    make_tracked_session,
 )
+from products.warehouse_sources.backend.temporal.data_imports.sources.common.http.transport import BoundedRetry
 from products.warehouse_sources.backend.temporal.data_imports.sources.common.mixins import log_connection_open
 from products.warehouse_sources.backend.temporal.data_imports.sources.common.sql import (
     ColumnTypeCategory,
@@ -161,6 +173,31 @@ BIGQUERY_INVALID_KEY_FILE_ERROR = (
     "corrupted. Please download a fresh service account key from Google Cloud and re-upload the JSON file."
 )
 
+# `token_uri` comes from the uploaded key file, and google-auth posts the service-account grant to
+# whatever URL it names, so the field decides where a worker sends an outbound request. Google
+# issues service-account keys with only these two endpoints, so any other value is hand-edited.
+GOOGLE_SERVICE_ACCOUNT_TOKEN_URIS = frozenset(
+    {"https://oauth2.googleapis.com/token", "https://accounts.google.com/o/oauth2/token"}
+)
+
+# Matched in `BigQuerySource.get_non_retryable_errors`, so it must stay free of volatile data.
+BIGQUERY_INVALID_TOKEN_URI_ERROR = (
+    "The token_uri in your Google Cloud JSON key file is not Google's OAuth token endpoint. Please download "
+    "a fresh service account key from Google Cloud and re-upload the JSON file without editing it."
+)
+
+
+class BigQueryInvalidTokenUriError(Exception):
+    pass
+
+
+def _require_google_token_uri(token_uri: str) -> str:
+    token_uri = token_uri.strip()
+    if token_uri not in GOOGLE_SERVICE_ACCOUNT_TOKEN_URIS:
+        raise BigQueryInvalidTokenUriError(BIGQUERY_INVALID_TOKEN_URI_ERROR)
+    return token_uri
+
+
 # Onboarding-time messages. Unlike the sync-path classifier these are only reached during credential
 # validation, where the fix is to correct the input and try again rather than re-enable a sync.
 BIGQUERY_MISSING_KEY_FILE_FIELDS_ERROR = (
@@ -187,6 +224,13 @@ BIGQUERY_VALIDATION_GENERIC_ERROR = (
 # escapes `QueryJob.result()` and crashes the import. BigQuery itself recommends retrying, so re-run
 # the job in place — matched on its stable retry-recommendation wording, not the volatile job id/URL.
 _BIGQUERY_JOB_RETRY_RECOMMENDED = "Retrying the job may solve the problem"
+
+# BigQuery has a second wording for the same transient `jobInternalError` condition above, seen from
+# the same `jobs.getQueryResults` call: "The job encountered an internal error during execution and
+# was unable to complete successfully." — no "Retrying the job may solve the problem" suffix, so
+# `_BIGQUERY_JOB_RETRY_RECOMMENDED` doesn't catch it and it escapes `QueryJob.result()` the same way.
+# Matched on its own stable wording, not the volatile job id/URL.
+_BIGQUERY_JOB_INTERNAL_ERROR = "encountered an internal error during execution and was unable to complete successfully"
 
 
 def _is_transient_rate_quota_exceeded(exc: Exception) -> bool:
@@ -229,8 +273,10 @@ def _query_should_retry(exc: Exception) -> bool:
     # Defer to the library's own default predicate for the reasons it already covers; importing it
     # directly (rather than reading the private `Retry._predicate`) means a library rename fails
     # loudly at import instead of silently dropping that default coverage.
+    message = str(exc)
     return (
-        _BIGQUERY_JOB_RETRY_RECOMMENDED in str(exc)
+        _BIGQUERY_JOB_RETRY_RECOMMENDED in message
+        or _BIGQUERY_JOB_INTERNAL_ERROR in message
         or _is_transient_rate_quota_exceeded(exc)
         or _is_transient_queued_jobs_quota_exceeded(exc)
         or _job_should_retry(exc)
@@ -256,6 +302,38 @@ BIGQUERY_READ_ROWS_RETRY = Retry(
     maximum=60.0,
     multiplier=1.3,
     deadline=86400.0,
+)
+
+
+# The same transient gRPC INTERNAL error can surface one call earlier, from `create_read_session`
+# itself, before any stream exists to reconnect. The client's default create_read_session retry
+# only covers DeadlineExceeded/ServiceUnavailable, so INTERNAL escapes as an unhandled
+# InternalServerError and fails the whole import activity. No stream has been read yet at this
+# point, so retrying just creates a fresh session. Parameters mirror the library's default
+# create_read_session retry, widened to also retry INTERNAL.
+BIGQUERY_CREATE_READ_SESSION_RETRY = Retry(
+    predicate=if_exception_type(DeadlineExceeded, ServiceUnavailable, InternalServerError),
+    initial=0.1,
+    maximum=60.0,
+    multiplier=1.3,
+    deadline=600.0,
+)
+
+
+# `AuthorizedSession` builds its own internal session for refreshing the service-account OAuth
+# access token, and its default adapter only retries connection errors, not HTTP error responses.
+# Google's OAuth token endpoint can fail the refresh POST with a transient 502/503/504 (a Google-side
+# infrastructure blip on accounts.google.com / oauth2.googleapis.com — the same condition already
+# tolerated as a non-fatal cleanup hiccup in `build_pipeline`'s `finally` block), which otherwise
+# escapes every call site as an opaque `RefreshError` and crashes the whole import activity. POST is
+# normally excluded from urllib3's retryable methods since it's often non-idempotent, but a failed
+# token request mints no token, so retrying it here duplicates no side effect.
+BIGQUERY_TOKEN_REFRESH_RETRY = BoundedRetry(
+    total=3,
+    backoff_factor=0.5,
+    status_forcelist=(502, 503, 504),
+    allowed_methods=frozenset(["POST"]),
+    raise_on_status=False,
 )
 
 
@@ -372,6 +450,7 @@ def bigquery_client(
 ) -> typing.Iterator[bigquery.Client]:
     """Manage a BigQuery client."""
     project_id = _normalize_identifier(project_id)
+    token_uri = _require_google_token_uri(token_uri)
     credentials = service_account.Credentials.from_service_account_info(
         {
             "private_key": private_key,
@@ -382,10 +461,15 @@ def bigquery_client(
         },
         scopes=["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/cloud-platform"],
     )
+    # See `BIGQUERY_TOKEN_REFRESH_RETRY`: hand `AuthorizedSession` our own retrying session for
+    # credential refresh, instead of the default one whose adapter never retries a 502/503/504.
+    # `capture=False` keeps the OAuth response (it carries the minted bearer token) out of HTTP
+    # sample capture.
+    auth_request_session = make_tracked_session(retry=BIGQUERY_TOKEN_REFRESH_RETRY, capture=False)
     # AuthorizedSession is a `requests.Session` subclass that injects the OAuth2
     # bearer token. Mount our TrackedHTTPAdapter on it so every BigQuery REST
     # call is logged and metered alongside the other warehouse sources.
-    authed_session = AuthorizedSession(credentials)
+    authed_session = AuthorizedSession(credentials, auth_request=GoogleAuthRequest(auth_request_session))
     tracked_adapter = TrackedHTTPAdapter(max_retries=DEFAULT_RETRY)
     authed_session.mount("https://", tracked_adapter)
     authed_session.mount("http://", tracked_adapter)
@@ -425,6 +509,7 @@ def bigquery_storage_read_client(
 ):
     """Manage a BigQuery Storage client."""
     project_id = _normalize_identifier(project_id)
+    token_uri = _require_google_token_uri(token_uri)
     credentials = service_account.Credentials.from_service_account_info(
         {
             "private_key": private_key,
@@ -594,6 +679,10 @@ def validate_bigquery_credentials(
 
     if not project_id or not private_key or not private_key_id or not client_email or not token_uri:
         return False, BIGQUERY_MISSING_KEY_FILE_FIELDS_ERROR
+    try:
+        _require_google_token_uri(token_uri)
+    except BigQueryInvalidTokenUriError as e:
+        return False, str(e)
 
     # Trim copy-paste whitespace from the identifiers before they reach BigQuery,
     # which otherwise rejects them with an opaque `Invalid project ID`/`Invalid dataset ID`.
@@ -604,10 +693,14 @@ def validate_bigquery_credentials(
 
     try:
         with bigquery_client(project_id, location, private_key, private_key_id, client_email, token_uri) as bq:
-            bq.list_tables(
+            tables = bq.list_tables(
                 bq.dataset(dataset_id, project=dataset_project_id or project_id),
                 retry=bigquery.DEFAULT_RETRY.with_timeout(5),
             )
+            # `list_tables` returns a lazy iterator; the REST request runs only when a page is
+            # consumed. Pull the first page inside the client context so identifier, dataset,
+            # permission, and auth errors surface here instead of validating an unmade request.
+            next(tables.pages, None)
         return True, None
     except Exception as e:
         # Mirror the stable substrings the sync-path classifier keys off, so the wizard names the
@@ -618,7 +711,11 @@ def validate_bigquery_credentials(
             return False, BIGQUERY_INVALID_KEY_FILE_ERROR
         if "invalid_grant" in message:
             return False, BIGQUERY_CREDENTIALS_REJECTED_ERROR
-        if "Invalid project ID" in message or "Invalid dataset ID" in message:
+        if (
+            "Invalid project ID" in message
+            or "Invalid dataset ID" in message
+            or "ProjectId must be non-empty" in message
+        ):
             return False, BIGQUERY_INVALID_IDENTIFIER_ERROR
         if "was not found in location" in message or "Not found: Dataset" in message:
             return False, BIGQUERY_DATASET_NOT_FOUND_ERROR
@@ -675,10 +772,10 @@ def _get_primary_keys_for_table(table: bigquery.Table, client: bigquery.Client) 
     """
 
     job_config = QueryJobConfig()
-    job = client.query(query, job_config=job_config, project=table.project, retry=BIGQUERY_QUERY_CREATE_RETRY)
+    rows = _query_result_with_job_retry(client, query, job_config=job_config, project=table.project)
 
     primary_keys = []
-    for row in job.result(job_retry=BIGQUERY_QUERY_JOB_RETRY):
+    for row in rows:
         field_name = row["column_name"].removeprefix(f"{table.table_id}.")
 
         if field_name not in existing_fields:
@@ -697,6 +794,12 @@ def _get_primary_keys_for_table(table: bigquery.Table, client: bigquery.Client) 
 # `_is_bigquery_resource_exceeded` and `BigQuerySource.get_non_retryable_errors` so the two sites
 # stay in lockstep if BigQuery ever adjusts the phrasing.
 BIGQUERY_RESOURCES_EXCEEDED_ERROR = "Resources exceeded during query execution"
+
+# Stable wording BigQuery puts in a `billingTierLimitExceeded` query failure's message, raised as a
+# 400 BadRequest from `jobs.getQueryResults` when a query's CPU-second usage relative to bytes
+# billed exceeds the ratio the on-demand pricing model allows. Shared with
+# `BigQuerySource.get_non_retryable_errors` so the two stay in lockstep.
+BIGQUERY_ON_DEMAND_RATIO_EXCEEDED_ERROR = "exceeds the ratio supported by the on-demand pricing model"
 
 
 def _is_bigquery_resource_exceeded(error: BadRequest) -> bool:
@@ -1115,7 +1218,7 @@ class BigQueryImplementation(SQLSourceImplementation[BigQuerySourceConfig, bigqu
     # ------------------------------------------------------------------
 
     @contextmanager
-    def connect(self, config: BigQuerySourceConfig) -> Iterator[bigquery.Client]:
+    def connect(self, config: BigQuerySourceConfig, *, team_id: int | None = None) -> Iterator[bigquery.Client]:
         # Without a custom region the client is built with `location=None`, so discovery
         # query jobs default to the US multi-region and miss datasets in other regions.
         # Auto-detect the dataset's location so discovery runs where the data lives.
@@ -1152,9 +1255,14 @@ class BigQueryImplementation(SQLSourceImplementation[BigQuerySourceConfig, bigqu
             # project than the service account (the `dataset_project` option), the client's default
             # project and the job's billing project diverge, and BigQuery can't resolve an unqualified
             # `dataset.INFORMATION_SCHEMA.*` — it rejects the job with "ProjectId must be non-empty".
+            # The backtick-quoted identifier must close after the dataset, not after `INFORMATION_SCHEMA.COLUMNS`
+            # — quoting the whole path as one identifier (like a regular `project.dataset.table` reference)
+            # stops BigQuery from resolving the trailing segments as the INFORMATION_SCHEMA view, which
+            # raises the same "ProjectId must be non-empty" error this qualification was meant to fix.
             project = _resolve_query_project(config)
+            qualified_dataset = f"{project}.{_resolve_dataset_id(config)}"
             query = conn.query(
-                f"SELECT table_name, column_name, data_type, is_nullable FROM `{project}.{_resolve_dataset_id(config)}.INFORMATION_SCHEMA.COLUMNS` ORDER BY table_name ASC",
+                f"SELECT table_name, column_name, data_type, is_nullable FROM `{qualified_dataset}`.INFORMATION_SCHEMA.COLUMNS ORDER BY table_name ASC",
                 project=project,
             )
             rows = query.result()
@@ -1171,9 +1279,16 @@ class BigQueryImplementation(SQLSourceImplementation[BigQuerySourceConfig, bigqu
             raise BigQueryDatasetNotFoundError(BIGQUERY_DATASET_NOT_FOUND_ERROR) from e
         except BadRequest as e:
             # A bad project/dataset ID surfaces as "400 Invalid project ID ..." / "Invalid dataset ID
-            # ...". Convert it to an actionable message; anything else is a genuine BadRequest we leave
-            # to propagate (including the transient job-internal-error the query retry predicate covers).
-            if "Invalid dataset ID" not in str(e) and "Invalid project ID" not in str(e):
+            # ...", or as "400 ... ProjectId must be non-empty" when the value carries an underscore
+            # (a character project IDs forbid). Convert it to an actionable message; anything else is a
+            # genuine BadRequest we leave to propagate (including the transient job-internal-error the
+            # query retry predicate covers).
+            message = str(e)
+            if (
+                "Invalid dataset ID" not in message
+                and "Invalid project ID" not in message
+                and "ProjectId must be non-empty" not in message
+            ):
                 raise
             structlog.get_logger().warning(
                 "BigQuery rejected an invalid project/dataset ID during schema discovery: %s", e
@@ -1567,6 +1682,7 @@ class BigQueryImplementation(SQLSourceImplementation[BigQuerySourceConfig, bigqu
                         read_session=requested_session,
                         # TODO: Currently, single stream. Could multi-thread here for performance.
                         max_stream_count=1,
+                        retry=BIGQUERY_CREATE_READ_SESSION_RETRY,
                     )
 
                     if not read_session.streams:

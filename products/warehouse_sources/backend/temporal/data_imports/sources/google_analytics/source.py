@@ -3,18 +3,16 @@ from typing import Optional, cast
 import requests
 from google.auth.exceptions import RefreshError
 
-from posthog.schema import (
+from posthog.models.integration import Integration
+
+from products.warehouse_sources.backend.facade.source_config import (
     DataWarehouseSourceCategory,
-    ExternalDataSourceType as SchemaExternalDataSourceType,
     ReleaseStatus,
     SourceConfig,
     SourceFieldInputConfig,
     SourceFieldInputConfigType,
     SourceFieldOauthConfig,
 )
-
-from posthog.models.integration import Integration
-
 from products.warehouse_sources.backend.temporal.data_imports.sources.common.base import FieldType, ResumableSource
 from products.warehouse_sources.backend.temporal.data_imports.sources.common.canonical_descriptions import (
     CanonicalDescriptions,
@@ -36,7 +34,8 @@ from products.warehouse_sources.backend.temporal.data_imports.sources.google_ana
 )
 from products.warehouse_sources.backend.temporal.data_imports.sources.google_analytics.settings import (
     GOOGLE_ANALYTICS_INCREMENTAL_FIELD,
-    GOOGLE_ANALYTICS_REPORT_SCHEMAS,
+    CustomReportError,
+    build_report_schemas,
 )
 from products.warehouse_sources.backend.types import ExternalDataSourceType
 
@@ -78,7 +77,30 @@ class GoogleAnalyticsSource(ResumableSource[GoogleAnalyticsSourceConfig, GoogleA
         # still exhausted once those retries run out, the property's token quota refills over
         # time and the resumable source picks up from the last saved chunk, so let Temporal
         # retry the activity without paging it as a bug.
-        return {"(retryable)"}
+        #
+        # "Connection aborted"/"Connection reset by peer"/"Read timed out" are transport-level blips
+        # from `requests` raised by `session.post()` in `_run_report`, which now backs off on them
+        # inline, so they reach here only once that budget is spent. The resumable source picks up
+        # from the last saved chunk on the next Temporal retry, same as ClickHouse's source
+        # classifies this text.
+        #
+        # "Connection broken" is the urllib3 `ProtocolError` prefix for a body cut off mid-stream.
+        # It carries the underlying reason (an incomplete read, an invalid chunk length, or a reset),
+        # so only the reset variant matches the text above — match the prefix to cover them all.
+        #
+        # "Max retries exceeded with url" is the urllib3 wrapper around a connect that never
+        # succeeded (a DNS failure, a refused connection, or a connect timeout). `Retry.increment`
+        # tests for a connection error before it tests the method allowlist, so the shared adapter
+        # retries this POST too and wraps the exhausted failure in that text, which carries none of
+        # the messages above. Google Sheets, Langfuse, Notion and SigNoz match the same prefix.
+        return {
+            "(retryable)",
+            "Connection aborted",
+            "Connection broken",
+            "Connection reset by peer",
+            "Max retries exceeded with url",
+            "Read timed out",
+        }
 
     def get_schemas(
         self,
@@ -98,7 +120,7 @@ class GoogleAnalyticsSource(ResumableSource[GoogleAnalyticsSourceConfig, GoogleA
                 description=schema["description"],
                 should_sync_default=schema["should_sync_default"],
             )
-            for name, schema in GOOGLE_ANALYTICS_REPORT_SCHEMAS.items()
+            for name, schema in build_report_schemas(config.custom_reports).items()
         ]
 
         if names is not None:
@@ -134,6 +156,11 @@ class GoogleAnalyticsSource(ResumableSource[GoogleAnalyticsSourceConfig, GoogleA
         schema_name: Optional[str] = None,
         api_version: str | None = None,
     ) -> tuple[bool, str | None]:
+        try:
+            build_report_schemas(config.custom_reports)
+        except CustomReportError as e:
+            return False, str(e)
+
         property_id = normalize_property_id(config.property_id)
         if not property_id.isdigit():
             # Name the two IDs users most often paste by mistake — both are non-numeric and
@@ -207,7 +234,7 @@ class GoogleAnalyticsSource(ResumableSource[GoogleAnalyticsSourceConfig, GoogleA
     @property
     def get_source_config(self) -> SourceConfig:
         return SourceConfig(
-            name=SchemaExternalDataSourceType.GOOGLE_ANALYTICS,
+            name=ExternalDataSourceType.GOOGLEANALYTICS,
             category=DataWarehouseSourceCategory.ANALYTICS,
             keywords=["ga4", "ga"],
             label="Google Analytics",
@@ -237,7 +264,26 @@ class GoogleAnalyticsSource(ResumableSource[GoogleAnalyticsSourceConfig, GoogleA
                         placeholder="123456789",
                         caption=(
                             "The numeric GA4 property ID, found in Google Analytics under "
-                            "Admin → Property settings → Property details."
+                            "Admin → Property settings → Property details. This is not the "
+                            "'G-XXXXXXX' Measurement ID from your website tag."
+                        ),
+                        secret=False,
+                    ),
+                    SourceFieldInputConfig(
+                        name="custom_reports",
+                        label="Custom reports (optional)",
+                        type=SourceFieldInputConfigType.TEXTAREA,
+                        required=False,
+                        placeholder=(
+                            '[{"name": "paid_campaigns", '
+                            '"dimensions": ["sessionCampaignName", "sessionSource"], '
+                            '"metrics": ["sessions", "totalUsers", "purchaseRevenue"]}]'
+                        ),
+                        caption=(
+                            "Define your own report tables as a JSON array, on top of the built-in ones. "
+                            "Each report needs a name, GA4 dimensions, and GA4 metrics. PostHog always adds "
+                            "the date dimension and syncs each report daily. GA4 allows up to 9 dimensions "
+                            "(including date) and 10 metrics per report."
                         ),
                         secret=False,
                     ),

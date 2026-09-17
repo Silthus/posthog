@@ -66,12 +66,25 @@ export function sanitizeHeaderValue(value?: string): string | undefined {
     return sanitised || undefined
 }
 
+// Sanitize a batch of optional header values, dropping the ones that are absent or that
+// sanitize away to nothing, so the result can be spread straight into a headers object.
+export function sanitizeHeaders(headers: Record<string, string | undefined>): Record<string, string> {
+    const sanitised: Record<string, string> = {}
+    for (const [name, value] of Object.entries(headers)) {
+        const safeValue = sanitizeHeaderValue(value)
+        if (safeValue) {
+            sanitised[name] = safeValue
+        }
+    }
+    return sanitised
+}
+
 export type McpMode = 'tools' | 'cli'
 
 // Caller-supplied selection between the tool-based MCP (each PostHog tool registered
 // individually) and the CLI-based MCP (a single `posthog` CLI-like tool that wraps
 // all tools). Anything other than `tools` or `cli` returns undefined and lets
-// `resolveMode` pick: cli by default, tools for allow-listed clients (Cursor, ChatGPT).
+// `resolveMode` pick: cli by default, tools for allow-listed clients (Cursor).
 export function parseMcpMode(raw: string | null | undefined): McpMode | undefined {
     const value = raw?.trim().toLowerCase()
     return value === 'tools' ? 'tools' : value === 'cli' ? 'cli' : undefined

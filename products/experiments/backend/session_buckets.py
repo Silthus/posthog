@@ -11,22 +11,26 @@ metric. The analysis counts per person over the whole run window, while a record
 session of one person, so copy built on this must stay session-scoped ("in this session") and
 must never claim the analysis counted or discounted anyone.
 
-The population is the same session-scoped exposure evidence the tab's own list is built from —
-an event matching the experiment's exposure criteria, carrying one of the flag's defined
-variants. Not the exposure query's `exposure_session_id`, which is the person's *first*
-exposure session only: the playlist ANDs these ids with its own exposure filter, so ids it
-would reject are wasted slots out of the cap, and the later sessions `exposure_session_id`
-omits are exactly where drop-off and conversion happen. `exposure_session_id` is the right
-source for a future person-scoped bucket, not for a session-scoped one. The default exposure
-event goes through the same `resolve_default_exposure_event` rollout resolution the analysis
-queries apply, so an experiment whose results count `$experiment_exposure` is bucketed on it too.
+The population is session-scoped exposure evidence: an event matching the experiment's
+exposure criteria, carrying one of the flag's defined variants, inside the session. That is a
+deliberate choice, kept even though the tab's own list
+(`RecordingsQuery.experiment_exposure`) and the watch shelf are person-scoped: every bucket
+asks what happened *in the session*, and
+"fired none of these metrics" only means something over sessions that demonstrably saw the
+experiment, whereas over all of an exposed person's sessions it would surface their unrelated
+browsing. The playlist ANDs the returned ids with its person-scoped filter, so a bucket session
+whose person the analysis excludes (multiple variants, for example) drops out there rather than
+widening the shown set; ids spent on such sessions are wasted slots out of the cap, which is
+the price of staying session-scoped. The default exposure event goes through the same
+`resolve_default_exposure_event` rollout resolution the analysis queries apply, so an
+experiment whose results count `$experiment_exposure` is bucketed on it too.
 
 Whether an event can match sessions at all is decided here, from the same `EventProperty` fact
 the taxonomy `seen_together` endpoint serves the tab: an event never ingested with a
 `$session_id` (backend-fired exposure, server-side metrics) can only ever match zero sessions.
 For the default exposure event the population falls back to the stamped `$feature/<flag_key>`
-property — the same fallback the tab's list uses — flagged in the response as
-`used_exposure_fallback`. Custom criteria get no such stand-in: they assert that something
+property — the same fallback the per-variant "View recordings" links use — flagged in the
+response as `used_exposure_fallback`. Custom criteria get no such stand-in: they assert that something
 specific happened, which the stamped property doesn't imply, so a custom exposure event that
 can't be matched is refused with a reason rather than answered over a wider population.
 Metrics whose every source is such an event are excluded with a reason instead of silently
@@ -45,8 +49,6 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Optional
 
-from django.db import models
-from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from posthog.schema import EventsNode
@@ -57,21 +59,18 @@ from posthog.hogql.modifiers import create_default_modifiers_for_team
 from posthog.hogql.query import execute_hogql_query
 
 from posthog.clickhouse.query_tagging import Feature, Product, tag_queries
-from posthog.models import EventProperty
 from posthog.models.team.team import Team
 from posthog.models.user import User
+from posthog.session_recordings.data_retention import retention_period_in_days
 from posthog.session_recordings.queries.session_replay_events import SessionReplayEvents
 from posthog.utils import get_safe_cache, safe_cache_set
 
-from products.access_control.backend.property_access_control import get_restricted_properties_for_team
+from products.access_control.backend.property_access_control import (
+    get_restricted_properties_with_group_type_index_for_team,
+)
 from products.experiments.backend.hogql_queries.exposure_query_logic import (
-    DEFAULT_EXPOSURE_EVENT,
-    EXPERIMENT_EXPOSURE_EVENT,
-    build_exposure_event_conditions,
-    get_exposure_event_and_property,
     get_test_accounts_filter,
     normalize_to_exposure_criteria,
-    resolve_default_exposure_event,
 )
 from products.experiments.backend.metric_events import (
     MetricEventSource,
@@ -83,6 +82,12 @@ from products.experiments.backend.metric_events import (
     resolve_metric_events,
 )
 from products.experiments.backend.models.experiment import Experiment
+from products.experiments.backend.replay_linkage import fallback_evidence_scan_is_unaffordable
+from products.experiments.backend.session_exposure import (
+    MAX_SESSION_DURATION_HOURS,
+    SessionExposure,
+    resolve_session_exposure,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,9 +96,15 @@ logger = logging.getLogger(__name__)
 # request-line limits proxies commonly enforce. Doubling it would not.
 MAX_SESSION_BUCKET_LIMIT = 100
 # The scan reads every session in the window, not a known id list, so the window is what bounds
-# it. Recency-ordered output capped at 100 means older sessions could not surface anyway, which
-# makes this clamp close to free in practice — but it must be stated wherever the bucket is.
+# it. It ends at the latest in-session exposure rather than at now, because an experiment whose
+# exposures stopped has nothing left in its recent days. The response carries the window it read,
+# because a clamped scan has to state what it left out.
 MAX_BUCKET_SCAN_DAYS = 30
+# How far back the anchor looks for the latest exposure, before the project's replay retention
+# bounds it further. The scan prunes on the exposure event name, but that event is among the
+# highest-volume a team has and a run has no length cap, so an unbounded lookup on a long-stopped
+# experiment would read years of it on every cold request.
+MAX_ANCHOR_LOOKBACK_DAYS = 90
 # Rows fetched before filtering to sessions that actually have a recording, so the cap isn't
 # spent on sessions sampled out of replay.
 RECORDING_LOOKUP_FACTOR = 3
@@ -255,66 +266,90 @@ def get_experiment_session_bucket(
     if variant is not None and variant not in variant_keys:
         raise SessionBucketUnavailable(f"'{variant}' is not a variant of this experiment.")
 
-    window_end = experiment.end_date or timezone.now()
-    window_start = max(experiment.start_date, window_end - timedelta(days=MAX_BUCKET_SCAN_DAYS))
+    run_end = experiment.end_date or timezone.now()
     criteria = normalize_to_exposure_criteria(experiment.exposure_criteria)
     filter_test_accounts = bool(criteria.filterTestAccounts) if criteria else False
     limit = min(limit, MAX_SESSION_BUCKET_LIMIT)
 
     requested = _resolve_requested_metrics(experiment, metric_uuids)
     # The same rollout resolution the analysis queries apply, so the bucket population is counted
-    # on the event the experiment's results actually read.
-    default_exposure_event = resolve_default_exposure_event(team, experiment.start_date)
-    exposure_event, _ = get_exposure_event_and_property(
-        experiment.feature_flag.key, experiment.exposure_criteria, default_exposure_event=default_exposure_event
-    )
-
-    # One EventProperty read covers both linkability decisions — whether the exposure event can
-    # match sessions at all, and which metrics can. The verdict must be the endpoint's own:
-    # callers other than the tab (the API, MCP tools) have no reason to know the lookup exists,
-    # and an empty bucket that's really an unlinkable event would read as "no sessions did this".
-    # An action-based exposure has no single event name to look up, so it fails open, the same
-    # posture action metric sources get.
-    # Collected per source, not per metric: `_source_event_names` is all-or-nothing, so a funnel
-    # with an action step among its named ones would contribute none of its event names and the
-    # boundary check below would pass on a name the lookup never asked about.
-    lookup_names: set[str] = {exposure_event} if exposure_event is not None else set()
+    # on the event the experiment's results actually read. The linkability verdict must be the
+    # endpoint's own: callers other than the tab (the API, MCP tools) have no reason to know the
+    # lookup exists, and an empty bucket that's really an unlinkable event would read as "no
+    # sessions did this".
+    #
+    # Event names collected per source, not per metric: `_source_event_names` is all-or-nothing, so
+    # a funnel with an action step among its named ones would contribute none of its event names and
+    # the boundary check below would pass on a name the lookup never asked about.
+    lookup_names: set[str] = set()
     for metric in requested:
         lookup_names |= _concrete_event_names(metric)
-    never_linked = _never_session_linked_events(team, lookup_names)
-    # Both default exposure events mean "this user was enrolled via the flag", which the stamped
-    # flag property implies too, so either can take the fallback.
-    use_exposure_fallback = (
-        exposure_event in (DEFAULT_EXPOSURE_EVENT, EXPERIMENT_EXPOSURE_EVENT) and exposure_event in never_linked
-    )
-    if exposure_event in never_linked and not use_exposure_fallback:
-        # Only the default events have a stand-in. Custom criteria assert that something specific
-        # happened, which the stamped flag property doesn't imply, so falling back would answer
-        # over "the flag was active in this session" — a wider population than the criteria name.
+    exposure = resolve_session_exposure(team, experiment, event_names=frozenset(lookup_names))
+    if exposure.is_unmatchable:
         raise SessionBucketUnavailable(CUSTOM_EXPOSURE_UNLINKABLE_REASON)
 
-    considered, excluded = _partition_metrics(requested, bucket, never_linked)
+    considered, excluded = _partition_metrics(requested, bucket, exposure.never_linked)
 
     cache_key = _cache_key(
-        team, user, experiment, bucket, considered, variant, window_start, window_end, limit, default_exposure_event
+        team,
+        user,
+        experiment,
+        bucket,
+        considered,
+        variant,
+        experiment.start_date,
+        run_end,
+        limit,
+        exposure.default_exposure_event,
     )
     cached = get_safe_cache(cache_key)
     if cached is not None:
         return cached
 
-    candidate_session_ids, scan_hit_cap = _query_bucket_sessions(
+    # Shared by both scans below, which read only `events` — the condition its docstring sets.
+    modifiers = create_default_modifiers_for_team(team)
+    shared_hogql = SharedHogQLDatabase(
+        # Postgres foreign-key lazy joins are the most expensive part of building the virtual
+        # database and these queries only read events.
+        database=Database.create_for(team=team, user=user, modifiers=modifiers, build_postgres_foreign_keys=False),
+        modifiers=modifiers,
+    )
+    scan_variant_keys = [variant] if variant is not None else sorted(variant_keys)
+    anchor_floor = _anchor_floor(team, run_start=experiment.start_date, run_end=run_end)
+    anchored_end = _resolve_window_end(
         team,
         user,
         experiment,
-        bucket=bucket,
-        considered=considered,
-        variant_keys=[variant] if variant is not None else sorted(variant_keys),
-        window_start=window_start,
-        window_end=window_end,
-        limit=limit,
-        use_exposure_fallback=use_exposure_fallback,
-        default_exposure_event=default_exposure_event,
+        exposure=exposure,
+        variant_keys=scan_variant_keys,
+        search_start=anchor_floor,
+        run_end=run_end,
+        shared_hogql=shared_hogql,
     )
+    if anchored_end is None:
+        # The anchor searched back to the floor and found no in-session exposure, so the floor is
+        # what the response reports: nothing newer went unread, and the bucket query would
+        # return the same empty list.
+        window_start = anchor_floor
+        window_end = run_end
+        candidate_session_ids: list[str] = []
+        scan_hit_cap = False
+    else:
+        window_end = anchored_end
+        window_start = max(experiment.start_date, window_end - timedelta(days=MAX_BUCKET_SCAN_DAYS))
+        candidate_session_ids, scan_hit_cap = _query_bucket_sessions(
+            team,
+            user,
+            experiment,
+            bucket=bucket,
+            considered=considered,
+            variant_keys=scan_variant_keys,
+            window_start=window_start,
+            window_end=window_end,
+            limit=limit,
+            exposure=exposure,
+            shared_hogql=shared_hogql,
+        )
     result = SessionBucketScan(
         candidate_session_ids=candidate_session_ids,
         scan_hit_cap=scan_hit_cap,
@@ -326,10 +361,35 @@ def get_experiment_session_bucket(
         date_from=window_start,
         date_to=window_end,
         filter_test_accounts=filter_test_accounts,
-        used_exposure_fallback=use_exposure_fallback,
+        used_exposure_fallback=exposure.used_fallback,
     )
     safe_cache_set(cache_key, result, timeout=SESSION_BUCKET_CACHE_TTL)
     return result
+
+
+def _restriction_signature(team: Team, user: User) -> str:
+    """The viewer's property restrictions, as a cache-key fragment.
+
+    Restrictions are compiled into the SQL, so unlike recording access they can't be re-filtered on
+    read; a restriction change has to miss the cache instead.
+    """
+    return json.dumps(
+        [
+            {
+                "name": restriction.name,
+                "property_type": restriction.property_type,
+                "group_type_index": restriction.group_type_index,
+            }
+            for restriction in sorted(
+                get_restricted_properties_with_group_type_index_for_team(user=user, team=team),
+                key=lambda restriction: (
+                    restriction.name,
+                    restriction.property_type,
+                    restriction.group_type_index if restriction.group_type_index is not None else -1,
+                ),
+            )
+        ]
+    )
 
 
 def _cache_key(
@@ -339,8 +399,8 @@ def _cache_key(
     bucket: SessionBucket,
     considered: list[MetricEventSource],
     variant: Optional[str],
-    window_start: datetime,
-    window_end: datetime,
+    run_start: datetime,
+    run_end: datetime,
     limit: int,
     default_exposure_event: str,
 ) -> str:
@@ -352,23 +412,182 @@ def _cache_key(
             bucket.value,
             sorted(metric.metric_uuid for metric in considered),
             variant,
-            # The scan window moves with wall-clock time on a running experiment; rounding to the
-            # minute keeps a burst of requests on one entry without pinning a stale window.
-            window_start.replace(second=0, microsecond=0).isoformat(),
-            window_end.replace(second=0, microsecond=0).isoformat(),
+            # The run window, not the scanned one, which is a function of the data inside it:
+            # keying on that would mean resolving the anchor before every lookup, hits included.
+            # Rounded to the minute so a burst of requests shares one entry as the run end moves.
+            run_start.replace(second=0, microsecond=0).isoformat(),
+            run_end.replace(second=0, microsecond=0).isoformat(),
             # Part of the key even though the cut happens on read: the scan over-fetches a
             # multiple of the limit, so a larger one looks further than a cached smaller one did.
             limit,
             # The rollout flag can flip which event the default exposure reads mid-window, and a
             # scan computed on the other event must not be served after the flip.
             default_exposure_event,
-            # Property restrictions are compiled into the SQL, so unlike recording access they
-            # can't be re-filtered on read; a restriction change has to miss the cache instead.
-            sorted(get_restricted_properties_for_team(user=user, team=team)),
+            _restriction_signature(team, user),
         ]
     )
     digest = hashlib.sha256(spec.encode()).hexdigest()[:16]
-    return f"experiment_session_bucket_v4_{team.pk}_{user.pk}_{experiment.pk}_{digest}"
+    return f"experiment_session_bucket_v5_{team.pk}_{user.pk}_{experiment.pk}_{digest}"
+
+
+def _anchor_cache_key(
+    team: Team,
+    user: User,
+    experiment: Experiment,
+    *,
+    variant_keys: list[str],
+    search_start: datetime,
+    run_end: datetime,
+    exposure: SessionExposure,
+) -> str:
+    """Per (team, viewer, experiment, exposure, variants, run window).
+
+    Deliberately narrower than the bucket key: the anchor is the same timestamp whichever bucket or
+    metrics are asked for, so every mode and metric switch on one experiment shares this entry
+    rather than paying for the scan again.
+    """
+    spec = json.dumps(
+        [
+            variant_keys,
+            search_start.replace(second=0, microsecond=0).isoformat(),
+            run_end.replace(second=0, microsecond=0).isoformat(),
+            exposure.default_exposure_event,
+            exposure.variant_property,
+            exposure.used_fallback,
+            _restriction_signature(team, user),
+        ]
+    )
+    digest = hashlib.sha256(spec.encode()).hexdigest()[:16]
+    return f"experiment_session_bucket_anchor_v1_{team.pk}_{user.pk}_{experiment.pk}_{digest}"
+
+
+@dataclass(frozen=True)
+class _WindowAnchor:
+    """A resolved scan-window end, wrapped so that a cached "no exposure in the run" reads as a
+    cache hit rather than a miss."""
+
+    window_end: Optional[datetime]
+
+
+def _anchor_floor(team: Team, *, run_start: datetime, run_end: datetime) -> datetime:
+    """The oldest timestamp the anchor may read, whichever of the two bounds is tighter.
+
+    Past the project's replay retention, every session the anchor could point at has already lost
+    its recording, so reading further only produces rows the recording lookup drops.
+    `MAX_ANCHOR_LOOKBACK_DAYS` then caps the long retention tiers.
+    """
+    lookback = min(retention_period_in_days(team.session_recording_retention_period), MAX_ANCHOR_LOOKBACK_DAYS)
+    return max(run_start, run_end - timedelta(days=lookback))
+
+
+def _resolve_window_end(
+    team: Team,
+    user: User,
+    experiment: Experiment,
+    *,
+    exposure: SessionExposure,
+    variant_keys: list[str],
+    search_start: datetime,
+    run_end: datetime,
+    shared_hogql: SharedHogQLDatabase,
+) -> Optional[datetime]:
+    """Where the scan window ends: `MAX_SESSION_DURATION_HOURS` past the latest in-session
+    exposure, capped at the end of the run. None when nothing from `search_start` on carries one.
+
+    The pad is what keeps the classification honest. A session's metric events can follow its
+    exposure, so a window that stopped at the last exposure would read a purchase fired after it as
+    absence, and a funnel finished after it as a drop-off.
+    """
+    if exposure.used_fallback and fallback_evidence_scan_is_unaffordable(team, experiment):
+        # The stamped-property condition carries no event name for ClickHouse to prune on, so
+        # anchoring would read every event the team captured in the run. The in-session recordings
+        # list refuses exactly this scan on these teams, so keep the recent-to-now window instead
+        # of buying the anchor at that price.
+        return run_end
+
+    cache_key = _anchor_cache_key(
+        team, user, experiment, variant_keys=variant_keys, search_start=search_start, run_end=run_end, exposure=exposure
+    )
+    cached = get_safe_cache(cache_key)
+    if cached is not None:
+        return cached.window_end
+
+    def latest_from(window_start: datetime, window_end: datetime) -> Optional[datetime]:
+        return _latest_session_exposure_at(
+            team,
+            user,
+            experiment,
+            exposure=exposure,
+            variant_keys=variant_keys,
+            window_start=window_start,
+            window_end=window_end,
+            shared_hogql=shared_hogql,
+        )
+
+    # The recent stretch first, and it settles the anchor on its own whenever it holds an exposure:
+    # every exposure outside it is older than every exposure inside it, so its latest is the run's
+    # latest. An experiment with current traffic therefore never reads its older days. The second
+    # probe stops where the first one started, which the first one has just found empty.
+    recent_start = max(search_start, run_end - timedelta(days=MAX_BUCKET_SCAN_DAYS))
+    latest = latest_from(recent_start, run_end)
+    if latest is None and recent_start > search_start:
+        latest = latest_from(search_start, recent_start)
+    window_end = None if latest is None else min(run_end, latest + timedelta(hours=MAX_SESSION_DURATION_HOURS))
+    safe_cache_set(cache_key, _WindowAnchor(window_end=window_end), timeout=SESSION_BUCKET_CACHE_TTL)
+    return window_end
+
+
+def _latest_session_exposure_at(
+    team: Team,
+    user: User,
+    experiment: Experiment,
+    *,
+    exposure: SessionExposure,
+    variant_keys: list[str],
+    window_start: datetime,
+    window_end: datetime,
+    shared_hogql: SharedHogQLDatabase,
+) -> Optional[datetime]:
+    """When a session last carried exposure evidence in this window, or None when none did.
+
+    The same exposure condition, variant keys and test-account filter the bucket query gets, so the
+    anchor is the latest exposure that query could count rather than a wider one. `count()` rides
+    the same scan because `max()` over no rows returns the epoch instead of NULL, which a window
+    would silently accept.
+    """
+    query = ast.SelectQuery(
+        select=[
+            ast.Call(name="max", args=[ast.Field(chain=["timestamp"])]),
+            ast.Call(name="count", args=[]),
+        ],
+        select_from=ast.JoinExpr(table=ast.Field(chain=["events"])),
+        where=ast.And(
+            exprs=[
+                ast.CompareOperation(
+                    op=ast.CompareOperationOp.GtEq,
+                    left=ast.Field(chain=["timestamp"]),
+                    right=ast.Constant(value=window_start),
+                ),
+                ast.CompareOperation(
+                    op=ast.CompareOperationOp.LtEq,
+                    left=ast.Field(chain=["timestamp"]),
+                    right=ast.Constant(value=window_end),
+                ),
+                ast.CompareOperation(
+                    op=ast.CompareOperationOp.NotEq, left=ast.Field(chain=["$session_id"]), right=ast.Constant(value="")
+                ),
+                exposure.condition(variant_keys),
+                *get_test_accounts_filter(team, experiment.exposure_criteria),
+            ]
+        ),
+    )
+    response = execute_hogql_query(
+        query, team=team, user=user, context=shared_hogql.fresh_context(team, user), modifiers=shared_hogql.modifiers
+    )
+    rows = response.results or []
+    if not rows or not rows[0][1]:
+        return None
+    return rows[0][0]
 
 
 def _resolve_requested_metrics(experiment: Experiment, metric_uuids: list[str]) -> list[MetricEventSource]:
@@ -383,7 +602,7 @@ def _resolve_requested_metrics(experiment: Experiment, metric_uuids: list[str]) 
 
 
 def _partition_metrics(
-    requested: list[MetricEventSource], bucket: SessionBucket, never_linked: set[str]
+    requested: list[MetricEventSource], bucket: SessionBucket, never_linked: frozenset[str]
 ) -> tuple[list[MetricEventSource], list[ExcludedBucketMetric]]:
     """Split the requested metrics into the ones the bucket is computed over and the ones that
     can't be matched to a recording at all, with the reason.
@@ -430,7 +649,7 @@ def _partition_metrics(
     return considered, excluded
 
 
-def _exclusion_reason(metric: MetricEventSource, never_linked: set[str]) -> Optional[str]:
+def _exclusion_reason(metric: MetricEventSource, never_linked: frozenset[str]) -> Optional[str]:
     if not metric.session_linkable:
         return DATA_WAREHOUSE_EXCLUSION_REASON
     if any(
@@ -469,24 +688,6 @@ def _source_event_names(metric: MetricEventSource) -> Optional[set[str]]:
     return names
 
 
-def _never_session_linked_events(team: Team, event_names: set[str]) -> set[str]:
-    """Event names never ingested with a `$session_id` property — only ever captured
-    server-side, so no recordings filter on them can match. The same `EventProperty` fact the
-    taxonomy `seen_together` endpoint serves the tab, read directly so the verdict doesn't
-    depend on the caller knowing to check."""
-    if not event_names:
-        return set()
-    seen = (
-        EventProperty.objects.alias(
-            effective_project_id=Coalesce("project_id", "team_id", output_field=models.BigIntegerField())
-        )
-        .filter(effective_project_id=team.project_id, event__in=sorted(event_names), property="$session_id")
-        .values_list("event", flat=True)
-        .distinct()
-    )
-    return event_names - set(seen)
-
-
 def _metric_condition(metric: MetricEventSource, team: Team) -> ast.Expr:
     """Match expression for "any of this metric's events" — the OR over its sources, built on the
     same matcher the analysis uses, so what counts as this metric's event can't diverge."""
@@ -505,7 +706,7 @@ def _funnel_completion_step(metric: MetricEventSource) -> MetricSource:
     return steps[-1]
 
 
-def _funnel_completion_reason(metric: MetricEventSource, never_linked: set[str]) -> Optional[str]:
+def _funnel_completion_reason(metric: MetricEventSource, never_linked: frozenset[str]) -> Optional[str]:
     """Why drop-off can't be asked of this funnel, or None when it can.
 
     The whole-metric check in `_exclusion_reason` is too coarse here. It clears a funnel as long
@@ -549,41 +750,11 @@ def _query_bucket_sessions(
     window_start: datetime,
     window_end: datetime,
     limit: int,
-    use_exposure_fallback: bool,
-    default_exposure_event: str,
+    exposure: SessionExposure,
+    shared_hogql: SharedHogQLDatabase,
 ) -> tuple[list[str], bool]:
-    flag_key = experiment.feature_flag.key
-    _event, variant_property = get_exposure_event_and_property(
-        flag_key, experiment.exposure_criteria, default_exposure_event=default_exposure_event
-    )
-    if use_exposure_fallback:
-        variant_property = f"$feature/{flag_key}"
-
     def exposure_condition() -> ast.Expr:
-        # The exposure criteria resolved through the shared helpers — the single seam that keeps
-        # this surface in sync with the analysis and with the player's session context. Rebuilt
-        # per use site: the HogQL resolver annotates ast nodes in place, so one instance can't
-        # appear in both the WHERE and the HAVING.
-        variant_condition = ast.CompareOperation(
-            op=ast.CompareOperationOp.In,
-            left=ast.Call(name="toString", args=[ast.Field(chain=["properties", variant_property])]),
-            right=ast.Constant(value=variant_keys),
-        )
-        if use_exposure_fallback:
-            # The default exposure event has only ever been captured server-side, so it can't
-            # match any session. posthog-js stamps `$feature/<flag_key>` on every client event
-            # captured after flags load, so the stamped property stands in — the same fallback
-            # the tab's own list uses. It means "the flag was active in this session", not "the
-            # enrollment moment was captured": no event-name condition, and the variant is the
-            # flag's value on each event rather than the exposure response.
-            return variant_condition
-        conditions = [
-            *build_exposure_event_conditions(
-                experiment.exposure_criteria, team, flag_key, default_exposure_event=default_exposure_event
-            ),
-            variant_condition,
-        ]
-        return ast.And(exprs=conditions) if len(conditions) > 1 else conditions[0]
+        return exposure.condition(variant_keys)
 
     def metric_conditions() -> list[ast.Expr]:
         return [_metric_condition(metric, team) for metric in considered]
@@ -661,13 +832,6 @@ def _query_bucket_sessions(
 
     # One query, so there is no union to hide an implicit per-branch limit — but the limit is
     # still set explicitly, since an unset one would silently become HogQL's LIMIT 100.
-    modifiers = create_default_modifiers_for_team(team)
-    shared_hogql = SharedHogQLDatabase(
-        # Postgres foreign-key lazy joins are the most expensive part of building the virtual
-        # database and this query only reads events.
-        database=Database.create_for(team=team, user=user, modifiers=modifiers, build_postgres_foreign_keys=False),
-        modifiers=modifiers,
-    )
     response = execute_hogql_query(
         query, team=team, user=user, context=shared_hogql.fresh_context(team, user), modifiers=shared_hogql.modifiers
     )

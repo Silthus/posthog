@@ -1,6 +1,7 @@
 import { useActions, useValues } from 'kea'
+import { useEffect } from 'react'
 
-import { IconCopy, IconEye, IconPlay, IconRefresh } from '@posthog/icons'
+import { IconCopy, IconEye, IconPlay, IconRefresh, IconX } from '@posthog/icons'
 import { LemonButton, LemonInput, LemonTable, LemonTag, LemonTagType, Link, Tooltip } from '@posthog/lemon-ui'
 
 import { DateFilter } from 'lib/components/DateFilter/DateFilter'
@@ -11,11 +12,14 @@ import { urls } from 'scenes/urls'
 
 import { DateMappingOption } from '~/types'
 
+import { VisionDocsLink } from '../../components/DocsLink'
 import { FilterPill } from '../../components/FilterPill'
+import { NumericRangeFilterPill } from '../../components/NumericRangeFilterPill'
 import { ObservationResultSummary, ObservationStatusTag } from '../../components/ObservationCard'
 import { ObservationRetryButton } from '../../components/ObservationRetryButton'
 import type { ReplayObservationApi } from '../../generated/api.schemas'
 import { observationDetailUrl } from '../../observations/replayObservationLogic'
+import { shortBackfillId } from '../../utils/backfills'
 import {
     OBSERVATIONS_PAGE_SIZE,
     ObservationStatusValue,
@@ -80,6 +84,7 @@ export function ScannerObservationsTable({ scannerId }: { scannerId: string }): 
     const logic = replayScannerLogic({ id: scannerId })
     const {
         observations,
+        observationsActive,
         observationsLoading,
         hasObservationsInFlight,
         observationsPage,
@@ -89,9 +94,12 @@ export function ScannerObservationsTable({ scannerId }: { scannerId: string }): 
         observationTriggeredByFilter,
         observationVerdictFilter,
         observationTagFilter,
+        observationMinScoreFilter,
+        observationMaxScoreFilter,
         observationSubjectFilter,
         observationDateFrom,
         observationDateTo,
+        observationBackfillFilter,
         hasActiveObservationFilters,
         observationDetailLinkParams,
         availableTags,
@@ -102,6 +110,7 @@ export function ScannerObservationsTable({ scannerId }: { scannerId: string }): 
         copyingAllObservations,
     } = useValues(logic)
     const {
+        setObservationsActive,
         refreshObservations,
         retryObservation,
         setObservationsPage,
@@ -110,13 +119,20 @@ export function ScannerObservationsTable({ scannerId }: { scannerId: string }): 
         setObservationTriggeredByFilter,
         setObservationVerdictFilter,
         setObservationTagFilter,
+        setObservationScoreRange,
         setObservationSubjectFilter,
         setObservationDateRange,
+        setObservationBackfillFilter,
         clearObservationFilters,
         copyAllObservations,
     } = useActions(logic)
+    useEffect(() => {
+        setObservationsActive(true)
+        return () => setObservationsActive(false)
+    }, [setObservationsActive])
     const scannerType = scanner?.scanner_type
     const tagFilterOptions = availableTags.map((tag) => ({ value: tag, label: tag }))
+    const scoreScale = scanner?.scanner_type === 'scorer' ? scanner.scanner_config.scale : undefined
 
     const columns: LemonTableColumns<ReplayObservationApi> = [
         {
@@ -124,12 +140,21 @@ export function ScannerObservationsTable({ scannerId }: { scannerId: string }): 
             key: 'session',
             width: 300,
             render: (_, obs) => (
-                <Link
-                    to={observationDetailUrl(obs.id, observationDetailLinkParams)}
-                    className="font-mono text-xs text-primary truncate block"
-                >
-                    {obs.session_id}
-                </Link>
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="flex w-2 shrink-0">
+                        {!obs.viewed && (
+                            <Tooltip title="You haven't opened this observation yet.">
+                                <span className="size-2 rounded-full bg-danger" />
+                            </Tooltip>
+                        )}
+                    </span>
+                    <Link
+                        to={observationDetailUrl(obs.id, observationDetailLinkParams)}
+                        className="font-mono text-xs text-primary truncate block"
+                    >
+                        {obs.session_id}
+                    </Link>
+                </div>
             ),
         },
         {
@@ -280,14 +305,45 @@ export function ScannerObservationsTable({ scannerId }: { scannerId: string }): 
                                         onChange={setObservationVerdictFilter}
                                     />
                                 )}
+                                {scannerType === 'scorer' && (
+                                    <NumericRangeFilterPill
+                                        label="Score"
+                                        min={observationMinScoreFilter}
+                                        max={observationMaxScoreFilter}
+                                        scaleMin={scoreScale?.min}
+                                        scaleMax={scoreScale?.max}
+                                        onChange={setObservationScoreRange}
+                                        dataAttr="vision-observations-score-filter"
+                                    />
+                                )}
                                 {scannerType === 'classifier' && tagFilterOptions.length > 0 && (
                                     <FilterPill<string>
-                                        label="Tag"
+                                        label="Category"
+                                        searchPlaceholder="Search categories"
                                         options={tagFilterOptions}
                                         value={observationTagFilter}
                                         onChange={setObservationTagFilter}
                                         searchable
                                     />
+                                )}
+                                {observationBackfillFilter && (
+                                    // Same secondary/small button the FilterPills next to it render, so
+                                    // the row stays visually uniform. It carries a clear action rather
+                                    // than a dropdown, because this filter arrives from a link and has
+                                    // nothing to choose between.
+                                    <LemonButton
+                                        type="secondary"
+                                        size="small"
+                                        tooltip={`Backfill ${observationBackfillFilter}`}
+                                        sideAction={{
+                                            icon: <IconX />,
+                                            onClick: () => setObservationBackfillFilter(null),
+                                            tooltip: 'Clear backfill filter',
+                                        }}
+                                        data-attr="vision-observations-backfill-filter"
+                                    >
+                                        Backfill {shortBackfillId(observationBackfillFilter)}
+                                    </LemonButton>
                                 )}
                                 <LemonButton
                                     type="tertiary"
@@ -336,7 +392,7 @@ export function ScannerObservationsTable({ scannerId }: { scannerId: string }): 
             <LemonTable
                 columns={columns}
                 dataSource={observations}
-                loading={triggeringOnDemandObservation || observationsLoading}
+                loading={!observationsActive || triggeringOnDemandObservation || observationsLoading}
                 rowKey="id"
                 pagination={{
                     controlled: true,
@@ -358,8 +414,8 @@ export function ScannerObservationsTable({ scannerId }: { scannerId: string }): 
                     ) : (
                         <div className="p-6 flex flex-col items-center gap-3 text-center">
                             <div className="text-muted">
-                                No observations yet. They'll appear here once the scanner fires on its schedule — or
-                                scan a recording right now.
+                                No observations yet. They'll appear here once the scanner fires on its schedule, or you
+                                can scan a recording right now.
                             </div>
                             <LemonButton
                                 type="primary"
@@ -369,6 +425,9 @@ export function ScannerObservationsTable({ scannerId }: { scannerId: string }): 
                             >
                                 Scan a recording now
                             </LemonButton>
+                            <VisionDocsLink page="observations" dataAttr="vision-empty-docs-link-observations">
+                                Learn how observations work
+                            </VisionDocsLink>
                         </div>
                     )
                 }

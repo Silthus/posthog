@@ -1,14 +1,12 @@
 from typing import Optional, cast
 
-from posthog.schema import (
+from products.warehouse_sources.backend.facade.source_config import (
     DataWarehouseSourceCategory,
-    ExternalDataSourceType as SchemaExternalDataSourceType,
     ReleaseStatus,
     SourceConfig,
     SourceFieldInputConfig,
     SourceFieldInputConfigType,
 )
-
 from products.warehouse_sources.backend.temporal.data_imports.sources.azure_devops.azure_devops import (
     AZURE_DEVOPS_VERSION_7_2,
     AZURE_DEVOPS_VERSION_LEGACY,
@@ -75,7 +73,7 @@ class AzureDevOpsSource(ResumableSource[AzureDevOpsSourceConfig, AzureDevOpsResu
     @property
     def get_source_config(self) -> SourceConfig:
         return SourceConfig(
-            name=SchemaExternalDataSourceType.AZURE_DEV_OPS,
+            name=ExternalDataSourceType.AZUREDEVOPS,
             category=DataWarehouseSourceCategory.ENGINEERING___MONITORING,
             label="Azure DevOps",
             caption="""Enter your Azure DevOps credentials to pull your project, build, and work item data into the PostHog Data warehouse.
@@ -126,12 +124,9 @@ Your organization is the first path segment of your Azure DevOps URL — for `de
         api_version: str | None = None,
     ) -> tuple[bool, str | None]:
         # Pre-creation calls pass no pin and resolve to default_version — the version new rows start on.
-        if validate_azure_devops_credentials(
+        return validate_azure_devops_credentials(
             config.organization, config.personal_access_token, self.resolve_api_version(api_version)
-        ):
-            return True, None
-
-        return False, "Invalid Azure DevOps credentials"
+        )
 
     def get_resumable_source_manager(self, inputs: SourceInputs) -> ResumableSourceManager[AzureDevOpsResumeConfig]:
         return ResumableSourceManager[AzureDevOpsResumeConfig](inputs, AzureDevOpsResumeConfig)

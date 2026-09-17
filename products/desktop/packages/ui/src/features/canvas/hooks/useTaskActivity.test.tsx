@@ -2,10 +2,14 @@ import type {
   TaskActivity,
   TaskActivityPage,
 } from "@posthog/shared/domain-types";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  focusManager,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockClient = vi.hoisted(() => ({
   getTaskActivity: vi.fn(),
@@ -17,7 +21,11 @@ vi.mock("@posthog/ui/features/auth/authClient", () => ({
 }));
 
 import { useMarkTaskActivityRead } from "./useMarkTaskActivityRead";
-import { TASK_ACTIVITY_QUERY_KEY, useTaskActivity } from "./useTaskActivity";
+import {
+  TASK_ACTIVITY_QUERY_KEY,
+  TASK_ACTIVITY_REFETCH_INTERVAL_MS,
+  useTaskActivity,
+} from "./useTaskActivity";
 
 function activity(overrides: Partial<TaskActivity>): TaskActivity {
   return {
@@ -41,7 +49,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe("task activity hooks", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     queryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -49,6 +57,28 @@ describe("task activity hooks", () => {
       },
     });
   });
+
+  afterEach(() => {
+    queryClient.clear();
+    focusManager.setFocused(undefined);
+    vi.useRealTimers();
+  });
+
+  const refreshTriggers: Array<[string, () => void]> = [
+    [
+      "the app regains focus",
+      (): void => {
+        act(() => focusManager.setFocused(false));
+        act(() => focusManager.setFocused(true));
+      },
+    ],
+    [
+      "an Activity surface opens",
+      (): void => {
+        renderHook(() => useTaskActivity(), { wrapper });
+      },
+    ],
+  ];
 
   it("loads every activity page", async () => {
     mockClient.getTaskActivity
@@ -88,6 +118,59 @@ describe("task activity hooks", () => {
       beforeId: "activity-1",
     });
   });
+
+  it.each(refreshTriggers)(
+    "refreshes stale activity when %s",
+    async (_name, refresh) => {
+      mockClient.getTaskActivity
+        .mockResolvedValueOnce({ results: [], unread_count: 0 })
+        .mockResolvedValueOnce({
+          results: [
+            activity({
+              id: "comment-activity-1",
+              latest_comment_id: "comment-1",
+            }),
+          ],
+          unread_count: 1,
+        });
+
+      const hook = renderHook(() => useTaskActivity(), { wrapper });
+      await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+      expect(hook.result.current.items).toEqual([]);
+      expect(mockClient.getTaskActivity).toHaveBeenCalledOnce();
+
+      vi.setSystemTime(Date.now() + TASK_ACTIVITY_REFETCH_INTERVAL_MS + 1);
+      refresh();
+
+      await waitFor(() =>
+        expect(hook.result.current.items[0]).toMatchObject({
+          id: "comment-activity-1",
+          commentId: "comment-1",
+        }),
+      );
+      expect(mockClient.getTaskActivity).toHaveBeenCalledTimes(2);
+      expect(hook.result.current.unreadCount).toBe(1);
+    },
+  );
+
+  it.each(refreshTriggers)(
+    "reuses fresh activity when %s",
+    async (_name, refresh) => {
+      mockClient.getTaskActivity.mockResolvedValue({
+        results: [activity({})],
+        unread_count: 1,
+      });
+
+      const hook = renderHook(() => useTaskActivity(), { wrapper });
+      await waitFor(() => expect(hook.result.current.items).toHaveLength(1));
+
+      refresh();
+      await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+
+      expect(mockClient.getTaskActivity).toHaveBeenCalledOnce();
+      expect(hook.result.current.items).toHaveLength(1);
+    },
+  );
 
   it("does not optimistically clear activity newer than the marker", async () => {
     const page: TaskActivityPage = {
@@ -149,5 +232,58 @@ describe("task activity hooks", () => {
     );
     expect(hook.result.current.activity.items).toHaveLength(1);
     expect(mockClient.getTaskActivity).toHaveBeenCalledOnce();
+  });
+
+  it("marks only the selected comment activity read", async () => {
+    const page: TaskActivityPage = {
+      results: [
+        activity({
+          id: "comment-activity-1",
+          latest_comment_id: "comment-1",
+        }),
+        activity({
+          id: "comment-activity-2",
+          latest_comment_id: "comment-2",
+        }),
+        activity({
+          id: "task-activity",
+          activity_kind: "awaiting_input",
+          latest_comment_id: null,
+        }),
+      ],
+      unread_count: 3,
+    };
+    queryClient.setQueryData(TASK_ACTIVITY_QUERY_KEY, {
+      pages: [page],
+      pageParams: [undefined],
+    });
+    mockClient.markTaskActivityRead.mockResolvedValue({
+      marked_read: 1,
+      unread_count: 1,
+    });
+
+    const hook = renderHook(() => useMarkTaskActivityRead(), { wrapper });
+    act(() => {
+      hook.result.current.mutate([
+        {
+          task_id: "task-1",
+          seen_before: "2026-07-01T10:00:00Z",
+          activity_id: "comment-activity-1",
+        },
+      ]);
+    });
+
+    await waitFor(() =>
+      expect(mockClient.markTaskActivityRead).toHaveBeenCalledOnce(),
+    );
+    const cached = queryClient.getQueryData<{
+      pages: TaskActivityPage[];
+    }>(TASK_ACTIVITY_QUERY_KEY);
+    expect(cached?.pages[0]?.results.map((row) => row.is_unread)).toEqual([
+      false,
+      true,
+      true,
+    ]);
+    expect(cached?.pages[0]?.unread_count).toBe(2);
   });
 });

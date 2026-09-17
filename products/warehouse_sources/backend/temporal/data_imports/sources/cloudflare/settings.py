@@ -67,17 +67,22 @@ CLOUDFLARE_ENDPOINTS: dict[str, CloudflareEndpointConfig] = {
         parent_key="_zone_id",
     ),
     # --- Zone-scoped security configuration ---
+    # Cloudflare deprecated the legacy Firewall Rules API (and the Filters API its rules
+    # reference) in favor of the Ruleset Engine; a zone that has moved to WAF custom rules
+    # gets a 400 on both rather than an empty list. Same shape as `rate_limits` below.
     "firewall_rules": CloudflareEndpointConfig(
         name="firewall_rules",
         path="/zones/{zone_id}/firewall/rules",
         parent=ZONES_PARENT,
         parent_key="_zone_id",
+        extra_skip_status_codes=(400,),
     ),
     "filters": CloudflareEndpointConfig(
         name="filters",
         path="/zones/{zone_id}/filters",
         parent=ZONES_PARENT,
         parent_key="_zone_id",
+        extra_skip_status_codes=(400,),
     ),
     "rulesets": CloudflareEndpointConfig(
         name="rulesets",
@@ -229,6 +234,12 @@ CLOUDFLARE_ENDPOINTS: dict[str, CloudflareEndpointConfig] = {
         # match SourceResponse's ascending sort mode.
         params={"direction": "asc"},
         incremental_param="since",
+        # This list has no `result_info.total_pages`, so the paginator only learns it has
+        # reached the end from a short page; when an account's true count is an exact
+        # multiple of PAGE_SIZE, the page right past the end gets a 400 rather than an
+        # empty list. Treat it like the end of the list — the next sync's `since` picks up
+        # where this one stopped.
+        extra_skip_status_codes=(400,),
     ),
     "billing_usage": CloudflareEndpointConfig(
         name="billing_usage",

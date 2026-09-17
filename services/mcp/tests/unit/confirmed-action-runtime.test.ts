@@ -15,7 +15,7 @@ import {
 } from '@/tools/confirmed-action-runtime'
 import type { Context } from '@/tools/types'
 
-function makeContext(distinctId: string = 'did-1'): Context {
+function makeContext(distinctId: string = 'did-1', connectionId?: string): Context {
     const stub = null as unknown as never
     return {
         api: stub,
@@ -25,6 +25,7 @@ function makeContext(distinctId: string = 'did-1'): Context {
         sessionManager: stub,
         getDistinctId: () => Promise.resolve(distinctId),
         trackEvent: () => Promise.resolve(),
+        ...(connectionId ? { connection: { localProjectId: '7', connectionId } } : {}),
     } as Context
 }
 
@@ -106,15 +107,15 @@ describe('prepareConfirmedAction', () => {
 
     it('keeps the hash small and constant-size regardless of args size', async () => {
         // The args live in the stash, not the token. If someone regresses to
-        // signing them inline, a large payload (a scout body + files) makes
+        // signing them inline, a large payload (a resource body + files) makes
         // the hash tens of kilobytes that the model must relay verbatim —
         // this catches that by preparing ~200 KB of args.
         const codec = makeCodec()
         const { stash } = makeStash()
         const result = await prepareConfirmedAction(makeContext('did-1'), {
-            args: { name: 'signals-scout-big', body: 'x'.repeat(200_000) },
-            purpose: 'scout-create',
-            actionLabel: 'create scout',
+            args: { name: 'resource-big', body: 'x'.repeat(200_000) },
+            purpose: 'resource-create',
+            actionLabel: 'create resource',
             messageTemplate: 'msg',
             codec,
             stash,
@@ -131,8 +132,8 @@ describe('prepareConfirmedAction', () => {
         await expect(
             prepareConfirmedAction(makeContext('did-1'), {
                 args: { body: 'x'.repeat(1_100_000) },
-                purpose: 'scout-create',
-                actionLabel: 'create scout',
+                purpose: 'resource-create',
+                actionLabel: 'create resource',
                 messageTemplate: 'msg',
                 codec,
                 stash,
@@ -158,8 +159,8 @@ describe('prepareConfirmedAction', () => {
         for (let i = 0; i < 23; i++) {
             await prepareConfirmedAction(makeContext('did-1'), {
                 args,
-                purpose: 'scout-create',
-                actionLabel: 'create scout',
+                purpose: 'resource-create',
+                actionLabel: 'create resource',
                 messageTemplate: 'msg',
                 codec,
                 stash,
@@ -168,8 +169,8 @@ describe('prepareConfirmedAction', () => {
         await expect(
             prepareConfirmedAction(makeContext('did-1'), {
                 args,
-                purpose: 'scout-create',
-                actionLabel: 'create scout',
+                purpose: 'resource-create',
+                actionLabel: 'create resource',
                 messageTemplate: 'msg',
                 codec,
                 stash,
@@ -415,6 +416,69 @@ describe('executeConfirmedAction', () => {
         if (!outcome.ok) {
             expect(outcome.result.content[0]!.text).toContain('different project or organization')
         }
+    })
+
+    it.each([
+        ['a different connection whose target shares the project id', 'connection-b'],
+        ['no connection at all', undefined],
+    ])('refuses a confirmation prepared through one connection when executed through %s', async (_case, executeVia) => {
+        // Project ids are only unique within a region, and `sub` is the local user either way, so
+        // without the connection in the scope a confirmation given for one connected project would
+        // spend against another organization's project that happens to share the number.
+        const { codec, ledger, stash } = setup()
+        const prep = await prepareConfirmedAction(makeContext('did-1', 'connection-a'), {
+            args: { name: 'mrr' },
+            purpose: 'metric-approve',
+            actionLabel: 'approve metric',
+            messageTemplate: 'msg',
+            codec,
+            stash,
+            boundScope: { projectId: '4242' },
+        })
+
+        const outcome = await executeConfirmedAction(makeContext('did-1', executeVia), {
+            incomingArgs: {
+                [CONFIRMATION_HASH_ARG]: prep.confirmation_hash,
+                [CONFIRMATION_WORD_ARG]: 'confirm',
+            },
+            purpose: 'metric-approve',
+            codec,
+            ledger,
+            stash,
+            expectedScope: { projectId: '4242' },
+        })
+
+        expect(outcome.ok).toBe(false)
+        if (!outcome.ok) {
+            expect(outcome.result.content[0]!.text).toContain('different project or organization')
+        }
+    })
+
+    it('succeeds when the confirmation is executed through the connection it was prepared in', async () => {
+        const { codec, ledger, stash } = setup()
+        const prep = await prepareConfirmedAction(makeContext('did-1', 'connection-a'), {
+            args: { name: 'mrr' },
+            purpose: 'metric-approve',
+            actionLabel: 'approve metric',
+            messageTemplate: 'msg',
+            codec,
+            stash,
+            boundScope: { projectId: '4242' },
+        })
+
+        const outcome = await executeConfirmedAction(makeContext('did-1', 'connection-a'), {
+            incomingArgs: {
+                [CONFIRMATION_HASH_ARG]: prep.confirmation_hash,
+                [CONFIRMATION_WORD_ARG]: 'confirm',
+            },
+            purpose: 'metric-approve',
+            codec,
+            ledger,
+            stash,
+            expectedScope: { projectId: '4242' },
+        })
+
+        expect(outcome.ok).toBe(true)
     })
 
     it('succeeds when the active scope still matches the scope bound at prepare time', async () => {

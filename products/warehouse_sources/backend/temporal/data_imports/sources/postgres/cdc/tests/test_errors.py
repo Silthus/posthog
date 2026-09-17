@@ -2,8 +2,10 @@ import struct
 
 import psycopg.errors
 from parameterized import parameterized
+from sshtunnel import BaseSSHTunnelForwarderError
 
 from products.warehouse_sources.backend.temporal.data_imports.cdc.errors import CDCErrorCategory
+from products.warehouse_sources.backend.temporal.data_imports.sources.common.mixins import HostNotAllowedError
 from products.warehouse_sources.backend.temporal.data_imports.sources.postgres.cdc.errors import (
     classify_postgres_cdc_error,
 )
@@ -55,6 +57,26 @@ class TestClassifyPostgresCDCError:
                 CDCErrorCategory.HOST_UNREACHABLE,
             ),
             (
+                # Supavisor reports the same routing failure with its erlang-tuple wording, which
+                # never contains the libpq phrases above.
+                "supavisor_enetunreach_is_non_retryable_host",
+                psycopg.OperationalError(
+                    "connection to server at example.invalid, port 5432 failed: FATAL:  "
+                    "Failed to connect to database: {:error, :enetunreach}"
+                ),
+                CDCErrorCategory.HOST_UNREACHABLE,
+            ),
+            (
+                "database_host_not_allowed_is_non_retryable_host",
+                HostNotAllowedError("Database host not allowed: resolves to a private address"),
+                CDCErrorCategory.HOST_UNREACHABLE,
+            ),
+            (
+                "ssh_tunnel_host_not_allowed_is_a_tunnel_failure",
+                HostNotAllowedError("SSH tunnel host not allowed: resolves to a private address"),
+                CDCErrorCategory.SSH_TUNNEL_FAILED,
+            ),
+            (
                 "slot_missing",
                 psycopg.errors.UndefinedObject('replication slot "posthog_slot" does not exist'),
                 CDCErrorCategory.SLOT_MISSING,
@@ -73,6 +95,16 @@ class TestClassifyPostgresCDCError:
                 "wal_decode_struct_error",
                 struct.error("unpack requires a buffer of 4 bytes"),
                 CDCErrorCategory.WAL_DECODE_ERROR,
+            ),
+            (
+                "ssh_gateway_session_failure_is_non_retryable",
+                BaseSSHTunnelForwarderError("Could not establish session to SSH gateway"),
+                CDCErrorCategory.SSH_TUNNEL_FAILED,
+            ),
+            (
+                "unrecognized_ssh_tunnel_error_falls_back_to_unknown",
+                BaseSSHTunnelForwarderError("Some other sshtunnel failure"),
+                None,
             ),
             (
                 "unrelated_runtime_error",
