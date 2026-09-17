@@ -36,7 +36,9 @@ export interface Chain {
 }
 
 export interface Workflow {
-    /** The definition JSON, exactly as it goes on the wire. */
+    /** The backend id this file owns, once a push has written one in. */
+    readonly id: string | undefined
+    /** The definition JSON, exactly as it goes on the wire. The id is not part of it. */
     emit(): WorkflowDefinition
 }
 
@@ -65,6 +67,11 @@ class ChainImpl implements Chain {
 }
 
 interface WorkflowOptions {
+    /**
+     * The workflow this file owns in PostHog. Left out on a new file; the first push
+     * writes it back here. With it, push goes straight to that workflow by id.
+     */
+    readonly id?: string
     readonly name: string
     readonly description?: string
     /** Defaults to `draft`, so a demo push never starts sending live traffic. */
@@ -155,6 +162,10 @@ class WorkflowImpl implements Workflow {
         private readonly chain: ChainImpl,
         private readonly exitReason: string
     ) {}
+
+    get id(): string | undefined {
+        return this.options.id
+    }
 
     emit(): WorkflowDefinition {
         const ids = new Ids()

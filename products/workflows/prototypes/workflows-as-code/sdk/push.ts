@@ -1,12 +1,19 @@
-// push(): upsert a workflow definition into a PostHog project by name.
+// push(): put the workflow the file describes into a PostHog project.
 //
-// Lookup is `GET ...?search=<name>` followed by an exact client-side match on `name`.
-// The list endpoint's only name-ish filter is `search`, which is a case-insensitive
-// substring regex over name and description, so it can return near misses and it
-// cannot stand in for an exact match on its own.
+// Identity comes from the file. With an `id` in the workflow options, push goes straight
+// to that workflow and the name is just a name. Without one, it falls back to the lookup
+// by name, and whichever way it learns an id it writes that id back into the source file,
+// so the next run has it.
+//
+// A push only writes when the definition differs from what PostHog holds. The API has no
+// "has this changed" question to ask (`base_updated_at` guards lost updates and moves on
+// any save; `version` is the content signal but only after the fact), so push fetches the
+// workflow and compares.
 
 import { WorkflowError } from './errors'
 import type { WorkflowErrorDetail } from './errors'
+import { recordWorkflowId } from './identity'
+import { sameWorkflow } from './normalize'
 import { assertValid } from './validate'
 import type { WorkflowDefinition } from './types'
 
@@ -16,16 +23,32 @@ export interface PushConfig {
     readonly projectId: string
 }
 
+export interface PushOptions {
+    /** The backend id the source file carries, when it has one. */
+    readonly id?: string | undefined
+    /** The `*.workflow.ts` file to write a newly learned id back into. */
+    readonly sourceFile?: string | undefined
+}
+
 export interface PushResult {
     readonly id: string
     readonly url: string
-    readonly action: 'created' | 'updated'
+    readonly action: 'created' | 'updated' | 'unchanged'
+    /** The version PostHog holds after the push. */
+    readonly version: number | undefined
+    /** The file the id was written into, when this push learned one. */
+    readonly idWrittenTo: string | undefined
     readonly warnings: readonly string[]
 }
 
 interface ListedWorkflow {
     readonly id: string
     readonly name: string
+}
+
+interface StoredWorkflow extends Record<string, unknown> {
+    readonly id: string
+    readonly version?: number
 }
 
 /** Reads the three env vars the demo runs on and explains any that are missing. */
@@ -105,6 +128,17 @@ function describeApiFailure(status: number, body: string): WorkflowErrorDetail {
     }
 }
 
+/** The 404 that means the file owns a workflow that is gone, which has two ways out. */
+function describeMissingWorkflow(id: string, sourceFile: string | undefined): WorkflowErrorDetail {
+    const where = sourceFile ?? 'the workflow file'
+    return {
+        status: 404,
+        message: 'The workflow this file owns is not in PostHog any more.',
+        why: `${where} carries id ${id}, and PostHog answered 404 for it, so it was deleted or it lives in another project.`,
+        fix: `Either remove the id line from ${where} and run again, which creates a new workflow and writes the new id back, or restore the workflow with id ${id} in PostHog and keep the file as it is.`,
+    }
+}
+
 async function request(config: PushConfig, method: string, path: string, body?: unknown): Promise<Response> {
     try {
         return await fetch(`${config.host}${path}`, {
@@ -134,32 +168,80 @@ async function findByName(config: PushConfig, name: string): Promise<ListedWorkf
         throw new WorkflowError({
             status: 'ambiguous_name',
             message: `This project already has ${matches.length} workflows named "${name}".`,
-            why: 'push() upserts by name, and it will not guess which of several same-named workflows the file owns.',
-            fix: `Rename or delete the duplicates in PostHog so one workflow is named "${name}", then run again.`,
+            why: 'Without an id in the file, push matches by name, and it will not guess which of several same-named workflows the file owns.',
+            fix: `Add the id of the workflow this file owns to its workflow({ ... }) options, or rename the duplicates in PostHog so one workflow is named "${name}".`,
         })
     }
     return matches[0] ?? null
 }
 
-/** Validates, then creates or updates the workflow with this name. Safe to rerun. */
-export async function push(definition: WorkflowDefinition, config: PushConfig): Promise<PushResult> {
-    const warnings = assertValid(definition)
-    const existing = await findByName(config, definition.name)
-
-    const base = `/api/projects/${config.projectId}/hog_flows/`
-    const response = existing
-        ? await request(config, 'PATCH', `${base}${existing.id}/`, definition)
-        : await request(config, 'POST', base, definition)
-
+/** Fetches the whole workflow, because the compare needs the definition, not the list row. */
+async function fetchWorkflow(
+    config: PushConfig,
+    id: string,
+    sourceFile: string | undefined
+): Promise<StoredWorkflow> {
+    const response = await request(config, 'GET', `/api/projects/${config.projectId}/hog_flows/${id}/`)
+    if (response.status === 404) {
+        throw new WorkflowError(describeMissingWorkflow(id, sourceFile))
+    }
     if (!response.ok) {
         throw new WorkflowError(describeApiFailure(response.status, await response.text()))
     }
+    return (await response.json()) as StoredWorkflow
+}
 
-    const saved = (await response.json()) as { id: string }
-    return {
-        id: saved.id,
-        url: `${config.host}/project/${config.projectId}/workflows/${saved.id}`,
-        action: existing ? 'updated' : 'created',
-        warnings,
+/**
+ * Validates, then creates the workflow or brings it up to date with the file. Writes the
+ * backend id into the source file the first time it learns one, and only PATCHes when the
+ * definition differs from what PostHog holds. Safe to rerun.
+ */
+export async function push(
+    definition: WorkflowDefinition,
+    config: PushConfig,
+    options: PushOptions = {}
+): Promise<PushResult> {
+    const warnings = assertValid(definition)
+    const base = `/api/projects/${config.projectId}/hog_flows/`
+    const url = (id: string): string => `${config.host}/project/${config.projectId}/workflows/${id}`
+
+    // An id in the file is the identity. The name lookup is only for a file that has none yet.
+    const known = options.id ?? (await findByName(config, definition.name))?.id
+
+    if (known === undefined) {
+        const response = await request(config, 'POST', base, definition)
+        if (!response.ok) {
+            throw new WorkflowError(describeApiFailure(response.status, await response.text()))
+        }
+        const created = (await response.json()) as StoredWorkflow
+        return {
+            id: created.id,
+            url: url(created.id),
+            action: 'created',
+            version: created.version,
+            idWrittenTo: await writeBack(options.sourceFile, created.id),
+            warnings,
+        }
     }
+
+    const idWrittenTo = options.id === undefined ? await writeBack(options.sourceFile, known) : undefined
+    const remote = await fetchWorkflow(config, known, options.sourceFile)
+
+    if (sameWorkflow(definition, remote)) {
+        return { id: known, url: url(known), action: 'unchanged', version: remote.version, idWrittenTo, warnings }
+    }
+
+    const response = await request(config, 'PATCH', `${base}${known}/`, definition)
+    if (!response.ok) {
+        throw new WorkflowError(describeApiFailure(response.status, await response.text()))
+    }
+    const saved = (await response.json()) as StoredWorkflow
+    return { id: known, url: url(known), action: 'updated', version: saved.version, idWrittenTo, warnings }
+}
+
+async function writeBack(sourceFile: string | undefined, id: string): Promise<string | undefined> {
+    if (sourceFile === undefined) {
+        return undefined
+    }
+    return (await recordWorkflowId(sourceFile, id)) ? sourceFile : undefined
 }

@@ -1,5 +1,8 @@
-// Runs the example twice against the fake API and prints the transcript that goes
-// into EVIDENCE.md: the create path, then the rerun that updates instead of duplicating.
+// Runs the example twice against the fake API and prints the wire-level transcript that
+// goes into EVIDENCE.md: what the SDK sends, which headers it sends, and what comes back.
+//
+// It passes no source file, so the example on disk is never written to and the second run
+// has to find the workflow by name the way a file with no id yet does.
 
 import { onboarding } from '../example/onboarding.workflow'
 import { push } from '../sdk'
@@ -25,7 +28,7 @@ const fake = startFakePostHog()
 const config = { apiKey: 'phx_REPLACE_ME', host: fake.host, projectId: '2' }
 let seen = 0
 
-for (const label of ['first run (create path)', 'second run (update path)']) {
+for (const label of ['first run (create path)', 'second run (matched by name, nothing changed)']) {
     const result = await push(onboarding.emit(), config)
     console.log(`--- ${label} ---`)
     for (const exchange of fake.exchanges.slice(seen)) {
@@ -35,7 +38,7 @@ for (const label of ['first run (create path)', 'second run (update path)']) {
         console.log(`  <- ${exchange.status} ${summarizeResponse(exchange.response)}`)
     }
     seen = fake.exchanges.length
-    console.log(`result: ${result.action} ${result.id}`)
+    console.log(`result: ${result.action} ${result.id} (version ${result.version})`)
     console.log(`url:    ${result.url}`)
     console.log('')
 }

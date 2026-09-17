@@ -10,7 +10,12 @@ export interface WorkflowErrorDetail {
     readonly fix: string
 }
 
-export type LocalErrorStatus = 'invalid_definition' | 'missing_config' | 'ambiguous_name' | 'network_error'
+export type LocalErrorStatus =
+    | 'invalid_definition'
+    | 'missing_config'
+    | 'ambiguous_name'
+    | 'network_error'
+    | 'no_anchor'
 
 export class WorkflowError extends Error {
     readonly detail: WorkflowErrorDetail
