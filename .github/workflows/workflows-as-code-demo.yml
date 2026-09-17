@@ -1,0 +1,38 @@
+name: Workflows as code demo (prototype)
+
+# Prototype job for the workflows-as-code demo loop. It runs the same file a laptop
+# runs and pushes the workflow into PostHog. Manual dispatch only: nothing about this
+# branch belongs on a PR or a push trigger.
+
+on:
+    workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+    contents: read
+
+jobs:
+    push-workflow:
+        name: Push the example workflow
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  sparse-checkout: products/workflows/prototypes/workflows-as-code
+                  sparse-checkout-cone-mode: false
+
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+              with:
+                  bun-version: 1.4.2
+
+            - name: Push the example workflow to PostHog
+              working-directory: products/workflows/prototypes/workflows-as-code
+              env:
+                  POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+                  POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+                  POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}
+              run: bun run example/onboarding.workflow.ts --push

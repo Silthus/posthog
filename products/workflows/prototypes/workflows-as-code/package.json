@@ -1,0 +1,15 @@
+{
+    "name": "workflows-as-code-prototype",
+    "private": true,
+    "type": "module",
+    "description": "Throwaway prototype. Not part of the pnpm workspace and not shipped.",
+    "scripts": {
+        "emit": "bun run example/onboarding.workflow.ts",
+        "push": "bun run example/onboarding.workflow.ts --push",
+        "evidence": "bun run dev/record-transcript.ts",
+        "typecheck": "bunx tsc --noEmit"
+    },
+    "devDependencies": {
+        "@types/bun": "^1.4.2"
+    }
+}
