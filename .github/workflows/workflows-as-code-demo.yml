@@ -3,6 +3,9 @@ name: Workflows as code demo (prototype)
 # Prototype job for the workflows-as-code demo loop. It runs the same file a laptop
 # runs and pushes the workflow into PostHog. Manual dispatch only: nothing about this
 # branch belongs on a PR or a push trigger.
+#
+# A create writes the new workflow id into the example file, and the id is only useful
+# if it survives the runner, so the job commits it back to the branch it ran on.
 
 on:
     workflow_dispatch:
@@ -12,7 +15,10 @@ concurrency:
     cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
-    contents: read
+    contents: write
+
+env:
+    EXAMPLE_FILE: products/workflows/prototypes/workflows-as-code/example/onboarding.workflow.ts
 
 jobs:
     push-workflow:
@@ -36,3 +42,15 @@ jobs:
                   POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
                   POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}
               run: bun run example/onboarding.workflow.ts --push
+
+            - name: Commit the workflow id back to the branch
+              run: |
+                  if [ -z "$(git status --porcelain -- "$EXAMPLE_FILE")" ]; then
+                      echo "The example file is unchanged, so the push did not create a workflow. Nothing to commit."
+                      exit 0
+                  fi
+                  git config user.name 'github-actions[bot]'
+                  git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+                  git add -- "$EXAMPLE_FILE"
+                  git commit -m 'chore(workflows): record the id of the workflow this push created [skip ci]'
+                  git push origin "HEAD:${GITHUB_REF_NAME}"
