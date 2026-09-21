@@ -119,7 +119,7 @@ function ManagedByCode({ children }: { children: JSX.Element }): JSX.Element {
 export const WorkflowList: StoryFn = () => <WorkflowsTable />
 
 export const WorkflowListNarrow: StoryFn = () => (
-    <div className="w-[520px] border rounded p-2">
+    <div className="w-[520px] max-w-full border rounded p-2">
         <WorkflowsTable />
     </div>
 )

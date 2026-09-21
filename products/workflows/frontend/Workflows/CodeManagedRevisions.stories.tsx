@@ -168,7 +168,7 @@ export default meta
 export const RevisionHistory: StoryFn = () => <WorkflowRevisions id={CODE_WORKFLOW_ID} />
 
 export const RevisionHistoryNarrow: StoryFn = () => (
-    <div className="w-[520px] border rounded p-2">
+    <div className="w-[520px] max-w-full border rounded p-2">
         <WorkflowRevisions id={CODE_WORKFLOW_ID} />
     </div>
 )

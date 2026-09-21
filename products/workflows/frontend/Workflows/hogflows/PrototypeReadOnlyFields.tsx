@@ -55,8 +55,12 @@ export function PrototypeReadOnlyFields({
         return () => observer.disconnect()
     }, [enabled, panelInputs, reason])
 
+    // The `disabled` alternative has to read as locked in a screenshot, which the native attribute
+    // alone does not do inside wrapped Lemon inputs.
+    const lockedClassName = enabled && panelInputs === 'disabled' ? 'pointer-events-none opacity-60' : ''
+
     return (
-        <div ref={containerRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div ref={containerRef} className={`flex min-h-0 flex-1 flex-col overflow-hidden ${lockedClassName}`}>
             {children}
         </div>
     )
