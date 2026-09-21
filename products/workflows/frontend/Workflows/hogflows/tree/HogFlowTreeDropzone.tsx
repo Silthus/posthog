@@ -8,6 +8,7 @@ import { Button, cn, Popover, PopoverContent, PopoverTrigger } from 'lib/ui/quil
 
 import { type CreateActionType, hogFlowEditorLogic } from '../hogFlowEditorLogic'
 import { HogFlowEditorPanelBuild } from '../panel/HogFlowEditorPanelBuild'
+import { useWorkflowReadOnly } from '../prototypeReadOnlyMode'
 import type { HogFlowEdge } from '../types'
 import { computeMoveTreeBranchEdges, isBranchingAction } from './workflowTree'
 
@@ -42,6 +43,7 @@ export function HogFlowTreeDropzone({
         setSelectedNodeId,
         setWorkflowInfo,
     } = useActions(hogFlowEditorLogic)
+    const { readOnly, reason, mode } = useWorkflowReadOnly()
     const [highlighted, setHighlighted] = useState(false)
     const [pickerOpen, setPickerOpen] = useState(false)
     const isAdjacentToDraggedAction = draggedActionId === edge.to || (!isBranchJoin && draggedActionId === edge.from)
@@ -99,7 +101,8 @@ export function HogFlowTreeDropzone({
             <div
                 className={cn(
                     'absolute inset-0 flex items-center justify-center',
-                    active ? 'hidden' : 'group-data-[workflow-tree-dragging=true]/tree:hidden'
+                    active ? 'hidden' : 'group-data-[workflow-tree-dragging=true]/tree:hidden',
+                    readOnly && mode.affordances === 'removed' && 'hidden'
                 )}
             >
                 <div
@@ -110,7 +113,7 @@ export function HogFlowTreeDropzone({
                         showConnector && 'group-hover:opacity-100'
                     )}
                 />
-                <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                <Popover open={pickerOpen && !readOnly} onOpenChange={setPickerOpen}>
                     <PopoverTrigger
                         render={
                             <Button
@@ -121,6 +124,8 @@ export function HogFlowTreeDropzone({
                                     'absolute -right-2 top-1/2 z-10 !size-4 -translate-y-1/2 border-0 bg-transparent p-0 hover:bg-transparent focus-visible:outline-none'
                                 )}
                                 aria-label="Insert step here"
+                                title={readOnly ? reason : undefined}
+                                disabled={readOnly}
                                 data-attr="workflow-tree-insert-action"
                             />
                         }
@@ -142,6 +147,7 @@ export function HogFlowTreeDropzone({
             <div
                 className={cn(
                     'absolute -inset-y-3 inset-x-0 z-20 items-center',
+                    readOnly ? 'hidden' : '',
                     isAdjacentToDraggedAction
                         ? 'hidden'
                         : 'hidden group-data-[workflow-tree-dropzone-closest=true]:flex'

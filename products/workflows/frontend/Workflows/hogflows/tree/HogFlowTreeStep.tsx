@@ -9,6 +9,7 @@ import { Badge, Button, Item, ItemActions, ItemContent, ItemDescription, ItemMed
 import { workflowLogic } from '../../workflowLogic'
 import { useHogFlowBranchSelection } from '../HogFlowBranchSelection'
 import { hogFlowEditorLogic } from '../hogFlowEditorLogic'
+import { useWorkflowReadOnly } from '../prototypeReadOnlyMode'
 import { StepView } from '../steps/components/StepView'
 import { useHogFlowStep } from '../steps/HogFlowSteps'
 import type { HogFlowAction, HogFlowActionNode } from '../types'
@@ -34,6 +35,7 @@ export function HogFlowTreeStep({
     const { duplicateNodeBelow, onNodesDelete, setSelectedNodeId } = useActions(hogFlowEditorLogic)
     const { setSelectedBranch } = useHogFlowBranchSelection()
     const { actionValidationErrorsById, workflow } = useValues(workflowLogic)
+    const { readOnly, reason, mode } = useWorkflowReadOnly()
     const step = useHogFlowStep(action)
     const dragPreviewRef = useRef<HTMLDivElement>(null)
 
@@ -85,11 +87,16 @@ export function HogFlowTreeStep({
                     setSelectedNodeId(action.id)
                 }}
             />
-            {canDrag && (
+            {canDrag && !(readOnly && mode.affordances === 'removed') && (
                 <div
-                    draggable
-                    className="relative z-10 -ms-0.5 -me-1 flex size-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground active:cursor-grabbing"
-                    onDragStart={(event) => onDragStart(event, action.id, dragPreviewRef.current)}
+                    draggable={!readOnly}
+                    title={readOnly ? reason : undefined}
+                    aria-disabled={readOnly || undefined}
+                    className={cn(
+                        'relative z-10 -ms-0.5 -me-1 flex size-5 shrink-0 items-center justify-center text-muted-foreground',
+                        readOnly ? 'cursor-not-allowed opacity-50' : 'cursor-grab active:cursor-grabbing'
+                    )}
+                    onDragStart={(event) => !readOnly && onDragStart(event, action.id, dragPreviewRef.current)}
                     onDragEnd={onDragEnd}
                     data-attr="workflow-tree-step-drag"
                 >
@@ -117,7 +124,7 @@ export function HogFlowTreeStep({
                     <ItemTitle className="pointer-events-none min-w-0 flex-1 max-w-full truncate leading-tight">
                         {action.name}
                     </ItemTitle>
-                    {canHaveActions && (
+                    {canHaveActions && !(readOnly && mode.affordances === 'removed') && (
                         <ItemActions
                             className={cn(
                                 'pointer-events-auto',
@@ -131,7 +138,8 @@ export function HogFlowTreeStep({
                                     variant="default"
                                     size="icon-sm"
                                     aria-label="Duplicate step"
-                                    title="Duplicate step"
+                                    title={readOnly ? reason : 'Duplicate step'}
+                                    disabled={readOnly}
                                     onClick={() => duplicateNodeBelow(action.id)}
                                     data-attr="workflow-tree-duplicate-step"
                                 >
@@ -143,8 +151,8 @@ export function HogFlowTreeStep({
                                 variant="default"
                                 size="icon-sm"
                                 aria-label="Delete step"
-                                title={canDelete ? 'Delete step' : 'Clean up branching steps first'}
-                                disabled={!canDelete}
+                                title={readOnly ? reason : canDelete ? 'Delete step' : 'Clean up branching steps first'}
+                                disabled={!canDelete || readOnly}
                                 onClick={() => {
                                     onNodesDelete([node])
                                     setSelectedNodeId(null)

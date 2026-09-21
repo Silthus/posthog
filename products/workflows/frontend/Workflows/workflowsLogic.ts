@@ -21,6 +21,8 @@ export type WorkflowTypeFilter = 'all' | 'messaging' | 'automation' | 'loop'
 
 const WORKFLOW_TYPE_FILTERS: WorkflowTypeFilter[] = ['all', 'messaging', 'automation', 'loop']
 
+export type WorkflowManagedByFilter = 'all' | 'code' | 'gui'
+
 export type WorkflowTriggerTypeFilter = 'all' | (NonNullable<HogFlow['trigger']> extends { type: infer T } ? T : never)
 
 // Keep in sync with TRIGGER_TYPES in products/workflows/backend/models/hog_flow/hog_flow.py.
@@ -47,6 +49,7 @@ export interface WorkflowsFilters {
     status: WorkflowStatusFilter
     type: WorkflowTypeFilter
     triggerType: WorkflowTriggerTypeFilter
+    managedBy: WorkflowManagedByFilter
     page: number
 }
 
@@ -56,6 +59,7 @@ const DEFAULT_FILTERS: WorkflowsFilters = {
     status: 'all',
     type: 'all',
     triggerType: 'all',
+    managedBy: 'all',
     page: 1,
 }
 
@@ -80,6 +84,7 @@ export interface workflowsLogicValues {
     paramsFromFilters: WorkflowsListParams
     selectedArchivedCount: number
     selectedArchivedWorkflowIds: Set<string>
+    visibleWorkflows: HogFlow[]
     workflows: WorkflowsResult
     workflowsLoading: boolean
 }
@@ -235,6 +240,7 @@ export interface workflowsLogicMeta {
         pagination: (filters: WorkflowsFilters, workflows: WorkflowsResult) => PaginationManual
         allArchivedSelected: (workflows: WorkflowsResult, selectedArchivedWorkflowIds: Set<string>) => boolean
         selectedArchivedCount: (selectedArchivedWorkflowIds: Set<string>) => number
+        visibleWorkflows: (workflows: WorkflowsResult, filters: WorkflowsFilters) => HogFlow[]
     }
 }
 
@@ -443,6 +449,18 @@ export const workflowsLogic = kea<workflowsLogicType>([
             (s) => [s.selectedArchivedWorkflowIds],
             (selectedIds: Set<string>): number => selectedIds.size,
         ],
+        // Prototype only: the real build item is a `managed_by` query param on the list endpoint.
+        visibleWorkflows: [
+            (s) => [s.workflows, s.filters],
+            (workflows: WorkflowsResult, filters: WorkflowsFilters): HogFlow[] => {
+                if (filters.managedBy === 'all') {
+                    return workflows.results
+                }
+                return workflows.results.filter((workflow) =>
+                    filters.managedBy === 'code' ? workflow.managed_by === 'code' : workflow.managed_by !== 'code'
+                )
+            },
+        ],
     }),
     listeners(({ actions, values }) => ({
         setFilters: async (_, breakpoint) => {
@@ -533,6 +551,7 @@ export const workflowsLogic = kea<workflowsLogicType>([
                 status: WORKFLOW_STATUS_FILTERS.includes(status) ? status : 'all',
                 type: WORKFLOW_TYPE_FILTERS.includes(type) ? type : 'all',
                 triggerType: WORKFLOW_TRIGGER_TYPE_FILTERS.includes(triggerType) ? triggerType : 'all',
+                managedBy: 'all',
                 // Anything unparseable, zero, or negative falls back to page 1 rather than reaching
                 // the offset maths as NaN or a negative number.
                 page: Math.max(1, parseInt(String(searchParams['page'])) || 1),

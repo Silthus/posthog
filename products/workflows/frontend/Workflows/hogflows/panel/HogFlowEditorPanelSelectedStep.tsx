@@ -7,6 +7,7 @@ import { EditableField } from 'lib/components/EditableField/EditableField'
 
 import { workflowLogic } from '../../workflowLogic'
 import { hogFlowEditorLogic } from '../hogFlowEditorLogic'
+import { useWorkflowReadOnly } from '../prototypeReadOnlyMode'
 import { useHogFlowStep } from '../steps/HogFlowSteps'
 import { isScheduleTrigger } from '../steps/types'
 
@@ -14,6 +15,11 @@ export function HogFlowEditorPanelSelectedStep(): JSX.Element | null {
     const { selectedNode, selectedNodeCanBeDeleted } = useValues(hogFlowEditorLogic)
     const { actionValidationErrorsById } = useValues(workflowLogic)
     const { onNodesDelete, setWorkflowAction, setSelectedNodeId } = useActions(hogFlowEditorLogic)
+    const {
+        readOnly,
+        reason,
+        mode: { affordances },
+    } = useWorkflowReadOnly()
     const Step = useHogFlowStep(selectedNode?.data)
 
     if (!selectedNode) {
@@ -49,7 +55,8 @@ export function HogFlowEditorPanelSelectedStep(): JSX.Element | null {
                     placeholder="Step name"
                     minLength={1}
                     saveOnBlur
-                    clickToEdit
+                    mode={readOnly ? 'view' : undefined}
+                    clickToEdit={!readOnly}
                     compactButtons
                     compactIcon
                     className="text-sm font-semibold"
@@ -63,7 +70,8 @@ export function HogFlowEditorPanelSelectedStep(): JSX.Element | null {
                         placeholder="Add a description (optional)"
                         multiline
                         saveOnBlur
-                        clickToEdit
+                        mode={readOnly ? 'view' : undefined}
+                        clickToEdit={!readOnly}
                         compactButtons
                         compactIcon
                         className="text-xs text-secondary"
@@ -71,7 +79,7 @@ export function HogFlowEditorPanelSelectedStep(): JSX.Element | null {
                     />
                 )}
             </div>
-            {selectedNode.deletable && (
+            {selectedNode.deletable && !(readOnly && affordances === 'removed') && (
                 <LemonButton
                     className="shrink-0"
                     size="small"
@@ -81,7 +89,9 @@ export function HogFlowEditorPanelSelectedStep(): JSX.Element | null {
                         onNodesDelete([selectedNode])
                         setSelectedNodeId(null)
                     }}
-                    disabledReason={selectedNodeCanBeDeleted ? undefined : 'Clean up branching steps first'}
+                    disabledReason={
+                        readOnly ? reason : selectedNodeCanBeDeleted ? undefined : 'Clean up branching steps first'
+                    }
                 />
             )}
             {hasValidationIssue && (

@@ -11,6 +11,7 @@ import { LemonMenu } from 'lib/lemon-ui/LemonMenu'
 
 import { workflowLogic } from '../../../workflowLogic'
 import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
+import { useWorkflowReadOnly } from '../../prototypeReadOnlyMode'
 import { NODE_HEIGHT, NODE_WIDTH } from '../../react_flow_utils/constants'
 import { HogFlowAction } from '../../types'
 import { useHogFlowStep } from '../HogFlowSteps'
@@ -30,6 +31,11 @@ export function StepView({ action }: { action: HogFlowAction }): JSX.Element {
         workflow,
         isZoomedOutFar,
     } = useValues(hogFlowEditorLogic)
+    const {
+        readOnly,
+        reason,
+        mode: { affordances },
+    } = useWorkflowReadOnly()
     const { setSelectedNodeId, startCopyingNode, startMovingNode } = useActions(hogFlowEditorLogic)
     const { actionValidationErrorsById, logicProps, scheduleState, scheduleStartsAt, isScheduleRepeating } =
         useValues(workflowLogic)
@@ -201,7 +207,7 @@ export function StepView({ action }: { action: HogFlowAction }): JSX.Element {
                         </Tooltip>
                     )}
                 </div>
-                {isSelected && node?.deletable && (
+                {isSelected && node?.deletable && !(readOnly && affordances === 'removed') && (
                     <div className="absolute top-0.5 right-0.5" onClick={(e) => e.stopPropagation()}>
                         <LemonMenu
                             items={[
@@ -210,6 +216,7 @@ export function StepView({ action }: { action: HogFlowAction }): JSX.Element {
                                           label: 'Copy',
                                           icon: <IconCopy />,
                                           status: 'default',
+                                          disabledReason: readOnly ? reason : undefined,
                                           onClick: () => startCopyingNode(node),
                                       }
                                     : null,
@@ -218,6 +225,7 @@ export function StepView({ action }: { action: HogFlowAction }): JSX.Element {
                                           label: 'Move',
                                           icon: <IconDrag />,
                                           status: 'default',
+                                          disabledReason: readOnly ? reason : undefined,
                                           onClick: () => startMovingNode(node),
                                       }
                                     : null,
@@ -229,9 +237,11 @@ export function StepView({ action }: { action: HogFlowAction }): JSX.Element {
                                         void deleteElements({ nodes: [node] })
                                         setSelectedNodeId(null)
                                     },
-                                    disabledReason: !selectedNodeCanBeDeleted
-                                        ? 'Clean up branching steps first'
-                                        : undefined,
+                                    disabledReason: readOnly
+                                        ? reason
+                                        : !selectedNodeCanBeDeleted
+                                          ? 'Clean up branching steps first'
+                                          : undefined,
                                 },
                             ]}
                         >

@@ -15,6 +15,8 @@ import {
     HogFlowEditorMode,
     hogFlowEditorLogic,
 } from '../hogFlowEditorLogic'
+import { PrototypeReadOnlyFields } from '../PrototypeReadOnlyFields'
+import { useWorkflowReadOnly } from '../prototypeReadOnlyMode'
 import { HogFlowEditorPanelBuild } from './HogFlowEditorPanelBuild'
 import { HogFlowEditorPanelBuildDetail } from './HogFlowEditorPanelBuildDetail'
 import { HogFlowEditorPanelLogs } from './HogFlowEditorPanelLogs'
@@ -30,6 +32,7 @@ export function HogFlowEditorPanel({
 }: { layout?: 'floating' | 'panel' } = {}): JSX.Element | null {
     const { panelWidth, selectedNode, mode, workflow } = useValues(hogFlowEditorLogic)
     const { clearPanelWidth, setMode, setPanelWidth, setSelectedNodeId } = useActions(hogFlowEditorLogic)
+    const { readOnly, reason, mode: prototypeMode } = useWorkflowReadOnly()
     const panelRef = useRef<HTMLDivElement>(null)
     const resizerProps: ResizerLogicProps = {
         logicKey: 'hog-flow-simple-panel',
@@ -41,7 +44,13 @@ export function HogFlowEditorPanel({
 
     const variablesCount = workflow?.variables?.length || 0
 
-    const tabs: LemonTab<HogFlowEditorMode>[] = HOG_FLOW_EDITOR_MODES.map((mode) => ({
+    // Read-only: the Build tab only carries the palette of new steps, so it is dropped until a step
+    // is selected, and the panel opens on that step instead.
+    const visibleModes = HOG_FLOW_EDITOR_MODES.filter(
+        (candidate) => !(readOnly && candidate === 'build' && !selectedNode)
+    )
+
+    const tabs: LemonTab<HogFlowEditorMode>[] = visibleModes.map((mode) => ({
         label: (
             <>
                 {capitalizeFirstLetter(mode)}
@@ -118,12 +127,23 @@ export function HogFlowEditorPanel({
                     </div>
                 </div>
 
-                {selectedNode && ['build', 'metrics', 'test', 'logs'].includes(mode) && (
-                    <HogFlowEditorPanelSelectedStep />
-                )}
-                {mode === 'build' && (
-                    <>{!selectedNode ? <HogFlowEditorPanelBuild /> : <HogFlowEditorPanelBuildDetail />}</>
-                )}
+                <PrototypeReadOnlyFields
+                    enabled={readOnly && mode === 'build'}
+                    panelInputs={prototypeMode.panelInputs}
+                    reason={reason}
+                >
+                    {selectedNode && ['build', 'metrics', 'test', 'logs'].includes(mode) && (
+                        <HogFlowEditorPanelSelectedStep />
+                    )}
+                    {mode === 'build' &&
+                        (selectedNode ? (
+                            <HogFlowEditorPanelBuildDetail />
+                        ) : readOnly ? (
+                            <p className="p-3 text-sm text-secondary">Select a step to see how it is set up.</p>
+                        ) : (
+                            <HogFlowEditorPanelBuild />
+                        ))}
+                </PrototypeReadOnlyFields>
                 {mode === 'variables' && <HogFlowEditorPanelVariables />}
                 {mode === 'test' &&
                     (selectedNode?.data?.type === 'function_email' ? (

@@ -26,6 +26,7 @@ import { workflowLogic } from './workflowLogic'
 import { findMatchingWorkflowSteps } from './workflowSearchMatches'
 import {
     WORKFLOW_TRIGGER_TYPE_OPTIONS,
+    WorkflowManagedByFilter,
     WorkflowStatusFilter,
     WorkflowTriggerTypeFilter,
     WorkflowTypeFilter,
@@ -112,7 +113,7 @@ export function WorkflowsTable(): JSX.Element {
     const logic = workflowsLogic()
     const {
         workflowsLoading,
-        workflows,
+        visibleWorkflows,
         pagination,
         filters,
         selectedArchivedWorkflowIds,
@@ -157,7 +158,7 @@ export function WorkflowsTable(): JSX.Element {
                               checked={allArchivedSelected ? true : selectedArchivedCount > 0 ? 'indeterminate' : false}
                               onChange={(checked: boolean) =>
                                   checked
-                                      ? selectAllArchivedWorkflows(workflows.results.map((w) => w.id))
+                                      ? selectAllArchivedWorkflows(visibleWorkflows.map((w) => w.id))
                                       : clearArchivedWorkflowSelection()
                               }
                           />
@@ -419,6 +420,21 @@ export function WorkflowsTable(): JSX.Element {
                             value={filters.triggerType}
                         />
                         <span className="ml-1">
+                            <b>Managed by</b>
+                        </span>
+                        <LemonSelect
+                            dropdownMatchSelectWidth={false}
+                            size="small"
+                            data-attr="workflows-managed-by-filter"
+                            onChange={(value) => setFilters({ managedBy: value as WorkflowManagedByFilter })}
+                            options={[
+                                { label: 'All', value: 'all' },
+                                { label: 'Code', value: 'code' },
+                                { label: 'UI', value: 'gui' },
+                            ]}
+                            value={filters.managedBy}
+                        />
+                        <span className="ml-1">
                             <b>Created by</b>
                         </span>
                         <MemberSelect
@@ -440,7 +456,7 @@ export function WorkflowsTable(): JSX.Element {
                 )}
 
                 <LemonTable
-                    dataSource={workflows.results}
+                    dataSource={visibleWorkflows}
                     loading={workflowsLoading}
                     rowKey="id"
                     columns={columns}

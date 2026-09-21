@@ -8,6 +8,7 @@ import { useDebouncedValue } from 'lib/hooks/useDebouncedValue'
 import { urls } from 'scenes/urls'
 
 import type { HogFlowEditorLayout } from './hogflows/hogFlowEditorLogic'
+import { useWorkflowReadOnly } from './hogflows/prototypeReadOnlyMode'
 import { WorkflowLogicProps, workflowLogic } from './workflowLogic'
 
 type WorkflowStatusBarProps = WorkflowLogicProps & {
@@ -33,6 +34,12 @@ export function WorkflowStatusBar({
         lastSavedAt,
     } = useValues(logic)
     const { setAutoSaveEnabled } = useActions(logic)
+    const {
+        readOnly,
+        reason,
+        mode: { autosave },
+    } = useWorkflowReadOnly()
+    const hideAutoSave = readOnly && autosave === 'hidden'
     const showSaving = useDebouncedValue(isAutoSavePending || workflowLoading, 1000)
 
     if (!originalWorkflow) {
@@ -88,31 +95,34 @@ export function WorkflowStatusBar({
                 toggle and History never shift as the narration or the timestamp changes. */}
             {showWorkflowStatus && historyWorkflowId && (
                 <div className="flex items-center gap-3 shrink-0">
-                    {autoSaveEnabled && showSaving ? (
+                    {hideAutoSave ? null : autoSaveEnabled && showSaving ? (
                         <span className="text-xs text-tertiary flex items-center gap-1">
                             <Spinner textColored /> Saving…
                         </span>
                     ) : lastSavedAt ? (
                         <LastSavedIndicator timestamp={lastSavedAt} />
                     ) : null}
-                    <span className="flex items-center gap-1">
-                        <LemonSwitch
-                            checked={autoSaveEnabled}
-                            onChange={setAutoSaveEnabled}
-                            label="Auto-save"
-                            size="small"
-                        />
-                        <Tooltip
-                            title={
-                                isActive
-                                    ? 'Auto-save stores your changes as a draft. Nothing goes live until you publish.'
-                                    : 'Draft workflows auto-save as you edit.'
-                            }
-                            placement="bottom"
-                        >
-                            <IconInfo className="text-tertiary size-4" />
-                        </Tooltip>
-                    </span>
+                    {!hideAutoSave && (
+                        <span className="flex items-center gap-1">
+                            <LemonSwitch
+                                checked={autoSaveEnabled && !readOnly}
+                                onChange={setAutoSaveEnabled}
+                                label="Auto-save"
+                                size="small"
+                                disabledReason={readOnly ? reason : undefined}
+                            />
+                            <Tooltip
+                                title={
+                                    isActive
+                                        ? 'Auto-save stores your changes as a draft. Nothing goes live until you publish.'
+                                        : 'Draft workflows auto-save as you edit.'
+                                }
+                                placement="bottom"
+                            >
+                                <IconInfo className="text-tertiary size-4" />
+                            </Tooltip>
+                        </span>
+                    )}
                     <LemonButton
                         type="tertiary"
                         size="small"

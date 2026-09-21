@@ -23,6 +23,7 @@ import { workflowLogic } from '../workflowLogic'
 import { HogFlowBranchSelectionProvider } from './HogFlowBranchSelection'
 import { hogFlowEditorLogic } from './hogFlowEditorLogic'
 import { HogFlowEditorPanel } from './panel/HogFlowEditorPanel'
+import { useWorkflowReadOnly } from './prototypeReadOnlyMode'
 import { LOW_DETAIL_ZOOM, MIN_ZOOM } from './react_flow_utils/constants'
 import { REACT_FLOW_EDGE_TYPES } from './react_flow_utils/SmartEdge'
 import { REACT_FLOW_NODE_TYPES } from './steps/Nodes'
@@ -31,6 +32,7 @@ import { HogFlowActionEdge, HogFlowActionNode } from './types'
 
 function HogFlowGraphEditor(): JSX.Element {
     const { isDarkModeOn } = useValues(themeLogic)
+    const { readOnly } = useWorkflowReadOnly()
 
     const { nodes, edges, dropzoneNodes, isMovingNode, isCopyingNode, isZoomedOutFar } = useValues(hogFlowEditorLogic)
     const {
@@ -91,7 +93,7 @@ function HogFlowGraphEditor(): JSX.Element {
                             setIsZoomedOutFar(zoomedOutFar)
                         }
                     }}
-                    nodes={nodesWithDropzones}
+                    nodes={readOnly ? nodes : nodesWithDropzones}
                     edges={edges}
                     onNodesChange={onNodesChange}
                     onEdgesChange={onEdgesChange}
@@ -102,6 +104,8 @@ function HogFlowGraphEditor(): JSX.Element {
                     nodeTypes={REACT_FLOW_NODE_TYPES as NodeTypes}
                     edgeTypes={REACT_FLOW_EDGE_TYPES as EdgeTypes}
                     nodesDraggable={false}
+                    nodesConnectable={!readOnly}
+                    edgesReconnectable={!readOnly}
                     colorMode={isDarkModeOn ? 'dark' : 'light'}
                     onPaneClick={handlePaneClick}
                 >
