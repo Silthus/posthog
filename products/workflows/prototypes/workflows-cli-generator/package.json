@@ -1,0 +1,19 @@
+{
+    "name": "workflows-cli-generator-prototype",
+    "private": true,
+    "description": "Throwaway prototype. The CLI loads a workflow definition file and interprets it. Not part of the pnpm workspace and not shipped.",
+    "type": "module",
+    "scripts": {
+        "cli": "node bin/posthog-workflows.mjs",
+        "stub": "node dev/fake-posthog.mjs",
+        "evidence": "bash dev/record-transcript.sh",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "jiti": "^2.7.0"
+    },
+    "devDependencies": {
+        "@types/node": "^24.0.0",
+        "typescript": "^5.9.0"
+    }
+}
