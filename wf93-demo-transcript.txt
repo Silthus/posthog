@@ -1,0 +1,200 @@
+posthog-workflows live demo
+CLI      Silthus/posthog feat/workflows-cli @ 4783a4fea5c, installed from wf93-posthog-workflows-0.0.0.tgz
+Server   Silthus/posthog feat/workflows-key @ 2eb89349aca, Django on http://localhost:8055, project 3
+Repo     a scratch repository, /tmp/wf93-demo-repo, remote acme/flows
+
+The personal API key is redacted. It was exported as $POSTHOG_CLI_API_KEY and never typed as a literal.
+
+
+========== STEP 1 - init ==========
+
+~/acme/flows $ pnpm exec posthog-workflows init workflows/welcome.ts
+Wrote workflows/welcome.ts with the key "welcome".
+Next: edit the steps, then run posthog-workflows check workflows/welcome.ts
+
+~/acme/flows $ cat workflows/welcome.ts
+import { delay, onEvent, path, workflow } from '@posthog/workflows'
+
+export const welcome = workflow({
+    // The identity of this workflow in your project. Every push resolves it, so keep it as it is.
+    key: 'welcome',
+    name: 'Welcome',
+    // A first push sends nothing to a real person. Set this to 'active' when the workflow is ready.
+    status: 'draft',
+    on: onEvent({ event: 'user signed up' }),
+    steps: path(delay('1d', { name: 'Wait a day' })),
+    exit: { reason: 'Welcome finished' },
+})
+
+# init already filled the key in from the file name. Give it the name we want.
+
+~/acme/flows $ sed -i '' "s/key: 'welcome'/key: 'welcome-email'/" workflows/welcome.ts
+
+~/acme/flows $ grep -n "key:" workflows/welcome.ts
+5:    key: 'welcome-email',
+
+~/acme/flows $ git add workflows/welcome.ts && git commit -q -m 'feat: add the welcome email workflow' && git log --oneline -1
+664bbce (HEAD -> main) feat: add the welcome email workflow
+
+========== STEP 2 - check ==========
+
+# No credentials in this shell: check validates the file offline and says so.
+
+~/acme/flows $ pnpm exec posthog-workflows check workflows/welcome.ts
+workflows/welcome.ts
+  welcome -> "Welcome"
+    key      welcome-email
+    status   draft
+    steps    3 (trigger, delay, exit)
+    source   664bbce on main
+    diff     not compared
+1 workflow(s), all valid.
+diff skipped: no PostHog credentials in this environment, so the file was validated offline.
+Set POSTHOG_CLI_API_KEY and POSTHOG_CLI_PROJECT_ID to compare against a project.
+
+# Now with credentials. The key is only ever a variable, never a literal.
+
+~/acme/flows $ export POSTHOG_CLI_API_KEY=<your personal API key, hog_flow:read + hog_flow:write>
+~/acme/flows $ export POSTHOG_CLI_PROJECT_ID=3
+~/acme/flows $ export POSTHOG_CLI_HOST=http://localhost:8055
+
+~/acme/flows $ pnpm exec posthog-workflows check workflows/welcome.ts
+workflows/welcome.ts
+  welcome -> "Welcome"
+    key      welcome-email
+    status   draft
+    steps    3 (trigger, delay, exit)
+    source   664bbce on main
+    result   would create
+1 workflow(s): 1 would be created, 0 would be updated, 0 unchanged.
+compared against project 3 on http://localhost:8055 (credentials from the environment).
+
+========== STEP 3 - push ==========
+
+~/acme/flows $ pnpm exec posthog-workflows push workflows/welcome.ts
+workflows/welcome.ts
+  welcome -> "Welcome"
+    key      welcome-email
+    status   draft
+    steps    3 (trigger, delay, exit)
+    source   664bbce on main
+    result   created
+    url      http://localhost:8055/project/3/workflows/01a0c4d4-f5bf-0000-64f7-e97a3931597c
+    version  1
+pushed 1 workflow(s): 1 created, 0 updated, 0 unchanged.
+pushed to project 3 on http://localhost:8055 (credentials from the environment).
+
+
+========== STEP 5 - edit the file, check the diff, push again ==========
+
+# Wait three days instead of one.
+
+~/acme/flows $ sed -i '' "s/delay('1d', { name: 'Wait a day' })/delay('3d', { name: 'Wait three days' })/" workflows/welcome.ts
+
+~/acme/flows $ git diff -- workflows/welcome.ts
+diff --git a/workflows/welcome.ts b/workflows/welcome.ts
+index 51072d7..5fb8655 100644
+--- a/workflows/welcome.ts
++++ b/workflows/welcome.ts
+@@ -7,6 +7,6 @@ export const welcome = workflow({
+     // A first push sends nothing to a real person. Set this to 'active' when the workflow is ready.
+     status: 'draft',
+     on: onEvent({ event: 'user signed up' }),
+-    steps: path(delay('1d', { name: 'Wait a day' })),
++    steps: path(delay('3d', { name: 'Wait three days' })),
+     exit: { reason: 'Welcome finished' },
+ })
+
+~/acme/flows $ git commit -q -am 'feat: wait three days before the welcome email' && git log --oneline -1
+a187b39 (HEAD -> main) feat: wait three days before the welcome email
+
+~/acme/flows $ pnpm exec posthog-workflows check workflows/welcome.ts
+workflows/welcome.ts
+  welcome -> "Welcome"
+    key      welcome-email
+    status   draft
+    steps    3 (trigger, delay, exit)
+    source   a187b39 on main
+    result   would update
+             + step "Wait three days"
+             - step "Wait a day"
+             ~ the connections between steps
+    url      http://localhost:8055/project/3/workflows/01a0c4d4-f5bf-0000-64f7-e97a3931597c
+    version  1
+1 workflow(s): 0 would be created, 1 would be updated, 0 unchanged.
+compared against project 3 on http://localhost:8055 (credentials from the environment).
+
+~/acme/flows $ pnpm exec posthog-workflows push workflows/welcome.ts
+workflows/welcome.ts
+  welcome -> "Welcome"
+    key      welcome-email
+    status   draft
+    steps    3 (trigger, delay, exit)
+    source   a187b39 on main
+    result   updated
+             + step "Wait three days"
+             - step "Wait a day"
+             ~ the connections between steps
+    url      http://localhost:8055/project/3/workflows/01a0c4d4-f5bf-0000-64f7-e97a3931597c
+    version  2
+pushed 1 workflow(s): 0 created, 1 updated, 0 unchanged.
+pushed to project 3 on http://localhost:8055 (credentials from the environment).
+
+
+========== STEP 6 - roll back through git ==========
+
+# The rollback is a revert commit. Nothing is clicked in PostHog.
+
+~/acme/flows $ git revert --no-edit HEAD
+[main d9b04aa] Revert "feat: wait three days before the welcome email"
+ Date: Mon Sep 21 18:42:49 2026 +0200
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+~/acme/flows $ git log --oneline -3
+d9b04aa (HEAD -> main) Revert "feat: wait three days before the welcome email"
+a187b39 feat: wait three days before the welcome email
+664bbce feat: add the welcome email workflow
+
+~/acme/flows $ pnpm exec posthog-workflows push workflows/welcome.ts
+workflows/welcome.ts
+  welcome -> "Welcome"
+    key      welcome-email
+    status   draft
+    steps    3 (trigger, delay, exit)
+    source   d9b04aa on main
+    result   updated
+             + step "Wait a day"
+             - step "Wait three days"
+             ~ the connections between steps
+    url      http://localhost:8055/project/3/workflows/01a0c4d4-f5bf-0000-64f7-e97a3931597c
+    version  3
+pushed 1 workflow(s): 0 created, 1 updated, 0 unchanged.
+pushed to project 3 on http://localhost:8055 (credentials from the environment).
+
+
+========== STEP 7 - push with nothing changed ==========
+
+~/acme/flows $ pnpm exec posthog-workflows push workflows/welcome.ts; echo "exit code: $?"
+workflows/welcome.ts
+  welcome -> "Welcome"
+    key      welcome-email
+    status   draft
+    steps    3 (trigger, delay, exit)
+    source   d9b04aa on main (not recorded: no change)
+    result   unchanged
+    url      http://localhost:8055/project/3/workflows/01a0c4d4-f5bf-0000-64f7-e97a3931597c
+    version  3
+pushed 1 workflow(s): 0 created, 0 updated, 1 unchanged.
+pushed to project 3 on http://localhost:8055 (credentials from the environment).
+exit code: 0
+
+========== STEP 8 - push with no API key ==========
+
+~/acme/flows $ unset POSTHOG_CLI_API_KEY
+
+~/acme/flows $ pnpm exec posthog-workflows push workflows/welcome.ts; echo "exit code: $?"
+status: missing_credentials
+message: No PostHog credentials.
+why: push writes to a project, so it needs a personal API key with hog_flow:write and the project to write into. Neither the environment nor ~/.posthog/credentials.json carried both.
+fix: In CI set POSTHOG_CLI_API_KEY, POSTHOG_CLI_PROJECT_ID and POSTHOG_CLI_HOST. On your own machine run posthog-cli login once.
+exit code: 1
