@@ -1,0 +1,13 @@
+{
+    "name": "workflows-composable-steps-prototype",
+    "private": true,
+    "description": "Throwaway prototype. Answers issue #74: how a step is defined once and reused. Not part of the pnpm workspace and not shipped.",
+    "type": "module",
+    "scripts": {
+        "evidence": "bun run dev/run-all.ts",
+        "typecheck": "bunx tsc --noEmit"
+    },
+    "devDependencies": {
+        "@types/bun": "^1.4.2"
+    }
+}
