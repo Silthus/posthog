@@ -78,7 +78,8 @@ export function WorkflowRevisions({
                         <LemonButton
                             type="secondary"
                             size="xsmall"
-                            className="whitespace-nowrap"
+                            // Narrow, the label wraps instead of pushing the actions column out of view.
+                            className="@[36rem]/revisions:whitespace-nowrap"
                             onClick={() => restoreRevision(revision.version)}
                             loading={restoringVersion === revision.version}
                             disabledReason={
