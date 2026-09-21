@@ -78,8 +78,7 @@ export function WorkflowRevisions({
                         <LemonButton
                             type="secondary"
                             size="xsmall"
-                            // Narrow, the label wraps instead of pushing the actions column out of view.
-                            className="@[36rem]/revisions:whitespace-nowrap"
+                            className="whitespace-nowrap"
                             onClick={() => restoreRevision(revision.version)}
                             loading={restoringVersion === revision.version}
                             disabledReason={
@@ -92,7 +91,9 @@ export function WorkflowRevisions({
                                         : undefined
                             }
                         >
-                            Restore as draft
+                            {/* Narrow, the short label keeps the button inside the table. */}
+                            <span className="@[36rem]/revisions:hidden">Restore</span>
+                            <span className="hidden @[36rem]/revisions:inline">Restore as draft</span>
                         </LemonButton>
                     </AccessControlAction>
                 </div>

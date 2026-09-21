@@ -18,7 +18,7 @@ export interface PrototypeReadOnlyMode {
 const DEFAULT_MODE: PrototypeReadOnlyMode = {
     affordances: 'removed',
     autosave: 'hidden',
-    panelInputs: 'readOnly',
+    panelInputs: 'disabled',
 }
 
 let currentMode: PrototypeReadOnlyMode = { ...DEFAULT_MODE }

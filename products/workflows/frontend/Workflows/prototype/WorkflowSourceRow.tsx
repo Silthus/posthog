@@ -8,6 +8,46 @@ import type { HogFlow } from '../hogflows/types'
 import { workflowSource } from './workflowSourceLink'
 
 /**
+ * The same three source parts as the row, shortened to fit a header that already carries tags and
+ * controls: the file links out, the repository and the ref follow as plain text.
+ */
+export function WorkflowSourceInline({
+    workflow,
+    pathOnly,
+}: {
+    workflow: HogFlow | null | undefined
+    /** Drops the repository and the ref, for a place that only has room for the file. */
+    pathOnly?: boolean
+}): JSX.Element | null {
+    const source = workflowSource(workflow)
+    if (!source) {
+        return <span className="text-xs text-secondary">No source file recorded yet</span>
+    }
+
+    return (
+        <span className="flex min-w-0 items-center gap-1 text-xs text-secondary">
+            {!pathOnly && <IconCode className="shrink-0" />}
+            {source.link ? (
+                <Link to={source.link} target="_blank" className="truncate">
+                    {source.path}
+                </Link>
+            ) : (
+                <span className="truncate">{source.path}</span>
+            )}
+            {pathOnly ? null : (
+                <>
+                    <span className="shrink-0" aria-hidden>
+                        ·
+                    </span>
+                    <span className="truncate">{source.repositoryLabel}</span>
+                    <span className="shrink-0 whitespace-nowrap">· {source.refLabel}</span>
+                </>
+            )}
+        </span>
+    )
+}
+
+/**
  * The one-line row under the scene title that says which file owns this workflow. Four states:
  * linked, unknown host, no pointer recorded yet, and released back to the UI.
  */

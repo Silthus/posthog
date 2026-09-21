@@ -2,13 +2,14 @@ import clsx from 'clsx'
 import { useActions, useValues } from 'kea'
 import { useRef } from 'react'
 
-import { IconArrowLeft } from '@posthog/icons'
+import { IconArrowLeft, IconLock } from '@posthog/icons'
 import { LemonBadge, LemonButton, LemonTab, LemonTabs } from '@posthog/lemon-ui'
 
 import { Resizer } from 'lib/components/Resizer/Resizer'
 import { ResizerLogicProps, resizerLogic } from 'lib/components/Resizer/resizerLogic'
 import { capitalizeFirstLetter } from 'lib/utils/strings'
 
+import { WorkflowSourceInline } from '../../prototype/WorkflowSourceRow'
 import {
     HOG_FLOW_EDITOR_DEFAULT_PANEL_WIDTH,
     HOG_FLOW_EDITOR_MODES,
@@ -127,6 +128,16 @@ export function HogFlowEditorPanel({
                     </div>
                 </div>
 
+                {readOnly &&
+                    mode === 'build' && (
+                        // The locked inputs alone do not read as locked in a glance, so the panel says it.
+                        <div className="flex shrink-0 items-center gap-1.5 border-b bg-surface-secondary px-3 py-1.5 text-xs text-secondary">
+                            <IconLock className="shrink-0" />
+                            <span className="shrink-0">Read-only. Edit</span>
+                            <WorkflowSourceInline workflow={workflow} pathOnly />
+                            <span className="shrink-0">and push.</span>
+                        </div>
+                    )}
                 <PrototypeReadOnlyFields
                     enabled={readOnly && mode === 'build'}
                     panelInputs={prototypeMode.panelInputs}

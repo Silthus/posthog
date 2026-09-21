@@ -92,20 +92,17 @@ TreeReadOnly.parameters = TREE_PARAMS
 export const TreeReadOnlyNarrow: StoryFn = () => <Canvas className="w-[520px] max-w-full" />
 TreeReadOnlyNarrow.parameters = TREE_PARAMS
 
-export const TreeAffordancesDisabled: StoryFn = () => <Canvas mode={{ affordances: 'disabled' }} />
-TreeAffordancesDisabled.parameters = TREE_PARAMS
-
 export const GraphReadOnly: StoryFn = () => <Canvas />
 
 export const GraphReadOnlyNarrow: StoryFn = () => <Canvas className="w-[520px] max-w-full" />
 
-export const NodePanelReadOnly: StoryFn = () => <Canvas selectedActionId="notify-account-team" />
-NodePanelReadOnly.parameters = TREE_PARAMS
+export const NodePanel: StoryFn = () => <Canvas selectedActionId="notify-account-team" />
+NodePanel.parameters = TREE_PARAMS
 
-export const NodePanelDisabled: StoryFn = () => (
-    <Canvas selectedActionId="notify-account-team" mode={{ panelInputs: 'disabled', autosave: 'disabled' }} />
+export const NodePanelNarrow: StoryFn = () => (
+    <Canvas selectedActionId="notify-account-team" className="w-[520px] max-w-full" />
 )
-NodePanelDisabled.parameters = TREE_PARAMS
+NodePanelNarrow.parameters = TREE_PARAMS
 
 export const EditableComparison: StoryFn = () => <Canvas id="storybook-editable-workflow" />
 EditableComparison.parameters = TREE_PARAMS

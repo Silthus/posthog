@@ -15,7 +15,8 @@ import {
 import { BindLogic, useActions, useValues } from 'kea'
 import { useEffect, useMemo, useRef } from 'react'
 
-import { IconInfo } from '@posthog/icons'
+import { IconInfo, IconLock } from '@posthog/icons'
+import { LemonTag, Tooltip } from '@posthog/lemon-ui'
 
 import { themeLogic } from '~/layout/navigation-3000/themeLogic'
 
@@ -32,7 +33,7 @@ import { HogFlowActionEdge, HogFlowActionNode } from './types'
 
 function HogFlowGraphEditor(): JSX.Element {
     const { isDarkModeOn } = useValues(themeLogic)
-    const { readOnly } = useWorkflowReadOnly()
+    const { readOnly, reason } = useWorkflowReadOnly()
 
     const { nodes, edges, dropzoneNodes, isMovingNode, isCopyingNode, isZoomedOutFar } = useValues(hogFlowEditorLogic)
     const {
@@ -110,6 +111,18 @@ function HogFlowGraphEditor(): JSX.Element {
                     onPaneClick={handlePaneClick}
                 >
                     <Background gap={36} variant={BackgroundVariant.Dots} />
+
+                    {readOnly && (
+                        <Panel position="top-left">
+                            {/* The graph keeps every node clickable, so without this the canvas looks
+                                the same as an editable one. */}
+                            <Tooltip title={reason}>
+                                <LemonTag type="default" icon={<IconLock />} data-attr="workflow-canvas-read-only">
+                                    Read-only
+                                </LemonTag>
+                            </Tooltip>
+                        </Panel>
+                    )}
 
                     {(isMovingNode || isCopyingNode) && (
                         <Panel position="bottom-left">

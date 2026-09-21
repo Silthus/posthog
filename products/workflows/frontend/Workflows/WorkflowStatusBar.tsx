@@ -7,8 +7,10 @@ import { LastSavedIndicator } from 'lib/components/LastSavedIndicator'
 import { useDebouncedValue } from 'lib/hooks/useDebouncedValue'
 import { urls } from 'scenes/urls'
 
+import { CodeManagedTag } from './CodeManagedTag'
 import type { HogFlowEditorLayout } from './hogflows/hogFlowEditorLogic'
 import { useWorkflowReadOnly } from './hogflows/prototypeReadOnlyMode'
+import { WorkflowSourceInline } from './prototype/WorkflowSourceRow'
 import { WorkflowLogicProps, workflowLogic } from './workflowLogic'
 
 type WorkflowStatusBarProps = WorkflowLogicProps & {
@@ -83,12 +85,22 @@ export function WorkflowStatusBar({
                     ) : (
                         <LemonTag>Draft</LemonTag>
                     ))}
-                {showWorkflowStatus && isActive && (
-                    <span className="text-xs text-secondary truncate">
-                        {isEditingDraftOfLive
-                            ? 'The live version keeps running until you publish.'
-                            : 'Changes you make save as a draft.'}
-                    </span>
+                {readOnly ? (
+                    // The editor header is where a person watches for the draft state, so the same
+                    // source link the scene header and the revisions table show belongs here too.
+                    <div className="flex min-w-0 items-center gap-2">
+                        <CodeManagedTag workflow={originalWorkflow} />
+                        <WorkflowSourceInline workflow={originalWorkflow} />
+                    </div>
+                ) : (
+                    showWorkflowStatus &&
+                    isActive && (
+                        <span className="text-xs text-secondary truncate">
+                            {isEditingDraftOfLive
+                                ? 'The live version keeps running until you publish.'
+                                : 'Changes you make save as a draft.'}
+                        </span>
+                    )
                 )}
             </div>
             {/* Interactive controls sit right-anchored with variable-width text leftmost, so the

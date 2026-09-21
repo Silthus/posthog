@@ -182,18 +182,27 @@ export function WorkflowsTable(): JSX.Element {
                 return (
                     <>
                         {item.status === 'archived' ? (
-                            <Tooltip title="Restore this workflow to make changes">
-                                <span className="font-semibold text-sm text-muted">{item.name}</span>
-                            </Tooltip>
+                            <div className="flex flex-wrap items-center gap-1">
+                                <Tooltip title="Restore this workflow to make changes">
+                                    <span className="font-semibold text-sm text-muted">{item.name}</span>
+                                </Tooltip>
+                                <CodeManagedTag workflow={item} />
+                            </div>
                         ) : (
                             <LemonTableLink
                                 to={urls.workflow(item.id, 'workflow')}
-                                title={item.name}
+                                // The badge belongs to the name, so it sits on the title row and wraps
+                                // under it when the column is narrow, rather than below the description.
+                                title={
+                                    <span className="flex flex-wrap items-center gap-1">
+                                        {item.name}
+                                        <CodeManagedTag workflow={item} />
+                                    </span>
+                                }
                                 description={item.description}
                                 truncateDescription
                             />
                         )}
-                        <CodeManagedTag workflow={item} />
                         {stepMatches.length > 0 && <WorkflowStepMatches workflow={item} matches={stepMatches} />}
                     </>
                 )
@@ -378,69 +387,80 @@ export function WorkflowsTable(): JSX.Element {
                         onChange={(search) => setFilters({ search })}
                         value={filters.search}
                     />
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <span>
-                            <b>Status</b>
-                        </span>
-                        <LemonSelect
-                            dropdownMatchSelectWidth={false}
-                            size="small"
-                            onChange={(value) => setFilters({ status: value as WorkflowStatusFilter })}
-                            options={[
-                                { label: 'All', value: 'all' },
-                                { label: 'Active', value: 'active' },
-                                { label: 'Draft', value: 'draft' },
-                                { label: 'Archived', value: 'archived' },
-                            ]}
-                            value={filters.status}
-                        />
-                        <span className="ml-1">
-                            <b>Type</b>
-                        </span>
-                        <LemonSelect
-                            dropdownMatchSelectWidth={false}
-                            size="small"
-                            onChange={(value) => setFilters({ type: value as WorkflowTypeFilter })}
-                            options={[
-                                { label: 'All', value: 'all' },
-                                { label: 'Messaging', value: 'messaging' },
-                                { label: 'Automation', value: 'automation' },
-                                { label: 'Loop', value: 'loop' },
-                            ]}
-                            value={filters.type}
-                        />
-                        <span className="ml-1">
-                            <b>Trigger</b>
-                        </span>
-                        <LemonSelect
-                            dropdownMatchSelectWidth={false}
-                            size="small"
-                            onChange={(value) => setFilters({ triggerType: value as WorkflowTriggerTypeFilter })}
-                            options={WORKFLOW_TRIGGER_TYPE_OPTIONS}
-                            value={filters.triggerType}
-                        />
-                        <span className="ml-1">
-                            <b>Managed by</b>
-                        </span>
-                        <LemonSelect
-                            dropdownMatchSelectWidth={false}
-                            size="small"
-                            data-attr="workflows-managed-by-filter"
-                            onChange={(value) => setFilters({ managedBy: value as WorkflowManagedByFilter })}
-                            options={[
-                                { label: 'All', value: 'all' },
-                                { label: 'Code', value: 'code' },
-                                { label: 'UI', value: 'gui' },
-                            ]}
-                            value={filters.managedBy}
-                        />
-                        <span className="ml-1">
-                            <b>Created by</b>
-                        </span>
-                        <MemberSelect
-                            value={filters.createdBy}
-                            onChange={(user) => setFilters({ createdBy: user?.uuid || null })}
-                        />
+                    <div className="flex items-center gap-x-3 gap-y-2 flex-wrap">
+                        {/* Each label stays glued to its control, so a wrap never orphans a label. */}
+                        <div className="flex items-center gap-2">
+                            <span>
+                                <b>Status</b>
+                            </span>
+                            <LemonSelect
+                                dropdownMatchSelectWidth={false}
+                                size="small"
+                                onChange={(value) => setFilters({ status: value as WorkflowStatusFilter })}
+                                options={[
+                                    { label: 'All', value: 'all' },
+                                    { label: 'Active', value: 'active' },
+                                    { label: 'Draft', value: 'draft' },
+                                    { label: 'Archived', value: 'archived' },
+                                ]}
+                                value={filters.status}
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span>
+                                <b>Type</b>
+                            </span>
+                            <LemonSelect
+                                dropdownMatchSelectWidth={false}
+                                size="small"
+                                onChange={(value) => setFilters({ type: value as WorkflowTypeFilter })}
+                                options={[
+                                    { label: 'All', value: 'all' },
+                                    { label: 'Messaging', value: 'messaging' },
+                                    { label: 'Automation', value: 'automation' },
+                                    { label: 'Loop', value: 'loop' },
+                                ]}
+                                value={filters.type}
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span>
+                                <b>Trigger</b>
+                            </span>
+                            <LemonSelect
+                                dropdownMatchSelectWidth={false}
+                                size="small"
+                                onChange={(value) => setFilters({ triggerType: value as WorkflowTriggerTypeFilter })}
+                                options={WORKFLOW_TRIGGER_TYPE_OPTIONS}
+                                value={filters.triggerType}
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span>
+                                <b>Managed by</b>
+                            </span>
+                            <LemonSelect
+                                dropdownMatchSelectWidth={false}
+                                size="small"
+                                data-attr="workflows-managed-by-filter"
+                                onChange={(value) => setFilters({ managedBy: value as WorkflowManagedByFilter })}
+                                options={[
+                                    { label: 'All', value: 'all' },
+                                    { label: 'Code', value: 'code' },
+                                    { label: 'UI', value: 'gui' },
+                                ]}
+                                value={filters.managedBy}
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span>
+                                <b>Created by</b>
+                            </span>
+                            <MemberSelect
+                                value={filters.createdBy}
+                                onChange={(user) => setFilters({ createdBy: user?.uuid || null })}
+                            />
+                        </div>
                     </div>
                 </div>
 
