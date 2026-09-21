@@ -8,11 +8,13 @@ import { ScrollableShadows } from 'lib/components/ScrollableShadows/ScrollableSh
 import { LemonField } from 'lib/lemon-ui/LemonField/LemonField'
 
 import { hogFlowEditorLogic } from '../hogFlowEditorLogic'
+import { useWorkflowReadOnly } from '../prototypeReadOnlyMode'
 import { sanitizeVariableKey } from './hogFlowOutputMappingLogic'
 
 export function HogFlowEditorPanelVariables(): JSX.Element | null {
     const { workflow } = useValues(hogFlowEditorLogic)
     const { setWorkflowInfo } = useActions(hogFlowEditorLogic)
+    const { readOnly } = useWorkflowReadOnly()
     const [hoveredVariableIndex, setHoveredVariableIndex] = useState<number | null>(null)
     const [editingVariableIndex, setEditingVariableIndex] = useState<number | null>(null)
     const [deletingVariableIndex, setDeletingVariableIndex] = useState<number | null>(null)
@@ -110,8 +112,12 @@ export function HogFlowEditorPanelVariables(): JSX.Element | null {
                                         }
                                     }}
                                 >
-                                    {editingVariableIndex === idx ||
-                                    (editingVariableIndex === null && hoveredVariableIndex === idx) ? (
+                                    {readOnly ? (
+                                        <span className="block w-full truncate rounded-sm bg-primary-alt-highlight-secondary px-2 py-1.5 text-left text-xs">
+                                            <code>{`{{ variables.${variable.key} }}`}</code>
+                                        </span>
+                                    ) : editingVariableIndex === idx ||
+                                      (editingVariableIndex === null && hoveredVariableIndex === idx) ? (
                                         <LemonInput
                                             className="font-mono text-xs"
                                             size="small"
@@ -146,31 +152,36 @@ export function HogFlowEditorPanelVariables(): JSX.Element | null {
                                         type="text"
                                         value={String(variable.default ?? '')}
                                         placeholder="Default value"
+                                        disabled={readOnly}
                                         onChange={(defaultValue) => editVariableDefaultValue(idx, defaultValue)}
                                     />
                                 </LemonField.Pure>
-                                <LemonButton
-                                    size="small"
-                                    type="tertiary"
-                                    icon={<IconX />}
-                                    tooltip="Delete variable"
-                                    aria-label={`Delete ${variable.key || 'variable'}`}
-                                    onClick={() => {
-                                        setHoveredVariableIndex(null)
-                                        setEditingVariableIndex(null)
-                                        setDeletingVariableIndex(idx)
-                                    }}
-                                />
+                                {!readOnly && (
+                                    <LemonButton
+                                        size="small"
+                                        type="tertiary"
+                                        icon={<IconX />}
+                                        tooltip="Delete variable"
+                                        aria-label={`Delete ${variable.key || 'variable'}`}
+                                        onClick={() => {
+                                            setHoveredVariableIndex(null)
+                                            setEditingVariableIndex(null)
+                                            setDeletingVariableIndex(idx)
+                                        }}
+                                    />
+                                )}
                             </>
                         )}
                     </div>
                 ))}
             </ScrollableShadows>
-            <div className="shrink-0 px-3 py-2">
-                <LemonButton icon={<IconPlus />} type="secondary" size="small" onClick={addNewVariable}>
-                    New variable
-                </LemonButton>
-            </div>
+            {!readOnly && (
+                <div className="shrink-0 px-3 py-2">
+                    <LemonButton icon={<IconPlus />} type="secondary" size="small" onClick={addNewVariable}>
+                        New variable
+                    </LemonButton>
+                </div>
+            )}
 
             <LemonDivider className="my-0 shrink-0" />
             <LemonCollapse
@@ -190,6 +201,9 @@ export function HogFlowEditorPanelVariables(): JSX.Element | null {
                                     To save a step result into a variable, select the step and use its{' '}
                                     <strong>Output variables</strong> section.
                                 </p>
+                                {readOnly && (
+                                    <p>A variable and its default value are defined in the workflow's file.</p>
+                                )}
                             </div>
                         ),
                     },

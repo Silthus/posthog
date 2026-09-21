@@ -11,7 +11,7 @@ import { mswDecorator } from '~/mocks/browser'
 
 import { Workflow } from '../../Workflow'
 import { workflowLogic } from '../../workflowLogic'
-import { hogFlowEditorLogic } from '../hogFlowEditorLogic'
+import { hogFlowEditorLogic, type HogFlowEditorMode } from '../hogFlowEditorLogic'
 import { type PrototypeReadOnlyMode, setPrototypeReadOnlyMode } from '../prototypeReadOnlyMode'
 import type { HogFlow } from '../types'
 import { CODE_MANAGED_WORKFLOW, EDITABLE_WORKFLOW, WORKFLOW_ID } from './codeManagedCanvasFixture'
@@ -62,22 +62,39 @@ function SelectStep({ actionId }: { actionId: string }): null {
     return null
 }
 
+/** Opens a panel tab once the workflow is loaded, for the tabs that are not the default. */
+function SelectPanelTab({ panelMode }: { panelMode: HogFlowEditorMode }): null {
+    const { logicProps, originalWorkflow } = useValues(workflowLogic)
+    const { setMode } = useActions(hogFlowEditorLogic(logicProps))
+
+    useEffect(() => {
+        if (originalWorkflow) {
+            setMode(panelMode)
+        }
+    }, [panelMode, originalWorkflow, setMode])
+
+    return null
+}
+
 function Canvas({
     id = WORKFLOW_ID,
     className,
     mode,
     selectedActionId,
+    panelMode,
 }: {
     id?: string
     className?: string
     mode?: Partial<PrototypeReadOnlyMode>
     selectedActionId?: string
+    panelMode?: HogFlowEditorMode
 }): JSX.Element {
     setPrototypeReadOnlyMode(mode)
     return (
         <BindLogic logic={workflowLogic} props={{ id }}>
             <div className={`h-screen ${className ?? ''} [&>div]:!h-full [&>div]:!max-h-none`}>
                 {selectedActionId && <SelectStep actionId={selectedActionId} />}
+                {panelMode && <SelectPanelTab panelMode={panelMode} />}
                 <Workflow id={id} />
             </div>
         </BindLogic>
@@ -103,6 +120,12 @@ export const NodePanelNarrow: StoryFn = () => (
     <Canvas selectedActionId="notify-account-team" className="w-[520px] max-w-full" />
 )
 NodePanelNarrow.parameters = TREE_PARAMS
+
+export const VariablesReadOnly: StoryFn = () => <Canvas panelMode="variables" />
+VariablesReadOnly.parameters = TREE_PARAMS
+
+export const VariablesReadOnlyNarrow: StoryFn = () => <Canvas panelMode="variables" className="w-[520px] max-w-full" />
+VariablesReadOnlyNarrow.parameters = TREE_PARAMS
 
 export const EditableComparison: StoryFn = () => <Canvas id="storybook-editable-workflow" />
 EditableComparison.parameters = TREE_PARAMS

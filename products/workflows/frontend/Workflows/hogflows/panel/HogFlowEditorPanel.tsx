@@ -45,6 +45,9 @@ export function HogFlowEditorPanel({
 
     const variablesCount = workflow?.variables?.length || 0
 
+    // A repository owns the steps and the variables alike, so both tabs say so.
+    const locked = readOnly && (mode === 'build' || mode === 'variables')
+
     // Read-only: the Build tab only carries the palette of new steps, so it is dropped until a step
     // is selected, and the panel opens on that step instead.
     const visibleModes = HOG_FLOW_EDITOR_MODES.filter(
@@ -128,16 +131,15 @@ export function HogFlowEditorPanel({
                     </div>
                 </div>
 
-                {readOnly &&
-                    mode === 'build' && (
-                        // The locked inputs alone do not read as locked in a glance, so the panel says it.
-                        <div className="flex shrink-0 items-center gap-1.5 border-b bg-surface-secondary px-3 py-1.5 text-xs text-secondary">
-                            <IconLock className="shrink-0" />
-                            <span className="shrink-0">Read-only. Edit</span>
-                            <WorkflowSourceInline workflow={workflow} pathOnly />
-                            <span className="shrink-0">and push.</span>
-                        </div>
-                    )}
+                {locked && (
+                    // The locked inputs alone do not read as locked in a glance, so the panel says it.
+                    <div className="flex shrink-0 items-center gap-1.5 border-b bg-surface-secondary px-3 py-1.5 text-xs text-secondary">
+                        <IconLock className="shrink-0" />
+                        <span className="shrink-0">Read-only. Edit</span>
+                        <WorkflowSourceInline workflow={workflow} pathOnly />
+                        <span className="shrink-0">and push.</span>
+                    </div>
+                )}
                 <PrototypeReadOnlyFields
                     enabled={readOnly && mode === 'build'}
                     panelInputs={prototypeMode.panelInputs}
