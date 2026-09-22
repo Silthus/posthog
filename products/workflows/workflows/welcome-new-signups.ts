@@ -17,7 +17,7 @@ export const welcomeNewSignups = workflow({
     status: 'draft',
     on: onEvent({ event: 'user signed up' }),
     steps: path(
-        delay('1d', { name: 'Wait a day' }),
+        delay('3d', { name: 'Wait three days' }),
         branch({
             name: 'Has an email address?',
             branches: [{ name: 'Has an email address', when: [person('email', 'is_set')], then: path(welcomeEmail) }],
