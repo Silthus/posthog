@@ -2,6 +2,7 @@ import { branch, delay, email, onEvent, path, person, workflow } from '@posthog/
 
 const welcomeEmail = email({
     name: 'Send the welcome email',
+    fromIntegrationId: 1,
     to: '{person.properties.email}',
     subject: 'Welcome to PostHog',
     text: 'Thanks for signing up. Your first events show up in Activity as soon as your SDK sends them.',
