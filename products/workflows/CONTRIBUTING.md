@@ -342,6 +342,45 @@ For anything emitted after the run has ended — a webhook, a callback — the v
 
 Building a version picker? The list of versions that have metrics is `{flow.version} ∪ {revision versions}`, not just the revisions endpoint. A workflow that has never been edited has zero `HogFlowRevision` rows but still reports metrics under `<flow id>/1`.
 
+## Code-managed workflows (read-only)
+
+A workflow can be owned by a file in a repository instead of by this app.
+`HogFlow.managed_by` holds that: `code` means a repository owns the content, and `gui` (which is also what `NULL` means) means this API does.
+
+Four more columns record where the file is and how the workflow first appeared.
+`created_via` is stamped from the request in `HogFlowSerializer.create`, never taken from the payload.
+`source_repository`, `source_path` and `source_ref` hold the source in parts rather than as a URL, because the backend cannot know whether a host is GitHub, GitLab or self-hosted.
+Nothing writes the three source columns yet; the CLI that pushes workflows does.
+
+### What the API allows on a code-managed workflow
+
+`HogFlowViewSet.check_object_permissions` carries the refusal, and `bulk_delete` repeats it because it is `detail=False` and never calls `get_object()`.
+The rule is an allow-list over the action and the whole payload, not over a set of field names.
+
+A request that `is_code_managed_writer` accepts may write anything. That is the client that pushes the file.
+Every other caller, including the editor and every MCP surface, may do exactly two things:
+
+- `PATCH` `status` on its own, so enable, disable and archive keep working without a deploy.
+- `PATCH` `managed_by` on its own, which hands the workflow back to the UI.
+
+The operational actions stay open as well: `rerun`, `run`, `invocations`, `cancel_invocations`, `batch_jobs`, `cancel_batch_job` and `resume_email_sending`.
+`schedules` and `schedule_detail` are refused, because a schedule is part of the trigger and the trigger is in the file.
+
+Everything else is refused with a 403 that names the recorded file, with `why` and `fix` in `extra`.
+
+Three costs of that rule, all deliberate:
+
+- **A push can re-enable what a person disabled.** `status` lives in the source file, so the next push resolves any disagreement between the file and the UI.
+- **Archiving is allowed.** It is a `status` write, and the file cannot express "unarchive" without a push.
+- **The lock is a rule of the REST API.** A management command, a Celery task or the Django admin writes a code-managed row like any other. The admin shows `managed_by` read-only so a staff editor can at least see it.
+
+### What the editor does
+
+`workflowLogic` derives `workflowEditDisabledReason` and `canEditWorkflow` from the loaded workflow, and every edit control reads one of them.
+Code ownership shadows the access level, because naming the file is more useful than telling someone their access is too low.
+A missing `user_access_level` is treated as no opinion rather than as no access, so a response without it does not lock the editor.
+`CodeManagedTag` renders the badge on the workflow scene and in the list.
+
 ## Common pitfalls
 
 - **Forgot the side-effect import**: triggers/actions must be imported by their `index.ts`, and async functions must be imported by nodejs/src/cdp/async-functions/index.ts.
