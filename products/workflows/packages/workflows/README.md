@@ -87,7 +87,6 @@ Each push records the commit it came from, taken from GitHub Actions, GitLab CI,
 
 The recorded commit and the path guard both need a PostHog that stores the source fields. Until your PostHog does, it drops them: the commit is sent and not kept, and a copied file resolves the same workflow rather than being refused.
 
-
 ## v1 surface
 
 Actions: `delay`, `fn` (any PostHog destination template by id), `webhook`, `email`, `branch`, and the trigger and exit the compiler adds.
