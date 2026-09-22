@@ -1,0 +1,216 @@
+=================== 00-push-without-sender
+# The example file as it lands on the branch: its email step names no sender.
+$ posthog-workflows push products/workflows/workflows/welcome-new-signups.ts
+products/workflows/workflows/welcome-new-signups.ts
+status: http_400
+message: PostHog refused the workflow definition.
+why: Missing value for 'from'.
+fix: Fix the step the message names. PostHog validates templates and inputs that check does not.
+exit code: 1
+
+=================== 01-file
+# The repository's own workflow, in products/workflows/workflows/.
+$ cat products/workflows/workflows/welcome-new-signups.ts
+import { branch, delay, email, onEvent, path, person, workflow } from '@posthog/workflows'
+
+const welcomeEmail = email({
+    name: 'Send the welcome email',
+    fromIntegrationId: 1,
+    to: '{person.properties.email}',
+    subject: 'Welcome to PostHog',
+    text: 'Thanks for signing up. Your first events show up in Activity as soon as your SDK sends them.',
+    html: '<p>Thanks for signing up. Your first events show up in Activity as soon as your SDK sends them.</p>',
+})
+
+export const welcomeNewSignups = workflow({
+    key: 'welcome-new-signups',
+    name: 'Welcome new signups',
+    description: 'Sends a welcome email a day after signup to people who have an email address.',
+    // Stays draft so a push never sends an email to anyone.
+    status: 'draft',
+    on: onEvent({ event: 'user signed up' }),
+    steps: path(
+        delay('1d', { name: 'Wait a day' }),
+        branch({
+            name: 'Has an email address?',
+            branches: [{ name: 'Has an email address', when: [person('email', 'is_set')], then: path(welcomeEmail) }],
+        })
+    ),
+    exit: { reason: 'Welcome new signups finished' },
+})
+
+=================== 02a-check-offline
+# No credentials in this shell: check validates the file offline.
+$ posthog-workflows check products/workflows/workflows/welcome-new-signups.ts
+products/workflows/workflows/welcome-new-signups.ts
+  welcomeNewSignups -> "Welcome new signups"
+    key      welcome-new-signups
+    status   draft
+    steps    5 (trigger, delay, conditional_branch, function_email, exit)
+    source   6ed1280 on demo/workflows-as-code
+    diff     not compared
+1 workflow(s), all valid.
+diff skipped: no PostHog credentials in this environment, so the file was validated offline.
+Set POSTHOG_CLI_API_KEY and POSTHOG_CLI_PROJECT_ID to compare against a project.
+exit code: 0
+
+=================== 02b-check-online
+# With credentials (the key is only ever a variable): check compares against the project.
+$ source .wf-demo.env
+$ posthog-workflows check products/workflows/workflows/welcome-new-signups.ts
+products/workflows/workflows/welcome-new-signups.ts
+  welcomeNewSignups -> "Welcome new signups"
+    key      welcome-new-signups
+    status   draft
+    steps    5 (trigger, delay, conditional_branch, function_email, exit)
+    source   6ed1280 on demo/workflows-as-code
+    result   would create
+1 workflow(s): 1 would be created, 0 would be updated, 0 unchanged.
+compared against project 7 on http://localhost:8010 (credentials from the environment).
+exit code: 0
+
+=================== 03-push
+$ git log --oneline -1
+6ed12805b4f chore(workflows): name the demo email sender in the welcome workflow
+$ posthog-workflows push products/workflows/workflows/welcome-new-signups.ts
+products/workflows/workflows/welcome-new-signups.ts
+  welcomeNewSignups -> "Welcome new signups"
+    key      welcome-new-signups
+    status   draft
+    steps    5 (trigger, delay, conditional_branch, function_email, exit)
+    source   6ed1280 on demo/workflows-as-code
+    result   created
+    url      http://localhost:8010/project/7/workflows/01a0c741-75c5-0000-0c28-ff35aee6a1a9/workflow
+    version  1
+pushed 1 workflow(s): 1 created, 0 updated, 0 unchanged.
+pushed to project 7 on http://localhost:8010 (credentials from the environment).
+exit code: 0
+
+=================== 05-edit-push
+# Wait three days instead of one, commit, then check and push.
+$ sed -i '' "s/delay('1d', { name: 'Wait a day' })/delay('3d', { name: 'Wait three days' })/" products/workflows/workflows/welcome-new-signups.ts
+$ git diff --stat
+ products/workflows/workflows/welcome-new-signups.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+$ git commit -qam 'feat(workflows): wait three days before the welcome email' && git log --oneline -1
+96115840e4c feat(workflows): wait three days before the welcome email
+
+$ posthog-workflows check products/workflows/workflows/welcome-new-signups.ts
+products/workflows/workflows/welcome-new-signups.ts
+  welcomeNewSignups -> "Welcome new signups"
+    key      welcome-new-signups
+    status   draft
+    steps    5 (trigger, delay, conditional_branch, function_email, exit)
+    source   9611584 on demo/workflows-as-code
+    result   would update
+             + step "Wait three days"
+             ~ step "Send the welcome email"
+             - step "Wait a day"
+             ~ the connections between steps
+    url      http://localhost:8010/project/7/workflows/01a0c741-75c5-0000-0c28-ff35aee6a1a9/workflow
+    version  1
+1 workflow(s): 0 would be created, 1 would be updated, 0 unchanged.
+compared against project 7 on http://localhost:8010 (credentials from the environment).
+exit code: 0
+
+$ posthog-workflows push products/workflows/workflows/welcome-new-signups.ts
+products/workflows/workflows/welcome-new-signups.ts
+  welcomeNewSignups -> "Welcome new signups"
+    key      welcome-new-signups
+    status   draft
+    steps    5 (trigger, delay, conditional_branch, function_email, exit)
+    source   9611584 on demo/workflows-as-code
+    result   updated
+             + step "Wait three days"
+             ~ step "Send the welcome email"
+             - step "Wait a day"
+             ~ the connections between steps
+    url      http://localhost:8010/project/7/workflows/01a0c741-75c5-0000-0c28-ff35aee6a1a9/workflow
+    version  2
+pushed 1 workflow(s): 0 created, 1 updated, 0 unchanged.
+pushed to project 7 on http://localhost:8010 (credentials from the environment).
+exit code: 0
+
+=================== 06-rollback-push
+# The rollback is a revert commit. Nothing is clicked in PostHog.
+$ git revert --no-edit HEAD && git log --oneline -3
+1c480a199ad Revert "feat(workflows): wait three days before the welcome email"
+96115840e4c feat(workflows): wait three days before the welcome email
+6ed12805b4f chore(workflows): name the demo email sender in the welcome workflow
+
+$ posthog-workflows push products/workflows/workflows/welcome-new-signups.ts
+products/workflows/workflows/welcome-new-signups.ts
+  welcomeNewSignups -> "Welcome new signups"
+    key      welcome-new-signups
+    status   draft
+    steps    5 (trigger, delay, conditional_branch, function_email, exit)
+    source   1c480a1 on demo/workflows-as-code
+    result   updated
+             + step "Wait a day"
+             ~ step "Send the welcome email"
+             - step "Wait three days"
+             ~ the connections between steps
+    url      http://localhost:8010/project/7/workflows/01a0c741-75c5-0000-0c28-ff35aee6a1a9/workflow
+    version  3
+pushed 1 workflow(s): 0 created, 1 updated, 0 unchanged.
+pushed to project 7 on http://localhost:8010 (credentials from the environment).
+exit code: 0
+
+=================== 07-push-unchanged
+# Nothing changed: push writes nothing and exits 0.
+$ posthog-workflows push products/workflows/workflows/welcome-new-signups.ts
+products/workflows/workflows/welcome-new-signups.ts
+  welcomeNewSignups -> "Welcome new signups"
+    key      welcome-new-signups
+    status   draft
+    steps    5 (trigger, delay, conditional_branch, function_email, exit)
+    source   1c480a1 on demo/workflows-as-code
+    result   updated
+             ~ step "Send the welcome email"
+    url      http://localhost:8010/project/7/workflows/01a0c741-75c5-0000-0c28-ff35aee6a1a9/workflow
+    version  3
+pushed 1 workflow(s): 0 created, 1 updated, 0 unchanged.
+pushed to project 7 on http://localhost:8010 (credentials from the environment).
+exit code: 0
+
+=================== 08-repo-check
+# The repository scripts run the same commands over every file in the folder.
+$ pnpm --filter=@posthog/workflows repo:check
+> @posthog/workflows@0.0.0 repo:check /Users/mreichenbach/dev/wf-demo/products/workflows/packages/workflows
+> pnpm run build && for file in ../../workflows/*.ts; do node dist/cli/main.js check "$file" || exit 1; done
+> @posthog/workflows@0.0.0 build /Users/mreichenbach/dev/wf-demo/products/workflows/packages/workflows
+> tsc -p tsconfig.build.json
+../../workflows/welcome-new-signups.ts
+  welcomeNewSignups -> "Welcome new signups"
+    key      welcome-new-signups
+    status   draft
+    steps    5 (trigger, delay, conditional_branch, function_email, exit)
+    source   1c480a1 on demo/workflows-as-code
+    result   would update
+             ~ step "Send the welcome email"
+    url      http://localhost:8010/project/7/workflows/01a0c741-75c5-0000-0c28-ff35aee6a1a9/workflow
+    version  3
+1 workflow(s): 0 would be created, 1 would be updated, 0 unchanged.
+compared against project 7 on http://localhost:8010 (credentials from the environment).
+exit code: 0
+
+=================== 09-scratch-repo-push
+# A customer repository: the CLI is installed from the pnpm pack tarball, not from this checkout.
+$ cat package.json | grep workflows
+    "@posthog/workflows": "file:wf103-posthog-workflows-0.0.0.tgz"
+$ git log --oneline -1
+d9b04aa Revert "feat: wait three days before the welcome email"
+$ pnpm exec posthog-workflows push workflows/welcome.ts
+workflows/welcome.ts
+  welcome -> "Welcome"
+    key      welcome-email
+    status   draft
+    steps    3 (trigger, delay, exit)
+    source   d9b04aa on main
+    result   created
+    url      http://localhost:8010/project/7/workflows/01a0c743-7f55-0000-3a79-4e40dab4d68a/workflow
+    version  1
+pushed 1 workflow(s): 1 created, 0 updated, 0 unchanged.
+pushed to project 7 on http://localhost:8010 (credentials from the environment).
+exit code: 0
+
