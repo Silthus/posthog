@@ -47249,6 +47249,12 @@ export namespace Schemas {
     export interface HogFlow {
       readonly id: string;
       /**
+         * Client-chosen identifier, unique within this environment. Set only when creating a workflow. Filter the list with `?key=`. Letters, numbers, hyphens (-) and underscores (_) only.
+         * @maxLength 400
+         * @nullable
+         */
+      key?: string | null;
+      /**
          * Workflow name.
          * @maxLength 400
          * @nullable
@@ -47460,6 +47466,11 @@ export namespace Schemas {
      */
     export interface HogFlowMinimal {
       readonly id: string;
+      /**
+         * Client-chosen identifier, unique within this environment. Set only when creating a workflow. Filter the list with `?key=`. Letters, numbers, hyphens (-) and underscores (_) only.
+         * @nullable
+         */
+      readonly key: string | null;
       /** @nullable */
       readonly name: string | null;
       readonly description: string;
@@ -47716,6 +47727,11 @@ export namespace Schemas {
      */
     export interface HogFlowUpdate {
       readonly id: string;
+      /**
+         * Client-chosen identifier, unique within this environment. This value cannot change after creation.
+         * @nullable
+         */
+      readonly key: string | null;
       /**
          * Workflow name.
          * @maxLength 400
@@ -70420,6 +70436,11 @@ export namespace Schemas {
      */
     export interface PatchedHogFlowUpdate {
       readonly id?: string;
+      /**
+         * Client-chosen identifier, unique within this environment. This value cannot change after creation.
+         * @nullable
+         */
+      readonly key?: string | null;
       /**
          * Workflow name.
          * @maxLength 400
@@ -105963,6 +105984,7 @@ export namespace Schemas {
      */
     created_by?: string;
     id?: string;
+    key?: string;
     /**
      * Number of results to return per page.
      */

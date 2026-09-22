@@ -121,6 +121,11 @@ class HogFlow(UUIDTModel):
 
         constraints = [
             models.UniqueConstraint(fields=["team", "version", "id"], name="unique_version_per_flow"),
+            # Partial so Django's own SQL matches the index the migration builds concurrently. The
+            # key-less rows stay out of the index entirely rather than relying on NULLs being distinct.
+            models.UniqueConstraint(
+                fields=["team", "key"], condition=models.Q(key__isnull=False), name="unique_key_for_team"
+            ),
         ]
 
     class State(models.TextChoices):
@@ -138,6 +143,15 @@ class HogFlow(UUIDTModel):
         LOOPS = "loops", "Loops"
 
     name = models.CharField(max_length=400, null=True, blank=True)
+    # The identity a source file carries, so a client can find the workflow it owns without
+    # knowing the server-minted UUID. Null for workflows built in the UI or over the API.
+    key = models.CharField(
+        max_length=400,
+        null=True,
+        blank=True,
+        help_text="Client-chosen identifier, unique within this environment. Set only when creating a workflow. "
+        "Filter the list with `?key=`. Letters, numbers, hyphens (-) and underscores (_) only.",
+    )
     description = models.TextField(blank=True, default="")
     version = models.IntegerField(default=1)
     team = models.ForeignKey("posthog.Team", on_delete=models.CASCADE)
