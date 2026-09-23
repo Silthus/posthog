@@ -1,0 +1,286 @@
+18:43:50 login 200
+18:43:50 theme light 200
+18:44:19 login 200
+18:44:19 theme dark 200
+18:44:47 login 200
+18:44:47 theme light 200
+18:45:14 login 200
+18:45:14 theme dark 200
+18:45:40 login 200
+18:45:40 theme light 200
+18:46:08 login 200
+18:46:08 theme dark 200
+18:46:37 theme light 200
+[
+ {
+  "tag": "1440-light",
+  "step": "desktop",
+  "appMenu": 0,
+  "apps": 0,
+  "help": 0
+ },
+ {
+  "tag": "1440-light",
+  "step": "app-menu",
+  "label": "Product analytics",
+  "items": [
+   "All insights, current page",
+   "My insights",
+   "Alerts",
+   "Notifications",
+   "History",
+   "New",
+   "Dashboards",
+   "New window",
+   "Minimize window",
+   "Close window"
+  ]
+ },
+ {
+  "tag": "1440-light",
+  "step": "navigate",
+  "windowsBefore": 1,
+  "windowsAfter": 1,
+  "frameUrl": "http://localhost:8105/project/100001/insights?tab=history",
+  "pageUrl": "http://localhost:8105/project/100001/insights?tab=history",
+  "active": [
+   "History, current page"
+  ]
+ },
+ {
+  "tag": "1440-light",
+  "step": "search",
+  "dialog": 1
+ },
+ {
+  "tag": "1440-light",
+  "step": "long-name",
+  "label": "Early access features"
+ },
+ {
+  "tag": "1440-dark",
+  "step": "desktop",
+  "appMenu": 0,
+  "apps": 0,
+  "help": 0
+ },
+ {
+  "tag": "1440-dark",
+  "step": "app-menu",
+  "label": "Product analytics",
+  "items": [
+   "All insights, current page",
+   "My insights",
+   "Alerts",
+   "Notifications",
+   "History",
+   "New",
+   "Dashboards",
+   "New window",
+   "Minimize window",
+   "Close window"
+  ]
+ },
+ {
+  "tag": "1440-dark",
+  "step": "navigate",
+  "windowsBefore": 1,
+  "windowsAfter": 1,
+  "frameUrl": "http://localhost:8105/project/100001/insights?tab=history",
+  "pageUrl": "http://localhost:8105/project/100001/insights?tab=history",
+  "active": [
+   "History, current page"
+  ]
+ },
+ {
+  "tag": "1440-dark",
+  "step": "search",
+  "dialog": 1
+ },
+ {
+  "tag": "1440-dark",
+  "step": "long-name",
+  "label": "Early access features"
+ },
+ {
+  "tag": "1280-light",
+  "step": "desktop",
+  "appMenu": 0,
+  "apps": 0,
+  "help": 0
+ },
+ {
+  "tag": "1280-light",
+  "step": "app-menu",
+  "label": "Product analytics",
+  "items": [
+   "All insights, current page",
+   "My insights",
+   "Alerts",
+   "Notifications",
+   "History",
+   "New",
+   "Dashboards",
+   "New window",
+   "Minimize window",
+   "Close window"
+  ]
+ },
+ {
+  "tag": "1280-light",
+  "step": "navigate",
+  "windowsBefore": 1,
+  "windowsAfter": 1,
+  "frameUrl": "http://localhost:8105/project/100001/insights?tab=history",
+  "pageUrl": "http://localhost:8105/project/100001/insights?tab=history",
+  "active": [
+   "History, current page"
+  ]
+ },
+ {
+  "tag": "1280-light",
+  "step": "search",
+  "dialog": 1
+ },
+ {
+  "tag": "1280-light",
+  "step": "long-name",
+  "label": "Early access features"
+ },
+ {
+  "tag": "1280-dark",
+  "step": "desktop",
+  "appMenu": 0,
+  "apps": 0,
+  "help": 0
+ },
+ {
+  "tag": "1280-dark",
+  "step": "app-menu",
+  "label": "Product analytics",
+  "items": [
+   "All insights, current page",
+   "My insights",
+   "Alerts",
+   "Notifications",
+   "History",
+   "New",
+   "Dashboards",
+   "New window",
+   "Minimize window",
+   "Close window"
+  ]
+ },
+ {
+  "tag": "1280-dark",
+  "step": "navigate",
+  "windowsBefore": 1,
+  "windowsAfter": 1,
+  "frameUrl": "http://localhost:8105/project/100001/insights?tab=history",
+  "pageUrl": "http://localhost:8105/project/100001/insights?tab=history",
+  "active": [
+   "History, current page"
+  ]
+ },
+ {
+  "tag": "1280-dark",
+  "step": "search",
+  "dialog": 1
+ },
+ {
+  "tag": "1280-dark",
+  "step": "long-name",
+  "label": "Early access features"
+ },
+ {
+  "tag": "1024-light",
+  "step": "desktop",
+  "appMenu": 0,
+  "apps": 0,
+  "help": 0
+ },
+ {
+  "tag": "1024-light",
+  "step": "app-menu",
+  "label": "Product analytics",
+  "items": [
+   "All insights, current page",
+   "My insights",
+   "Alerts",
+   "Notifications",
+   "History",
+   "New",
+   "Dashboards",
+   "New window",
+   "Minimize window",
+   "Close window"
+  ]
+ },
+ {
+  "tag": "1024-light",
+  "step": "navigate",
+  "windowsBefore": 1,
+  "windowsAfter": 1,
+  "frameUrl": "http://localhost:8105/project/100001/insights?tab=history",
+  "pageUrl": "http://localhost:8105/project/100001/insights?tab=history",
+  "active": [
+   "History, current page"
+  ]
+ },
+ {
+  "tag": "1024-light",
+  "step": "search",
+  "dialog": 1
+ },
+ {
+  "tag": "1024-light",
+  "step": "long-name",
+  "label": "Early access features"
+ },
+ {
+  "tag": "1024-dark",
+  "step": "desktop",
+  "appMenu": 0,
+  "apps": 0,
+  "help": 0
+ },
+ {
+  "tag": "1024-dark",
+  "step": "app-menu",
+  "label": "Product analytics",
+  "items": [
+   "All insights, current page",
+   "My insights",
+   "Alerts",
+   "Notifications",
+   "History",
+   "New",
+   "Dashboards",
+   "New window",
+   "Minimize window",
+   "Close window"
+  ]
+ },
+ {
+  "tag": "1024-dark",
+  "step": "navigate",
+  "windowsBefore": 1,
+  "windowsAfter": 1,
+  "frameUrl": "http://localhost:8105/project/100001/insights?tab=history",
+  "pageUrl": "http://localhost:8105/project/100001/insights?tab=history",
+  "active": [
+   "History, current page"
+  ]
+ },
+ {
+  "tag": "1024-dark",
+  "step": "search",
+  "dialog": 1
+ },
+ {
+  "tag": "1024-dark",
+  "step": "long-name",
+  "label": "Early access features"
+ }
+]
+EXIT 0

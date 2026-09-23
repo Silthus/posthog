@@ -1,0 +1,5 @@
+{
+ "osMenuBar": 0,
+ "iframes": 0,
+ "osPageText": "Skip to content\nH\nHedgebox\nSearch\nCtrl\nK\nBrowse\nChat\nPROJECT\nHome\nActivity\nData\nFiles\nTools\nRECENTS\nMY TOOLS\nAnalytics\nDashboards\nData catalog BETA\nProduct analytics\nSQL editor\nWeb analytics\nAI engineering\nAI observability\nClusters\nEvaluations\nPlayground\nPrompts\nBehavior\nHeatmaps BETA\nReplay vision\n"
+}

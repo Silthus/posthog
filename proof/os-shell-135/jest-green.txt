@@ -1,0 +1,118 @@
+watchman warning:  Recrawled this watch 5 times, most recently because:
+dir missing from internal stateTo resolve, please review the information on
+https://facebook.github.io/watchman/docs/troubleshooting.html#recrawl
+To clear this warning, run:
+`watchman watch-del '/home/coder/posthog' ; watchman watch-project '/home/coder/posthog'`
+
+[90m18:14:50:18[0m [34m[client-request-interceptor][0m constructing the interceptor...
+[90m18:14:50:31[0m [34m[xhr][0m constructing the interceptor...
+[90m18:14:50:31[0m [34m[fetch][0m constructing the interceptor...
+[90m18:14:50:31[0m [34m[websocket][0m constructing the interceptor...
+[90m18:14:50:31[0m [34m[interceptor-source][0m constructing the interceptor...
+[90m18:14:53:906[0m [34m[interceptor-source:apply][0m applying the interceptor...
+[90m18:14:53:906[0m [34m[interceptor-source][0m retrieved global instance: undefined
+[90m18:14:53:906[0m [34m[interceptor-source:apply][0m no running instance found, setting up a new instance...
+[90m18:14:53:906[0m [34m[interceptor-source:setup][0m applying all 4 interceptors...
+[90m18:14:53:906[0m [34m[interceptor-source:setup][0m applying "ClientRequestInterceptor" interceptor...
+[90m18:14:53:906[0m [34m[client-request-interceptor:apply][0m applying the interceptor...
+[90m18:14:53:906[0m [34m[client-request-interceptor][0m retrieved global instance: undefined
+[90m18:14:53:906[0m [34m[client-request-interceptor:apply][0m no running instance found, setting up a new instance...
+[90m18:14:53:906[0m [34m[client-request-interceptor][0m set global instance! client-request-interceptor
+[90m18:14:53:906[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m18:14:53:906[0m [34m[interceptor-source:setup][0m applying "XMLHttpRequestInterceptor" interceptor...
+[90m18:14:53:906[0m [34m[xhr:apply][0m applying the interceptor...
+[90m18:14:53:907[0m [34m[xhr][0m retrieved global instance: undefined
+[90m18:14:53:907[0m [34m[xhr:apply][0m no running instance found, setting up a new instance...
+[90m18:14:53:907[0m [34m[xhr:setup][0m patching "XMLHttpRequest" module...
+[90m18:14:53:907[0m [34m[xhr:setup][0m native "XMLHttpRequest" module patched! XMLHttpRequest
+[90m18:14:53:907[0m [34m[xhr][0m set global instance! xhr
+[90m18:14:53:907[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m18:14:53:907[0m [34m[interceptor-source:setup][0m applying "FetchInterceptor" interceptor...
+[90m18:14:53:907[0m [34m[fetch:apply][0m applying the interceptor...
+[90m18:14:53:907[0m [34m[fetch][0m retrieved global instance: undefined
+[90m18:14:53:907[0m [34m[fetch:apply][0m no running instance found, setting up a new instance...
+[90m18:14:53:907[0m [34m[fetch][0m set global instance! fetch
+[90m18:14:53:907[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m18:14:53:907[0m [34m[interceptor-source:setup][0m applying "WebSocketInterceptor" interceptor...
+[90m18:14:53:907[0m [34m[websocket:apply][0m applying the interceptor...
+[90m18:14:53:907[0m [34m[websocket][0m retrieved global instance: undefined
+[90m18:14:53:907[0m [34m[websocket:apply][0m no running instance found, setting up a new instance...
+[90m18:14:53:907[0m [34m[websocket][0m set global instance! websocket
+[90m18:14:53:907[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m18:14:53:907[0m [34m[interceptor-source][0m set global instance! interceptor-source
+[90m18:14:53:907[0m [34m[client-request-interceptor:on][0m adding "request" event listener: function () { [native code] }
+[90m18:14:53:908[0m [34m[xhr:on][0m adding "request" event listener: function () { [native code] }
+[90m18:14:53:908[0m [34m[fetch:on][0m adding "request" event listener: function () { [native code] }
+[90m18:14:53:908[0m [34m[websocket:on][0m adding "request" event listener: function () { [native code] }
+[90m18:14:53:908[0m [34m[client-request-interceptor:on][0m adding "response" event listener: function () { [native code] }
+[90m18:14:53:908[0m [34m[xhr:on][0m adding "response" event listener: function () { [native code] }
+[90m18:14:53:908[0m [34m[fetch:on][0m adding "response" event listener: function () { [native code] }
+[90m18:14:53:908[0m [34m[websocket:on][0m adding "response" event listener: function () { [native code] }
+[90m18:14:53:908[0m [34m[client-request-interceptor:on][0m adding "connection" event listener: function () { [native code] }
+[90m18:14:53:908[0m [34m[xhr:on][0m adding "connection" event listener: function () { [native code] }
+[90m18:14:53:908[0m [34m[fetch:on][0m adding "connection" event listener: function () { [native code] }
+[90m18:14:53:908[0m [34m[websocket:on][0m adding "connection" event listener: function () { [native code] }
+[90m18:14:53:975[0m [34m[interceptor-source:dispose][0m disposing the interceptor...
+[90m18:14:53:975[0m [34m[interceptor-source][0m retrieved global instance: BatchInterceptor
+[90m18:14:53:975[0m [34m[interceptor-source][0m cleared global instance! interceptor-source
+[90m18:14:53:975[0m [34m[interceptor-source:dispose][0m global symbol deleted: undefined
+[90m18:14:53:975[0m [34m[interceptor-source:dispose][0m disposing of 4 subscriptions...
+[90m18:14:53:975[0m [34m[client-request-interceptor:dispose][0m disposing the interceptor...
+[90m18:14:53:975[0m [34m[client-request-interceptor][0m retrieved global instance: ClientRequestInterceptor
+[90m18:14:53:975[0m [34m[client-request-interceptor][0m cleared global instance! client-request-interceptor
+[90m18:14:53:975[0m [34m[client-request-interceptor:dispose][0m global symbol deleted: undefined
+[90m18:14:53:976[0m [34m[client-request-interceptor:dispose][0m disposing of 1 subscriptions...
+[90m18:14:53:976[0m [34m[client-request-interceptor:dispose][0m disposed of all subscriptions! 0
+[90m18:14:53:976[0m [34m[client-request-interceptor:dispose][0m destroyed the listener!
+[90m18:14:53:976[0m [34m[xhr:dispose][0m disposing the interceptor...
+[90m18:14:53:976[0m [34m[xhr][0m retrieved global instance: XMLHttpRequestInterceptor
+[90m18:14:53:976[0m [34m[xhr][0m cleared global instance! xhr
+[90m18:14:53:976[0m [34m[xhr:dispose][0m global symbol deleted: undefined
+[90m18:14:53:976[0m [34m[xhr:dispose][0m disposing of 1 subscriptions...
+[90m18:14:53:976[0m [34m[xhr:setup][0m native "XMLHttpRequest" module restored! XMLHttpRequest
+[90m18:14:53:976[0m [34m[xhr:dispose][0m disposed of all subscriptions! 0
+[90m18:14:53:976[0m [34m[xhr:dispose][0m destroyed the listener!
+[90m18:14:53:976[0m [34m[fetch:dispose][0m disposing the interceptor...
+[90m18:14:53:976[0m [34m[fetch][0m retrieved global instance: FetchInterceptor
+[90m18:14:53:976[0m [34m[fetch][0m cleared global instance! fetch
+[90m18:14:53:976[0m [34m[fetch:dispose][0m global symbol deleted: undefined
+[90m18:14:53:976[0m [34m[fetch:dispose][0m disposing of 1 subscriptions...
+[90m18:14:53:976[0m [34m[fetch][0m restored native "globalThis.fetch"! 
+[90m18:14:53:976[0m [34m[fetch:dispose][0m disposed of all subscriptions! 0
+[90m18:14:53:976[0m [34m[fetch:dispose][0m destroyed the listener!
+[90m18:14:53:976[0m [34m[websocket:dispose][0m disposing the interceptor...
+[90m18:14:53:976[0m [34m[websocket][0m retrieved global instance: WebSocketInterceptor
+[90m18:14:53:976[0m [34m[websocket][0m cleared global instance! websocket
+[90m18:14:53:976[0m [34m[websocket:dispose][0m global symbol deleted: undefined
+[90m18:14:53:976[0m [34m[websocket:dispose][0m disposing of 1 subscriptions...
+[90m18:14:53:976[0m [34m[websocket:dispose][0m disposed of all subscriptions! 0
+[90m18:14:53:976[0m [34m[websocket:dispose][0m destroyed the listener!
+[90m18:14:53:976[0m [34m[interceptor-source:dispose][0m disposed of all subscriptions! 0
+[90m18:14:53:976[0m [34m[interceptor-source:dispose][0m destroyed the listener!
+PASS src/scenes/os/shell/osAppMenus.test.ts
+  osAppMenuFor
+    ✓ resolves /project/1/insights?tab=history to Product analytics with History active (6 ms)
+    ✓ resolves /project/1/insights to Product analytics with All insights active (2 ms)
+    ✓ resolves /project/1/insights?tab=all to Product analytics with All insights active (2 ms)
+    ✓ resolves /project/1/alerts to Product analytics with Alerts active (1 ms)
+    ✓ resolves /project/1/insights/abc123/edit to Product analytics with null active (2 ms)
+    ✓ resolves /project/1/replay/playlists to Session replay with Collections active (2 ms)
+    ✓ resolves /project/1/replay/abc?t=10 to Session replay with null active (1 ms)
+    ✓ resolves /project/1/web/web-vitals to Web analytics with Web vitals active (2 ms)
+    ✓ resolves /project/1/feature_flags?tab=history to Feature flags with History active (1 ms)
+    ✓ resolves /project/1/activity/live to Activity with Live active (1 ms)
+    ✓ resolves /project/1/settings/organization to Settings with Organization active
+    ✓ lists the app pages in menu order, and links related apps separately (2 ms)
+    ✓ gives an app without its own pages a menu with its home page and its "new" items (1 ms)
+    ✓ lists the "new" items of an app from the product manifests (2 ms)
+    ✓ hides "new" items behind a feature flag that is off (1 ms)
+    ✓ returns no menu for a page no app claims
+    ✓ returns no menu for the desktop with no path
+    ✓ does not claim pages for an app the user cannot see (1 ms)
+    ✓ only lists pages that are real routes and that open in the same app (37 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       19 passed, 19 total
+Snapshots:   0 total
+Time:        4.641 s
+Ran all test suites matching /src\/scenes\/os\/shell\/osAppMenus.test.ts/i.

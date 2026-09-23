@@ -1,0 +1,374 @@
+watchman warning:  Recrawled this watch 5 times, most recently because:
+dir missing from internal stateTo resolve, please review the information on
+https://facebook.github.io/watchman/docs/troubleshooting.html#recrawl
+To clear this warning, run:
+`watchman watch-del '/home/coder/posthog' ; watchman watch-project '/home/coder/posthog'`
+
+[90m18:13:40:44[0m [34m[client-request-interceptor][0m constructing the interceptor...
+[90m18:13:40:57[0m [34m[xhr][0m constructing the interceptor...
+[90m18:13:40:57[0m [34m[fetch][0m constructing the interceptor...
+[90m18:13:40:57[0m [34m[websocket][0m constructing the interceptor...
+[90m18:13:40:58[0m [34m[interceptor-source][0m constructing the interceptor...
+[90m18:13:41:473[0m [34m[interceptor-source:apply][0m applying the interceptor...
+[90m18:13:41:473[0m [34m[interceptor-source][0m retrieved global instance: undefined
+[90m18:13:41:473[0m [34m[interceptor-source:apply][0m no running instance found, setting up a new instance...
+[90m18:13:41:473[0m [34m[interceptor-source:setup][0m applying all 4 interceptors...
+[90m18:13:41:473[0m [34m[interceptor-source:setup][0m applying "ClientRequestInterceptor" interceptor...
+[90m18:13:41:473[0m [34m[client-request-interceptor:apply][0m applying the interceptor...
+[90m18:13:41:473[0m [34m[client-request-interceptor][0m retrieved global instance: undefined
+[90m18:13:41:474[0m [34m[client-request-interceptor:apply][0m no running instance found, setting up a new instance...
+[90m18:13:41:474[0m [34m[client-request-interceptor][0m set global instance! client-request-interceptor
+[90m18:13:41:474[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m18:13:41:474[0m [34m[interceptor-source:setup][0m applying "XMLHttpRequestInterceptor" interceptor...
+[90m18:13:41:474[0m [34m[xhr:apply][0m applying the interceptor...
+[90m18:13:41:474[0m [34m[xhr][0m retrieved global instance: undefined
+[90m18:13:41:474[0m [34m[xhr:apply][0m no running instance found, setting up a new instance...
+[90m18:13:41:474[0m [34m[xhr:setup][0m patching "XMLHttpRequest" module...
+[90m18:13:41:474[0m [34m[xhr:setup][0m native "XMLHttpRequest" module patched! XMLHttpRequest
+[90m18:13:41:474[0m [34m[xhr][0m set global instance! xhr
+[90m18:13:41:474[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m18:13:41:474[0m [34m[interceptor-source:setup][0m applying "FetchInterceptor" interceptor...
+[90m18:13:41:474[0m [34m[fetch:apply][0m applying the interceptor...
+[90m18:13:41:474[0m [34m[fetch][0m retrieved global instance: undefined
+[90m18:13:41:474[0m [34m[fetch:apply][0m no running instance found, setting up a new instance...
+[90m18:13:41:474[0m [34m[fetch][0m set global instance! fetch
+[90m18:13:41:474[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m18:13:41:474[0m [34m[interceptor-source:setup][0m applying "WebSocketInterceptor" interceptor...
+[90m18:13:41:475[0m [34m[websocket:apply][0m applying the interceptor...
+[90m18:13:41:475[0m [34m[websocket][0m retrieved global instance: undefined
+[90m18:13:41:475[0m [34m[websocket:apply][0m no running instance found, setting up a new instance...
+[90m18:13:41:475[0m [34m[websocket][0m set global instance! websocket
+[90m18:13:41:475[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m18:13:41:475[0m [34m[interceptor-source][0m set global instance! interceptor-source
+[90m18:13:41:475[0m [34m[client-request-interceptor:on][0m adding "request" event listener: function () { [native code] }
+[90m18:13:41:475[0m [34m[xhr:on][0m adding "request" event listener: function () { [native code] }
+[90m18:13:41:475[0m [34m[fetch:on][0m adding "request" event listener: function () { [native code] }
+[90m18:13:41:475[0m [34m[websocket:on][0m adding "request" event listener: function () { [native code] }
+[90m18:13:41:475[0m [34m[client-request-interceptor:on][0m adding "response" event listener: function () { [native code] }
+[90m18:13:41:475[0m [34m[xhr:on][0m adding "response" event listener: function () { [native code] }
+[90m18:13:41:475[0m [34m[fetch:on][0m adding "response" event listener: function () { [native code] }
+[90m18:13:41:475[0m [34m[websocket:on][0m adding "response" event listener: function () { [native code] }
+[90m18:13:41:475[0m [34m[client-request-interceptor:on][0m adding "connection" event listener: function () { [native code] }
+[90m18:13:41:475[0m [34m[xhr:on][0m adding "connection" event listener: function () { [native code] }
+[90m18:13:41:475[0m [34m[fetch:on][0m adding "connection" event listener: function () { [native code] }
+[90m18:13:41:475[0m [34m[websocket:on][0m adding "connection" event listener: function () { [native code] }
+[90m18:13:41:491[0m [34m[interceptor-source:dispose][0m disposing the interceptor...
+[90m18:13:41:491[0m [34m[interceptor-source][0m retrieved global instance: BatchInterceptor
+[90m18:13:41:491[0m [34m[interceptor-source][0m cleared global instance! interceptor-source
+[90m18:13:41:491[0m [34m[interceptor-source:dispose][0m global symbol deleted: undefined
+[90m18:13:41:491[0m [34m[interceptor-source:dispose][0m disposing of 4 subscriptions...
+[90m18:13:41:491[0m [34m[client-request-interceptor:dispose][0m disposing the interceptor...
+[90m18:13:41:491[0m [34m[client-request-interceptor][0m retrieved global instance: ClientRequestInterceptor
+[90m18:13:41:491[0m [34m[client-request-interceptor][0m cleared global instance! client-request-interceptor
+[90m18:13:41:491[0m [34m[client-request-interceptor:dispose][0m global symbol deleted: undefined
+[90m18:13:41:491[0m [34m[client-request-interceptor:dispose][0m disposing of 1 subscriptions...
+[90m18:13:41:491[0m [34m[client-request-interceptor:dispose][0m disposed of all subscriptions! 0
+[90m18:13:41:491[0m [34m[client-request-interceptor:dispose][0m destroyed the listener!
+[90m18:13:41:491[0m [34m[xhr:dispose][0m disposing the interceptor...
+[90m18:13:41:491[0m [34m[xhr][0m retrieved global instance: XMLHttpRequestInterceptor
+[90m18:13:41:491[0m [34m[xhr][0m cleared global instance! xhr
+[90m18:13:41:491[0m [34m[xhr:dispose][0m global symbol deleted: undefined
+[90m18:13:41:491[0m [34m[xhr:dispose][0m disposing of 1 subscriptions...
+[90m18:13:41:491[0m [34m[xhr:setup][0m native "XMLHttpRequest" module restored! XMLHttpRequest
+[90m18:13:41:491[0m [34m[xhr:dispose][0m disposed of all subscriptions! 0
+[90m18:13:41:491[0m [34m[xhr:dispose][0m destroyed the listener!
+[90m18:13:41:491[0m [34m[fetch:dispose][0m disposing the interceptor...
+[90m18:13:41:491[0m [34m[fetch][0m retrieved global instance: FetchInterceptor
+[90m18:13:41:491[0m [34m[fetch][0m cleared global instance! fetch
+[90m18:13:41:491[0m [34m[fetch:dispose][0m global symbol deleted: undefined
+[90m18:13:41:492[0m [34m[fetch:dispose][0m disposing of 1 subscriptions...
+[90m18:13:41:492[0m [34m[fetch][0m restored native "globalThis.fetch"! 
+[90m18:13:41:492[0m [34m[fetch:dispose][0m disposed of all subscriptions! 0
+[90m18:13:41:492[0m [34m[fetch:dispose][0m destroyed the listener!
+[90m18:13:41:492[0m [34m[websocket:dispose][0m disposing the interceptor...
+[90m18:13:41:492[0m [34m[websocket][0m retrieved global instance: WebSocketInterceptor
+[90m18:13:41:492[0m [34m[websocket][0m cleared global instance! websocket
+[90m18:13:41:492[0m [34m[websocket:dispose][0m global symbol deleted: undefined
+[90m18:13:41:492[0m [34m[websocket:dispose][0m disposing of 1 subscriptions...
+[90m18:13:41:492[0m [34m[websocket:dispose][0m disposed of all subscriptions! 0
+[90m18:13:41:492[0m [34m[websocket:dispose][0m destroyed the listener!
+[90m18:13:41:492[0m [34m[interceptor-source:dispose][0m disposed of all subscriptions! 0
+[90m18:13:41:492[0m [34m[interceptor-source:dispose][0m destroyed the listener!
+FAIL src/scenes/os/shell/osAppMenus.test.ts
+  osAppMenuFor
+    ✕ resolves /project/1/insights?tab=history to Product analytics with History active (2 ms)
+    ✕ resolves /project/1/insights to Product analytics with Insights active (1 ms)
+    ✕ resolves /project/1/insights?tab=all to Product analytics with Insights active (1 ms)
+    ✕ resolves /project/1/alerts to Product analytics with Alerts active
+    ✕ resolves /project/1/insights/abc123/edit to Product analytics with null active (1 ms)
+    ✕ resolves /project/1/replay/playlists to Session replay with Collections active
+    ✕ resolves /project/1/replay/abc?t=10 to Session replay with null active
+    ✕ resolves /project/1/web/web-vitals to Web analytics with Web vitals active
+    ✕ resolves /project/1/feature_flags?tab=history to Feature flags with History active
+    ✕ resolves /project/1/activity/live to Activity with Live events active (1 ms)
+    ✕ resolves /project/1/settings/organization to Settings with Organization active
+    ✕ lists the app pages in menu order, and links related apps separately (1 ms)
+    ✕ gives an app without its own pages a menu with its home page and its "new" items (1 ms)
+    ✕ lists the "new" items of an app from the product manifests
+    ✕ hides "new" items behind a feature flag that is off
+    ✓ returns no menu for a page no app claims (1 ms)
+    ✓ returns no menu for the desktop with no path
+    ✓ does not claim pages for an app the user cannot see
+    ✓ only lists pages that are real routes and that open in the same app
+
+  ● osAppMenuFor › resolves /project/1/insights?tab=history to Product analytics with History active
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "Product analytics"
+    Received: undefined
+
+      40 |     ])('resolves $path to $app with $active active', ({ path, app, active }) => {
+      41 |         const menu = osAppMenuFor(path, apps, allFlagsOn)
+    > 42 |         expect(menu?.app.name).toEqual(app)
+         |                                ^
+      43 |         expect(menu?.activePage?.label ?? null).toEqual(active)
+      44 |     })
+      45 |
+
+      at src/scenes/os/shell/osAppMenus.test.ts:42:32
+
+  ● osAppMenuFor › resolves /project/1/insights to Product analytics with Insights active
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "Product analytics"
+    Received: undefined
+
+      40 |     ])('resolves $path to $app with $active active', ({ path, app, active }) => {
+      41 |         const menu = osAppMenuFor(path, apps, allFlagsOn)
+    > 42 |         expect(menu?.app.name).toEqual(app)
+         |                                ^
+      43 |         expect(menu?.activePage?.label ?? null).toEqual(active)
+      44 |     })
+      45 |
+
+      at src/scenes/os/shell/osAppMenus.test.ts:42:32
+
+  ● osAppMenuFor › resolves /project/1/insights?tab=all to Product analytics with Insights active
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "Product analytics"
+    Received: undefined
+
+      40 |     ])('resolves $path to $app with $active active', ({ path, app, active }) => {
+      41 |         const menu = osAppMenuFor(path, apps, allFlagsOn)
+    > 42 |         expect(menu?.app.name).toEqual(app)
+         |                                ^
+      43 |         expect(menu?.activePage?.label ?? null).toEqual(active)
+      44 |     })
+      45 |
+
+      at src/scenes/os/shell/osAppMenus.test.ts:42:32
+
+  ● osAppMenuFor › resolves /project/1/alerts to Product analytics with Alerts active
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "Product analytics"
+    Received: undefined
+
+      40 |     ])('resolves $path to $app with $active active', ({ path, app, active }) => {
+      41 |         const menu = osAppMenuFor(path, apps, allFlagsOn)
+    > 42 |         expect(menu?.app.name).toEqual(app)
+         |                                ^
+      43 |         expect(menu?.activePage?.label ?? null).toEqual(active)
+      44 |     })
+      45 |
+
+      at src/scenes/os/shell/osAppMenus.test.ts:42:32
+
+  ● osAppMenuFor › resolves /project/1/insights/abc123/edit to Product analytics with null active
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "Product analytics"
+    Received: undefined
+
+      40 |     ])('resolves $path to $app with $active active', ({ path, app, active }) => {
+      41 |         const menu = osAppMenuFor(path, apps, allFlagsOn)
+    > 42 |         expect(menu?.app.name).toEqual(app)
+         |                                ^
+      43 |         expect(menu?.activePage?.label ?? null).toEqual(active)
+      44 |     })
+      45 |
+
+      at src/scenes/os/shell/osAppMenus.test.ts:42:32
+
+  ● osAppMenuFor › resolves /project/1/replay/playlists to Session replay with Collections active
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "Session replay"
+    Received: undefined
+
+      40 |     ])('resolves $path to $app with $active active', ({ path, app, active }) => {
+      41 |         const menu = osAppMenuFor(path, apps, allFlagsOn)
+    > 42 |         expect(menu?.app.name).toEqual(app)
+         |                                ^
+      43 |         expect(menu?.activePage?.label ?? null).toEqual(active)
+      44 |     })
+      45 |
+
+      at src/scenes/os/shell/osAppMenus.test.ts:42:32
+
+  ● osAppMenuFor › resolves /project/1/replay/abc?t=10 to Session replay with null active
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "Session replay"
+    Received: undefined
+
+      40 |     ])('resolves $path to $app with $active active', ({ path, app, active }) => {
+      41 |         const menu = osAppMenuFor(path, apps, allFlagsOn)
+    > 42 |         expect(menu?.app.name).toEqual(app)
+         |                                ^
+      43 |         expect(menu?.activePage?.label ?? null).toEqual(active)
+      44 |     })
+      45 |
+
+      at src/scenes/os/shell/osAppMenus.test.ts:42:32
+
+  ● osAppMenuFor › resolves /project/1/web/web-vitals to Web analytics with Web vitals active
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "Web analytics"
+    Received: undefined
+
+      40 |     ])('resolves $path to $app with $active active', ({ path, app, active }) => {
+      41 |         const menu = osAppMenuFor(path, apps, allFlagsOn)
+    > 42 |         expect(menu?.app.name).toEqual(app)
+         |                                ^
+      43 |         expect(menu?.activePage?.label ?? null).toEqual(active)
+      44 |     })
+      45 |
+
+      at src/scenes/os/shell/osAppMenus.test.ts:42:32
+
+  ● osAppMenuFor › resolves /project/1/feature_flags?tab=history to Feature flags with History active
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "Feature flags"
+    Received: undefined
+
+      40 |     ])('resolves $path to $app with $active active', ({ path, app, active }) => {
+      41 |         const menu = osAppMenuFor(path, apps, allFlagsOn)
+    > 42 |         expect(menu?.app.name).toEqual(app)
+         |                                ^
+      43 |         expect(menu?.activePage?.label ?? null).toEqual(active)
+      44 |     })
+      45 |
+
+      at src/scenes/os/shell/osAppMenus.test.ts:42:32
+
+  ● osAppMenuFor › resolves /project/1/activity/live to Activity with Live events active
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "Activity"
+    Received: undefined
+
+      40 |     ])('resolves $path to $app with $active active', ({ path, app, active }) => {
+      41 |         const menu = osAppMenuFor(path, apps, allFlagsOn)
+    > 42 |         expect(menu?.app.name).toEqual(app)
+         |                                ^
+      43 |         expect(menu?.activePage?.label ?? null).toEqual(active)
+      44 |     })
+      45 |
+
+      at src/scenes/os/shell/osAppMenus.test.ts:42:32
+
+  ● osAppMenuFor › resolves /project/1/settings/organization to Settings with Organization active
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "Settings"
+    Received: undefined
+
+      40 |     ])('resolves $path to $app with $active active', ({ path, app, active }) => {
+      41 |         const menu = osAppMenuFor(path, apps, allFlagsOn)
+    > 42 |         expect(menu?.app.name).toEqual(app)
+         |                                ^
+      43 |         expect(menu?.activePage?.label ?? null).toEqual(active)
+      44 |     })
+      45 |
+
+      at src/scenes/os/shell/osAppMenus.test.ts:42:32
+
+  ● osAppMenuFor › lists the app pages in menu order, and links related apps separately
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: ["Insights", "My insights", "Alerts", "History"]
+    Received: undefined
+
+      46 |     it('lists the app pages in menu order, and links related apps separately', () => {
+      47 |         const menu = osAppMenuFor('/project/1/insights', apps, allFlagsOn)
+    > 48 |         expect(menu?.pages.map((page) => page.label)).toEqual(['Insights', 'My insights', 'Alerts', 'History'])
+         |                                                       ^
+      49 |         expect(menu?.relatedApps.map((page) => [page.label, page.href])).toEqual([['Dashboards', '/dashboard']])
+      50 |     })
+      51 |
+
+      at Object.<anonymous> (src/scenes/os/shell/osAppMenus.test.ts:48:55)
+
+  ● osAppMenuFor › gives an app without its own pages a menu with its home page and its "new" items
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: "Dashboards"
+    Received: undefined
+
+      52 |     it('gives an app without its own pages a menu with its home page and its "new" items', () => {
+      53 |         const menu = osAppMenuFor('/project/1/dashboard/12', apps, allFlagsOn)
+    > 54 |         expect(menu?.app.name).toEqual('Dashboards')
+         |                                ^
+      55 |         expect(menu?.pages).toEqual([{ label: 'Dashboards', href: '/dashboard' }])
+      56 |         expect(menu?.activePage).toBeNull()
+      57 |         expect(menu?.newItems.map((item) => item.label)).toContain('Dashboard')
+
+      at Object.<anonymous> (src/scenes/os/shell/osAppMenus.test.ts:54:32)
+
+  ● osAppMenuFor › lists the "new" items of an app from the product manifests
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: ArrayContaining ["Trends", "Funnel", "Retention"]
+    Received: undefined
+
+      60 |     it('lists the "new" items of an app from the product manifests', () => {
+      61 |         const menu = osAppMenuFor('/project/1/insights', apps, allFlagsOn)
+    > 62 |         expect(menu?.newItems.map((item) => item.label)).toEqual(
+         |                                                          ^
+      63 |             expect.arrayContaining(['Trends', 'Funnel', 'Retention'])
+      64 |         )
+      65 |     })
+
+      at Object.<anonymous> (src/scenes/os/shell/osAppMenus.test.ts:62:58)
+
+  ● osAppMenuFor › hides "new" items behind a feature flag that is off
+
+    expect(received).toContain(expected) // indexOf
+
+    Matcher error: received value must not be null nor undefined
+
+    Received has value: undefined
+
+      68 |         const flagsOff = new Proxy({}, { get: () => false }) as Record<string, boolean>
+      69 |         const labels = osAppMenuFor('/project/1/insights', apps, flagsOff)?.newItems.map((item) => item.label)
+    > 70 |         expect(labels).toContain('Trends')
+         |                        ^
+      71 |         expect(labels).not.toContain('Journeys')
+      72 |     })
+      73 |
+
+      at Object.<anonymous> (src/scenes/os/shell/osAppMenus.test.ts:70:24)
+
+Test Suites: 1 failed, 1 total
+Tests:       15 failed, 4 passed, 19 total
+Snapshots:   0 total
+Time:        2.607 s
+Ran all test suites matching /src\/scenes\/os\/shell\/osAppMenus.test.ts/i.

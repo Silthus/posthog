@@ -1,0 +1,32 @@
+[
+ {
+  "start": "feature_flags",
+  "pick": "history",
+  "frameUrl": "http://localhost:8105/project/100001/feature_flags?tab=history",
+  "ok": true,
+  "seconds": 2.015,
+  "windows": 1,
+  "historyLength": 5,
+  "trigger": "Feature flags"
+ },
+ {
+  "start": "insights",
+  "pick": "alerts",
+  "frameUrl": "http://localhost:8105/project/100001/alerts",
+  "ok": true,
+  "seconds": 3.157,
+  "windows": 1,
+  "historyLength": 3,
+  "trigger": "Product analytics"
+ },
+ {
+  "start": "replay/home",
+  "pick": "collections",
+  "frameUrl": "http://localhost:8105/project/100001/replay/playlists",
+  "ok": true,
+  "seconds": 3.035,
+  "windows": 1,
+  "historyLength": 3,
+  "trigger": "Session replay"
+ }
+]
