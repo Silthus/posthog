@@ -1,0 +1,44 @@
+{
+  "aiBefore": [
+    "App Store",
+    "AI observability, active"
+  ],
+  "frameUrl": "http://localhost:8106/project/100001/ai-observability/dashboard",
+  "aiAfterTraces": [
+    "App Store",
+    "AI observability, active"
+  ],
+  "aiUrl": "http://localhost:8106/project/100001/ai-observability/traces",
+  "aiWindows": [
+    "/project/100001/ai-observability/traces"
+  ],
+  "aiStored": [
+    [
+      "a1u4p1ng",
+      "/project/100001/ai-observability/traces",
+      "AI observability"
+    ]
+  ],
+  "menuBarAppOnTraces": "AI observability\nSearch or open an app\nCtrl\nK\nHedgebox\nE",
+  "alertsWindow": [
+    "App Store",
+    "AI observability",
+    "Product analytics, active"
+  ],
+  "arrowUpMenu": [
+    "Pin to dock",
+    "Open in new window",
+    "Minimize",
+    "Close"
+  ],
+  "arrowUpMenuFocused": true,
+  "focusBackOnTile": true,
+  "overflow": {
+    "tiles": 46,
+    "scrollWidth": 1396,
+    "clientWidth": 1262,
+    "scrollable": "auto"
+  },
+  "lastTileVisibleAfterFocus": true,
+  "undefinedColorTile": "oklch(0.551 0.027 264.364)"
+}

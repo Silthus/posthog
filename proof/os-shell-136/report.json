@@ -1,0 +1,31 @@
+{
+  "start": [
+    "App Store"
+  ],
+  "threeOpen": [
+    "App Store",
+    "Product analytics",
+    "Web analytics",
+    "Dashboards, active"
+  ],
+  "afterClose": [
+    "App Store",
+    "Product analytics",
+    "Web analytics, active"
+  ],
+  "pinnedAfterClose": [
+    "App Store",
+    "Web analytics, pinned",
+    "Product analytics, active"
+  ],
+  "storage": "{\"version\":1,\"keys\":[\"Web analytics\"]}",
+  "afterReload": [
+    "App Store",
+    "Web analytics, pinned",
+    "Product analytics, active"
+  ],
+  "afterUnpin": [
+    "App Store",
+    "Product analytics, active"
+  ]
+}

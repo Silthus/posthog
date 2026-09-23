@@ -1,0 +1,30 @@
+[
+  {
+    "scheme": "light",
+    "userTheme": "light",
+    "htmlTheme": "light",
+    "labels": [
+      "App Store",
+      "Session replay, pinned",
+      "Feature flags, pinned",
+      "Product analytics, active, 2 windows",
+      "Web analytics, minimized",
+      "Dashboards, minimized",
+      "SQL editor"
+    ]
+  },
+  {
+    "scheme": "dark",
+    "userTheme": "light",
+    "htmlTheme": "dark",
+    "labels": [
+      "App Store",
+      "Session replay, pinned",
+      "Feature flags, pinned",
+      "Product analytics, active, 2 windows",
+      "Web analytics, minimized",
+      "Dashboards, minimized",
+      "SQL editor"
+    ]
+  }
+]
