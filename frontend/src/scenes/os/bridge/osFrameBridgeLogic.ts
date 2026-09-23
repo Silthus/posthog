@@ -202,8 +202,11 @@ export const osFrameBridgeLogic = kea<osFrameBridgeLogicType>([
                 }
                 const onPointerDown = (): void => send({ type: 'focus' })
                 const onHostMessage = (event: MessageEvent): void => {
-                    if (isFromOsHost(event, window) && parseOsHostMessage(event.data)?.type === 'user-changed') {
+                    const message = isFromOsHost(event, window) ? parseOsHostMessage(event.data) : null
+                    if (message?.type === 'user-changed') {
                         actions.loadUser()
+                    } else if (message?.type === 'navigate') {
+                        router.actions.push(message.path)
                     }
                 }
                 const onTitleChange = (): void => cache.reportLocation(false)

@@ -7,7 +7,7 @@ import { osSpotlightLogic } from '../spotlight/osSpotlightLogic'
 import { osWindowsLogic } from '../windows/osWindowsLogic'
 import type { OsWindowState } from '../windows/osWindowsLogic'
 import { OsBridgeMessage, osBridgeSenderWindowId, parseOsBridgeMessage, postToOsFrames } from './osBridgeProtocol'
-import { OS_FRAME_NAME_PREFIX, osFrameName } from './osFrame'
+import { OS_FRAME_NAME_PREFIX, osFrameName, osFrameSrc } from './osFrame'
 import { setOsWindowOpener } from './osFrameConnection'
 import { osSidePanelPath } from './osSidePanelPath'
 
@@ -90,6 +90,13 @@ export interface osBridgeLogicActions {
         tab: string
         windowId: string
     }
+    navigateWindow: (
+        windowId: string,
+        path: string
+    ) => {
+        path: string
+        windowId: string
+    }
 }
 
 export type osBridgeLogicType = MakeLogicType<osBridgeLogicValues, osBridgeLogicActions>
@@ -115,6 +122,8 @@ export const osBridgeLogic = kea<osBridgeLogicType>([
         messageReceived: (windowId: string, message: OsBridgeMessage) => ({ windowId, message }),
         /** A window asked for a side panel. A shell with its own side panel can listen for this. */
         sidePanelRequested: (windowId: string, tab: string, options?: string) => ({ windowId, tab, options }),
+        /** Shows another page in a window without reloading the app in it, for example from the app menu. */
+        navigateWindow: (windowId: string, path: string) => ({ windowId, path }),
     }),
     listeners(({ actions, values }) => ({
         messageReceived: ({ windowId, message }) => {
@@ -162,6 +171,21 @@ export const osBridgeLogic = kea<osBridgeLogicType>([
         // The frames keep their own copy of the user, so a theme picked in the menu bar would not reach them.
         updateUserSuccess: () => {
             postToOsFrames(osWindowFrames(), { type: 'user-changed' }, window.location.origin)
+        },
+        navigateWindow: ({ windowId, path }) => {
+            const frame = osWindowFrames().find((candidate) => candidate.name === osFrameName(windowId))
+            if (!frame) {
+                return
+            }
+            // A frame on another origin (a sign-in page) cannot read messages, so it loads the page again.
+            if (isCrossOrigin(frame)) {
+                const src = osFrameSrc({ pathname: path, search: '', hash: '' }, window.location.origin)
+                if (src) {
+                    frame.src = src
+                }
+                return
+            }
+            postToOsFrames([frame], { type: 'navigate', path }, window.location.origin)
         },
         sidePanelRequested: ({ tab, options }) => {
             const panelPath = osSidePanelPath(tab, options)

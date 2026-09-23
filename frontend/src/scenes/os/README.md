@@ -96,8 +96,13 @@ Bump `OS_BRIDGE_VERSION` for any change that a reader of the old version would g
 | `user-changed`   | The app saved a change to the user, such as the theme.                                                                                      | Reloads its own user and sends `user-changed` to the other frames.           |
 | `open-top`       | A page that refuses framing: a server page (`/api/`, `/login`, `/logout`, `/signup`, `/admin/`, `/complete/`, `/oauth/`) or another origin. | Loads the http(s) URL in the whole browser tab.                              |
 
-The OS page sends one message to its frames, `user-changed`, after it saves a change to the user, such as the theme in the menu bar.
-A frame accepts it only when `event.source` is its parent and `event.origin` is its own origin, and then reloads the user, so the new theme reaches every open window without a reload.
+The OS page sends two messages to its frames:
+
+- `user-changed`, after it saves a change to the user, such as the theme in the menu bar. The frame reloads the user, so the new theme reaches every open window without a reload.
+- `navigate`, with a path on this origin, when the person picks a page in the menu bar's app menu. The frame pushes the path to its router, so the page changes without a reload. `osBridgeLogic.actions.navigateWindow(id, path)` sends it. A frame on another origin cannot read it, so that frame loads the path again.
+
+A frame accepts them only when `event.source` is its parent and `event.origin` is its own origin.
+`parseOsHostMessage` drops a `navigate` whose path does not start with a single `/`.
 
 Links:
 
@@ -120,11 +125,31 @@ A frame on another origin (an OAuth provider, billing) cannot send messages.
 When the person clicks into one, the OS page loses focus to it, and `osBridgeLogic` brings that window to the front.
 Same-origin frames do not use this, because an app that focuses an input on load would otherwise raise its window.
 
+## Menu bar
+
+`shell/OsMenuBar` has three parts: the PostHog menu and the app menu on the left, the search field in the middle, and the project, PostHog AI, notifications and account on the right.
+The PostHog menu holds Home, App Store, Choose desktop apps, Settings and About PostHog. There is no list of apps, because the desktop and the App Store show them.
+
+**The app menu** (`shell/OsAppMenu`, `shell/osMenuBarLogic`) shows the name of the app in the focused window, and a menu of that app's pages.
+With no focused window, it does not render.
+`shell/osAppMenus.ts` finds the app for the window's path:
+
+- `OS_APP_MENU_PAGES` lists the pages of the apps that have tabs, with the labels and the order of those tabs. Tabs behind a feature flag stay out.
+- An app claims its own link and every page it lists, and the longest match wins, the same as the dock (`osAppForPath`). Only apps the user can see claim pages.
+- An app without listed pages gets its home page.
+- "New" lists the product manifests' new items (`getTreeItemsNew`) that open one of the app's scenes, without the ones behind a feature flag that is off.
+- A page that another app owns is a related app (Dashboards under Product analytics). It opens in its own window, so the menu and the dock agree on the app of every page.
+
+The page the window shows is highlighted. Picking a page shows it in the focused window through the bridge's `navigate` message.
+The menu also opens the app in a new window, and minimizes or closes the focused window.
+
+**The desktop** draws every icon in white, except the App Store, which is drawn in the accent color (`highlighted` in `osDesktopApps`).
+
 ## Spotlight
 
 `spotlight/OsSpotlight` replaces the app's `Command` menu on the OS page and uses the same search (`Search`) and open state (`commandLogic`).
 Cmd+K on the desktop, or inside a window, opens it.
-The menu bar search icon opens it with `osSpotlightLogic.actions.openSpotlight()`.
+The search field in the middle of the menu bar opens it with `osSpotlightLogic.actions.openSpotlight()`.
 A result opens in a window, or focuses the window that shows it. Cmd/Ctrl+Enter opens another window, and a result on another site opens a browser tab.
 
 ## Dock and App Store
