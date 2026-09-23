@@ -126,7 +126,17 @@ export function Navigation({
                 }
             >
                 {showMinimalNavigation && <MinimalNavigation />}
-                <main className={mode === 'zen' ? 'p-4' : undefined}>{children}</main>
+                <main
+                    className={cn({
+                        'p-4': mode === 'zen',
+                        // The OS window gives the scene the whole frame, so the scene scrolls on its own and
+                        // container queries on main-content still resolve.
+                        '@container/main-content flex-1 min-h-0 overflow-y-auto': mode === 'framed',
+                        'p-4 pb-0': mode === 'framed' && !noPaddingScene,
+                    })}
+                >
+                    {children}
+                </main>
             </div>
         )
     }

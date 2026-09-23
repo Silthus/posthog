@@ -1,7 +1,10 @@
 import { MakeLogicType, kea, path } from 'kea'
 import { urlToAction } from 'kea-router'
 
+import { FEATURE_FLAGS } from 'lib/constants'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { organizationLogic } from 'scenes/organizationLogic'
+import { isOsFrame } from 'scenes/os/bridge/osFrame'
 import { sceneLogic } from 'scenes/sceneLogic'
 
 import { SidePanelTab } from '~/types'
@@ -11,6 +14,10 @@ import { SUPPORT_KIND_TO_SUBJECT, supportLogic } from './supportLogic'
 // Mirrors navigationLogic's `mode === 'full'` (the condition that mounts <SidePanel />), derived from
 // sources supportLogic can't import without a billingLogic init cycle. Keep here, not in supportLogic.
 function shouldUseSidePanel(searchParams: Record<string, any>): boolean {
+    // Neither an OS window nor the OS shell around it mounts <SidePanel />.
+    if (isOsFrame(window) || featureFlagLogic.findMounted()?.values.featureFlags[FEATURE_FLAGS.OS_SHELL]) {
+        return false
+    }
     const zenFromUrl = searchParams?.zen !== undefined && searchParams.zen !== 'false' && searchParams.zen !== '0'
     if (zenFromUrl) {
         return false

@@ -1524,7 +1524,9 @@ class CSPMiddleware:
             # Enforced for every viewer, flag or not, because this directive is what admits these
             # origins: a frame-ancestors directive makes browsers ignore X-Frame-Options, which
             # names only our own origin.
-            frame_ancestors = "frame-ancestors https://posthog.com https://preview.posthog.com"
+            # 'self' lets the OS shell open app pages in its own windows, as X-Frame-Options: SAMEORIGIN
+            # already allows. The sandboxed documents we serve have an opaque origin that 'self' does not match.
+            frame_ancestors = "frame-ancestors 'self' https://posthog.com https://preview.posthog.com"
             if settings.DEBUG or settings.TEST:
                 resource_url = "http://localhost:8234"
             elif settings.SITE_URL.endswith(".dev.posthog.dev"):

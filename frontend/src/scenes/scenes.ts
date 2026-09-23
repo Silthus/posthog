@@ -296,6 +296,7 @@ export const sceneConfigurations: Record<Scene | string, SceneConfig> = {
         allowUnauthenticated: true,
     },
     [Scene.Onboarding]: { projectBased: true, name: 'Onboarding', layout: 'plain' },
+    [Scene.Os]: { projectBased: true, name: 'Desktop', layout: 'app-raw', hideProjectNotice: true },
     [Scene.OnboardingCoupon]: { projectBased: true, name: 'Claim coupon', layout: 'plain' },
     [Scene.OrganizationCreateFirst]: {
         name: 'Organization creation',
@@ -763,6 +764,7 @@ export const routes: Record<string, [Scene | string, string]> = {
     [urls.webAnalyticsHealth()]: [Scene.WebAnalyticsHealth, 'webAnalyticsHealth'],
     [urls.webAnalyticsLive()]: [Scene.WebAnalyticsLive, 'webAnalyticsLive'],
     [urls.webAnalyticsRecap()]: [Scene.WebAnalyticsRecap, 'webAnalyticsRecap'],
+    [urls.os()]: [Scene.Os, 'os'],
     [urls.webAnalyticsPageReports()]: [Scene.WebAnalytics, 'webAnalyticsPageReports'],
     [urls.marketingAnalyticsApp()]: [Scene.MarketingAnalytics, 'marketingAnalytics'],
     [urls.revenueSettings()]: [Scene.DataManagement, 'revenue'],
