@@ -7,6 +7,7 @@ import { useOnMountEffect } from 'lib/hooks/useOnMountEffect'
 import { customProductsLogic } from '~/layout/panel-layout/ProjectTree/customProductsLogic'
 import { mswDecorator } from '~/mocks/browser'
 
+import { osWindowsLogic } from '../windows/osWindowsLogic'
 import { OsShell } from './OsShell'
 import { osShellLogic } from './osShellLogic'
 import { OsWallpaperKey } from './osWallpapers'
@@ -26,11 +27,12 @@ const MOCK_TOOLS = ['Product analytics', 'Web analytics', 'Session replay', 'Fea
  * open for the current URL is closed before the shell renders.
  */
 function OsDesktopStory({ wallpaper }: { wallpaper: OsWallpaperKey }): JSX.Element | null {
-    const { showPage, setWallpaper } = useActions(osShellLogic)
+    const { setWallpaper } = useActions(osShellLogic)
+    const { restoreLayout } = useActions(osWindowsLogic)
     const { loadCustomProducts } = useActions(customProductsLogic)
     const [ready, setReady] = useState(false)
     useOnMountEffect(() => {
-        showPage(null)
+        restoreLayout([])
         setWallpaper(wallpaper)
         loadCustomProducts()
         setReady(true)

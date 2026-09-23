@@ -9,7 +9,7 @@ import type { OsWallpaperOption } from './osWallpapers'
 export interface OsDesktopIconProps {
     app: OsDesktopApp
     wallpaper: OsWallpaperOption
-    onOpen: (app: OsDesktopApp) => void
+    onOpen: (app: OsDesktopApp, from: Element) => void
 }
 
 export function OsDesktopIcon({ app, wallpaper, onOpen }: OsDesktopIconProps): JSX.Element {
@@ -27,7 +27,7 @@ export function OsDesktopIcon({ app, wallpaper, onOpen }: OsDesktopIconProps): J
                             return
                         }
                         event.preventDefault()
-                        onOpen(app)
+                        onOpen(app, event.currentTarget)
                     }}
                     className="group inline-flex flex-col items-center justify-center gap-0.5 max-w-28 text-center select-none text-white font-medium drop-shadow-lg rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white focus-visible:ring-2 focus-visible:ring-black/60"
                     data-attr={`os-desktop-icon-${app.key}`}

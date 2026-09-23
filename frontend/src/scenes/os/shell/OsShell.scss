@@ -86,3 +86,13 @@
         0 1px 3px rgb(0 0 0 / 50%),
         0 0 1px rgb(0 0 0 / 30%);
 }
+
+// The window layer covers the desktop, so only the windows themselves take clicks. A minimized
+// window is hidden from assistive tech and keeps ignoring clicks.
+.OsShell__window-layer {
+    pointer-events: none;
+
+    [data-attr='os-window']:not([aria-hidden='true']) {
+        pointer-events: auto;
+    }
+}

@@ -2,7 +2,7 @@ import './OsShell.scss'
 
 import { useValues } from 'kea'
 
-import { OsWindow } from '../windows/OsWindow'
+import { OsWindowLayer } from '../windows/OsWindowLayer'
 import { OsDesktop } from './OsDesktop'
 import { OsMenuBar } from './OsMenuBar'
 import { osShellLogic } from './osShellLogic'
@@ -13,7 +13,7 @@ import { osShellLogic } from './osShellLogic'
  * the first thing the keyboard reaches.
  */
 export function OsShell(): JSX.Element {
-    const { wallpaper, focusedWindow } = useValues(osShellLogic)
+    const { wallpaper } = useValues(osShellLogic)
 
     return (
         <div className="OsShell" data-os-scheme="primary" data-os-wallpaper={wallpaper.key} data-attr="os-shell">
@@ -21,15 +21,8 @@ export function OsShell(): JSX.Element {
                 <div className="pointer-events-auto">
                     <OsMenuBar />
                 </div>
-                <div
-                    className="relative flex flex-1 min-h-0 items-center justify-center pt-2"
-                    data-attr="os-window-layer"
-                >
-                    {focusedWindow && (
-                        <div className="pointer-events-auto flex flex-col w-[80%] h-[95%]">
-                            <OsWindow id="focused" title={focusedWindow.title} src={focusedWindow.src} />
-                        </div>
-                    )}
+                <div className="OsShell__window-layer flex flex-1 min-h-0 pt-2">
+                    <OsWindowLayer />
                 </div>
             </div>
             <OsDesktop />
