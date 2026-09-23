@@ -1,0 +1,28 @@
+18:50:54 list ["Dashboards","Error tracking","Product analytics","Session replay","Web analytics"]
+18:50:58 MSG {"type":"location","path":"/project/100001/app-store/ai-observability","title":"App Store","traversed":false,"channel":"posthog-os-bridge","version":1}
+18:51:00 before [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null]]
+18:51:00 MSG {"type":"focus","channel":"posthog-os-bridge","version":1}
+18:51:00 MSG {"type":"posthog-os-store:preview-app","key":"LLM analytics"}
+18:51:01 t0 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:02 t1 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:02 MSG {"type":"location","path":"/project/100001/ai-observability/dashboard","title":"AI observability","traversed":false,"channel":"posthog-os-bridge","version":1}
+18:51:03 t2 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:04 t3 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:05 t4 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:06 t5 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:07 t6 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:08 t7 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:09 t8 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:10 t9 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:11 t10 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:12 t11 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:13 t12 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:14 t13 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:15 t14 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:16 t15 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:17 t16 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:18 t17 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:19 t18 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:20 t19 [["0n53uzon","/project/100001/app-store/ai-observability","App Store",null],["7nlm6usc","/project/100001/ai-observability/dashboard","AI observability","LLM analytics"]]
+18:51:20 list after preview ["Dashboards","Error tracking","Product analytics","Session replay","Web analytics"]
+18:51:20 preview attr frames 1 bars 1

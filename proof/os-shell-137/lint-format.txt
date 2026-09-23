@@ -1,12 +1,12 @@
 ! You are not logged in to FloxHub. Run 'flox auth login' to log in.
 $ oxlint frontend/src/scenes/os
-frontend/src/scenes/os/bridge/osFrameBridgeLogic.test.ts:155:5: warning jest(expect-expect): Test has no assertions help: Add assertion(s) in this Test
-frontend/src/scenes/os/bridge/osFrameBridgeLogic.test.ts:161:5: warning jest(expect-expect): Test has no assertions help: Add assertion(s) in this Test
+frontend/src/scenes/os/bridge/osFrameBridgeLogic.test.ts:159:5: warning jest(expect-expect): Test has no assertions help: Add assertion(s) in this Test
+frontend/src/scenes/os/bridge/osFrameBridgeLogic.test.ts:165:5: warning jest(expect-expect): Test has no assertions help: Add assertion(s) in this Test
 exit=0
 
 $ oxfmt --check <files changed against feat/os-shell>
 Checking formatting...
 
 All matched files use the correct format.
-Finished in 164ms on 12 files using 16 threads.
+Finished in 220ms on 16 files using 16 threads.
 exit=0
