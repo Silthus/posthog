@@ -1,6 +1,6 @@
 import { MakeLogicType, actions, afterMount, connect, kea, listeners, path } from 'kea'
 
-import { addProjectIdIfMissing } from 'lib/utils/kea-router'
+import { addProjectIdIfMissing, removeProjectIdIfPresent } from 'lib/utils/kea-router'
 import { userLogic } from 'scenes/userLogic'
 
 import { osSpotlightLogic } from '../spotlight/osSpotlightLogic'
@@ -125,10 +125,11 @@ export const osBridgeLogic = kea<osBridgeLogicType>([
         /** Shows another page in a window without reloading the app in it, for example from the app menu. */
         navigateWindow: (windowId: string, path: string) => ({ windowId, path }),
     }),
-    listeners(({ actions, values }) => ({
+    listeners(({ actions, values, cache }) => ({
         messageReceived: ({ windowId, message }) => {
             switch (message.type) {
                 case 'location':
+                    cache.settleNavigation?.(windowId, message.path)
                     actions.windowNavigated(windowId, message.path, message.title)
                     // Back and forward can step a window that is behind others, so that window comes to the front.
                     if (message.traversed) {
@@ -185,6 +186,9 @@ export const osBridgeLogic = kea<osBridgeLogicType>([
                 }
                 return
             }
+            // A frame whose app is still loading drops the message. Its first location report then shows
+            // another page, and `settleNavigation` sends the message once more.
+            cache.pendingNavigations.set(windowId, { path, retried: false })
             postToOsFrames([frame], { type: 'navigate', path }, window.location.origin)
         },
         sidePanelRequested: ({ tab, options }) => {
@@ -195,6 +199,19 @@ export const osBridgeLogic = kea<osBridgeLogicType>([
         },
     })),
     afterMount(({ actions, cache }) => {
+        cache.pendingNavigations = new Map<string, { path: string; retried: boolean }>()
+        cache.settleNavigation = (windowId: string, reportedPath: string): void => {
+            const pending = cache.pendingNavigations.get(windowId)
+            if (!pending) {
+                return
+            }
+            if (removeProjectIdIfPresent(reportedPath) === removeProjectIdIfPresent(pending.path) || pending.retried) {
+                cache.pendingNavigations.delete(windowId)
+                return
+            }
+            actions.navigateWindow(windowId, pending.path)
+            cache.pendingNavigations.set(windowId, { ...pending, retried: true })
+        }
         cache.disposables.add(
             () => {
                 const onMessage = (event: MessageEvent): void => {

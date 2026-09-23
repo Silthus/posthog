@@ -3,6 +3,7 @@ import { router } from 'kea-router'
 
 import { commandLogic } from 'lib/components/Command/commandLogic'
 import { lemonToast } from 'lib/lemon-ui/LemonToast/LemonToast'
+import { removeProjectIdIfPresent } from 'lib/utils/kea-router'
 import { userLogic } from 'scenes/userLogic'
 
 import { sidePanelStateLogic } from '~/layout/navigation-3000/sidepanel/sidePanelStateLogic'
@@ -206,7 +207,14 @@ export const osFrameBridgeLogic = kea<osFrameBridgeLogicType>([
                     if (message?.type === 'user-changed') {
                         actions.loadUser()
                     } else if (message?.type === 'navigate') {
-                        router.actions.push(message.path)
+                        const { pathname, search, hash } = router.values.location
+                        // The OS page can send the same page twice while the app loads, and one history entry is enough.
+                        if (
+                            removeProjectIdIfPresent(`${pathname}${search}${hash}`) !==
+                            removeProjectIdIfPresent(message.path)
+                        ) {
+                            router.actions.push(message.path)
+                        }
                     }
                 }
                 const onTitleChange = (): void => cache.reportLocation(false)
