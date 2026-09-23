@@ -156,6 +156,9 @@ export function postToOsFrames(frames: Iterable<OsBridgeFrame>, message: OsHostM
 }
 
 /** True when a message event comes from the OS page that holds this frame. */
-export function isFromOsHost(event: { origin: string; source: MessageEventSource | Window | null }, win: Window): boolean {
+export function isFromOsHost(
+    event: { origin: string; source: MessageEventSource | Window | null },
+    win: Window
+): boolean {
     return event.origin === win.location.origin && !!event.source && event.source === win.parent
 }

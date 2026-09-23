@@ -16,26 +16,28 @@ export function OsDesktopIcon({ app, wallpaper, onOpen }: OsDesktopIconProps): J
     const { icon } = app
     return (
         <li className="w-28 min-h-[84px] flex justify-center items-start">
-            {/* Moves half a pixel on hover and press, like the posthog.com icons. */}
-            <span className="relative inline-flex hover:top-[-0.5px] active:top-[0.5px]">
+            {/* Moves half a pixel on hover and press, like the posthog.com icons. Clicks are captured here,
+                because the link stops Cmd and Ctrl clicks before its own click handler runs. */}
+            <span
+                className="relative inline-flex hover:top-[-0.5px] active:top-[0.5px]"
+                onClickCapture={(event) => {
+                    if (app.external) {
+                        return
+                    }
+                    event.preventDefault()
+                    onOpen(app, event.currentTarget, event.metaKey || event.ctrlKey)
+                }}
+                onAuxClick={(event) => {
+                    if (app.external || event.button !== 1) {
+                        return
+                    }
+                    event.preventDefault()
+                    onOpen(app, event.currentTarget, true)
+                }}
+            >
                 <LinkPrimitive
                     to={app.href}
                     target={app.external ? '_blank' : undefined}
-                    // Captured, because the link stops Cmd and Ctrl clicks before its own click handler runs.
-                    onClickCapture={(event) => {
-                        if (app.external) {
-                            return
-                        }
-                        event.preventDefault()
-                        onOpen(app, event.currentTarget, event.metaKey || event.ctrlKey)
-                    }}
-                    onAuxClick={(event) => {
-                        if (app.external || event.button !== 1) {
-                            return
-                        }
-                        event.preventDefault()
-                        onOpen(app, event.currentTarget, true)
-                    }}
                     className="group inline-flex flex-col items-center justify-center gap-0.5 max-w-28 text-center select-none text-white font-medium drop-shadow-lg rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white focus-visible:ring-2 focus-visible:ring-black/60"
                     data-attr={`os-desktop-icon-${app.key}`}
                 >

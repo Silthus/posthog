@@ -93,7 +93,11 @@ Bump `OS_BRIDGE_VERSION` for any change that a reader of the old version would g
 | `window-command` | A window shortcut (`osWindowCommandFor`) while the frame has keyboard focus.                                                                | Focuses the sender, then runs `runWindowCommand`.                            |
 | `side-panel`     | The app calls `openSidePanel` for any tab but support.                                                                                      | Emits `sidePanelRequested`, then opens the matching app (`osSidePanelPath`). |
 | `spotlight`      | Cmd+K in the frame.                                                                                                                         | Opens the spotlight.                                                         |
+| `user-changed`   | The app saved a change to the user, such as the theme.                                                                                      | Reloads its own user and sends `user-changed` to the other frames.           |
 | `open-top`       | A page that refuses framing: a server page (`/api/`, `/login`, `/logout`, `/signup`, `/admin/`, `/complete/`, `/oauth/`) or another origin. | Loads the http(s) URL in the whole browser tab.                              |
+
+The OS page sends one message to its frames, `user-changed`, after it saves a change to the user, such as the theme in the menu bar.
+A frame accepts it only when `event.source` is its parent and `event.origin` is its own origin, and then reloads the user, so the new theme reaches every open window without a reload.
 
 Links:
 
@@ -101,6 +105,8 @@ Links:
 - A plain click on a link to another site opens a browser tab. A link with its own `target` or a modifier keeps the browser behavior.
 - A redirect in code or a form post to a page that refuses framing is caught with the Navigation API `navigate` event and goes to `open-top`. Browsers without the Navigation API load those pages in the window, which then stays blank.
 - The browser's own "Open link in new tab" menu item still opens a browser tab.
+- A link to `/api/` stays with the browser: a file downloads, and an OAuth start leaves the window through `open-top`.
+- On the desktop, Cmd/Ctrl+click or a middle click on an icon opens another window, also when a window already shows that app.
 
 Side panels: PostHog AI, activity, notebooks and exports open as apps in windows.
 Support opens its form as a modal inside the window.
@@ -116,5 +122,5 @@ Same-origin frames do not use this, because an app that focuses an input on load
 
 `spotlight/OsSpotlight` replaces the app's `Command` menu on the OS page and uses the same search (`Search`) and open state (`commandLogic`).
 Cmd+K on the desktop, or inside a window, opens it.
-A menu bar opens it with `osSpotlightLogic.actions.openSpotlight()`.
+The menu bar search icon opens it with `osSpotlightLogic.actions.openSpotlight()`.
 A result opens in a window, or focuses the window that shows it. Cmd/Ctrl+Enter opens another window, and a result on another site opens a browser tab.
