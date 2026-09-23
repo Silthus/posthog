@@ -1,0 +1,9 @@
+{
+  "osShell": 0,
+  "osFrames": 0,
+  "afterPlainClick": "/project/100001/dashboard/2",
+  "cmdClickOpenedBrowserTab": true,
+  "browserTabs": 2,
+  "urlAfterCmdClick": "/project/100001/dashboard/2",
+  "commandMenuOpen": true
+}
