@@ -1,0 +1,5 @@
+src/scenes/os/bridge/osFrameBridgeLogic.test.ts:155:5: warning jest(expect-expect): Test has no assertions help: Add assertion(s) in this Test
+src/scenes/os/bridge/osFrameBridgeLogic.test.ts:161:5: warning jest(expect-expect): Test has no assertions help: Add assertion(s) in this Test
+src/layout/navigation-3000/Navigation.tsx:118:17: warning react(forbid-dom-props): style should be avoided in favor of utility CSS classes - see https://storybook.dev.posthog.dev/?path=/docs/lemon-ui-utilities--overview
+src/layout/navigation-3000/Navigation.tsx:161:17: warning react(forbid-dom-props): style should be avoided in favor of utility CSS classes - see https://storybook.dev.posthog.dev/?path=/docs/lemon-ui-utilities--overview
+oxlint exit 0
