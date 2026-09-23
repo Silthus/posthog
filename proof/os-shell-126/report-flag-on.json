@@ -1,0 +1,500 @@
+{
+  "steps": [
+    {
+      "name": "dashboards-window",
+      "pageUrl": "/project/100001/dashboard",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "Dashboards",
+          "focused": true,
+          "hidden": false
+        }
+      ],
+      "screenshot": "01-dashboards-window.png"
+    },
+    {
+      "name": "same-window-dashboard",
+      "pageUrl": "/project/100001/dashboard/2",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "🔑 Key metrics",
+          "focused": true,
+          "hidden": false
+        }
+      ],
+      "screenshot": "02-same-window-dashboard.png"
+    },
+    {
+      "name": "cmd-click-new-window",
+      "pageUrl": "/project/100001/insights/f5TX9fY9?dashboard=2&variables_override=%7B%7D&filters_override=%7B%7D&tile_filters_override=%7B%7D",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "🔑 Key metrics",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "nmy14a6l",
+          "title": "Weekly signups",
+          "focused": true,
+          "hidden": false
+        }
+      ],
+      "screenshot": "03-cmd-click-new-window.png"
+    },
+    {
+      "name": "shortcut-forwarded-tidy-up",
+      "pageUrl": "/project/100001/insights/f5TX9fY9?dashboard=2&variables_override=%7B%7D&filters_override=%7B%7D&tile_filters_override=%7B%7D",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "🔑 Key metrics",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "nmy14a6l",
+          "title": "Weekly signups",
+          "focused": true,
+          "hidden": false
+        }
+      ],
+      "screenshot": "04-shortcut-forwarded-tidy-up.png"
+    },
+    {
+      "name": "click-raises-window-modal-inside",
+      "pageUrl": "/project/100001/dashboard/2/subscriptions",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "🔑 Key metrics",
+          "focused": true,
+          "hidden": false
+        },
+        {
+          "id": "nmy14a6l",
+          "title": "Weekly signups",
+          "focused": false,
+          "hidden": false
+        }
+      ],
+      "screenshot": "05-click-raises-window-modal-inside.png"
+    },
+    {
+      "name": "same-window-other-app",
+      "pageUrl": "/project/100001/insights/WhhvoCxP?dashboard=2&variables_override=%7B%7D&filters_override=%7B%7D&tile_filters_override=%7B%7D",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "Last month's signups by country",
+          "focused": true,
+          "hidden": false
+        },
+        {
+          "id": "nmy14a6l",
+          "title": "Weekly signups",
+          "focused": false,
+          "hidden": false
+        }
+      ],
+      "frame1Url": "/project/100001/insights/WhhvoCxP?dashboard=2&variables_override=%7B%7D&filters_override=%7B%7D&tile_filters_override=%7B%7D",
+      "screenshot": "06-same-window-other-app.png"
+    },
+    {
+      "name": "side-panel-opener-routes-to-os",
+      "pageUrl": "/project/100001/ai?chat=5271e470-1fbf-4df9-a094-94cae7ca78c4",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "Last month's signups by country",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "nmy14a6l",
+          "title": "Weekly signups",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "p69xj982",
+          "title": "New chat",
+          "focused": true,
+          "hidden": false
+        }
+      ],
+      "windowsBefore": 2,
+      "screenshot": "07-side-panel-opener-routes-to-os.png"
+    },
+    {
+      "name": "theme-dark-reaches-windows",
+      "pageUrl": "/project/100001/ai?chat=5271e470-1fbf-4df9-a094-94cae7ca78c4",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "Last month's signups by country",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "nmy14a6l",
+          "title": "Weekly signups",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "p69xj982",
+          "title": "New chat",
+          "focused": true,
+          "hidden": false
+        }
+      ],
+      "themesBefore": [
+        "light",
+        "light",
+        "light"
+      ],
+      "themesAfter": [
+        "dark",
+        "dark",
+        "dark"
+      ],
+      "screenshot": "08-theme-dark-reaches-windows.png"
+    },
+    {
+      "name": "cmd-click-icon-new-windows",
+      "pageUrl": "/project/100001/dashboard",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "Last month's signups by country",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "nmy14a6l",
+          "title": "Weekly signups",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "p69xj982",
+          "title": "New chat",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "rc5x9q5w",
+          "title": "Dashboards",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "gb30kjav",
+          "title": "Dashboards",
+          "focused": true,
+          "hidden": false
+        }
+      ],
+      "windowsBefore": 3,
+      "screenshot": "09-cmd-click-icon-new-windows.png"
+    },
+    {
+      "name": "spotlight-open",
+      "pageUrl": "/project/100001/dashboard",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "Last month's signups by country",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "nmy14a6l",
+          "title": "Weekly signups",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "p69xj982",
+          "title": "New chat",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "rc5x9q5w",
+          "title": "Dashboards",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "gb30kjav",
+          "title": "Dashboards",
+          "focused": true,
+          "hidden": false
+        }
+      ],
+      "screenshot": "10-spotlight-open.png"
+    },
+    {
+      "name": "spotlight-opened-entity",
+      "pageUrl": "/project/100001/insights/UGeHiRD5",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "Last month's signups by country",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "nmy14a6l",
+          "title": "Weekly signups",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "p69xj982",
+          "title": "New chat",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "rc5x9q5w",
+          "title": "Dashboards",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "gb30kjav",
+          "title": "Dashboards",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "v1gsol3q",
+          "title": "Monthly app revenue",
+          "focused": true,
+          "hidden": false
+        }
+      ],
+      "windowsBefore": 5,
+      "screenshot": "11-spotlight-opened-entity.png"
+    },
+    {
+      "name": "spotlight-opened-app",
+      "pageUrl": "/project/100001/replay/home",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "Last month's signups by country",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "nmy14a6l",
+          "title": "Weekly signups",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "p69xj982",
+          "title": "New chat",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "rc5x9q5w",
+          "title": "Dashboards",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "gb30kjav",
+          "title": "Dashboards",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "v1gsol3q",
+          "title": "Monthly app revenue",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "nby0vw36",
+          "title": "Recordings",
+          "focused": true,
+          "hidden": false
+        }
+      ],
+      "screenshot": "12-spotlight-opened-app.png"
+    },
+    {
+      "name": "cmd-k-in-frame",
+      "pageUrl": "/project/100001/replay/home",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "Last month's signups by country",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "nmy14a6l",
+          "title": "Weekly signups",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "p69xj982",
+          "title": "New chat",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "rc5x9q5w",
+          "title": "Dashboards",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "gb30kjav",
+          "title": "Dashboards",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "v1gsol3q",
+          "title": "Monthly app revenue",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "nby0vw36",
+          "title": "Recordings",
+          "focused": true,
+          "hidden": false
+        }
+      ],
+      "spotlightOpen": true,
+      "screenshot": "13-cmd-k-in-frame.png"
+    },
+    {
+      "name": "spotlight-new-sql-query-window",
+      "pageUrl": "/project/100001/sql#q=&output_tab=results",
+      "browserTabs": 1,
+      "windows": [
+        {
+          "id": "j56g6x23",
+          "title": "Last month's signups by country",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "nmy14a6l",
+          "title": "Weekly signups",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "p69xj982",
+          "title": "New chat",
+          "focused": false,
+          "hidden": true
+        },
+        {
+          "id": "rc5x9q5w",
+          "title": "Dashboards",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "gb30kjav",
+          "title": "Dashboards",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "v1gsol3q",
+          "title": "Monthly app revenue",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "nby0vw36",
+          "title": "Recordings",
+          "focused": false,
+          "hidden": false
+        },
+        {
+          "id": "h3eqdtac",
+          "title": "SQL query",
+          "focused": true,
+          "hidden": false
+        }
+      ],
+      "windowsBefore": 7,
+      "screenshot": "14-spotlight-new-sql-query-window.png"
+    }
+  ],
+  "insightLinks": [
+    "/project/100001/insights/f5TX9fY9?dashboard=2&variables_override=%7B%7D&filters_override=%7B%7D&tile_filters_override=%7B%7D",
+    "/project/100001/insights/WhhvoCxP?dashboard=2&variables_override=%7B%7D&filters_override=%7B%7D&tile_filters_override=%7B%7D",
+    "/project/100001/insights/6eym5ASy?dashboard=2&variables_override=%7B%7D&filters_override=%7B%7D&tile_filters_override=%7B%7D",
+    "/project/100001/insights/OjA1a46C?dashboard=2&variables_override=%7B%7D&filters_override=%7B%7D&tile_filters_override=%7B%7D"
+  ],
+  "themesRestored": [
+    "light",
+    "light",
+    "light"
+  ],
+  "spotlightOptions": [
+    "Monthly app revenueInsight3 min ago",
+    "Revenue definitionsSchema",
+    "Revenue analytics",
+    "Managed reverse proxy",
+    "Customization",
+    "Feature flags",
+    "Monthly app revenue",
+    "💸 Revenue",
+    "revenue-fields-in-power-users-table",
+    "dwh-revenuecat",
+    "error-tracking-revenue-sorting",
+    "web-revenue-tracking"
+  ],
+  "spotlightAppOptions": [
+    "Session replayBehavior1 min ago",
+    "Session replay",
+    "Autocapture",
+    "Logs",
+    "Support",
+    "Feature flags",
+    "session-replay-url-blocklist",
+    "session-replay-url-trigger",
+    "onboarding-session-replay-media",
+    "onboarding-session-replay-separate-step",
+    "anonymous-user-session-replay-filtering-fix",
+    "survey-targeting-next-five-great-session-replay-things"
+  ],
+  "focusAfterEscape": "iframe posthog-os-window:nby0vw36",
+  "focusedWindowAfterEscape": "posthog-os-window:nby0vw36",
+  "mainFrameLoads": [
+    "LOAD /project/100001/dashboard"
+  ]
+}
