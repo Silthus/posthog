@@ -1,0 +1,48 @@
+PASS src/scenes/os/shell/osDesktopApps.test.ts
+PASS src/scenes/os/bridge/osSidePanelPath.test.ts
+PASS src/scenes/os/bridge/osFrame.test.ts
+PASS src/scenes/os/windows/osWindowGeometry.test.ts
+PASS src/scenes/os/osShellMode.test.ts
+PASS src/scenes/os/shell/osAppSrc.test.ts
+PASS src/scenes/os/shell/glass/iconGlyph.test.tsx
+PASS src/scenes/os/windows/osWindowShortcuts.test.ts
+PASS src/scenes/os/shell/osWallpapers.test.ts
+FAIL src/scenes/os/bridge/osBridgeProtocol.test.ts
+  ● osBridgeProtocol › parses a click into the frame
+    Expected: {"type": "focus"}
+    Received: null
+  ● osBridgeProtocol › parses a changed user
+    Expected: {"type": "user-changed"}
+    Received: null
+  ● osBridgeProtocol › parses a changed user from the OS page
+    TypeError: Cannot read properties of undefined (reading 'call')
+  ● osBridgeProtocol › parses a frame-only message from the OS page
+    TypeError: Cannot read properties of undefined (reading 'call')
+  ● osBridgeProtocol › parses a message from another channel from the OS page
+    TypeError: Cannot read properties of undefined (reading 'call')
+  ● osBridgeProtocol › parses a message from a newer protocol from the OS page
+    TypeError: Cannot read properties of undefined (reading 'call')
+FAIL src/scenes/os/bridge/osFrameRouting.test.ts
+  ● osFrameRouting › a server page that asks for a new tab keeps the browser tab
+    Expected: null
+    Received: {"kind": "new-window", "path": "/api/export"}
+PASS src/scenes/os/spotlight/osSpotlightLogic.test.ts
+FAIL src/scenes/os/bridge/osFrameBridgeLogic.test.ts
+  ● osFrameBridgeLogic › tells the OS when the person changes the user, such as the theme, in the window
+    - Expected  - 5
+    + Received  + 1
+  ● osFrameBridgeLogic › reloads the user when the OS page says it changed
+    Expected number of calls: 1
+    Received number of calls: 0
+FAIL src/scenes/os/bridge/osBridgeLogic.test.ts
+  ● osBridgeLogic › brings a window to the front when the person clicks into its frame
+    Expected: "/project/997/insights"
+    Received: "/project/997/replay/home"
+  ● osBridgeLogic › tells every window frame when the user changes, so a new theme reaches open windows
+    Expected: {"channel": "posthog-os-bridge", "type": "user-changed", "version": 1}, "http://localhost"
+  ● osBridgeLogic › reloads its own user and tells the other frames when a window changes the user
+    Expected number of calls: >= 1
+    Received number of calls:    0
+PASS src/scenes/os/windows/osWindowsLogic.test.ts
+Test Suites: 4 failed, 11 passed, 15 total
+Tests:       12 failed, 162 passed, 174 total
