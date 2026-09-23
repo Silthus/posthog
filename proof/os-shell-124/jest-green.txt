@@ -1,0 +1,105 @@
+[90m12:29:43:498[0m [34m[websocket:dispose][0m global symbol deleted: undefined
+[90m12:29:43:498[0m [34m[websocket:dispose][0m disposing of 1 subscriptions...
+[90m12:29:43:498[0m [34m[websocket:dispose][0m disposed of all subscriptions! 0
+[90m12:29:43:498[0m [34m[websocket:dispose][0m destroyed the listener!
+[90m12:29:43:498[0m [34m[interceptor-source:dispose][0m disposed of all subscriptions! 0
+[90m12:29:43:498[0m [34m[interceptor-source:dispose][0m destroyed the listener!
+[90m12:29:43:540[0m [34m[fetch][0m request has not been handled, passthrough...
+[90m12:29:43:541[0m [34m[fetch][0m original fetch performed {}
+[90m12:29:43:547[0m [34m[fetch][0m request has not been handled, passthrough...
+[90m12:29:43:548[0m [34m[fetch][0m original fetch performed {}
+PASS src/scenes/os/windows/osWindowsLogic.test.ts
+  osWindowsLogic
+    ✓ opens the URL the page loaded on as the focused window (39 ms)
+    ✓ focuses the newest window and keeps the browser URL on the focused window (22 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       2 passed, 2 total
+Snapshots:   0 total
+Time:        1.414 s
+Ran all test suites matching /src\/scenes\/os\/windows\/osWindowsLogic.test.ts/i.
+    ✓ opens the URL the page loaded on as the focused window (40 ms)
+    ✓ focuses the newest window and keeps the browser URL on the focused window (29 ms)
+    ✓ opening an open path focuses the window that already shows the path (31 ms)
+    ✓ opening an open path opens a second window when asked for a new one (22 ms)
+    ✓ refuses to open a protocol-relative URL (19 ms)
+    ✓ refuses to open an absolute URL on another site (20 ms)
+    ✓ refuses to open a script URL (27 ms)
+    ✓ hands focus and the URL to the window below when the focused window closes or minimizes (20 ms)
+    ✓ leaves the URL alone when the last visible window goes away (18 ms)
+    ✓ opens a path the page navigates to, and ignores redirects it did not ask for (17 ms)
+    ✓ follows navigation inside a window, and moves the URL only for the focused one (18 ms)
+Tests:       11 passed, 11 total
+    ✓ opens the URL the page loaded on as the focused window (41 ms)
+    ✓ focuses the newest window and keeps the browser URL on the focused window (30 ms)
+    ✓ opening an open path focuses the window that already shows the path (31 ms)
+    ✓ opening an open path opens a second window when asked for a new one (23 ms)
+    ✓ refuses to open a protocol-relative URL (19 ms)
+    ✓ refuses to open an absolute URL on another site (19 ms)
+    ✓ refuses to open a script URL (22 ms)
+    ✓ hands focus and the URL to the window below when the focused window closes or minimizes (21 ms)
+    ✓ leaves the URL alone when the last visible window goes away (18 ms)
+    ✓ opens a path the page navigates to, and ignores redirects it did not ask for (18 ms)
+    ✓ follows navigation inside a window, and moves the URL only for the focused one (19 ms)
+    ✓ maximizes and snaps a window, and goes back to the size it had before (20 ms)
+    ✓ keeps a maximized window filling the desktop and a moved window reachable when the desktop shrinks (23 ms)
+    ✓ tidies the visible windows into a grid in their left-to-right order and leaves minimized ones alone (18 ms)
+Tests:       14 passed, 14 total
+    ✓ opens the URL the page loaded on as the focused window (40 ms)
+    ✓ focuses the newest window and keeps the browser URL on the focused window (30 ms)
+    ✓ opening an open path focuses the window that already shows the path (31 ms)
+    ✓ opening an open path opens a second window when asked for a new one (22 ms)
+    ✓ refuses to open a protocol-relative URL (20 ms)
+    ✓ refuses to open an absolute URL on another site (26 ms)
+    ✓ refuses to open a script URL (20 ms)
+    ✓ hands focus and the URL to the window below when the focused window closes or minimizes (20 ms)
+    ✓ leaves the URL alone when the last visible window goes away (18 ms)
+    ✓ opens a path the page navigates to, and ignores redirects it did not ask for (17 ms)
+    ✓ follows navigation inside a window, and moves the URL only for the focused one (18 ms)
+    ✓ maximizes and snaps a window, and goes back to the size it had before (19 ms)
+    ✓ keeps a maximized window filling the desktop and a moved window reachable when the desktop shrinks (23 ms)
+    ✓ tidies the visible windows into a grid in their left-to-right order and leaves minimized ones alone (17 ms)
+      ✓ restores the same layout on the same URL (23 ms)
+      ✓ opens a deep link as the focused window on top of the restored layout (27 ms)
+      ✓ brings back a minimized window when the URL points at it (35 ms)
+      ✓ does not reopen a window that was closed on the URL it left behind (31 ms)
+      ✓ keeps each project on its own desktop (31 ms)
+      ✓ starts from the URL alone when the saved layout is not JSON (26 ms)
+      ✓ starts from the URL alone when the saved layout has the wrong shape (29 ms)
+      ✓ starts from the URL alone when the saved layout points a window at another site (16 ms)
+Tests:       22 passed, 22 total
+    ✓ Alt+Shift+Left snaps left (2 ms)
+    ✓ Alt+Shift+Right snaps right
+    ✓ Alt+Shift+Up maximizes (1 ms)
+    ✓ Alt+Shift+Down minimizes
+    ✓ Alt+Shift+W closes (1 ms)
+    ✓ Alt+Shift+G tidies up
+    ✓ a bare arrow key does nothing
+    ✓ Shift+Left alone does nothing, it selects text (1 ms)
+    ✓ Alt+Left alone does nothing, it is browser back
+    ✓ an extra Ctrl does nothing
+    ✓ an extra Cmd does nothing (1 ms)
+    ✓ a held key does not repeat the command
+    ✓ typing in a field does nothing
+Tests:       13 passed, 13 total
+Tests:       37 passed, 37 total
+    ✓ tidy up: one window fills the desktop (2 ms)
+    ✓ tidy up: three windows put two on top and stretch the third across the bottom
+    ✓ a drag that ends at { x: 5, y: 300 } snaps to left (1 ms)
+    ✓ a drag that ends at { x: 995, y: 300 } snaps to right
+    ✓ a drag that ends at { x: 500, y: 2 } snaps to maximize (1 ms)
+    ✓ a drag that ends at { x: 500, y: 300 } snaps to null
+    ✓ resizing from the left edge by { x: -50, y: 0 } keeps the opposite edge in place
+    ✓ resizing from the left edge by { x: 400, y: 0 } keeps the opposite edge in place (1 ms)
+    ✓ resizing from the bottom-right edge by { x: 20, y: 30 } keeps the opposite edge in place
+Tests:       9 passed, 9 total
+Tests:       1 failed, 62 passed, 63 total
+Tests:       63 passed, 63 total
+Tests:       65 passed, 65 total
+PASS src/scenes/os/windows/osWindowGeometry.test.ts
+PASS src/scenes/os/windows/osWindowShortcuts.test.ts
+PASS src/scenes/os/osShellMode.test.ts
+PASS src/scenes/os/bridge/osFrame.test.ts
+PASS src/scenes/os/windows/osWindowsLogic.test.ts
+PASS src/scenes/sceneLogic.test.tsx (8.41 s)
+Tests:       111 passed, 111 total

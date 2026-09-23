@@ -1,0 +1,100 @@
+    You might want to include a file extension in your import, or update your 'moduleFileExtensions', which is currently ['js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'json', 'node'].
+
+    See https://jestjs.io/docs/configuration#modulefileextensions-arraystring
+
+       5 | import { initKeaTests } from '~/test/init'
+       6 |
+    >  7 | import { osWindowsLogic } from './osWindowsLogic'
+         | ^
+       8 |
+       9 | const INSIGHTS = `/project/${MOCK_TEAM_ID}/insights`
+      10 | const REPLAY = `/project/${MOCK_TEAM_ID}/replay/home`
+
+      at Resolver._throwModNotFoundError (../node_modules/.pnpm/jest-resolve@29.7.0/node_modules/jest-resolve/build/resolver.js:427:11)
+      at Object.<anonymous> (src/scenes/os/windows/osWindowsLogic.test.ts:7:1)
+
+Test Suites: 1 failed, 1 total
+Tests:       0 total
+Snapshots:   0 total
+Time:        2.251 s
+Ran all test suites matching /src\/scenes\/os\/windows\/osWindowsLogic.test.ts/i.
+    ✓ opens the URL the page loaded on as the focused window (41 ms)
+    ✓ focuses the newest window and keeps the browser URL on the focused window (29 ms)
+    ✓ opening an open path focuses the window that already shows the path (31 ms)
+    ✓ opening an open path opens a second window when asked for a new one (22 ms)
+    ✓ refuses to open a protocol-relative URL (19 ms)
+    ✓ refuses to open an absolute URL on another site (20 ms)
+    ✓ refuses to open a script URL (28 ms)
+    ✕ hands focus and the URL to the window below when the focused window closes or minimizes (19 ms)
+    ✕ leaves the URL alone when the last visible window goes away (17 ms)
+    ✕ opens a path the page navigates to, and ignores redirects it did not ask for (19 ms)
+    ✕ follows navigation inside a window, and moves the URL only for the focused one (17 ms)
+    TypeError: logic.actions.closeWindow is not a function
+    TypeError: logic.actions.minimizeWindow is not a function
+    - Expected  - 1
+    + Received  + 0
+    TypeError: logic.actions.windowNavigated is not a function
+Tests:       4 failed, 7 passed, 11 total
+    ✓ opens the URL the page loaded on as the focused window (40 ms)
+    ✓ focuses the newest window and keeps the browser URL on the focused window (30 ms)
+    ✓ opening an open path focuses the window that already shows the path (32 ms)
+    ✓ opening an open path opens a second window when asked for a new one (22 ms)
+    ✓ refuses to open a protocol-relative URL (19 ms)
+    ✓ refuses to open an absolute URL on another site (21 ms)
+    ✓ refuses to open a script URL (28 ms)
+    ✓ hands focus and the URL to the window below when the focused window closes or minimizes (22 ms)
+    ✓ leaves the URL alone when the last visible window goes away (19 ms)
+    ✓ opens a path the page navigates to, and ignores redirects it did not ask for (18 ms)
+    ✓ follows navigation inside a window, and moves the URL only for the focused one (17 ms)
+    ✕ maximizes and snaps a window, and goes back to the size it had before (18 ms)
+    ✕ keeps a maximized window filling the desktop and a moved window reachable when the desktop shrinks (17 ms)
+    ✕ tidies the visible windows into a grid in their left-to-right order and leaves minimized ones alone (19 ms)
+    TypeError: logic.actions.setDesktopSize is not a function
+    TypeError: logic.actions.setDesktopSize is not a function
+    TypeError: logic.actions.setDesktopSize is not a function
+Tests:       3 failed, 11 passed, 14 total
+    ✓ opens the URL the page loaded on as the focused window (39 ms)
+    ✓ focuses the newest window and keeps the browser URL on the focused window (29 ms)
+    ✓ opening an open path focuses the window that already shows the path (30 ms)
+    ✓ opening an open path opens a second window when asked for a new one (22 ms)
+    ✓ refuses to open a protocol-relative URL (20 ms)
+    ✓ refuses to open an absolute URL on another site (19 ms)
+    ✓ refuses to open a script URL (39 ms)
+    ✓ hands focus and the URL to the window below when the focused window closes or minimizes (21 ms)
+    ✓ leaves the URL alone when the last visible window goes away (17 ms)
+    ✓ opens a path the page navigates to, and ignores redirects it did not ask for (17 ms)
+    ✓ follows navigation inside a window, and moves the URL only for the focused one (17 ms)
+    ✓ maximizes and snaps a window, and goes back to the size it had before (18 ms)
+    ✓ keeps a maximized window filling the desktop and a moved window reachable when the desktop shrinks (17 ms)
+    ✓ tidies the visible windows into a grid in their left-to-right order and leaves minimized ones alone (24 ms)
+      ✕ restores the same layout on the same URL (26 ms)
+      ✕ opens a deep link as the focused window on top of the restored layout (26 ms)
+      ✕ brings back a minimized window when the URL points at it (32 ms)
+      ✕ does not reopen a window that was closed on the URL it left behind (38 ms)
+      ✓ keeps each project on its own desktop (31 ms)
+      ✓ starts from the URL alone when the saved layout is not JSON (25 ms)
+      ✓ starts from the URL alone when the saved layout has the wrong shape (19 ms)
+      ✓ starts from the URL alone when the saved layout points a window at another site (24 ms)
+    - Expected  - 37
+    + Received  +  4
+    - Expected  - 3
+    + Received  + 0
+    Expected length: 3
+    Received length: 1
+    Received array:  [{"bounds": {"height": 653, "width": 819, "x": 103, "y": 58}, "id": "wmxtw7t4", "maximized": false, "minimized": false, "path": "/project/997/feature_flags?tab=overview#panel=discussion", "restoreBounds": null, "title": "PostHog", "zIndex": 1}]
+    - Expected  -  1
+    + Received  + 17
+Tests:       4 failed, 18 passed, 22 total
+    Cannot find module './osWindowShortcuts' from 'src/scenes/os/windows/osWindowShortcuts.test.ts'
+Tests:       0 total
+    ✕ runs keyboard commands on the focused window only (17 ms)
+    TypeError: logic.actions.runWindowCommand is not a function
+Tests:       1 failed, 23 passed, 24 total
+    ✕ moves the URL without a router location change, so the page does not load the scene itself (19 ms)
+    ✕ keeps a maximized window filling the desktop and a moved window reachable when the desktop shrinks (19 ms)
+      ✕ does not reopen the closed window when another tab saved the layout since (34 ms)
+    Expected: <= 840
+    Received:    904
+    - Expected  -  1
+    + Received  + 17
+Tests:       3 failed, 23 passed, 26 total

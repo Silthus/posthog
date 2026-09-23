@@ -1,0 +1,358 @@
+{
+  "threeApps": {
+    "url": "/project/5/feature_flags?tab=overview",
+    "layout": [
+      {
+        "id": "3v9ga5fd",
+        "title": "Product analytics",
+        "focused": false,
+        "hidden": false,
+        "z": "1",
+        "x": 144,
+        "y": 68,
+        "w": 1152,
+        "h": 765
+      },
+      {
+        "id": "vv6c4p52",
+        "title": "Recordings",
+        "focused": false,
+        "hidden": false,
+        "z": "2",
+        "x": 176,
+        "y": 100,
+        "w": 1152,
+        "h": 765
+      },
+      {
+        "id": "53zy3zrx",
+        "title": "Feature flags",
+        "focused": true,
+        "hidden": false,
+        "z": "3",
+        "x": 208,
+        "y": 132,
+        "w": 1152,
+        "h": 765
+      }
+    ]
+  },
+  "afterDrag": [
+    {
+      "id": "3v9ga5fd",
+      "title": "Product analytics",
+      "focused": false,
+      "hidden": false,
+      "z": "1",
+      "x": 144,
+      "y": 68,
+      "w": 1152,
+      "h": 765
+    },
+    {
+      "id": "vv6c4p52",
+      "title": "Recordings",
+      "focused": false,
+      "hidden": false,
+      "z": "2",
+      "x": 176,
+      "y": 100,
+      "w": 1152,
+      "h": 765
+    },
+    {
+      "id": "53zy3zrx",
+      "title": "Feature flags",
+      "focused": true,
+      "hidden": false,
+      "z": "3",
+      "x": -92,
+      "y": 192,
+      "w": 1152,
+      "h": 765
+    }
+  ],
+  "afterResize": {
+    "url": "/project/5/feature_flags?tab=overview",
+    "layout": [
+      {
+        "id": "3v9ga5fd",
+        "title": "Product analytics",
+        "focused": false,
+        "hidden": false,
+        "z": "1",
+        "x": 144,
+        "y": 68,
+        "w": 1152,
+        "h": 765
+      },
+      {
+        "id": "vv6c4p52",
+        "title": "Recordings",
+        "focused": false,
+        "hidden": false,
+        "z": "2",
+        "x": 176,
+        "y": 100,
+        "w": 1152,
+        "h": 765
+      },
+      {
+        "id": "53zy3zrx",
+        "title": "Feature flags",
+        "focused": true,
+        "hidden": false,
+        "z": "3",
+        "x": -92,
+        "y": 192,
+        "w": 852,
+        "h": 765
+      }
+    ]
+  },
+  "snapPreviewVisible": true,
+  "afterSnap": {
+    "url": "/project/5/insights",
+    "layout": [
+      {
+        "id": "3v9ga5fd",
+        "title": "Product analytics",
+        "focused": true,
+        "hidden": false,
+        "z": "3",
+        "x": 0,
+        "y": 0,
+        "w": 720,
+        "h": 900
+      },
+      {
+        "id": "vv6c4p52",
+        "title": "Recordings",
+        "focused": false,
+        "hidden": false,
+        "z": "1",
+        "x": 176,
+        "y": 100,
+        "w": 1152,
+        "h": 765
+      },
+      {
+        "id": "53zy3zrx",
+        "title": "Feature flags",
+        "focused": false,
+        "hidden": false,
+        "z": "2",
+        "x": -92,
+        "y": 192,
+        "w": 852,
+        "h": 765
+      }
+    ]
+  },
+  "afterMinimize": {
+    "url": "/project/5/insights",
+    "layout": [
+      {
+        "id": "3v9ga5fd",
+        "title": "Product analytics",
+        "focused": true,
+        "hidden": false,
+        "z": "2",
+        "x": 0,
+        "y": 0,
+        "w": 720,
+        "h": 900
+      },
+      {
+        "id": "vv6c4p52",
+        "title": "Recordings",
+        "focused": false,
+        "hidden": true,
+        "z": "3",
+        "x": 666,
+        "y": 820,
+        "w": 115,
+        "h": 77
+      },
+      {
+        "id": "53zy3zrx",
+        "title": "Feature flags",
+        "focused": false,
+        "hidden": false,
+        "z": "1",
+        "x": -92,
+        "y": 192,
+        "w": 852,
+        "h": 765
+      }
+    ]
+  },
+  "afterRestore": {
+    "url": "/project/5/replay/home",
+    "layout": [
+      {
+        "id": "3v9ga5fd",
+        "title": "Product analytics",
+        "focused": false,
+        "hidden": false,
+        "z": "2",
+        "x": 0,
+        "y": 0,
+        "w": 720,
+        "h": 900
+      },
+      {
+        "id": "vv6c4p52",
+        "title": "Recordings",
+        "focused": true,
+        "hidden": false,
+        "z": "3",
+        "x": 176,
+        "y": 100,
+        "w": 1152,
+        "h": 765
+      },
+      {
+        "id": "53zy3zrx",
+        "title": "Feature flags",
+        "focused": false,
+        "hidden": false,
+        "z": "1",
+        "x": -92,
+        "y": 192,
+        "w": 852,
+        "h": 765
+      }
+    ]
+  },
+  "afterTidy": {
+    "url": "/project/5/replay/home",
+    "layout": [
+      {
+        "id": "3v9ga5fd",
+        "title": "Product analytics",
+        "focused": false,
+        "hidden": false,
+        "z": "2",
+        "x": 724,
+        "y": 8,
+        "w": 708,
+        "h": 438
+      },
+      {
+        "id": "vv6c4p52",
+        "title": "Recordings",
+        "focused": true,
+        "hidden": false,
+        "z": "3",
+        "x": 8,
+        "y": 454,
+        "w": 1424,
+        "h": 438
+      },
+      {
+        "id": "53zy3zrx",
+        "title": "Feature flags",
+        "focused": false,
+        "hidden": false,
+        "z": "1",
+        "x": 8,
+        "y": 8,
+        "w": 708,
+        "h": 438
+      }
+    ]
+  },
+  "reload": {
+    "url": "/project/5/replay/home",
+    "same": true,
+    "beforeReload": [
+      {
+        "id": "3v9ga5fd",
+        "title": "Product analytics",
+        "focused": false,
+        "hidden": false,
+        "z": "2",
+        "x": 724,
+        "y": 8,
+        "w": 708,
+        "h": 438
+      },
+      {
+        "id": "vv6c4p52",
+        "title": "Recordings",
+        "focused": true,
+        "hidden": false,
+        "z": "3",
+        "x": 8,
+        "y": 454,
+        "w": 1424,
+        "h": 438
+      },
+      {
+        "id": "53zy3zrx",
+        "title": "Feature flags",
+        "focused": false,
+        "hidden": false,
+        "z": "1",
+        "x": 8,
+        "y": 8,
+        "w": 708,
+        "h": 438
+      }
+    ],
+    "afterReload": [
+      {
+        "id": "3v9ga5fd",
+        "title": "Product analytics",
+        "focused": false,
+        "hidden": false,
+        "z": "2",
+        "x": 724,
+        "y": 8,
+        "w": 708,
+        "h": 438
+      },
+      {
+        "id": "vv6c4p52",
+        "title": "Recordings",
+        "focused": true,
+        "hidden": false,
+        "z": "3",
+        "x": 8,
+        "y": 454,
+        "w": 1424,
+        "h": 438
+      },
+      {
+        "id": "53zy3zrx",
+        "title": "Feature flags",
+        "focused": false,
+        "hidden": false,
+        "z": "1",
+        "x": 8,
+        "y": 8,
+        "w": 708,
+        "h": 438
+      }
+    ]
+  },
+  "frames": [
+    {
+      "name": "posthog-os-window:3v9ga5fd",
+      "src": "/project/5/insights",
+      "hasOsShell": false
+    },
+    {
+      "name": "posthog-os-window:vv6c4p52",
+      "src": "/project/5/replay/home",
+      "hasOsShell": false
+    },
+    {
+      "name": "posthog-os-window:53zy3zrx",
+      "src": "/project/5/feature_flags?tab=overview",
+      "hasOsShell": false
+    }
+  ],
+  "errors": []
+}

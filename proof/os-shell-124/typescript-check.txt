@@ -1,0 +1,2 @@
+No errors reported by tsgo.
+EXIT 0
