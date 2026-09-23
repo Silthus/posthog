@@ -1,20 +1,25 @@
+import type { SceneConfig } from 'scenes/sceneTypes'
+
 import { resolveOsShellMode } from './osShellMode'
+
+const appScene: SceneConfig = { projectBased: true, name: 'Insight' }
+const plainScene: SceneConfig = { projectBased: true, name: 'Onboarding', layout: 'plain' }
 
 describe('resolveOsShellMode', () => {
     test.each([
-        ['full', false, true, 'os'],
-        ['zen', false, true, 'os'],
-        ['full', false, false, 'full'],
-        ['zen', false, false, 'zen'],
-        ['minimal', false, false, 'minimal'],
-        ['none', false, false, 'none'],
-        ['minimal', false, true, 'minimal'],
-        ['none', false, true, 'none'],
-        ['full', true, true, 'framed'],
-        ['full', true, false, 'framed'],
-        ['zen', true, true, 'framed'],
-        ['minimal', true, true, 'framed'],
-    ] as const)('regular mode %s, framed %s, flag %s gives %s', (regularMode, framed, osShellEnabled, expected) => {
-        expect(resolveOsShellMode({ regularMode, framed, osShellEnabled })).toBe(expected)
-    })
+        ['flag on, app scene', 'full', true, false, appScene, false, 'os'],
+        ['flag on, persisted zen mode', 'zen', true, false, appScene, false, 'os'],
+        ['flag off', 'full', false, false, appScene, false, 'full'],
+        ['flag on, scene that owns the page', 'minimal', true, false, plainScene, false, 'minimal'],
+        ['flag on, organization unavailable', 'minimal', true, false, appScene, true, 'minimal'],
+        ['flag on, inside an OS window', 'full', true, true, appScene, false, 'framed'],
+        ['flag off, inside an OS window', 'full', false, true, appScene, false, 'framed'],
+    ] as const)(
+        '%s',
+        (_description, regularMode, osShellEnabled, framed, sceneConfig, organizationUnavailable, expected) => {
+            expect(
+                resolveOsShellMode(regularMode, { osShellEnabled, framed, sceneConfig, organizationUnavailable })
+            ).toBe(expected)
+        }
+    )
 })

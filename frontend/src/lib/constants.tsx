@@ -594,7 +594,8 @@ export const FEATURE_FLAGS = {
 export type FeatureFlagLookupKey = keyof typeof FEATURE_FLAGS
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[keyof typeof FEATURE_FLAGS]
 
-export const STORYBOOK_FEATURE_FLAGS = Object.values(FEATURE_FLAGS)
+// The OS shell replaces the app layout with an iframe of the story, so stories that turn on every flag leave it off.
+export const STORYBOOK_FEATURE_FLAGS = Object.values(FEATURE_FLAGS).filter((flag) => flag !== FEATURE_FLAGS.OS_SHELL)
 
 export const INSIGHT_VISUAL_ORDER = {
     trends: 10,

@@ -86,8 +86,8 @@ export interface navigation3000LogicValues {
     isNavCollapsed: boolean
     isNavCollapsedDesktop: boolean
     isNavShown: boolean
-    isOsFrame: boolean
     isNavShownMobile: boolean
+    isOsFrame: boolean
     isResizeInProgress: boolean
     isSearchShown: boolean
     isSidebarKeyboardShortcutAcknowledged: boolean
@@ -235,7 +235,9 @@ export interface navigation3000LogicMeta {
         mode: (
             regularMode: Navigation3000Mode,
             isOsFrame: boolean,
-            featureFlags: import('lib/logic/featureFlagLogic').FeatureFlagsSet
+            featureFlags: import('lib/logic/featureFlagLogic').FeatureFlagsSet,
+            sceneConfig: SceneConfig | null,
+            isCurrentOrganizationUnavailable: boolean
         ) => Navigation3000Mode
         isNavShown: (isNavShownMobile: boolean, mobileLayout: boolean) => boolean
         isNavCollapsed: (isNavCollapsedDesktop: boolean, mobileLayout: boolean) => boolean
@@ -614,16 +616,25 @@ export const navigation3000Logic = kea<navigation3000LogicType>([
             },
         ],
         mode: [
-            (s) => [s.regularMode, s.isOsFrame, featureFlagLogic.selectors.featureFlags],
+            (s) => [
+                s.regularMode,
+                s.isOsFrame,
+                featureFlagLogic.selectors.featureFlags,
+                s.sceneConfig,
+                s.isCurrentOrganizationUnavailable,
+            ],
             (
                 regularMode: Navigation3000Mode,
                 framed: boolean,
-                featureFlags: import('lib/logic/featureFlagLogic').FeatureFlagsSet
+                featureFlags: import('lib/logic/featureFlagLogic').FeatureFlagsSet,
+                sceneConfig: SceneConfig | null,
+                isCurrentOrganizationUnavailable: boolean
             ): Navigation3000Mode =>
-                resolveOsShellMode({
-                    regularMode,
-                    framed,
+                resolveOsShellMode(regularMode, {
                     osShellEnabled: !!featureFlags[FEATURE_FLAGS.OS_SHELL],
+                    framed,
+                    sceneConfig,
+                    organizationUnavailable: isCurrentOrganizationUnavailable,
                 }),
         ],
         isNavShown: [
