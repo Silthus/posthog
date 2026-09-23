@@ -4,6 +4,7 @@ import { router } from 'kea-router'
 import { expectLogic } from 'kea-test-utils'
 
 import { commandLogic } from 'lib/components/Command/commandLogic'
+import { lemonToast } from 'lib/lemon-ui/LemonToast/LemonToast'
 import { newInternalTab } from 'lib/utils/newInternalTab'
 import { userLogic } from 'scenes/userLogic'
 
@@ -21,6 +22,7 @@ describe('osFrameBridgeLogic', () => {
     let logic: ReturnType<typeof osFrameBridgeLogic.build>
     let sent: OsBridgeMessage[]
     let anchor: HTMLAnchorElement
+    let sibling: HTMLIFrameElement
 
     function sentOfType<T extends OsBridgeMessage['type']>(type: T): Extract<OsBridgeMessage, { type: T }>[] {
         return sent.filter((m): m is Extract<OsBridgeMessage, { type: T }> => m.type === type)
@@ -46,6 +48,8 @@ describe('osFrameBridgeLogic', () => {
         // Without this the jsdom click would try to navigate the test page.
         anchor.addEventListener('click', (event) => event.preventDefault())
         document.body.appendChild(anchor)
+        sibling = document.createElement('iframe')
+        document.body.appendChild(sibling)
         document.title = 'Insights • Product analytics • PostHog'
         logic = osFrameBridgeLogic()
         logic.mount()
@@ -54,6 +58,7 @@ describe('osFrameBridgeLogic', () => {
     afterEach(() => {
         logic.unmount()
         anchor.remove()
+        sibling.remove()
         jest.restoreAllMocks()
     })
 
@@ -117,13 +122,17 @@ describe('osFrameBridgeLogic', () => {
         expect(event.defaultPrevented).toBe(true)
     })
 
-    it('asks the OS for a side panel, but opens support in the window', () => {
+    it('asks the OS for a side panel, opens support in the window, and explains a panel no window can show', () => {
+        const info = jest.spyOn(lemonToast, 'info').mockImplementation(() => 'toast')
+
         sidePanelStateLogic.actions.openSidePanel(SidePanelTab.Max, '!why did signups drop')
         sidePanelStateLogic.actions.openSidePanel(SidePanelTab.Support, 'bug:analytics')
+        sidePanelStateLogic.actions.openSidePanel(SidePanelTab.Discussion)
 
         expect(sentOfType('side-panel')).toEqual([
             { type: 'side-panel', tab: SidePanelTab.Max, options: '!why did signups drop' },
         ])
+        expect(info).toHaveBeenCalledWith('This panel is not available in windows yet.', expect.anything())
     })
 
     it('tells the OS when the person changes the user, such as the theme, in the window', () => {
@@ -150,10 +159,11 @@ describe('osFrameBridgeLogic', () => {
     })
 
     test.each([
-        ['another origin', 'https://evil.example.com', window.parent],
-        ['a window that is not the OS page', window.location.origin, null],
+        ['another origin', 'https://evil.example.com', () => window.parent],
+        ['a message without a source', window.location.origin, () => null],
+        ['another frame on this origin', window.location.origin, () => sibling.contentWindow],
     ])('ignores a user change from %s', async (_description, origin, source) => {
-        await expectLogic(logic, messageFrom(origin, source)).toNotHaveDispatchedActions(['loadUser'])
+        await expectLogic(logic, messageFrom(origin, source())).toNotHaveDispatchedActions(['loadUser'])
     })
 
     it('opens the OS spotlight in place of the command menu', () => {

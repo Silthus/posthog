@@ -4,10 +4,12 @@ import { router } from 'kea-router'
 import { expectLogic } from 'kea-test-utils'
 
 import { commandLogic } from 'lib/components/Command/commandLogic'
+import { newInternalTab } from 'lib/utils/newInternalTab'
 import { userLogic } from 'scenes/userLogic'
 
 import { initKeaTests } from '~/test/init'
 
+import { osSpotlightLogic } from '../spotlight/osSpotlightLogic'
 import { osWindowsLogic } from '../windows/osWindowsLogic'
 import { osBridgeLogic } from './osBridgeLogic'
 import { OS_BRIDGE_CHANNEL, OS_BRIDGE_VERSION, OsBridgeMessage } from './osBridgeProtocol'
@@ -95,12 +97,15 @@ describe('osBridgeLogic', () => {
         expect(windows.values.focusedWindow?.path).toBe(REPLAY)
     })
 
-    it('brings a window to the front when the person clicks into its frame', () => {
+    it('brings a window to the front when the person clicks into its frame, and ignores clicks in the top window', () => {
         windows.actions.openWindow(REPLAY)
 
         send({ type: 'focus' })
-
         expect(windows.values.focusedWindow?.path).toBe(INSIGHTS)
+
+        const saves = jest.spyOn(Storage.prototype, 'setItem')
+        send({ type: 'focus' })
+        expect(saves).not.toHaveBeenCalled()
     })
 
     it('tells every window frame when the user changes, so a new theme reaches open windows', () => {
@@ -128,11 +133,21 @@ describe('osBridgeLogic', () => {
         other.remove()
     })
 
-    it('opens the spotlight when the framed app asks for search', () => {
+    it('opens the spotlight when the framed app asks for search, without counting a second open', async () => {
         commandLogic.mount()
+        osSpotlightLogic.mount()
 
-        send({ type: 'spotlight' })
+        await expectLogic(commandLogic, () => send({ type: 'spotlight' })).toNotHaveDispatchedActions([
+            'openCommand',
+            'toggleCommand',
+        ])
 
-        expect(commandLogic.values.isCommandOpen).toBe(true)
+        expect(osSpotlightLogic.values.isSpotlightOpen).toBe(true)
+    })
+
+    it('opens an "open in new tab" action on the OS page in a new window', () => {
+        newInternalTab('/replay/home')
+
+        expect(pathsOf()).toEqual([INSIGHTS, REPLAY])
     })
 })

@@ -2,6 +2,7 @@ import { MakeLogicType, afterMount, beforeUnmount, connect, kea, listeners, path
 import { router } from 'kea-router'
 
 import { commandLogic } from 'lib/components/Command/commandLogic'
+import { lemonToast } from 'lib/lemon-ui/LemonToast/LemonToast'
 import { userLogic } from 'scenes/userLogic'
 
 import { sidePanelStateLogic } from '~/layout/navigation-3000/sidepanel/sidePanelStateLogic'
@@ -9,8 +10,9 @@ import { SidePanelTab } from '~/types'
 
 import { osWindowCommandFor } from '../windows/osWindowShortcuts'
 import { OsBridgeMessage, isFromOsHost, parseOsHostMessage, postToOs } from './osBridgeProtocol'
-import { setOsFrameConnection } from './osFrameConnection'
+import { setOsWindowOpener } from './osFrameConnection'
 import { OsLinkTarget, osLinkTarget, osNavigationTarget } from './osFrameRouting'
+import { osSidePanelPath } from './osSidePanelPath'
 
 /**
  * The app titles pages "Page • Section • PostHog", and a window shows only the page part. A loading app
@@ -135,8 +137,15 @@ export const osFrameBridgeLogic = kea<osFrameBridgeLogicType>([
                 if (tab === SidePanelTab.Support) {
                     return
                 }
-                send({ type: 'side-panel', tab, ...(options ? { options } : {}) })
                 actions.closeSidePanel()
+                if (osSidePanelPath(tab, options)) {
+                    send({ type: 'side-panel', tab, ...(options ? { options } : {}) })
+                } else {
+                    // The side panel's hash sync can open the same panel twice in a row, so one toast id keeps one toast.
+                    lemonToast.info('This panel is not available in windows yet.', {
+                        toastId: 'os-side-panel-unavailable',
+                    })
+                }
             },
             openCommand: openSpotlight,
             toggleCommand: openSpotlight,
@@ -160,7 +169,7 @@ export const osFrameBridgeLogic = kea<osFrameBridgeLogicType>([
                 send(report)
             }
         }
-        setOsFrameConnection(window)
+        setOsWindowOpener((path) => send({ type: 'open-window', path }))
         cache.reportLocation(false)
 
         cache.disposables.add(
@@ -185,7 +194,7 @@ export const osFrameBridgeLogic = kea<osFrameBridgeLogicType>([
                 }
                 const onKeyDown = (event: KeyboardEvent): void => {
                     const command = osWindowCommandFor(event)
-                    if (command && !event.defaultPrevented) {
+                    if (command) {
                         event.preventDefault()
                         event.stopPropagation()
                         send({ type: 'window-command', command })
@@ -250,6 +259,6 @@ export const osFrameBridgeLogic = kea<osFrameBridgeLogicType>([
         )
     }),
     beforeUnmount(() => {
-        setOsFrameConnection(null)
+        setOsWindowOpener(null)
     }),
 ])

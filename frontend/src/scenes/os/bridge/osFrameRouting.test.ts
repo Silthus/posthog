@@ -65,11 +65,8 @@ describe('osFrameRouting', () => {
             null,
         ],
         ['a plain click on a server page leaves the frame', click('/logout'), { kind: 'top', url: `${ORIGIN}/logout` }],
-        [
-            'a server page that asks for a new tab keeps the browser tab',
-            click('/api/export', { target: '_blank' }),
-            null,
-        ],
+        ['a server page that asks for a new tab keeps the browser tab', click('/logout', { metaKey: true }), null],
+        ['an API link that asks for a new tab keeps the browser tab', click('/api/export', { target: '_blank' }), null],
         ['a mail link keeps the browser behavior', click('mailto:hey@example.com'), null],
         ['a script link does nothing', click('javascript:alert(1)'), null],
         ['a hash link stays in the page', click('#section'), null],

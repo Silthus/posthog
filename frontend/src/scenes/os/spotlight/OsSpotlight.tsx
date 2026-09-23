@@ -8,15 +8,19 @@ import { osSpotlightLogic } from './osSpotlightLogic'
 
 /** The app's command menu, with results that open in OS windows. Replaces `Command` on the OS page. */
 export function OsSpotlight(): JSX.Element {
-    const { isCommandOpen } = useValues(osSpotlightLogic)
+    const { isSpotlightOpen } = useValues(osSpotlightLogic)
     const { closeSpotlight, selectResult } = useActions(osSpotlightLogic)
 
     return (
-        <DialogPrimitive open={isCommandOpen} onOpenChange={(open) => !open && closeSpotlight()} className="w-[640px]">
+        <DialogPrimitive
+            open={isSpotlightOpen}
+            onOpenChange={(open) => !open && closeSpotlight()}
+            className="w-[640px]"
+        >
             <DialogPrimitiveTitle>Spotlight</DialogPrimitiveTitle>
             <Search.Root
                 logicKey="command"
-                isActive={isCommandOpen}
+                isActive={isSpotlightOpen}
                 onItemSelect={(item, newWindow) => selectResult(item, !!newWindow)}
                 onAskAiClick={closeSpotlight}
                 showAskAiLink

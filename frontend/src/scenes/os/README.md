@@ -91,8 +91,8 @@ Bump `OS_BRIDGE_VERSION` for any change that a reader of the old version would g
 | `focus`          | A pointer goes down in the frame.                                                                                                           | Brings the window to the front.                                              |
 | `open-window`    | Cmd/Ctrl+click, middle click, an in-app `target="_blank"` link, or `newInternalTab`.                                                        | Opens the path in a new window (`openWindow(path, { newWindow: true })`).    |
 | `window-command` | A window shortcut (`osWindowCommandFor`) while the frame has keyboard focus.                                                                | Focuses the sender, then runs `runWindowCommand`.                            |
-| `side-panel`     | The app calls `openSidePanel` for any tab but support.                                                                                      | Emits `sidePanelRequested`, then opens the matching app (`osSidePanelPath`). |
-| `spotlight`      | Cmd+K in the frame.                                                                                                                         | Opens the spotlight.                                                         |
+| `side-panel`     | The app calls `openSidePanel` for a tab that a page shows.                                                                                  | Emits `sidePanelRequested`, then opens the matching app (`osSidePanelPath`). |
+| `spotlight`      | Cmd+K in the frame.                                                                                                                         | Opens the spotlight without a second `command menu opened` event.            |
 | `user-changed`   | The app saved a change to the user, such as the theme.                                                                                      | Reloads its own user and sends `user-changed` to the other frames.           |
 | `open-top`       | A page that refuses framing: a server page (`/api/`, `/login`, `/logout`, `/signup`, `/admin/`, `/complete/`, `/oauth/`) or another origin. | Loads the http(s) URL in the whole browser tab.                              |
 
@@ -106,11 +106,13 @@ Links:
 - A redirect in code or a form post to a page that refuses framing is caught with the Navigation API `navigate` event and goes to `open-top`. Browsers without the Navigation API load those pages in the window, which then stays blank.
 - The browser's own "Open link in new tab" menu item still opens a browser tab.
 - A link to `/api/` stays with the browser: a file downloads, and an OAuth start leaves the window through `open-top`.
+  A redirect in code to any `/api/` URL without `download` leaves the window too, so an inline API response replaces the desktop until the person goes back. The layout is saved, so the windows come back.
+- `newInternalTab` opens a new window both inside a window and on the OS page itself (for example "New SQL query" in the spotlight).
 - On the desktop, Cmd/Ctrl+click or a middle click on an icon opens another window, also when a window already shows that app.
 
 Side panels: PostHog AI, activity, notebooks and exports open as apps in windows.
 Support opens its form as a modal inside the window.
-Discussions, access control and the info panel have no page yet, so a shell that shows its own side panel can handle `sidePanelRequested`.
+Discussions, access control and the info panel have no page yet. The window shows a toast that the panel is not available in windows yet, and sends nothing to the OS.
 
 Toasts, modals and popovers render inside the frame that opened them, so they stay inside its window.
 

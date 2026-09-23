@@ -1,20 +1,22 @@
-import { postToOs } from './osBridgeProtocol'
 import { osLinkTarget } from './osFrameRouting'
 
 // Kept free of logic and scene imports, because app-wide helpers such as `newInternalTab` import it.
-let connectedWindow: Window | null = null
+let windowOpener: ((path: string) => void) | null = null
 
-/** Called by `osFrameBridgeLogic` while it runs inside an OS window. */
-export function setOsFrameConnection(win: Window | null): void {
-    connectedWindow = win
+/**
+ * Registers how this page opens an app path in a new OS window. The framed app asks the OS page, and the
+ * OS page opens the window itself. Pass null when the bridge unmounts.
+ */
+export function setOsWindowOpener(opener: ((path: string) => void) | null): void {
+    windowOpener = opener
 }
 
 /**
- * Opens an app path in a new OS window when this page runs inside one. Returns false when the caller must
- * open it the regular way: outside the OS, or for a page that cannot load in a window.
+ * Opens an app path in a new OS window when this page belongs to the OS. Returns false when the caller must
+ * open it the regular way: without the OS, or for a page that cannot load in a window.
  */
 export function openInOsWindow(href: string): boolean {
-    if (!connectedWindow) {
+    if (!windowOpener) {
         return false
     }
     const target = osLinkTarget(
@@ -28,11 +30,11 @@ export function openInOsWindow(href: string): boolean {
             shiftKey: false,
             altKey: false,
         },
-        connectedWindow.location.href
+        window.location.href
     )
     if (target?.kind !== 'new-window') {
         return false
     }
-    postToOs(connectedWindow, { type: 'open-window', path: target.path })
+    windowOpener(target.path)
     return true
 }
