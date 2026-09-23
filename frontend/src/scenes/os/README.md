@@ -39,15 +39,15 @@ The root files (`OsScene.tsx`, `osShellMode.ts`, this README) belong to the foun
 `windows/osWindowsLogic` owns every open window, and `windows/OsWindowLayer` renders them in the space its parent gives it.
 Other folders open and arrange windows through the logic's actions, never through the DOM:
 
-| Action                                           | Effect                                                                                                                     |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `openWindow(path, { newWindow, title, origin })` | Focuses the window that shows `path`, or opens one. `newWindow` always opens another. `origin` is the point it zooms from. |
-| `focusWindow(id)`, `restoreWindow(id)`           | Brings a window to the front. Both also un-minimize it.                                                                    |
-| `minimizeWindow(id)`, `closeWindow(id)`          | Hides or closes a window. Focus goes to the next window in the stack.                                                      |
-| `maximizeWindow(id)`, `unmaximizeWindow(id)`     | Fills the desktop, or goes back to the size before the last maximize or snap.                                              |
-| `snapWindow(id, 'left' \| 'right')`              | Fills one half of the desktop.                                                                                             |
-| `tidyUpWindows()`                                | Arranges the visible windows in a grid, in their left-to-right order.                                                      |
-| `runWindowCommand(command)`                      | Runs a keyboard command (`osWindowShortcuts.ts`) on the focused window.                                                    |
+| Action                                                    | Effect                                                                                                                                                                                      |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openWindow(path, { newWindow, title, origin, preview })` | Focuses the window that shows `path`, or opens one. `newWindow` always opens another. `origin` is the point it zooms from. `preview` marks a new window as a preview of that App Store app. |
+| `focusWindow(id)`, `restoreWindow(id)`                    | Brings a window to the front. Both also un-minimize it.                                                                                                                                     |
+| `minimizeWindow(id)`, `closeWindow(id)`                   | Hides or closes a window. Focus goes to the next window in the stack.                                                                                                                       |
+| `maximizeWindow(id)`, `unmaximizeWindow(id)`              | Fills the desktop, or goes back to the size before the last maximize or snap.                                                                                                               |
+| `snapWindow(id, 'left' \| 'right')`                       | Fills one half of the desktop.                                                                                                                                                              |
+| `tidyUpWindows()`                                         | Arranges the visible windows in a grid, in their left-to-right order.                                                                                                                       |
+| `runWindowCommand(command)`                               | Runs a keyboard command (`osWindowShortcuts.ts`) on the focused window.                                                                                                                     |
 
 `windows` lists every window with its `minimized` state, and `focusedWindow` is the top window that is not minimized.
 
@@ -62,7 +62,7 @@ Navigation inside a window adds entries to the browser's history, so back and fo
 The window that back or forward moves comes to the front, and the URL follows it.
 When the last visible window closes or minimizes, the URL stays on its path.
 
-**The layout persists per project** in `localStorage` under `posthog-os-windows:<project id>`: paths, bounds, stacking order, minimized and maximized state.
+**The layout persists per project** in `localStorage` under `posthog-os-windows:<project id>`: paths, bounds, stacking order, minimized and maximized state, and the preview mark.
 Tabs of one project share it, and the last save wins.
 Loading a URL opens it as the focused window on top of the saved layout.
 Each tab keeps the URL it showed last in `sessionStorage` (`posthog-os-windows-url:<project id>`).
@@ -173,7 +173,7 @@ Activity, PostHog AI and Settings are not in the store, because they are always 
 **The App Store is a scene** (`Scene.OsAppStore`) at `/app-store`, with one listing per app at `/app-store/<slug>`.
 It opens in a window like any other app, and with the flag off it shows the not-found page.
 The store frame keeps its own copy of the installed apps, so it tells the OS page about changes with `postMessage` (`store/osStoreMessages.ts`).
-It sends `installed-changed` after each write, and `open-app` with a catalog key for Open.
+It sends `installed-changed` after each write, `open-app` with a catalog key for Open, and `preview-app` with a catalog key for Preview.
 It never sends a URL, so a frame can only ask the OS for apps the OS already knows.
 The OS page accepts these messages only from its own window frames on the same origin.
 
@@ -187,3 +187,17 @@ With no window open, the dock shows only the App Store.
 The dock sits below the window layer, so maximized and snapped windows stop above it.
 Tiles shrink so every window keeps a tile on screen.
 In the DOM the dock comes right after the menu bar, so the keyboard reaches it before the windows.
+
+**Preview** opens an app in a window without installing it.
+Each listing that is not installed offers Preview next to Install.
+The store window sends `preview-app`, and `store/osAppPreviewLogic` on the OS page opens the app with `openWindow(href, { preview: key })`.
+It only opens apps in the catalog, so a frame cannot preview an app behind an off flag, a system app, or a URL.
+A preview does not install the app, so the app gets no desktop icon and no entry in "My tools".
+Many apps record a product intent when they load, and the server adds the app to `UserProductList` for it, which would install the app.
+The server skips that when the user has a disabled row for the app, so before the window opens the preview reloads the list and writes `enabled: false` for an app that is not installed. Remove leaves the same row.
+So a previewed app that is not installed is not added to "My tools" later by its product intents.
+A path without the project id makes the OS page redirect its own address bar, so the preview opens the project-scoped path.
+The window keeps the mark (`preview` on the window state), and `store/OsAppPreviewBar` draws a slim bar under its title bar while the app is not installed.
+Install in the bar installs the app, and the bar goes away as soon as the install starts. If the write fails, the bar comes back.
+The mark stays on the window, so the bar comes back if the app is removed while the window is open.
+Closing the window removes the mark with it, so a closed preview leaves nothing behind.

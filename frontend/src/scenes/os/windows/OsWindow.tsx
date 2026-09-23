@@ -9,6 +9,7 @@ import { LemonButton } from 'lib/lemon-ui/LemonButton'
 import { cn } from 'lib/utils/css-classes'
 
 import { osFrameName, osFrameSrc } from '../bridge/osFrame'
+import { OsAppPreviewBar } from '../store/OsAppPreviewBar'
 import { OsBounds, OsPoint, OsResizeEdge, OsSnapZone, resizeBounds, snapZoneAt } from './osWindowGeometry'
 import { OS_WINDOW_SHORTCUT_KEYS, OsWindowCommand } from './osWindowShortcuts'
 import { OsWindowState, osWindowsLogic } from './osWindowsLogic'
@@ -270,6 +271,7 @@ export function OsWindow({
                     />
                 </div>
             </header>
+            {win.preview && <OsAppPreviewBar appKey={win.preview} />}
             {src && (
                 <iframe
                     name={osFrameName(win.id)}
