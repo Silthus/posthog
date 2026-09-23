@@ -1,12 +1,14 @@
 import { useActions, useValues } from 'kea'
 
+import { IconCheck } from '@posthog/icons'
+
+import { ButtonPrimitive } from 'lib/ui/Button/ButtonPrimitives'
 import {
     ContextMenu,
     ContextMenuContent,
+    ContextMenuGroup,
     ContextMenuItem,
     ContextMenuLabel,
-    ContextMenuRadioGroup,
-    ContextMenuRadioItem,
     ContextMenuSeparator,
     ContextMenuTrigger,
 } from 'lib/ui/ContextMenu/ContextMenu'
@@ -15,7 +17,7 @@ import { urls } from 'scenes/urls'
 import { OsDesktopIcon } from './OsDesktopIcon'
 import { osShellLogic } from './osShellLogic'
 import { OsWallpaper } from './OsWallpaper'
-import { OS_WALLPAPERS, OsWallpaperKey } from './osWallpapers'
+import { OS_WALLPAPERS } from './osWallpapers'
 
 // The menu bar is 42px tall inside the shell's 8px padding. Icons start 16px below it.
 const ICON_COLUMN_CLASS = 'list-none m-0 p-0 flex flex-col content-start h-[calc(100dvh-82px)]'
@@ -29,7 +31,7 @@ export function OsDesktop(): JSX.Element {
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>
-                <div className="absolute inset-0" data-attr="os-desktop">
+                <div className="absolute inset-0 z-0" data-attr="os-desktop">
                     <OsWallpaper wallpaper={wallpaper.key} />
                     <nav aria-label="Desktop" className="relative flex justify-between items-start px-1 pt-[66px]">
                         <ul className={`${ICON_COLUMN_CLASS} flex-wrap`}>
@@ -47,24 +49,36 @@ export function OsDesktop(): JSX.Element {
                 </div>
             </ContextMenuTrigger>
             <ContextMenuContent className="min-w-56">
-                <ContextMenuLabel>Wallpaper</ContextMenuLabel>
-                <ContextMenuRadioGroup
-                    value={wallpaper.key}
-                    onValueChange={(value) => setWallpaper(value as OsWallpaperKey)}
-                >
+                <ContextMenuGroup>
+                    <ContextMenuLabel>Wallpaper</ContextMenuLabel>
                     {OS_WALLPAPERS.map(({ key, label }) => (
-                        <ContextMenuRadioItem key={key} value={key} data-attr={`os-wallpaper-${key}`}>
-                            {label}
-                        </ContextMenuRadioItem>
+                        <ContextMenuItem key={key} asChild>
+                            <ButtonPrimitive
+                                menuItem
+                                role="menuitemradio"
+                                aria-checked={wallpaper.key === key}
+                                active={wallpaper.key === key}
+                                onClick={() => setWallpaper(key)}
+                                data-attr={`os-wallpaper-${key}`}
+                            >
+                                <IconCheck className={wallpaper.key === key ? 'visible' : 'invisible'} />
+                                {label}
+                            </ButtonPrimitive>
+                        </ContextMenuItem>
                     ))}
-                </ContextMenuRadioGroup>
+                </ContextMenuGroup>
                 <ContextMenuSeparator />
-                <ContextMenuItem
-                    onSelect={() => onOpen({ href: urls.settings('user-navigation'), label: 'Settings' })}
-                    data-attr="os-desktop-customize-icons"
-                >
-                    Choose desktop apps
-                </ContextMenuItem>
+                <ContextMenuGroup>
+                    <ContextMenuItem asChild>
+                        <ButtonPrimitive
+                            menuItem
+                            onClick={() => onOpen({ href: urls.settings('user-navigation'), label: 'Settings' })}
+                            data-attr="os-desktop-customize-icons"
+                        >
+                            Choose desktop apps
+                        </ButtonPrimitive>
+                    </ContextMenuItem>
+                </ContextMenuGroup>
             </ContextMenuContent>
         </ContextMenu>
     )

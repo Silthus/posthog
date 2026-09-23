@@ -26,11 +26,11 @@ const MOCK_TOOLS = ['Product analytics', 'Web analytics', 'Session replay', 'Fea
  * open for the current URL is closed before the shell renders.
  */
 function OsDesktopStory({ wallpaper }: { wallpaper: OsWallpaperKey }): JSX.Element | null {
-    const { setPageSrc, setWallpaper } = useActions(osShellLogic)
+    const { showPage, setWallpaper } = useActions(osShellLogic)
     const { loadCustomProducts } = useActions(customProductsLogic)
     const [ready, setReady] = useState(false)
     useOnMountEffect(() => {
-        setPageSrc(null)
+        showPage(null)
         setWallpaper(wallpaper)
         loadCustomProducts()
         setReady(true)

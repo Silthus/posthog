@@ -2,6 +2,7 @@ import { LinkPrimitive } from 'lib/lemon-ui/Link'
 import { cn } from 'lib/utils/css-classes'
 
 import { GlassIcon } from './glass/GlassIcon'
+import { GlassIconFromElement } from './glass/GlassIconFromElement'
 import type { OsDesktopApp } from './osDesktopApps'
 import type { OsWallpaperOption } from './osWallpapers'
 
@@ -28,22 +29,27 @@ export function OsDesktopIcon({ app, wallpaper, onOpen }: OsDesktopIconProps): J
                         event.preventDefault()
                         onOpen(app)
                     }}
-                    className="group inline-flex flex-col items-center justify-center gap-0.5 max-w-28 text-center select-none text-white font-medium drop-shadow-lg rounded focus-visible:outline-2 focus-visible:outline-white"
+                    className="group inline-flex flex-col items-center justify-center gap-0.5 max-w-28 text-center select-none text-white font-medium drop-shadow-lg rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white focus-visible:ring-2 focus-visible:ring-black/60"
                     data-attr={`os-desktop-icon-${app.key}`}
                 >
-                    {icon.kind === 'glyph' ? (
-                        <GlassIcon
-                            path={icon.path}
-                            viewBox={icon.viewBox}
-                            fillRule={icon.fillRule}
-                            glowColor={wallpaper.glow.light}
-                            glowColorDark={wallpaper.glow.dark}
-                        />
-                    ) : (
-                        <span className="inline-flex size-9 items-center justify-center text-white [&_svg]:size-7">
-                            {icon.element}
-                        </span>
-                    )}
+                    {/* An inline wrapper, as on posthog.com, so the line box spaces the label the same way. */}
+                    <span className="relative">
+                        {icon.kind === 'glyph' ? (
+                            <GlassIcon
+                                path={icon.path}
+                                viewBox={icon.viewBox}
+                                fillRule={icon.fillRule}
+                                glowColor={wallpaper.glow.light}
+                                glowColorDark={wallpaper.glow.dark}
+                            />
+                        ) : (
+                            <GlassIconFromElement
+                                icon={icon.element}
+                                glowColor={wallpaper.glow.light}
+                                glowColorDark={wallpaper.glow.dark}
+                            />
+                        )}
+                    </span>
                     <span className="text-[13px] font-medium leading-tight text-balance">
                         <span
                             className={cn(

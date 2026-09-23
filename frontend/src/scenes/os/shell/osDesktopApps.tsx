@@ -7,11 +7,10 @@ import { iconForType } from '~/layout/panel-layout/ProjectTree/defaultTree'
 
 import type { GlyphPart } from './glass/GlassIcon'
 import { CHANGELOG_GLYPH, DOCS_GLYPH, HOME_GLYPH } from './glass/glyphs'
-import { glyphFromIcon } from './glass/iconGlyph'
 
 export type OsDesktopAppIcon =
     | { kind: 'glyph'; path: string | GlyphPart[]; viewBox?: string; fillRule?: 'nonzero' | 'evenodd' }
-    /** An icon drawn with more than paths, so it cannot become glass. */
+    /** An app icon, drawn as glass when it paints only paths. */
     | { kind: 'element'; element: JSX.Element }
 
 export interface OsDesktopApp {
@@ -26,11 +25,6 @@ export interface OsDesktopApp {
 export interface OsDesktopColumns {
     left: OsDesktopApp[]
     right: OsDesktopApp[]
-}
-
-function iconFromElement(element: JSX.Element): OsDesktopAppIcon {
-    const glyph = glyphFromIcon(element)
-    return glyph ? { kind: 'glyph', path: glyph.parts, viewBox: glyph.viewBox } : { kind: 'element', element }
 }
 
 /**
@@ -50,7 +44,7 @@ export function osDesktopColumns(productGroups: FlatNavProductGroup[]): OsDeskto
                 key: `tool-${item.path}`,
                 label: item.label,
                 href: item.href,
-                icon: iconFromElement(iconForType(item.iconType, item.iconColor)),
+                icon: { kind: 'element', element: iconForType(item.iconType, item.iconColor) },
             })
         )
     )
@@ -58,7 +52,12 @@ export function osDesktopColumns(productGroups: FlatNavProductGroup[]): OsDeskto
     return {
         left: [home, ...tools],
         right: [
-            { key: 'settings', label: 'Settings', href: urls.settings(), icon: iconFromElement(<IconGear />) },
+            {
+                key: 'settings',
+                label: 'Settings',
+                href: urls.settings(),
+                icon: { kind: 'element', element: <IconGear /> },
+            },
             {
                 key: 'docs',
                 label: 'Docs',

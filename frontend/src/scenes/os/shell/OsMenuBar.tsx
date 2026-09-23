@@ -7,7 +7,6 @@ import { AccountMenu } from 'lib/components/Account/AccountMenu'
 import { ProjectMenu } from 'lib/components/Account/ProjectMenu'
 import { commandLogic } from 'lib/components/Command/commandLogic'
 import { NotificationsPanel } from 'lib/components/NotificationsMenu/NotificationsPanel'
-import { shortcutLogic } from 'lib/components/Shortcuts/shortcutLogic'
 import { IconWithCount } from 'lib/lemon-ui/icons'
 import { LemonDropdown } from 'lib/lemon-ui/LemonDropdown'
 import { LemonMenu, LemonMenuItems } from 'lib/lemon-ui/LemonMenu'
@@ -29,15 +28,21 @@ export function OsMenuBar(): JSX.Element {
     const { desktopColumns } = useValues(osShellLogic)
     const { openApp } = useActions(osShellLogic)
     const { toggleCommand } = useActions(commandLogic)
-    const { setShortcutMenuOpen } = useActions(shortcutLogic)
     const { user } = useValues(userLogic)
     const { inAppUnreadCount } = useValues(sidePanelNotificationsLogic)
 
     const logoMenu: LemonMenuItems = [
-        { label: 'Home', onClick: () => openApp(urls.projectHomepage(), 'Home') },
-        { label: 'Settings', onClick: () => openApp(urls.settings(), 'Settings') },
-        { label: 'Keyboard shortcuts', onClick: () => setShortcutMenuOpen(true) },
-        { label: 'About PostHog', onClick: () => openInNewTab('https://posthog.com/about') },
+        { label: 'Home', onClick: () => openApp(urls.projectHomepage(), 'Home'), 'data-attr': 'os-menu-logo-home' },
+        {
+            label: 'Settings',
+            onClick: () => openApp(urls.settings(), 'Settings'),
+            'data-attr': 'os-menu-logo-settings',
+        },
+        {
+            label: 'About PostHog',
+            onClick: () => openInNewTab('https://posthog.com/about'),
+            'data-attr': 'os-menu-logo-about',
+        },
     ]
     const appsMenu: LemonMenuItems = [
         {
@@ -45,6 +50,7 @@ export function OsMenuBar(): JSX.Element {
             items: desktopColumns.left.map((app) => ({
                 label: app.label,
                 onClick: () => openApp(app.href, app.label),
+                'data-attr': `os-menu-apps-${app.key}`,
             })),
         },
         {
@@ -52,14 +58,18 @@ export function OsMenuBar(): JSX.Element {
                 {
                     label: 'Choose desktop apps',
                     onClick: () => openApp(urls.settings('user-navigation'), 'Settings'),
+                    'data-attr': 'os-menu-apps-customize',
                 },
             ],
         },
     ]
     const helpMenu: LemonMenuItems = [
-        { label: 'Docs', onClick: () => openInNewTab('https://posthog.com/docs') },
-        { label: 'Changelog', onClick: () => openInNewTab('https://posthog.com/changelog') },
-        { label: 'Keyboard shortcuts', onClick: () => setShortcutMenuOpen(true) },
+        { label: 'Docs', onClick: () => openInNewTab('https://posthog.com/docs'), 'data-attr': 'os-menu-help-docs' },
+        {
+            label: 'Changelog',
+            onClick: () => openInNewTab('https://posthog.com/changelog'),
+            'data-attr': 'os-menu-help-changelog',
+        },
     ]
 
     return (
@@ -89,7 +99,7 @@ export function OsMenuBar(): JSX.Element {
                     </button>
                 </LemonMenu>
             </nav>
-            <aside data-os-scheme="secondary" className="flex items-center gap-0.5 py-1">
+            <div data-os-scheme="secondary" className="flex items-center gap-0.5 py-1">
                 <ProjectMenu buttonProps={{ className: 'OsShell__menu-trigger font-semibold' }} />
                 <Tooltip title="Search">
                     <button
@@ -145,7 +155,7 @@ export function OsMenuBar(): JSX.Element {
                         </button>
                     }
                 />
-            </aside>
+            </div>
         </header>
     )
 }

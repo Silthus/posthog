@@ -107,7 +107,7 @@ const SCENES: Record<OsWallpaperKey, () => JSX.Element> = {
     'office-party': OfficeParty,
 }
 
-/** The desktop artwork. Only the chosen scene mounts, so the others never download. */
+/** The desktop artwork. Only the chosen scene mounts, so the other scenes' images never download. */
 export function OsWallpaper({ wallpaper }: { wallpaper: OsWallpaperKey }): JSX.Element {
     const Scene = SCENES[wallpaper]
     return (

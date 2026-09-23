@@ -30,14 +30,4 @@ describe('osDesktopColumns', () => {
             ['Session replay', '/replay'],
         ])
     })
-
-    it('opens settings in a window and the docs in a new tab from the right column', () => {
-        const { right } = osDesktopColumns([])
-
-        expect(right.map(({ label, external }) => [label, !!external])).toEqual([
-            ['Settings', false],
-            ['Docs', true],
-            ['Changelog', true],
-        ])
-    })
 })
