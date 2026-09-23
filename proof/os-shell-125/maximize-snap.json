@@ -1,0 +1,13 @@
+{
+  "viewport": "1280x800",
+  "maximized": {
+    "window": 716,
+    "dockTop": 716
+  },
+  "snapped": {
+    "window": 716,
+    "dockTop": 716
+  },
+  "maximizedClearsDock": true,
+  "snappedClearsDock": true
+}

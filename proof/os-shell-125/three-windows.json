@@ -1,0 +1,44 @@
+{
+  "light": {
+    "theme": "light",
+    "dock": [
+      [
+        "App Store",
+        null
+      ],
+      [
+        "Dashboards",
+        null
+      ],
+      [
+        "Product analytics, minimized",
+        null
+      ],
+      [
+        "Web analytics, active",
+        "true"
+      ]
+    ]
+  },
+  "dark": {
+    "theme": "dark",
+    "dock": [
+      [
+        "App Store",
+        null
+      ],
+      [
+        "Dashboards",
+        null
+      ],
+      [
+        "Product analytics, minimized",
+        null
+      ],
+      [
+        "Web analytics, active",
+        "true"
+      ]
+    ]
+  }
+}

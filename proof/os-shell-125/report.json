@@ -1,0 +1,642 @@
+{
+  "steps": [
+    {
+      "name": "01-desktop-empty-dock",
+      "store": {
+        "label": "App Store",
+        "current": null
+      },
+      "windows": [],
+      "desktopIcons": [
+        "os-desktop-icon-home",
+        "os-desktop-icon-tool-Dashboards",
+        "os-desktop-icon-tool-Data catalog",
+        "os-desktop-icon-tool-Product analytics",
+        "os-desktop-icon-tool-SQL editor",
+        "os-desktop-icon-tool-Web analytics",
+        "os-desktop-icon-tool-LLM analytics",
+        "os-desktop-icon-tool-Clusters",
+        "os-desktop-icon-tool-Evaluations",
+        "os-desktop-icon-tool-Playground",
+        "os-desktop-icon-tool-Prompts",
+        "os-desktop-icon-tool-Heatmaps",
+        "os-desktop-icon-tool-Replay vision",
+        "os-desktop-icon-tool-Session replay",
+        "os-desktop-icon-tool-Support",
+        "os-desktop-icon-tool-Error tracking",
+        "os-desktop-icon-tool-Logs",
+        "os-desktop-icon-tool-Metrics",
+        "os-desktop-icon-tool-Early access features",
+        "os-desktop-icon-tool-Experiments",
+        "os-desktop-icon-tool-Feature flags",
+        "os-desktop-icon-tool-Broadcasts",
+        "os-desktop-icon-tool-Endpoints",
+        "os-desktop-icon-tool-Notebooks",
+        "os-desktop-icon-tool-Skills",
+        "os-desktop-icon-tool-Toolbar",
+        "os-desktop-icon-tool-Web scripts",
+        "os-desktop-icon-tool-Workflows",
+        "os-desktop-icon-app-store",
+        "os-desktop-icon-settings",
+        "os-desktop-icon-docs",
+        "os-desktop-icon-changelog"
+      ],
+      "openWindows": []
+    },
+    {
+      "name": "02-store-front",
+      "store": {
+        "label": "App Store, active",
+        "current": "true"
+      },
+      "windows": [],
+      "desktopIcons": [
+        "os-desktop-icon-home",
+        "os-desktop-icon-tool-Dashboards",
+        "os-desktop-icon-tool-Data catalog",
+        "os-desktop-icon-tool-Product analytics",
+        "os-desktop-icon-tool-SQL editor",
+        "os-desktop-icon-tool-Web analytics",
+        "os-desktop-icon-tool-LLM analytics",
+        "os-desktop-icon-tool-Clusters",
+        "os-desktop-icon-tool-Evaluations",
+        "os-desktop-icon-tool-Playground",
+        "os-desktop-icon-tool-Prompts",
+        "os-desktop-icon-tool-Heatmaps",
+        "os-desktop-icon-tool-Replay vision",
+        "os-desktop-icon-tool-Session replay",
+        "os-desktop-icon-tool-Support",
+        "os-desktop-icon-tool-Error tracking",
+        "os-desktop-icon-tool-Logs",
+        "os-desktop-icon-tool-Metrics",
+        "os-desktop-icon-tool-Early access features",
+        "os-desktop-icon-tool-Experiments",
+        "os-desktop-icon-tool-Feature flags",
+        "os-desktop-icon-tool-Broadcasts",
+        "os-desktop-icon-tool-Endpoints",
+        "os-desktop-icon-tool-Notebooks",
+        "os-desktop-icon-tool-Skills",
+        "os-desktop-icon-tool-Toolbar",
+        "os-desktop-icon-tool-Web scripts",
+        "os-desktop-icon-tool-Workflows",
+        "os-desktop-icon-app-store",
+        "os-desktop-icon-settings",
+        "os-desktop-icon-docs",
+        "os-desktop-icon-changelog"
+      ],
+      "openWindows": [
+        {
+          "hidden": false,
+          "src": "/app-store"
+        }
+      ]
+    },
+    {
+      "name": "03-store-category",
+      "store": {
+        "label": "App Store, active",
+        "current": "true"
+      },
+      "windows": [],
+      "desktopIcons": [
+        "os-desktop-icon-home",
+        "os-desktop-icon-tool-Dashboards",
+        "os-desktop-icon-tool-Data catalog",
+        "os-desktop-icon-tool-Product analytics",
+        "os-desktop-icon-tool-SQL editor",
+        "os-desktop-icon-tool-Web analytics",
+        "os-desktop-icon-tool-LLM analytics",
+        "os-desktop-icon-tool-Clusters",
+        "os-desktop-icon-tool-Evaluations",
+        "os-desktop-icon-tool-Playground",
+        "os-desktop-icon-tool-Prompts",
+        "os-desktop-icon-tool-Heatmaps",
+        "os-desktop-icon-tool-Replay vision",
+        "os-desktop-icon-tool-Session replay",
+        "os-desktop-icon-tool-Support",
+        "os-desktop-icon-tool-Error tracking",
+        "os-desktop-icon-tool-Logs",
+        "os-desktop-icon-tool-Metrics",
+        "os-desktop-icon-tool-Early access features",
+        "os-desktop-icon-tool-Experiments",
+        "os-desktop-icon-tool-Feature flags",
+        "os-desktop-icon-tool-Broadcasts",
+        "os-desktop-icon-tool-Endpoints",
+        "os-desktop-icon-tool-Notebooks",
+        "os-desktop-icon-tool-Skills",
+        "os-desktop-icon-tool-Toolbar",
+        "os-desktop-icon-tool-Web scripts",
+        "os-desktop-icon-tool-Workflows",
+        "os-desktop-icon-app-store",
+        "os-desktop-icon-settings",
+        "os-desktop-icon-docs",
+        "os-desktop-icon-changelog"
+      ],
+      "openWindows": [
+        {
+          "hidden": false,
+          "src": "/app-store"
+        }
+      ]
+    },
+    {
+      "name": "04-listing",
+      "store": {
+        "label": "App Store, active",
+        "current": "true"
+      },
+      "windows": [],
+      "desktopIcons": [
+        "os-desktop-icon-home",
+        "os-desktop-icon-tool-Dashboards",
+        "os-desktop-icon-tool-Data catalog",
+        "os-desktop-icon-tool-Product analytics",
+        "os-desktop-icon-tool-SQL editor",
+        "os-desktop-icon-tool-Web analytics",
+        "os-desktop-icon-tool-LLM analytics",
+        "os-desktop-icon-tool-Clusters",
+        "os-desktop-icon-tool-Evaluations",
+        "os-desktop-icon-tool-Playground",
+        "os-desktop-icon-tool-Prompts",
+        "os-desktop-icon-tool-Heatmaps",
+        "os-desktop-icon-tool-Replay vision",
+        "os-desktop-icon-tool-Session replay",
+        "os-desktop-icon-tool-Support",
+        "os-desktop-icon-tool-Error tracking",
+        "os-desktop-icon-tool-Logs",
+        "os-desktop-icon-tool-Metrics",
+        "os-desktop-icon-tool-Early access features",
+        "os-desktop-icon-tool-Experiments",
+        "os-desktop-icon-tool-Feature flags",
+        "os-desktop-icon-tool-Broadcasts",
+        "os-desktop-icon-tool-Endpoints",
+        "os-desktop-icon-tool-Notebooks",
+        "os-desktop-icon-tool-Skills",
+        "os-desktop-icon-tool-Toolbar",
+        "os-desktop-icon-tool-Web scripts",
+        "os-desktop-icon-tool-Workflows",
+        "os-desktop-icon-app-store",
+        "os-desktop-icon-settings",
+        "os-desktop-icon-docs",
+        "os-desktop-icon-changelog"
+      ],
+      "openWindows": [
+        {
+          "hidden": false,
+          "src": "/app-store"
+        }
+      ]
+    },
+    {
+      "name": "05-installed",
+      "store": {
+        "label": "App Store, active",
+        "current": "true"
+      },
+      "windows": [],
+      "desktopIcons": [
+        "os-desktop-icon-home",
+        "os-desktop-icon-tool-Dashboards",
+        "os-desktop-icon-tool-Data catalog",
+        "os-desktop-icon-tool-Product analytics",
+        "os-desktop-icon-tool-SQL editor",
+        "os-desktop-icon-tool-Web analytics",
+        "os-desktop-icon-tool-LLM analytics",
+        "os-desktop-icon-tool-Clusters",
+        "os-desktop-icon-tool-Evaluations",
+        "os-desktop-icon-tool-Playground",
+        "os-desktop-icon-tool-Prompts",
+        "os-desktop-icon-tool-Heatmaps",
+        "os-desktop-icon-tool-Replay vision",
+        "os-desktop-icon-tool-Session replay",
+        "os-desktop-icon-tool-Support",
+        "os-desktop-icon-tool-Surveys",
+        "os-desktop-icon-tool-Error tracking",
+        "os-desktop-icon-tool-Logs",
+        "os-desktop-icon-tool-Metrics",
+        "os-desktop-icon-tool-Early access features",
+        "os-desktop-icon-tool-Experiments",
+        "os-desktop-icon-tool-Feature flags",
+        "os-desktop-icon-tool-Broadcasts",
+        "os-desktop-icon-tool-Endpoints",
+        "os-desktop-icon-tool-Notebooks",
+        "os-desktop-icon-tool-Skills",
+        "os-desktop-icon-tool-Toolbar",
+        "os-desktop-icon-tool-Web scripts",
+        "os-desktop-icon-tool-Workflows",
+        "os-desktop-icon-app-store",
+        "os-desktop-icon-settings",
+        "os-desktop-icon-docs",
+        "os-desktop-icon-changelog"
+      ],
+      "openWindows": [
+        {
+          "hidden": false,
+          "src": "/app-store"
+        }
+      ]
+    },
+    {
+      "name": "06-icon-on-desktop",
+      "store": {
+        "label": "App Store, minimized",
+        "current": null
+      },
+      "windows": [],
+      "desktopIcons": [
+        "os-desktop-icon-home",
+        "os-desktop-icon-tool-Dashboards",
+        "os-desktop-icon-tool-Data catalog",
+        "os-desktop-icon-tool-Product analytics",
+        "os-desktop-icon-tool-SQL editor",
+        "os-desktop-icon-tool-Web analytics",
+        "os-desktop-icon-tool-LLM analytics",
+        "os-desktop-icon-tool-Clusters",
+        "os-desktop-icon-tool-Evaluations",
+        "os-desktop-icon-tool-Playground",
+        "os-desktop-icon-tool-Prompts",
+        "os-desktop-icon-tool-Heatmaps",
+        "os-desktop-icon-tool-Replay vision",
+        "os-desktop-icon-tool-Session replay",
+        "os-desktop-icon-tool-Support",
+        "os-desktop-icon-tool-Surveys",
+        "os-desktop-icon-tool-Error tracking",
+        "os-desktop-icon-tool-Logs",
+        "os-desktop-icon-tool-Metrics",
+        "os-desktop-icon-tool-Early access features",
+        "os-desktop-icon-tool-Experiments",
+        "os-desktop-icon-tool-Feature flags",
+        "os-desktop-icon-tool-Broadcasts",
+        "os-desktop-icon-tool-Endpoints",
+        "os-desktop-icon-tool-Notebooks",
+        "os-desktop-icon-tool-Skills",
+        "os-desktop-icon-tool-Toolbar",
+        "os-desktop-icon-tool-Web scripts",
+        "os-desktop-icon-tool-Workflows",
+        "os-desktop-icon-app-store",
+        "os-desktop-icon-settings",
+        "os-desktop-icon-docs",
+        "os-desktop-icon-changelog"
+      ],
+      "openWindows": [
+        {
+          "hidden": true,
+          "src": "/app-store"
+        }
+      ]
+    },
+    {
+      "name": "07-app-open-in-dock",
+      "store": {
+        "label": "App Store, minimized",
+        "current": null
+      },
+      "windows": [
+        {
+          "label": "Surveys, active",
+          "current": "true"
+        }
+      ],
+      "desktopIcons": [
+        "os-desktop-icon-home",
+        "os-desktop-icon-tool-Dashboards",
+        "os-desktop-icon-tool-Data catalog",
+        "os-desktop-icon-tool-Product analytics",
+        "os-desktop-icon-tool-SQL editor",
+        "os-desktop-icon-tool-Web analytics",
+        "os-desktop-icon-tool-LLM analytics",
+        "os-desktop-icon-tool-Clusters",
+        "os-desktop-icon-tool-Evaluations",
+        "os-desktop-icon-tool-Playground",
+        "os-desktop-icon-tool-Prompts",
+        "os-desktop-icon-tool-Heatmaps",
+        "os-desktop-icon-tool-Replay vision",
+        "os-desktop-icon-tool-Session replay",
+        "os-desktop-icon-tool-Support",
+        "os-desktop-icon-tool-Surveys",
+        "os-desktop-icon-tool-Error tracking",
+        "os-desktop-icon-tool-Logs",
+        "os-desktop-icon-tool-Metrics",
+        "os-desktop-icon-tool-Early access features",
+        "os-desktop-icon-tool-Experiments",
+        "os-desktop-icon-tool-Feature flags",
+        "os-desktop-icon-tool-Broadcasts",
+        "os-desktop-icon-tool-Endpoints",
+        "os-desktop-icon-tool-Notebooks",
+        "os-desktop-icon-tool-Skills",
+        "os-desktop-icon-tool-Toolbar",
+        "os-desktop-icon-tool-Web scripts",
+        "os-desktop-icon-tool-Workflows",
+        "os-desktop-icon-app-store",
+        "os-desktop-icon-settings",
+        "os-desktop-icon-docs",
+        "os-desktop-icon-changelog"
+      ],
+      "openWindows": [
+        {
+          "hidden": true,
+          "src": "/app-store"
+        },
+        {
+          "hidden": false,
+          "src": "/surveys"
+        }
+      ]
+    },
+    {
+      "name": "08-minimized-from-dock",
+      "store": {
+        "label": "App Store, minimized",
+        "current": null
+      },
+      "windows": [
+        {
+          "label": "Surveys, minimized",
+          "current": null
+        }
+      ],
+      "desktopIcons": [
+        "os-desktop-icon-home",
+        "os-desktop-icon-tool-Dashboards",
+        "os-desktop-icon-tool-Data catalog",
+        "os-desktop-icon-tool-Product analytics",
+        "os-desktop-icon-tool-SQL editor",
+        "os-desktop-icon-tool-Web analytics",
+        "os-desktop-icon-tool-LLM analytics",
+        "os-desktop-icon-tool-Clusters",
+        "os-desktop-icon-tool-Evaluations",
+        "os-desktop-icon-tool-Playground",
+        "os-desktop-icon-tool-Prompts",
+        "os-desktop-icon-tool-Heatmaps",
+        "os-desktop-icon-tool-Replay vision",
+        "os-desktop-icon-tool-Session replay",
+        "os-desktop-icon-tool-Support",
+        "os-desktop-icon-tool-Surveys",
+        "os-desktop-icon-tool-Error tracking",
+        "os-desktop-icon-tool-Logs",
+        "os-desktop-icon-tool-Metrics",
+        "os-desktop-icon-tool-Early access features",
+        "os-desktop-icon-tool-Experiments",
+        "os-desktop-icon-tool-Feature flags",
+        "os-desktop-icon-tool-Broadcasts",
+        "os-desktop-icon-tool-Endpoints",
+        "os-desktop-icon-tool-Notebooks",
+        "os-desktop-icon-tool-Skills",
+        "os-desktop-icon-tool-Toolbar",
+        "os-desktop-icon-tool-Web scripts",
+        "os-desktop-icon-tool-Workflows",
+        "os-desktop-icon-app-store",
+        "os-desktop-icon-settings",
+        "os-desktop-icon-docs",
+        "os-desktop-icon-changelog"
+      ],
+      "openWindows": [
+        {
+          "hidden": true,
+          "src": "/app-store"
+        },
+        {
+          "hidden": true,
+          "src": "/surveys"
+        }
+      ]
+    },
+    {
+      "name": "09-restored-from-dock",
+      "store": {
+        "label": "App Store, minimized",
+        "current": null
+      },
+      "windows": [
+        {
+          "label": "Surveys, active",
+          "current": "true"
+        }
+      ],
+      "desktopIcons": [
+        "os-desktop-icon-home",
+        "os-desktop-icon-tool-Dashboards",
+        "os-desktop-icon-tool-Data catalog",
+        "os-desktop-icon-tool-Product analytics",
+        "os-desktop-icon-tool-SQL editor",
+        "os-desktop-icon-tool-Web analytics",
+        "os-desktop-icon-tool-LLM analytics",
+        "os-desktop-icon-tool-Clusters",
+        "os-desktop-icon-tool-Evaluations",
+        "os-desktop-icon-tool-Playground",
+        "os-desktop-icon-tool-Prompts",
+        "os-desktop-icon-tool-Heatmaps",
+        "os-desktop-icon-tool-Replay vision",
+        "os-desktop-icon-tool-Session replay",
+        "os-desktop-icon-tool-Support",
+        "os-desktop-icon-tool-Surveys",
+        "os-desktop-icon-tool-Error tracking",
+        "os-desktop-icon-tool-Logs",
+        "os-desktop-icon-tool-Metrics",
+        "os-desktop-icon-tool-Early access features",
+        "os-desktop-icon-tool-Experiments",
+        "os-desktop-icon-tool-Feature flags",
+        "os-desktop-icon-tool-Broadcasts",
+        "os-desktop-icon-tool-Endpoints",
+        "os-desktop-icon-tool-Notebooks",
+        "os-desktop-icon-tool-Skills",
+        "os-desktop-icon-tool-Toolbar",
+        "os-desktop-icon-tool-Web scripts",
+        "os-desktop-icon-tool-Workflows",
+        "os-desktop-icon-app-store",
+        "os-desktop-icon-settings",
+        "os-desktop-icon-docs",
+        "os-desktop-icon-changelog"
+      ],
+      "openWindows": [
+        {
+          "hidden": true,
+          "src": "/app-store"
+        },
+        {
+          "hidden": false,
+          "src": "/surveys"
+        }
+      ]
+    },
+    {
+      "name": "10-store-restored",
+      "store": {
+        "label": "App Store, active",
+        "current": "true"
+      },
+      "windows": [
+        {
+          "label": "Surveys",
+          "current": null
+        }
+      ],
+      "desktopIcons": [
+        "os-desktop-icon-home",
+        "os-desktop-icon-tool-Dashboards",
+        "os-desktop-icon-tool-Data catalog",
+        "os-desktop-icon-tool-Product analytics",
+        "os-desktop-icon-tool-SQL editor",
+        "os-desktop-icon-tool-Web analytics",
+        "os-desktop-icon-tool-LLM analytics",
+        "os-desktop-icon-tool-Clusters",
+        "os-desktop-icon-tool-Evaluations",
+        "os-desktop-icon-tool-Playground",
+        "os-desktop-icon-tool-Prompts",
+        "os-desktop-icon-tool-Heatmaps",
+        "os-desktop-icon-tool-Replay vision",
+        "os-desktop-icon-tool-Session replay",
+        "os-desktop-icon-tool-Support",
+        "os-desktop-icon-tool-Surveys",
+        "os-desktop-icon-tool-Error tracking",
+        "os-desktop-icon-tool-Logs",
+        "os-desktop-icon-tool-Metrics",
+        "os-desktop-icon-tool-Early access features",
+        "os-desktop-icon-tool-Experiments",
+        "os-desktop-icon-tool-Feature flags",
+        "os-desktop-icon-tool-Broadcasts",
+        "os-desktop-icon-tool-Endpoints",
+        "os-desktop-icon-tool-Notebooks",
+        "os-desktop-icon-tool-Skills",
+        "os-desktop-icon-tool-Toolbar",
+        "os-desktop-icon-tool-Web scripts",
+        "os-desktop-icon-tool-Workflows",
+        "os-desktop-icon-app-store",
+        "os-desktop-icon-settings",
+        "os-desktop-icon-docs",
+        "os-desktop-icon-changelog"
+      ],
+      "openWindows": [
+        {
+          "hidden": false,
+          "src": "/app-store"
+        },
+        {
+          "hidden": false,
+          "src": "/surveys"
+        }
+      ]
+    },
+    {
+      "name": "11-removed",
+      "store": {
+        "label": "App Store, active",
+        "current": "true"
+      },
+      "windows": [
+        {
+          "label": "Surveys",
+          "current": null
+        }
+      ],
+      "desktopIcons": [
+        "os-desktop-icon-home",
+        "os-desktop-icon-tool-Dashboards",
+        "os-desktop-icon-tool-Data catalog",
+        "os-desktop-icon-tool-Product analytics",
+        "os-desktop-icon-tool-SQL editor",
+        "os-desktop-icon-tool-Web analytics",
+        "os-desktop-icon-tool-LLM analytics",
+        "os-desktop-icon-tool-Clusters",
+        "os-desktop-icon-tool-Evaluations",
+        "os-desktop-icon-tool-Playground",
+        "os-desktop-icon-tool-Prompts",
+        "os-desktop-icon-tool-Heatmaps",
+        "os-desktop-icon-tool-Replay vision",
+        "os-desktop-icon-tool-Session replay",
+        "os-desktop-icon-tool-Support",
+        "os-desktop-icon-tool-Error tracking",
+        "os-desktop-icon-tool-Logs",
+        "os-desktop-icon-tool-Metrics",
+        "os-desktop-icon-tool-Early access features",
+        "os-desktop-icon-tool-Experiments",
+        "os-desktop-icon-tool-Feature flags",
+        "os-desktop-icon-tool-Broadcasts",
+        "os-desktop-icon-tool-Endpoints",
+        "os-desktop-icon-tool-Notebooks",
+        "os-desktop-icon-tool-Skills",
+        "os-desktop-icon-tool-Toolbar",
+        "os-desktop-icon-tool-Web scripts",
+        "os-desktop-icon-tool-Workflows",
+        "os-desktop-icon-app-store",
+        "os-desktop-icon-settings",
+        "os-desktop-icon-docs",
+        "os-desktop-icon-changelog"
+      ],
+      "openWindows": [
+        {
+          "hidden": false,
+          "src": "/app-store"
+        },
+        {
+          "hidden": false,
+          "src": "/surveys"
+        }
+      ]
+    }
+  ],
+  "sections": [
+    "Understand usage",
+    "Watch and ask users",
+    "Ship and test",
+    "Keep production healthy",
+    "Build with AI",
+    "Automate and reach users",
+    "Query and move data",
+    "More apps",
+    "Beta",
+    "Labs"
+  ],
+  "userProductListAfterRemove": [
+    "AI gateway",
+    "Apps",
+    "Broadcasts",
+    "Business knowledge",
+    "Clusters",
+    "Code review",
+    "Customer analytics",
+    "Dashboards",
+    "Data catalog",
+    "Data warehouse",
+    "Datasets",
+    "Early access features",
+    "Endpoints",
+    "Engineering analytics",
+    "Error tracking",
+    "Evaluations",
+    "Experiments",
+    "Feature flags",
+    "Heatmaps",
+    "Identity matching",
+    "Inbox",
+    "Links",
+    "Live Debugger",
+    "LLM analytics",
+    "Logs",
+    "Marketing analytics",
+    "MCP analytics",
+    "MCP servers",
+    "Metrics",
+    "Notebooks",
+    "Playground",
+    "Product analytics",
+    "Product tours",
+    "Prompts",
+    "Pulse",
+    "Replay vision",
+    "Session replay",
+    "Skills",
+    "SQL editor",
+    "Support",
+    "Taggers",
+    "Tasks",
+    "Toolbar",
+    "Tracing",
+    "User research",
+    "Visual review",
+    "Web analytics",
+    "Web scripts",
+    "Wizard",
+    "Workflows"
+  ]
+}
