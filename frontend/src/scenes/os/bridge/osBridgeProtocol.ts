@@ -12,6 +12,10 @@ export type OsBridgeMessage =
     | { type: 'location'; path: string; title: string; traversed: boolean }
     /** Open a path in another window, for example after a Cmd+click. */
     | { type: 'open-window'; path: string }
+    /** The person clicked into the frame, so its window comes to the front. */
+    | { type: 'focus' }
+    /** The frame saved a change to the user, such as the theme, that the OS and other windows must load. */
+    | { type: 'user-changed' }
     /** A window shortcut pressed while the frame had keyboard focus. */
     | { type: 'window-command'; command: OsWindowCommand }
     /** A page that refuses to load in a frame, such as a sign-in or checkout page. */
@@ -21,7 +25,15 @@ export type OsBridgeMessage =
     /** Cmd+K in the frame opens the OS spotlight. */
     | { type: 'spotlight' }
 
-export type OsBridgeEnvelope = OsBridgeMessage & { channel: typeof OS_BRIDGE_CHANNEL; version: number }
+/** Messages the OS page sends to its window frames. */
+export type OsHostMessage =
+    /** The user changed, for example the theme in the menu bar, so the frame reloads it. */
+    { type: 'user-changed' }
+
+export type OsBridgeEnvelope = (OsBridgeMessage | OsHostMessage) & {
+    channel: typeof OS_BRIDGE_CHANNEL
+    version: number
+}
 
 // App URLs can carry a whole query in the search or hash, so the limit only guards against runaway data.
 const MAX_TEXT_LENGTH = 100_000
@@ -43,16 +55,21 @@ function isHttpUrl(value: string): boolean {
     }
 }
 
+function envelopeData(data: unknown): Record<string, unknown> | null {
+    if (!data || typeof data !== 'object') {
+        return null
+    }
+    const raw = data as Record<string, unknown>
+    return raw.channel === OS_BRIDGE_CHANNEL && raw.version === OS_BRIDGE_VERSION ? raw : null
+}
+
 /**
  * Reads a message event's data as a bridge message, or returns null. Any page on this origin can post to
  * the OS page, so every field is checked here and nothing else trusts the raw data.
  */
 export function parseOsBridgeMessage(data: unknown): OsBridgeMessage | null {
-    if (!data || typeof data !== 'object') {
-        return null
-    }
-    const raw = data as Record<string, unknown>
-    if (raw.channel !== OS_BRIDGE_CHANNEL || raw.version !== OS_BRIDGE_VERSION) {
+    const raw = envelopeData(data)
+    if (!raw) {
         return null
     }
     switch (raw.type) {
@@ -67,6 +84,10 @@ export function parseOsBridgeMessage(data: unknown): OsBridgeMessage | null {
             const path = text(raw.path)
             return path ? { type: 'open-window', path } : null
         }
+        case 'focus':
+            return { type: 'focus' }
+        case 'user-changed':
+            return { type: 'user-changed' }
         case 'window-command':
             return isOsWindowCommand(raw.command) ? { type: 'window-command', command: raw.command } : null
         case 'open-top': {
@@ -86,6 +107,11 @@ export function parseOsBridgeMessage(data: unknown): OsBridgeMessage | null {
         default:
             return null
     }
+}
+
+/** Reads a message event's data as a message from the OS page, or returns null. */
+export function parseOsHostMessage(data: unknown): OsHostMessage | null {
+    return envelopeData(data)?.type === 'user-changed' ? { type: 'user-changed' } : null
 }
 
 export interface OsBridgeFrame {
@@ -113,8 +139,23 @@ export function osBridgeSenderWindowId(
     return null
 }
 
+function envelope(message: OsBridgeMessage | OsHostMessage): OsBridgeEnvelope {
+    return { ...message, channel: OS_BRIDGE_CHANNEL, version: OS_BRIDGE_VERSION }
+}
+
 /** Sends a message from a framed app to the OS page. Only the OS page on the same origin receives it. */
 export function postToOs(win: Window, message: OsBridgeMessage): void {
-    const envelope: OsBridgeEnvelope = { ...message, channel: OS_BRIDGE_CHANNEL, version: OS_BRIDGE_VERSION }
-    win.parent.postMessage(envelope, win.location.origin)
+    win.parent.postMessage(envelope(message), win.location.origin)
+}
+
+/** Sends a message from the OS page to window frames. A frame that left this origin does not receive it. */
+export function postToOsFrames(frames: Iterable<OsBridgeFrame>, message: OsHostMessage, origin: string): void {
+    for (const frame of frames) {
+        frame.contentWindow?.postMessage(envelope(message), origin)
+    }
+}
+
+/** True when a message event comes from the OS page that holds this frame. */
+export function isFromOsHost(event: { origin: string; source: MessageEventSource | Window | null }, win: Window): boolean {
+    return event.origin === win.location.origin && !!event.source && event.source === win.parent
 }

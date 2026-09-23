@@ -9,7 +9,7 @@ import type { OsWallpaperOption } from './osWallpapers'
 export interface OsDesktopIconProps {
     app: OsDesktopApp
     wallpaper: OsWallpaperOption
-    onOpen: (app: OsDesktopApp, from: Element) => void
+    onOpen: (app: OsDesktopApp, from: Element, newWindow: boolean) => void
 }
 
 export function OsDesktopIcon({ app, wallpaper, onOpen }: OsDesktopIconProps): JSX.Element {
@@ -21,13 +21,20 @@ export function OsDesktopIcon({ app, wallpaper, onOpen }: OsDesktopIconProps): J
                 <LinkPrimitive
                     to={app.href}
                     target={app.external ? '_blank' : undefined}
-                    onClick={(event) => {
-                        // Cmd and Ctrl clicks never reach this handler, so they open a browser tab.
+                    // Captured, because the link stops Cmd and Ctrl clicks before its own click handler runs.
+                    onClickCapture={(event) => {
                         if (app.external) {
                             return
                         }
                         event.preventDefault()
-                        onOpen(app, event.currentTarget)
+                        onOpen(app, event.currentTarget, event.metaKey || event.ctrlKey)
+                    }}
+                    onAuxClick={(event) => {
+                        if (app.external || event.button !== 1) {
+                            return
+                        }
+                        event.preventDefault()
+                        onOpen(app, event.currentTarget, true)
                     }}
                     className="group inline-flex flex-col items-center justify-center gap-0.5 max-w-28 text-center select-none text-white font-medium drop-shadow-lg rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white focus-visible:ring-2 focus-visible:ring-black/60"
                     data-attr={`os-desktop-icon-${app.key}`}

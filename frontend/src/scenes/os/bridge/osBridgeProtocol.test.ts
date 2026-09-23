@@ -1,4 +1,10 @@
-import { OS_BRIDGE_CHANNEL, OS_BRIDGE_VERSION, osBridgeSenderWindowId, parseOsBridgeMessage } from './osBridgeProtocol'
+import {
+    OS_BRIDGE_CHANNEL,
+    OS_BRIDGE_VERSION,
+    osBridgeSenderWindowId,
+    parseOsBridgeMessage,
+    parseOsHostMessage,
+} from './osBridgeProtocol'
 import { osFrameName } from './osFrame'
 
 const ORIGIN = 'https://app.example.com'
@@ -19,6 +25,8 @@ describe('osBridgeProtocol', () => {
             envelope({ type: 'open-window', path: '/project/1/replay' }),
             { type: 'open-window', path: '/project/1/replay' },
         ],
+        ['a click into the frame', envelope({ type: 'focus' }), { type: 'focus' }],
+        ['a changed user', envelope({ type: 'user-changed' }), { type: 'user-changed' }],
         [
             'a window shortcut',
             envelope({ type: 'window-command', command: 'snap-left' }),
@@ -56,6 +64,15 @@ describe('osBridgeProtocol', () => {
         ['null', null, null],
     ])('parses %s', (_description, data, expected) => {
         expect(parseOsBridgeMessage(data)).toEqual(expected)
+    })
+
+    test.each([
+        ['a changed user', envelope({ type: 'user-changed' }), { type: 'user-changed' }],
+        ['a frame-only message', envelope({ type: 'open-window', path: '/project/1/replay' }), null],
+        ['a message from another channel', { channel: 'other', version: 1, type: 'user-changed' }, null],
+        ['a message from a newer protocol', { ...envelope({ type: 'user-changed' }), version: 2 }, null],
+    ])('parses %s from the OS page', (_description, data, expected) => {
+        expect(parseOsHostMessage(data)).toEqual(expected)
     })
 
     describe('sender', () => {

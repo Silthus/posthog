@@ -1,15 +1,17 @@
-import { MOCK_TEAM_ID } from 'lib/api.mock'
+import { MOCK_DEFAULT_USER, MOCK_TEAM_ID } from 'lib/api.mock'
 
 import { router } from 'kea-router'
+import { expectLogic } from 'kea-test-utils'
 
 import { commandLogic } from 'lib/components/Command/commandLogic'
 import { newInternalTab } from 'lib/utils/newInternalTab'
+import { userLogic } from 'scenes/userLogic'
 
 import { sidePanelStateLogic } from '~/layout/navigation-3000/sidepanel/sidePanelStateLogic'
 import { initKeaTests } from '~/test/init'
 import { SidePanelTab } from '~/types'
 
-import { OsBridgeMessage } from './osBridgeProtocol'
+import { OS_BRIDGE_CHANNEL, OS_BRIDGE_VERSION, OsBridgeMessage } from './osBridgeProtocol'
 import { osFrameBridgeLogic } from './osFrameBridgeLogic'
 
 const INSIGHTS = `/project/${MOCK_TEAM_ID}/insights`
@@ -122,6 +124,36 @@ describe('osFrameBridgeLogic', () => {
         expect(sentOfType('side-panel')).toEqual([
             { type: 'side-panel', tab: SidePanelTab.Max, options: '!why did signups drop' },
         ])
+    })
+
+    it('tells the OS when the person changes the user, such as the theme, in the window', () => {
+        userLogic.actions.updateUserSuccess({ ...MOCK_DEFAULT_USER, theme_mode: 'dark' })
+
+        expect(sentOfType('user-changed')).toEqual([{ type: 'user-changed' }])
+    })
+
+    function messageFrom(origin: string, source: Window | null): () => void {
+        return () =>
+            window.dispatchEvent(
+                new MessageEvent('message', {
+                    data: { channel: OS_BRIDGE_CHANNEL, version: OS_BRIDGE_VERSION, type: 'user-changed' },
+                    origin,
+                    source,
+                })
+            )
+    }
+
+    it('reloads the user when the OS page says it changed', async () => {
+        await expectLogic(logic, messageFrom(window.location.origin, window.parent)).toDispatchActions(userLogic, [
+            'loadUser',
+        ])
+    })
+
+    test.each([
+        ['another origin', 'https://evil.example.com', window.parent],
+        ['a window that is not the OS page', window.location.origin, null],
+    ])('ignores a user change from %s', async (_description, origin, source) => {
+        await expectLogic(logic, messageFrom(origin, source)).toNotHaveDispatchedActions(['loadUser'])
     })
 
     it('opens the OS spotlight in place of the command menu', () => {

@@ -68,6 +68,10 @@ export function osLinkTarget(click: OsLinkClick, currentHref: string): OsLinkTar
     if (isServerPath(url.pathname)) {
         return newTab ? null : { kind: 'top', url: url.href }
     }
+    // An API link is a file or an OAuth start. The browser handles files, and `osNavigationTarget` catches the redirects.
+    if (url.pathname.startsWith('/api/')) {
+        return null
+    }
     if (!newTab) {
         return null
     }

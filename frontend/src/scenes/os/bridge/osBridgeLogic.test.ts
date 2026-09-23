@@ -1,8 +1,10 @@
-import { MOCK_TEAM_ID } from 'lib/api.mock'
+import { MOCK_DEFAULT_USER, MOCK_TEAM_ID } from 'lib/api.mock'
 
 import { router } from 'kea-router'
+import { expectLogic } from 'kea-test-utils'
 
 import { commandLogic } from 'lib/components/Command/commandLogic'
+import { userLogic } from 'scenes/userLogic'
 
 import { initKeaTests } from '~/test/init'
 
@@ -91,6 +93,39 @@ describe('osBridgeLogic', () => {
 
         expect(windows.values.windows.find((w) => w.id === senderId)?.minimized).toBe(true)
         expect(windows.values.focusedWindow?.path).toBe(REPLAY)
+    })
+
+    it('brings a window to the front when the person clicks into its frame', () => {
+        windows.actions.openWindow(REPLAY)
+
+        send({ type: 'focus' })
+
+        expect(windows.values.focusedWindow?.path).toBe(INSIGHTS)
+    })
+
+    it('tells every window frame when the user changes, so a new theme reaches open windows', () => {
+        const postMessage = jest.spyOn(frame.contentWindow as Window, 'postMessage')
+
+        userLogic.actions.updateUserSuccess({ ...MOCK_DEFAULT_USER, theme_mode: 'dark' })
+
+        expect(postMessage).toHaveBeenCalledWith(
+            { channel: OS_BRIDGE_CHANNEL, version: OS_BRIDGE_VERSION, type: 'user-changed' },
+            window.location.origin
+        )
+    })
+
+    it('reloads its own user and tells the other frames when a window changes the user', async () => {
+        const other = document.createElement('iframe')
+        other.name = osFrameName('other1')
+        document.body.appendChild(other)
+        const toSender = jest.spyOn(frame.contentWindow as Window, 'postMessage')
+        const toOther = jest.spyOn(other.contentWindow as Window, 'postMessage')
+
+        await expectLogic(bridge, () => send({ type: 'user-changed' })).toDispatchActions(userLogic, ['loadUser'])
+
+        expect(toOther).toHaveBeenCalledWith(expect.objectContaining({ type: 'user-changed' }), window.location.origin)
+        expect(toSender).not.toHaveBeenCalled()
+        other.remove()
     })
 
     it('opens the spotlight when the framed app asks for search', () => {
