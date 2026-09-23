@@ -1,0 +1,23 @@
+! You are not logged in to FloxHub. Run 'flox auth login' to log in.
+
+  ci:preflight — 79 changed file(s) vs origin/master
+
+   → [staleness] branch freshness vs master
+       merging master conflicts in 1 file(s) (e.g. frontend/src/layout/navigation-3000/navigationLogic.tsx) · CI workflows changed on master (7 file(s)) · 72 commits (≈ PRs) behind — merge master in: git merge origin/master
+   ✓ [ruff-lint] Python lint (ruff check)
+       2 file(s) · ok
+   ⚠ [complexity] cyclomatic complexity (warn >10, >15 in tests)
+       64 file(s) · posthog/middleware.py:354:9: warning: `__call__` has cyclomatic complexity 12 (warn >10) · posthog/middleware.py:411:9: warning: `get_target_queryset` has cyclomatic complexity 12 (warn >10) · posthog/middleware.py:924:9: warning: `process_response` has cyclomatic complexity 12 (warn >10)
+   ⚠ [size] file size (warn >1000 lines)
+       64 file(s) · posthog/test/test_middleware.py:1:1: note: 3111 lines (~37k tokens to read)
+   ✓ [ruff-format] Python format (ruff format)
+       2 file(s) · ok
+   → [type-check] Python type checking (mypy)
+       2 file(s) · a type error costs a full CI re-run — consider `uv run mypy --cache-fine-grained .` (what CI runs)
+   ✓ [markdown-format] markdown formatting (oxfmt)
+       1 file(s) · ok
+   ✓ [feature-flags] FEATURE_FLAGS not alphabetically sorted
+       1 file(s) · ok
+
+  summary {"changed_files": 79, "triggered": ["ruff-lint", "complexity", "size", "ruff-format", "type-check", "markdown-format", "feature-flags"], "failures": 0, "mode": "strict"}
+
