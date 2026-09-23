@@ -19,9 +19,16 @@ export type OsLinkTarget =
     /** Load the URL in the whole browser tab, because the page refuses to load in a frame. */
     | { kind: 'top'; url: string }
 
-// Server pages answer with a redirect to another site (SSO, OAuth) or are not part of the app, so they
-// never load inside a window.
-const SERVER_PATH = /^\/(?:(?:api|admin|complete|oauth)\/|(?:login|logout|signup)(?:\/|$))/
+// Server pages answer with a redirect to another site (SSO, OAuth, the toolbar) or are not part of the app,
+// so they never load inside a window. Keep in sync with the non-API routes in `posthog/urls.py`.
+const SERVER_PATH =
+    /^\/(?:(?:admin|complete|oauth|toolbar_oauth|authorize_and_redirect|reauth|integrations\/connect)\/|(?:login|logout|signup|exporter|render_query)(?:\/|$))/
+
+// An API URL that the app loads as a page, not with fetch, is a redirect (an OAuth start) or a file. Files
+// download fine inside a frame, so only the redirects leave the window.
+function isApiRedirect(url: URL): boolean {
+    return url.pathname.startsWith('/api/') && !url.searchParams.has('download')
+}
 
 function isServerPath(pathname: string): boolean {
     return SERVER_PATH.test(pathname)
@@ -77,5 +84,5 @@ export function osNavigationTarget(destination: string, origin: string): string 
     if (!url) {
         return null
     }
-    return url.origin !== origin || isServerPath(url.pathname) ? url.href : null
+    return url.origin !== origin || isServerPath(url.pathname) || isApiRedirect(url) ? url.href : null
 }

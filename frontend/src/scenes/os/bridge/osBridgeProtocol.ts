@@ -12,8 +12,6 @@ export type OsBridgeMessage =
     | { type: 'location'; path: string; title: string; traversed: boolean }
     /** Open a path in another window, for example after a Cmd+click. */
     | { type: 'open-window'; path: string }
-    /** The person clicked into the frame, so its window comes to the front. */
-    | { type: 'focus' }
     /** A window shortcut pressed while the frame had keyboard focus. */
     | { type: 'window-command'; command: OsWindowCommand }
     /** A page that refuses to load in a frame, such as a sign-in or checkout page. */
@@ -25,7 +23,8 @@ export type OsBridgeMessage =
 
 export type OsBridgeEnvelope = OsBridgeMessage & { channel: typeof OS_BRIDGE_CHANNEL; version: number }
 
-const MAX_TEXT_LENGTH = 2000
+// App URLs can carry a whole query in the search or hash, so the limit only guards against runaway data.
+const MAX_TEXT_LENGTH = 100_000
 
 function text(value: unknown): string | null {
     return typeof value === 'string' && value.length <= MAX_TEXT_LENGTH ? value : null
@@ -68,8 +67,6 @@ export function parseOsBridgeMessage(data: unknown): OsBridgeMessage | null {
             const path = text(raw.path)
             return path ? { type: 'open-window', path } : null
         }
-        case 'focus':
-            return { type: 'focus' }
         case 'window-command':
             return isOsWindowCommand(raw.command) ? { type: 'window-command', command: raw.command } : null
         case 'open-top': {

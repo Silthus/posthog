@@ -19,7 +19,6 @@ describe('osBridgeProtocol', () => {
             envelope({ type: 'open-window', path: '/project/1/replay' }),
             { type: 'open-window', path: '/project/1/replay' },
         ],
-        ['a focus request', envelope({ type: 'focus' }), { type: 'focus' }],
         [
             'a window shortcut',
             envelope({ type: 'window-command', command: 'snap-left' }),
@@ -36,8 +35,18 @@ describe('osBridgeProtocol', () => {
             { type: 'side-panel', tab: 'max', options: '!why did signups drop' },
         ],
         ['a spotlight request', envelope({ type: 'spotlight' }), { type: 'spotlight' }],
-        ['a message from another channel', { channel: 'other', version: 1, type: 'focus' }, null],
-        ['a message from a newer protocol', { ...envelope({ type: 'focus' }), version: 2 }, null],
+        [
+            'a location with a long query in the hash',
+            envelope({
+                type: 'location',
+                path: `/project/1/insights/new#q=${'x'.repeat(5000)}`,
+                title: '',
+                traversed: false,
+            }),
+            { type: 'location', path: `/project/1/insights/new#q=${'x'.repeat(5000)}`, title: '', traversed: false },
+        ],
+        ['a message from another channel', { channel: 'other', version: 1, type: 'spotlight' }, null],
+        ['a message from a newer protocol', { ...envelope({ type: 'spotlight' }), version: 2 }, null],
         ['an unknown type', envelope({ type: 'eval', code: 'alert(1)' }), null],
         ['a location without a path', envelope({ type: 'location', title: 'x', traversed: false }), null],
         ['an unknown window command', envelope({ type: 'window-command', command: 'delete-everything' }), null],

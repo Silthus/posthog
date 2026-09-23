@@ -100,9 +100,6 @@ export const osBridgeLogic = kea<osBridgeLogicType>([
                         actions.focusWindow(windowId)
                     }
                     return
-                case 'focus':
-                    actions.focusWindow(windowId)
-                    return
                 case 'open-window':
                     actions.openWindow(message.path, { newWindow: true })
                     return
