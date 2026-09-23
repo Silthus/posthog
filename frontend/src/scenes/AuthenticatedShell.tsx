@@ -26,7 +26,9 @@ import { ImpersonationNotice } from '~/layout/navigation/ImpersonationNotice'
 import { sceneLogic } from './sceneLogic'
 
 // Loaded only with the os-shell flag on, so the desktop and its images stay out of everyone else's bundle.
-const OsShell = lazyWithRetry(() => import('./os/shell/OsShell').then(({ OsShell }) => ({ default: OsShell })))
+const OsShell = lazyWithRetry(() =>
+    import('./os/variants/OsVariantShell').then(({ OsVariantShell }) => ({ default: OsVariantShell }))
+)
 
 const TerminalDock = lazyWithRetry(() =>
     import('./terminal/TerminalDock').then(({ TerminalDock }) => ({ default: TerminalDock }))

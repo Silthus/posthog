@@ -1,0 +1,10 @@
+// PROTOTYPE: styles only the design variants use. Tokens come from `shell/OsShell.scss`.
+
+.OsShell__dock {
+    background: rgb(var(--os-bg) / 45%);
+    backdrop-filter: blur(48px);
+    border: 1px solid rgb(var(--os-text-primary) / 12%);
+    border-radius: 1rem;
+    box-shadow: 0 20px 40px -12px rgb(0 0 0 / 35%);
+    transform: translateZ(0);
+}

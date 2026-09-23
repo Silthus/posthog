@@ -9,7 +9,7 @@ With the flag off, nothing here renders.
 
 - `navigation3000Logic.mode` resolves through `resolveOsShellMode` (`osShellMode.ts`).
   It returns `os` when the flag is on and the page would show the regular layout, and `framed` inside an OS window.
-- `AuthenticatedShell` renders `shell/OsShell` for `os`, and `Navigation` for every other mode.
+- `AuthenticatedShell` renders `shell/OsShell` for `os` (through the design variant prototype, see below), and `Navigation` for every other mode.
 - `Navigation` renders only the scene for `framed`: no navigation, no side panel, no top bar.
 - A page is framed when `isOsFrame(window)` is true (`bridge/osFrame.ts`).
   An OS window names its frame with `osFrameName(windowId)`, and the frame keeps that name across navigations and reloads.
@@ -32,6 +32,27 @@ There is no shared `osLogic`: each folder owns its own logic, and `shell/OsShell
 | `bridge/`  | Messages between a framed app and the OS, and framed-mode detection         | Always build a frame `src` with `osFrameSrc`, never from raw input. |
 
 The root files (`OsScene.tsx`, `osShellMode.ts`, this README) belong to the foundation and change only when the switch itself changes.
+
+## Design variants (prototype)
+
+`variants/` holds throwaway designs of the whole shell, so one can be picked by clicking through them.
+`AuthenticatedShell` loads `variants/OsVariantShell`, which renders the picked design and a floating switcher.
+
+| `?variant=` | Design      | Folder               | What it tries                                                                              |
+| ----------- | ----------- | -------------------- | ------------------------------------------------------------------------------------------ |
+| `a`         | posthog.com | `shell/` (unchanged) | Menu bar and desktop icon columns, no dock                                                 |
+| `b`         | Mac         | `variants/mac/`      | Menu bar, a dock with running dots and minimized windows, only system icons on the desktop |
+| `c`         | Launcher    | `variants/launcher/` | The app grid as home, full-size windows, a tab strip to switch, Cmd+K opens any app        |
+| `d`         | Tiling      | `variants/tiling/`   | A sidebar of apps and windows, and the visible windows always tile                         |
+
+- Only `/os?variant=<key>` picks a design. The tab keeps its pick in `sessionStorage` (`posthog-os-variant`) while the address bar follows its windows and across reloads, and shows the switcher.
+- Every other tab, and every tab that never opened `/os`, renders `DEFAULT_OS_VARIANT` (`variants/osVariants.ts`) with no switcher.
+- The switcher's close button leaves the preview and goes back to the default.
+- Arrow keys cycle the designs while nothing has focus.
+- Windows stay open across switches, because the designs share `osWindowsLogic`.
+- The Mac dock in `variants/mac/` is a placeholder until the real dock lands in `dock/`.
+
+To finish the prototype, fold the picked design into `shell/`, point `AuthenticatedShell` back at `shell/OsShell`, and delete `variants/`.
 
 ## Windows
 
