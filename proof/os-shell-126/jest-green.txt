@@ -1,0 +1,17 @@
+PASS src/scenes/os/osShellMode.test.ts
+PASS src/scenes/os/windows/osWindowGeometry.test.ts
+PASS src/scenes/os/bridge/osBridgeProtocol.test.ts
+PASS src/scenes/os/shell/osAppSrc.test.ts
+PASS src/scenes/os/bridge/osSidePanelPath.test.ts
+PASS src/scenes/os/shell/osWallpapers.test.ts
+PASS src/scenes/os/shell/osDesktopApps.test.ts
+PASS src/scenes/os/windows/osWindowShortcuts.test.ts
+PASS src/scenes/os/shell/glass/iconGlyph.test.tsx
+PASS src/scenes/os/bridge/osFrameRouting.test.ts
+PASS src/scenes/os/bridge/osFrame.test.ts
+PASS src/scenes/os/spotlight/osSpotlightLogic.test.ts
+PASS src/scenes/os/bridge/osBridgeLogic.test.ts
+PASS src/scenes/os/bridge/osFrameBridgeLogic.test.ts
+PASS src/scenes/os/windows/osWindowsLogic.test.ts
+Test Suites: 15 passed, 15 total
+Tests:       177 passed, 177 total
