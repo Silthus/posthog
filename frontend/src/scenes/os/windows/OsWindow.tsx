@@ -83,6 +83,20 @@ export function OsWindow({
 
     useEffect(() => () => stopWatchingFrame.current?.(), [])
 
+    // A shortcut can maximize, minimize or close a window mid-gesture, and its handles then never see the
+    // pointer come up. Without this, every frame would keep ignoring the pointer.
+    useEffect(
+        () => () => {
+            if (gesture.current?.moved) {
+                onInteractionChange(false)
+                onSnapPreview(null)
+            }
+            gesture.current = null
+            setLiveBounds(null)
+        },
+        [win.maximized, win.minimized, onInteractionChange, onSnapPreview]
+    )
+
     const bounds = liveBounds ?? win.bounds
     const toggleMaximize = (): void => (win.maximized ? unmaximizeWindow(win.id) : maximizeWindow(win.id))
 
@@ -123,8 +137,8 @@ export function OsWindow({
             }
             current.moved = true
             onInteractionChange(true)
-            if (current.kind === 'move' && win.maximized && win.restoreBounds) {
-                // Dragging a maximized window takes it back to its old size under the pointer.
+            if (current.kind === 'move' && win.restoreBounds) {
+                // Dragging a maximized or snapped window takes it back to its old size under the pointer.
                 const { width, height } = win.restoreBounds
                 current.startBounds = { width, height, x: pointer.x - width / 2, y: 0 }
                 current.start = pointer
@@ -159,7 +173,7 @@ export function OsWindow({
             onInteractionChange(false)
             onSnapPreview(null)
         }
-        if (current.moved && event.type !== 'pointercancel') {
+        if (current.moved && event.type === 'pointerup') {
             if (current.zone === 'maximize') {
                 maximizeWindow(win.id)
             } else if (current.zone) {
@@ -175,11 +189,18 @@ export function OsWindow({
         onPointerMove: moveGesture,
         onPointerUp: endGesture,
         onPointerCancel: endGesture,
+        onLostPointerCapture: endGesture,
     }
 
     const onFrameLoad = (frame: HTMLIFrameElement): void => {
         stopWatchingFrame.current?.()
-        const stopWatching = watchOsWindowFrame(frame, ({ path, title }) => windowNavigated(win.id, path, title))
+        const stopWatching = watchOsWindowFrame(frame, ({ path, title, traversed }) => {
+            windowNavigated(win.id, path, title)
+            // Back and forward can step a window that is behind others, so that window comes to the front.
+            if (traversed) {
+                focusWindow(win.id)
+            }
+        })
         // A click into a frame never reaches this page, so the frame reports it. Frame `focus` events are
         // not used, because an app that focuses an input on load would steal focus from the window on top.
         const focusThisWindow = (): void => focusWindow(win.id)

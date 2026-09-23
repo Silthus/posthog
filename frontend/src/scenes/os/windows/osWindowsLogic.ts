@@ -1,5 +1,6 @@
 import { MakeLogicType, actions, afterMount, connect, kea, listeners, path, reducers, selectors } from 'kea'
 import { router } from 'kea-router'
+import { getRouterContext } from 'kea-router/lib/router'
 
 import { removeProjectIdIfPresent } from 'lib/utils/kea-router'
 import { teamLogic } from 'scenes/teamLogic'
@@ -48,12 +49,9 @@ export const OS_WINDOW_DEFAULT_TITLE = 'PostHog'
 
 // pinned: localStorage key prefix, renaming it drops every saved desktop layout
 const STORAGE_KEY_PREFIX = 'posthog-os-windows:'
+// pinned: sessionStorage key prefix for the URL each tab showed last
+const TAB_URL_KEY_PREFIX = 'posthog-os-windows-url:'
 const STORAGE_VERSION = 1
-
-interface StoredLayout {
-    url: string | null
-    windows: OsWindowState[]
-}
 
 function isFiniteNumber(value: unknown): value is number {
     return typeof value === 'number' && Number.isFinite(value)
@@ -92,8 +90,8 @@ function parseWindow(value: unknown): OsWindowState | null {
     }
 }
 
-function readLayout(key: string | null): StoredLayout {
-    const empty: StoredLayout = { url: null, windows: [] }
+function readLayout(key: string | null): OsWindowState[] {
+    const empty: OsWindowState[] = []
     if (!key) {
         return empty
     }
@@ -107,21 +105,29 @@ function readLayout(key: string | null): StoredLayout {
             .map(parseWindow)
             .filter((w): w is OsWindowState => !!w && !seen.has(w.id) && !!seen.add(w.id))
         const stack = [...windows].sort((a, b) => a.zIndex - b.zIndex).map((w) => w.id)
-        return {
-            url: typeof parsed.url === 'string' ? parsed.url : null,
-            windows: windows.map((w) => ({ ...w, zIndex: stack.indexOf(w.id) + 1 })),
-        }
+        return windows.map((w) => ({ ...w, zIndex: stack.indexOf(w.id) + 1 }))
     } catch {
         return empty
     }
 }
 
-function writeLayout(key: string | null, layout: StoredLayout): void {
-    if (!key) {
+// Tabs of one project share the layout, but each tab keeps its own last URL. Otherwise another tab's save
+// would make this tab reopen a window it closed.
+function readTabUrl(teamId: number | null): string | null {
+    try {
+        return teamId ? sessionStorage.getItem(`${TAB_URL_KEY_PREFIX}${teamId}`) : null
+    } catch {
+        return null
+    }
+}
+
+function writeLayout(teamId: number | null, windows: OsWindowState[], url: string): void {
+    if (!teamId) {
         return
     }
     try {
-        localStorage.setItem(key, JSON.stringify({ version: STORAGE_VERSION, ...layout }))
+        localStorage.setItem(`${STORAGE_KEY_PREFIX}${teamId}`, JSON.stringify({ version: STORAGE_VERSION, windows }))
+        sessionStorage.setItem(`${TAB_URL_KEY_PREFIX}${teamId}`, url)
     } catch {
         // A full or blocked localStorage only costs the saved layout, so the desktop keeps working.
     }
@@ -132,9 +138,19 @@ function isDesktopUrl(url: string): boolean {
     return removeProjectIdIfPresent(url.split(/[?#]/)[0]) === urls.os()
 }
 
-function currentUrl(): string {
+function routerUrl(): string {
     const { pathname, search, hash } = router.values.location
     return `${pathname}${search}${hash}`
+}
+
+/**
+ * Moves the address bar without a kea-router location change. A router change would make this page load
+ * the window's scene itself: it would log a second pageview on every focus change, and a scene with its own
+ * page layout (onboarding, login) would replace the whole OS shell.
+ */
+function replaceAddressBar(url: string): void {
+    const history = getRouterContext().history ?? window.history
+    history.replaceState(window.history.state, '', url)
 }
 
 function sanitizePath(path: string): string | null {
@@ -374,13 +390,7 @@ export const osWindowsLogic = kea<osWindowsLogicType>([
                     }
                 },
                 restoreLayout: (state, { windows }) => ({ ...state, windows }),
-                setDesktopSize: (state, { desktop }) => ({
-                    desktop,
-                    windows: state.windows.map((w) => ({
-                        ...w,
-                        bounds: w.maximized ? maximizedBounds(desktop) : clampBounds(w.bounds, desktop),
-                    })),
-                }),
+                setDesktopSize: (state, { desktop }) => ({ ...state, desktop }),
             },
         ],
         // Not saved: a restored window has no icon to zoom from.
@@ -397,18 +407,34 @@ export const osWindowsLogic = kea<osWindowsLogicType>([
         ],
     }),
     selectors({
-        windows: [(s) => [s.state], (state: OsDesktopState): OsWindowState[] => state.windows],
+        // State keeps the bounds a window asked for, so a desktop that shrinks and grows back restores them.
+        windows: [
+            (s) => [s.state],
+            (state: OsDesktopState): OsWindowState[] =>
+                state.windows.map((w) => ({
+                    ...w,
+                    bounds: w.maximized ? maximizedBounds(state.desktop) : clampBounds(w.bounds, state.desktop),
+                })),
+        ],
         desktop: [(s) => [s.state], (state: OsDesktopState): OsSize => state.desktop],
         focusedWindow: [(s) => [s.windows], (windows: OsWindowState[]): OsWindowState | null => topWindow(windows)],
     }),
     listeners(({ actions, values, cache }) => {
         const persist = (): void => {
-            writeLayout(cache.storageKey, { url: currentUrl(), windows: values.windows })
+            writeLayout(values.currentTeamId, values.state.windows, cache.pageUrl)
         }
         const syncUrl = (): void => {
             const focused = values.focusedWindow
-            if (focused && focused.path !== currentUrl()) {
-                router.actions.replace(focused.path)
+            if (focused && focused.path !== cache.pageUrl) {
+                cache.pageUrl = focused.path
+                replaceAddressBar(focused.path)
+            }
+            if (focused) {
+                // The page's own scene does not follow the address bar, so the tab title follows the window.
+                document.title =
+                    focused.title === OS_WINDOW_DEFAULT_TITLE
+                        ? focused.title
+                        : `${focused.title} • ${OS_WINDOW_DEFAULT_TITLE}`
             }
             persist()
         }
@@ -424,7 +450,6 @@ export const osWindowsLogic = kea<osWindowsLogicType>([
             unmaximizeWindow: persist,
             snapWindow: persist,
             tidyUpWindows: persist,
-            setDesktopSize: persist,
             runWindowCommand: ({ command }) => {
                 if (command === 'tidy-up') {
                     actions.tidyUpWindows()
@@ -449,12 +474,13 @@ export const osWindowsLogic = kea<osWindowsLogicType>([
                 }
             },
             [router.actionTypes.locationChanged]: ({ method }) => {
-                // Only a push or a back/forward is a request to show a path. A replace comes from this
-                // logic or from a redirect, and the window that shows the page runs that redirect itself.
+                const url = routerUrl()
+                cache.pageUrl = url
+                // Only a push or a back/forward is a request to show a path. A replace is a redirect, and
+                // the window that shows the page runs that redirect itself.
                 if (method === 'REPLACE') {
                     return
                 }
-                const url = currentUrl()
                 if (url !== values.focusedWindow?.path && !isDesktopUrl(url)) {
                     actions.openWindow(url)
                 }
@@ -462,14 +488,13 @@ export const osWindowsLogic = kea<osWindowsLogicType>([
         }
     }),
     afterMount(({ actions, values, cache }) => {
-        cache.storageKey = values.currentTeamId ? `${STORAGE_KEY_PREFIX}${values.currentTeamId}` : null
-        // Saved bounds are clamped when the window layer reports the desktop size.
-        const stored = readLayout(cache.storageKey)
-        actions.restoreLayout(stored.windows)
-        const url = currentUrl()
-        // The saved URL belongs to the saved layout. When the page loads on it again, the layout already
-        // shows it, or the user closed its window, so only a different URL opens a window.
-        if (url !== stored.url && !isDesktopUrl(url)) {
+        const url = routerUrl()
+        cache.pageUrl = url
+        const lastTabUrl = readTabUrl(values.currentTeamId)
+        actions.restoreLayout(readLayout(values.currentTeamId ? `${STORAGE_KEY_PREFIX}${values.currentTeamId}` : null))
+        // When the tab loads on the URL it showed last, the layout already shows it, or the user closed its
+        // window, so only a different URL opens a window.
+        if (url !== lastTabUrl && !isDesktopUrl(url)) {
             actions.openWindow(url)
         }
     }),

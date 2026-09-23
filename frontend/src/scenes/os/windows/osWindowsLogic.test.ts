@@ -1,6 +1,7 @@
 import { MOCK_DEFAULT_TEAM, MOCK_TEAM_ID } from 'lib/api.mock'
 
 import { router } from 'kea-router'
+import { getRouterContext } from 'kea-router/lib/router'
 
 import { initKeaTests } from '~/test/init'
 
@@ -10,9 +11,23 @@ const INSIGHTS = `/project/${MOCK_TEAM_ID}/insights`
 const REPLAY = `/project/${MOCK_TEAM_ID}/replay/home`
 const FLAGS = `/project/${MOCK_TEAM_ID}/feature_flags?tab=overview#panel=discussion`
 
+// The OS moves the address bar without kea-router, so `router.values.location` can lag behind it.
+let addressBar = ''
+
 function currentUrl(): string {
-    const { pathname, search, hash } = router.values.location
-    return `${pathname}${search}${hash}`
+    return addressBar
+}
+
+function initKeaAndTrackAddressBar(team = MOCK_DEFAULT_TEAM): void {
+    initKeaTests(true, team)
+    const history = getRouterContext().history as History
+    for (const method of ['pushState', 'replaceState'] as const) {
+        const original = history[method].bind(history)
+        history[method] = (state: any, title: string, url?: string | URL | null): void => {
+            addressBar = String(url)
+            original(state, title, url)
+        }
+    }
 }
 
 describe('osWindowsLogic', () => {
@@ -34,7 +49,8 @@ describe('osWindowsLogic', () => {
 
     beforeEach(() => {
         localStorage.clear()
-        initKeaTests()
+        sessionStorage.clear()
+        initKeaAndTrackAddressBar()
     })
 
     afterEach(() => {
@@ -110,6 +126,16 @@ describe('osWindowsLogic', () => {
         expect(currentUrl()).toEqual(REPLAY)
     })
 
+    it('moves the URL without a router location change, so the page does not load the scene itself', () => {
+        mountAt(INSIGHTS)
+
+        logic.actions.openWindow(REPLAY)
+        logic.actions.windowNavigated(windowAt(REPLAY).id, `/project/${MOCK_TEAM_ID}/onboarding/replay`)
+
+        expect(currentUrl()).toEqual(`/project/${MOCK_TEAM_ID}/onboarding/replay`)
+        expect(router.values.location.pathname).toEqual(INSIGHTS)
+    })
+
     it('leaves the URL alone when the last visible window goes away', () => {
         mountAt(INSIGHTS)
 
@@ -183,8 +209,12 @@ describe('osWindowsLogic', () => {
 
         expect(windowAt(INSIGHTS).bounds).toEqual({ x: 0, y: 0, width: 1000, height: 700 })
         const replay = windowAt(REPLAY).bounds
-        expect(replay.x).toBeLessThanOrEqual(1000 - 96)
-        expect(replay.y).toBeLessThanOrEqual(700 - 48)
+        expect(replay.x).toBeLessThanOrEqual(1000 - 160)
+        expect(replay.y).toBeLessThanOrEqual(700 - 80)
+
+        logic.actions.setDesktopSize({ width: 1600, height: 900 })
+
+        expect(windowAt(REPLAY).bounds).toEqual({ x: 1400, y: 700, width: 800, height: 600 })
     })
 
     it('tidies the visible windows into a grid in their left-to-right order and leaves minimized ones alone', () => {
@@ -236,7 +266,7 @@ describe('osWindowsLogic', () => {
     describe('after a reload', () => {
         function reloadAt(url: string, team = MOCK_DEFAULT_TEAM): void {
             logic.unmount()
-            initKeaTests(true, team)
+            initKeaAndTrackAddressBar(team)
             mountAt(url)
             logic.actions.setDesktopSize({ width: 1600, height: 900 })
         }
@@ -300,6 +330,18 @@ describe('osWindowsLogic', () => {
         it('does not reopen a window that was closed on the URL it left behind', () => {
             mountAt(INSIGHTS)
             logic.actions.closeWindow(windowAt(INSIGHTS).id)
+
+            reloadAt(INSIGHTS)
+
+            expect(logic.values.windows).toEqual([])
+        })
+
+        it('does not reopen the closed window when another tab saved the layout since', () => {
+            mountAt(INSIGHTS)
+            logic.actions.closeWindow(windowAt(INSIGHTS).id)
+            const key = `posthog-os-windows:${MOCK_TEAM_ID}`
+            const saved = JSON.parse(localStorage.getItem(key) ?? '{}')
+            localStorage.setItem(key, JSON.stringify({ ...saved, url: REPLAY }))
 
             reloadAt(INSIGHTS)
 

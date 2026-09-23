@@ -8,6 +8,7 @@ function keyEvent(overrides: Partial<OsWindowShortcutEvent>): OsWindowShortcutEv
         ctrlKey: false,
         metaKey: false,
         repeat: false,
+        isComposing: false,
         target: document.body,
         ...overrides,
     }
@@ -28,6 +29,12 @@ describe('osWindowCommandFor', () => {
         ['an extra Cmd does nothing', { metaKey: true }, null],
         ['a held key does not repeat the command', { repeat: true }, null],
         ['typing in a field does nothing', { target: document.createElement('input') }, null],
+        ['composing text with an input method does nothing', { isComposing: true }, null],
+        [
+            'typing in a field inside a shadow root does nothing',
+            { target: document.createElement('div'), composedPath: () => [document.createElement('textarea')] },
+            null,
+        ],
     ])('%s', (_description, overrides, expected) => {
         expect(osWindowCommandFor(keyEvent(overrides))).toEqual(expected)
     })

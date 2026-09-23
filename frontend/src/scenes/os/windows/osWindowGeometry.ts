@@ -17,7 +17,7 @@ export const OS_WINDOW_MIN_SIZE: OsSize = { width: 360, height: 240 }
 export const OS_WINDOW_DEFAULT_MAX_SIZE: OsSize = { width: 1280, height: 860 }
 export const OS_WINDOW_CASCADE_OFFSET = 32
 /** The part of a title bar that stays on the desktop, so a window can always be dragged back. */
-export const OS_WINDOW_REACHABLE_EDGE = 96
+export const OS_WINDOW_REACHABLE_EDGE = 160
 export const OS_SNAP_EDGE = 16
 export const OS_TIDY_GAP = 8
 
@@ -119,8 +119,8 @@ export function tidyLayout(count: number, desktop: OsSize, gap: number = OS_TIDY
             cells.push({
                 x: Math.round(gap + column * (cellWidth + gap)),
                 y: Math.round(gap + row * (rowHeight + gap)),
-                width: Math.round(cellWidth),
-                height: Math.round(rowHeight),
+                width: Math.round(Math.max(cellWidth, OS_WINDOW_MIN_SIZE.width)),
+                height: Math.round(Math.max(rowHeight, OS_WINDOW_MIN_SIZE.height)),
             })
         }
     }

@@ -2,8 +2,8 @@ export type OsWindowCommand = 'snap-left' | 'snap-right' | 'toggle-maximize' | '
 
 export type OsWindowShortcutEvent = Pick<
     KeyboardEvent,
-    'code' | 'altKey' | 'shiftKey' | 'ctrlKey' | 'metaKey' | 'repeat' | 'target'
->
+    'code' | 'altKey' | 'shiftKey' | 'ctrlKey' | 'metaKey' | 'repeat' | 'isComposing' | 'target'
+> & { composedPath?: () => EventTarget[] }
 
 // Keys are matched by `code` because Option+Shift on macOS turns `key` into a symbol.
 const COMMANDS: Record<string, OsWindowCommand> = {
@@ -37,10 +37,11 @@ function isEditable(target: EventTarget | null): boolean {
  * They only reach this page while the desktop has focus: key presses inside a window stay in its frame.
  */
 export function osWindowCommandFor(event: OsWindowShortcutEvent): OsWindowCommand | null {
-    if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.repeat) {
+    if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.repeat || event.isComposing) {
         return null
     }
-    if (isEditable(event.target)) {
+    // An editor inside a shadow root reports its host as the target, so the innermost element is checked.
+    if (isEditable(event.composedPath?.()[0] ?? event.target)) {
         return null
     }
     return COMMANDS[event.code] ?? null

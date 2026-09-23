@@ -51,21 +51,29 @@ Other folders open and arrange windows through the logic's actions, never throug
 `windows` lists every window with its `minimized` state, and `focusedWindow` is the top window that is not minimized.
 
 **The URL follows focus.**
-When the focused window changes, or the focused window navigates, the page URL is replaced with that window's path.
+When the focused window changes, or the focused window navigates, the page URL is replaced with that window's path, and the tab title follows the window.
 The OS never pushes a history entry.
+It moves the address bar without a kea-router location change, so this page never loads the window's scene: no second pageview, and a scene with its own page layout (onboarding, login) cannot replace the OS shell.
+Reloading on such a URL shows that page without the OS, and the OS comes back on the next regular page.
 A push or a back/forward to another path on this page (for example from the command palette) opens that path as a window, or focuses the window that shows it.
 Redirects on this page (replaces) are ignored, because the window runs the same redirect.
 Navigation inside a window adds entries to the browser's history, so back and forward step through the pages the windows visited, in the order they visited them.
-The URL follows when the window that moves is the focused one.
+The window that back or forward moves comes to the front, and the URL follows it.
 When the last visible window closes or minimizes, the URL stays on its path.
 
 **The layout persists per project** in `localStorage` under `posthog-os-windows:<project id>`: paths, bounds, stacking order, minimized and maximized state.
+Tabs of one project share it, and the last save wins.
 Loading a URL opens it as the focused window on top of the saved layout.
-Loading the URL the desktop saved last only restores the layout, so a window closed on that URL stays closed after a reload.
+Each tab keeps the URL it showed last in `sessionStorage` (`posthog-os-windows-url:<project id>`).
+Reloading on that URL only restores the layout, so a window closed on that URL stays closed after a reload.
+A window keeps the bounds it asked for, and the desktop clamps them only for display, so a browser window that shrinks and grows back gets its layout back.
+When a window navigates to another project and a reload follows, the page opens that project's desktop.
 Saved paths go through `osFrameSrc` again when they load, and entries that do not parse are dropped.
 
 **Keyboard shortcuts** use Option+Shift (Alt+Shift) and a key: arrows snap, maximize and minimize, W closes, G tidies up.
 They only work while the desktop has focus, because key presses inside a window stay in its frame.
 
 `watchOsWindowFrame` reads the path and title of a window frame on load, on in-app navigation (the Navigation API) and on title changes.
+It only reports app pages, never a server page such as `/admin/` or an API response.
 It is a stopgap until the bridge reports them with messages.
+A frame on another origin (an OAuth provider, billing) cannot be read, so clicking inside it does not bring its window to the front.

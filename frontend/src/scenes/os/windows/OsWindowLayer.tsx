@@ -33,7 +33,7 @@ export function OsWindowLayer(): JSX.Element {
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent): void => {
             const command = osWindowCommandFor(event)
-            if (command) {
+            if (command && !event.defaultPrevented) {
                 event.preventDefault()
                 runWindowCommand(command)
             }
@@ -47,7 +47,7 @@ export function OsWindowLayer(): JSX.Element {
     return (
         <div
             ref={setDesktopElement}
-            className="relative flex-1 min-h-0 w-full overflow-hidden"
+            className="relative isolate flex-1 min-h-0 w-full overflow-hidden"
             data-attr="os-window-layer"
         >
             <AnimatePresence>
