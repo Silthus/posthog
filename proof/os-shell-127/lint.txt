@@ -1,0 +1,14 @@
+src/scenes/os/bridge/osFrameBridgeLogic.test.ts:159:5: warning jest(expect-expect): Test has no assertions help: Add assertion(s) in this Test
+src/scenes/os/bridge/osFrameBridgeLogic.test.ts:165:5: warning jest(expect-expect): Test has no assertions help: Add assertion(s) in this Test
+src/layout/navigation-3000/Navigation.tsx:118:17: warning react(forbid-dom-props): style should be avoided in favor of utility CSS classes - see https://storybook.dev.posthog.dev/?path=/docs/lemon-ui-utilities--overview
+src/layout/navigation-3000/Navigation.tsx:161:17: warning react(forbid-dom-props): style should be avoided in favor of utility CSS classes - see https://storybook.dev.posthog.dev/?path=/docs/lemon-ui-utilities--overview
+src/scenes/sceneLogic.test.tsx:66:5: warning jest(expect-expect): Test has no assertions help: Add assertion(s) in this Test
+src/scenes/sceneLogic.test.tsx:83:5: warning jest(expect-expect): Test has no assertions help: Add assertion(s) in this Test
+src/scenes/sceneLogic.test.tsx:257:5: warning jest(expect-expect): Test has no assertions help: Add assertion(s) in this Test
+oxlint EXIT 0 (97 files)
+Checking formatting...
+
+All matched files use the correct format.
+Finished in 197ms on 101 files using 16 threads.
+oxfmt EXIT 0 (101 files)
+stylelint EXIT 0 (3 files)

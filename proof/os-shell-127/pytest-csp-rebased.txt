@@ -1,0 +1,112 @@
+! You are not logged in to FloxHub. Run 'flox auth login' to log in.
+
+[1;36mPostHog dev[0m [2m── os-shell/rebase[0m
+
+  ... Python packages
+  [32m✓[0m Python packages
+  [32m✓[0m Build phrocs                                 1s
+  [32m✓[0m Node packages                                7s
+  [33m⚠[0m CodeRabbit CLI skipped  \033[2m(no release for this host, or unzip is missing)\033[0m
+  [32m✓[0m System hosts
+  [32m✓[0m Environment vars
+  [32m✓[0m Rust toolchain (rustc 1.91.1)
+
+[2mReady in 7s[0m
+Detected: Python test (pytest)
+🚀 pytest -s posthog/test/test_middleware.py::TestCSPMiddleware posthog/test/test_middleware.py::TestAppCspHeaderName posthog/test/test_middleware.py::TestNarrowedAppPolicy posthog/test/test_middleware.py::TestViewManagedCsp
+{'event': "\n                You indicated your instance is behind a proxy (IS_BEHIND_PROXY env var),\n                but you haven't configured any trusted proxies. See\n                https://posthog.com/docs/configuring-posthog/running-behind-proxy for details.\n            ", 'timestamp': '2026-09-23T20:07:36.817631Z', 'logger': 'posthog.settings.access', 'level': 'warning', 'pid': 2496393, 'tid': 267139400630304}
+/home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/.flox/cache/venv/lib/python3.13/site-packages/infi/clickhouse_orm/__init__.py:1: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  __import__("pkg_resources").declare_namespace(__name__)
+Running in test mode. Setting DEBUG and TEST environment variables.
+============================= test session starts ==============================
+platform linux -- Python 3.13.13, pytest-8.4.2, pluggy-1.6.0
+django: version: 5.2.17, settings: posthog.settings (from ini)
+rootdir: /home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9
+configfile: pytest.ini
+plugins: env-1.2.0, mock-3.15.1, durations-1.6.2, syrupy-4.9.1, requests-mock-1.12.1, icdiff-0.9, django-4.14.0, hypothesis-6.151.9, aiohttp-1.1.0, time-machine-3.5.0, split-0.11.0, xdist-3.8.0, asyncio-1.3.0, anyio-4.9.0, timeout-2.4.0, cov-7.0.0, rerunfailures-16.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=module, asyncio_default_test_loop_scope=module
+collected 56 items
+
+posthog/test/test_middleware.py /home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/.flox/cache/venv/lib/python3.13/site-packages/django/core/handlers/base.py:61: UserWarning: No directory at: /home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/staticfiles/
+  mw_instance = middleware(adapted_handler)
+[2m2026-09-23T20:07:53.734493Z[0m [[33m[1mwarning  [0m] [1mrequest_memory_growth         [0m [[0m[1m[34mposthog.middleware[0m][0m [36mmethod[0m=[35mGET[0m [36mpid[0m=[35m2496393[0m [36mrequest_path[0m=[35m/admin/[0m [36mrss_mb_delta[0m=[35m197.4[0m [36mrss_mb_end[0m=[35m1113.6[0m [36mrss_mb_start[0m=[35m916.3[0m [36mtid[0m=[35m267139400630304[0m [36mworker_pid[0m=[35m2496393[0m
+Default migration data already present.
+Default migration data already present.
+./home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/.flox/cache/venv/lib/python3.13/site-packages/django/core/handlers/base.py:61: UserWarning: No directory at: /home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/staticfiles/
+  mw_instance = middleware(adapted_handler)
+../home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/.flox/cache/venv/lib/python3.13/site-packages/jwt/api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 31 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+./home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/.flox/cache/venv/lib/python3.13/site-packages/django/core/handlers/base.py:61: UserWarning: No directory at: /home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/staticfiles/
+  mw_instance = middleware(adapted_handler)
+..[2m2026-09-23T20:07:54.473418Z[0m [[33m[1mwarning  [0m] [1mNot Found: /shared/notarealtoken[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m2496393[0m [36mtid[0m=[35m267139400630304[0m
+[2m2026-09-23T20:07:54.473526Z[0m [[33m[1mwarning  [0m] [1mNot Found: /shared/notarealtoken[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m2496393[0m [36mtid[0m=[35m267139400630304[0m
+....[2m2026-09-23T20:07:54.723596Z[0m [[33m[1mwarning  [0m] [1mNot Found: /shared/notarealtoken[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m2496393[0m [36mtid[0m=[35m267139400630304[0m
+[2m2026-09-23T20:07:54.723717Z[0m [[33m[1mwarning  [0m] [1mNot Found: /shared/notarealtoken[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m2496393[0m [36mtid[0m=[35m267139400630304[0m
+.......%4|1790194075.201|CONFWARN|rdkafka#producer-1| [thrd:app]: Configuration property api.version.request is deprecated: **Post-deprecation actions: remove this configuration property, brokers < 0.10.0 won't be supported anymore in librdkafka 3.x.** Request broker's supported API versions to adjust functionality to available protocol features. If set to false, or the ApiVersionRequest fails, the fallback version `broker.version.fallback` will be used. **NOTE**: Depends on broker version >=0.10.0. If the request is not supported by (an older) broker the `broker.version.fallback` fallback is used.
+%4|1790194075.201|CONFWARN|rdkafka#producer-1| [thrd:app]: Configuration property broker.version.fallback is deprecated: **Post-deprecation actions: remove this configuration property, brokers < 0.10.0 won't be supported anymore in librdkafka 3.x.** Older broker versions (before 0.10.0) provide no way for a client to query for supported protocol features (ApiVersionRequest, see `api.version.request`) making it impossible for the client to know what features it may use. As a workaround a user may set this property to the expected broker version and the client will automatically adjust its feature set accordingly if the ApiVersionRequest fails (or is disabled). The fallback broker version will be used for `api.version.fallback.ms`. Valid values are: 0.9.0, 0.8.2, 0.8.1, 0.8.0. Any other value >= 0.10, such as 0.10.2.1, enables ApiVersionRequests.
+......./home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/.flox/cache/venv/lib/python3.13/site-packages/structlog/stdlib.py:1166: UserWarning: Remove `format_exc_info` from your processor chain if you want pretty exceptions.
+  ed = p(logger, meth_name, ed)  # type: ignore[arg-type]
+[2m2026-09-23T20:07:55.666205Z[0m [[33m[1mwarning  [0m] [1mcsp.enforcement_flag_check_failed_defaulting_off[0m [[0m[1m[34mposthog.middleware[0m][0m [36mpid[0m=[35m2496393[0m [36mtid[0m=[35m267139400630304[0m
+Traceback (most recent call last):
+  File "/home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/posthog/middleware.py", line 1400, in csp_enforcement_enabled
+    posthoganalytics.feature_enabled(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        CSP_ENFORCE_APP_POLICY_FLAG,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        only_evaluate_locally=True,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/coder/.local/share/uv/python/cpython-3.13.13-linux-aarch64-gnu/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/coder/.local/share/uv/python/cpython-3.13.13-linux-aarch64-gnu/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/coder/.local/share/uv/python/cpython-3.13.13-linux-aarch64-gnu/lib/python3.13/unittest/mock.py", line 1234, in _execute_mock_call
+    raise effect
+Exception: flags unavailable
+.[2m2026-09-23T20:07:55.669913Z[0m [[33m[1mwarning  [0m] [1mcsp.signed_out_enforcement_flag_check_failed_defaulting_off[0m [[0m[1m[34mposthog.middleware[0m][0m [36mpid[0m=[35m2496393[0m [36mtid[0m=[35m267139400630304[0m
+Traceback (most recent call last):
+  File "/home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/posthog/middleware.py", line 1369, in signed_out_csp_enforcement_enabled
+    posthoganalytics.feature_enabled(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        CSP_ENFORCE_SIGNED_OUT_PAGES_FLAG,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        send_feature_flag_events=False,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/coder/.local/share/uv/python/cpython-3.13.13-linux-aarch64-gnu/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/coder/.local/share/uv/python/cpython-3.13.13-linux-aarch64-gnu/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/coder/.local/share/uv/python/cpython-3.13.13-linux-aarch64-gnu/lib/python3.13/unittest/mock.py", line 1234, in _execute_mock_call
+    raise effect
+  File "/home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/posthog/middleware.py", line 1400, in csp_enforcement_enabled
+    posthoganalytics.feature_enabled(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        CSP_ENFORCE_APP_POLICY_FLAG,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        only_evaluate_locally=True,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/coder/.local/share/uv/python/cpython-3.13.13-linux-aarch64-gnu/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/coder/.local/share/uv/python/cpython-3.13.13-linux-aarch64-gnu/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/coder/.local/share/uv/python/cpython-3.13.13-linux-aarch64-gnu/lib/python3.13/unittest/mock.py", line 1234, in _execute_mock_call
+    raise effect
+Exception: flags unavailable
+...............................
+
+============================= 56 passed in 15.85s ==============================
+EXIT 0

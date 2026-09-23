@@ -1,0 +1,121 @@
+watchman warning:  Recrawled this watch 9 times, most recently because:
+dir missing from internal stateTo resolve, please review the information on
+https://facebook.github.io/watchman/docs/troubleshooting.html#recrawl
+To clear this warning, run:
+`watchman watch-del '/home/coder/posthog' ; watchman watch-project '/home/coder/posthog'`
+
+[90m19:26:26:639[0m [34m[xhr][0m constructing the interceptor...
+[90m19:26:26:639[0m [34m[websocket][0m constructing the interceptor...
+[90m19:26:28:650[0m [34m[xhr:apply][0m applying the interceptor...
+[90m19:26:28:650[0m [34m[xhr][0m retrieved global instance: undefined
+[90m19:26:28:650[0m [34m[xhr:apply][0m no running instance found, setting up a new instance...
+[90m19:26:28:650[0m [34m[xhr:setup][0m patching "XMLHttpRequest" module...
+[90m19:26:28:650[0m [34m[xhr:setup][0m native "XMLHttpRequest" module patched! XMLHttpRequest
+[90m19:26:28:650[0m [34m[xhr][0m set global instance! xhr
+[90m19:26:28:650[0m [34m[fetch:apply][0m applying the interceptor...
+[90m19:26:28:650[0m [34m[fetch:apply][0m no running instance found, setting up a new instance...
+[90m19:26:28:651[0m [34m[websocket:apply][0m applying the interceptor...
+[90m19:26:28:651[0m [34m[websocket][0m retrieved global instance: undefined
+[90m19:26:28:651[0m [34m[websocket:apply][0m no running instance found, setting up a new instance...
+[90m19:26:28:651[0m [34m[websocket][0m set global instance! websocket
+[90m19:26:28:651[0m [34m[xhr:on][0m adding "request" event listener: function () { [native code] }
+[90m19:26:28:651[0m [34m[fetch:on][0m adding "request" event listener: function () { [native code] }
+[90m19:26:28:651[0m [34m[websocket:on][0m adding "request" event listener: function () { [native code] }
+[90m19:26:28:651[0m [34m[xhr:on][0m adding "response" event listener: function () { [native code] }
+[90m19:26:28:651[0m [34m[fetch:on][0m adding "response" event listener: function () { [native code] }
+[90m19:26:28:651[0m [34m[websocket:on][0m adding "response" event listener: function () { [native code] }
+[90m19:26:28:651[0m [34m[xhr:on][0m adding "connection" event listener: function () { [native code] }
+[90m19:26:28:651[0m [34m[fetch:on][0m adding "connection" event listener: function () { [native code] }
+[90m19:26:28:651[0m [34m[websocket:on][0m adding "connection" event listener: function () { [native code] }
+[90m19:26:28:900[0m [34m[xhr:dispose][0m disposing the interceptor...
+[90m19:26:28:900[0m [34m[xhr][0m retrieved global instance: XMLHttpRequestInterceptor
+[90m19:26:28:900[0m [34m[xhr][0m cleared global instance! xhr
+[90m19:26:28:900[0m [34m[xhr:dispose][0m global symbol deleted: undefined
+[90m19:26:28:900[0m [34m[xhr:dispose][0m disposing of 1 subscriptions...
+[90m19:26:28:900[0m [34m[xhr:setup][0m native "XMLHttpRequest" module restored! XMLHttpRequest
+[90m19:26:28:900[0m [34m[xhr:dispose][0m disposed of all subscriptions! 0
+[90m19:26:28:900[0m [34m[xhr:dispose][0m destroyed the listener!
+[90m19:26:28:900[0m [34m[fetch:dispose][0m disposing the interceptor...
+[90m19:26:28:900[0m [34m[fetch:dispose][0m global symbol deleted: undefined
+[90m19:26:28:900[0m [34m[fetch:dispose][0m disposing of 1 subscriptions...
+[90m19:26:28:901[0m [34m[fetch:dispose][0m disposed of all subscriptions! 0
+[90m19:26:28:901[0m [34m[fetch:dispose][0m destroyed the listener!
+[90m19:26:28:901[0m [34m[websocket:dispose][0m disposing the interceptor...
+[90m19:26:28:901[0m [34m[websocket][0m retrieved global instance: WebSocketInterceptor
+[90m19:26:28:901[0m [34m[websocket][0m cleared global instance! websocket
+[90m19:26:28:901[0m [34m[websocket:dispose][0m global symbol deleted: undefined
+[90m19:26:28:901[0m [34m[websocket:dispose][0m disposing of 1 subscriptions...
+[90m19:26:28:901[0m [34m[websocket:dispose][0m disposed of all subscriptions! 0
+[90m19:26:28:901[0m [34m[websocket:dispose][0m destroyed the listener!
+FAIL src/scenes/sceneLogic.test.tsx
+  sceneLogic
+    ✓ with the OS shell flag off, the page shows the regular layout, mounts and tracks the scene logic (157 ms)
+    ✕ with the OS shell flag on, the OS shell frames the scene and the page skips the scene logic (87 ms)
+    ○ skipped has preloaded some scenes
+    ○ skipped keeps teamLogic mounted after every other mount reference is released
+    ○ skipped changing URL to /settings/user loads its own scene
+    ○ skipped changing URL to /files loads its own scene
+    ○ skipped changing URL to /files?folder=Research loads its own scene
+    ○ skipped redirects the hyphenated /feature-flags path to the underscore scene route
+    ○ skipped redirects a bare /billing to /organization/billing instead of a 404
+    ○ skipped keeps /billing/authorization_status on its own scene route, not the billing redirect
+    ○ skipped sends the unrouted /organization to /settings/organization instead of the 404 scene
+    ○ skipped sends the unrouted /organization/projects to /settings/organization instead of the 404 scene
+    ○ skipped sends the unrouted /organization/settings/projects to /settings/organization instead of the 404 scene
+    ○ skipped sends the unrouted /organization/projects/new to /organization/create-project instead of the 404 scene
+    ○ skipped sends the unrouted /organization/create to /create-organization instead of the 404 scene
+    ○ skipped sends the unrouted /organization/new to /create-organization instead of the 404 scene
+    ○ skipped keeps /organization/billing on its own scene route, not the organization redirect
+    ○ skipped redirects /project/new to the create-project flow instead of a 404
+    ○ skipped sends the id-less /project path to the homepage, not a 404
+    ○ skipped sends the id-less /project/ path to the homepage, not a 404
+    ○ skipped redirects /data-warehouse/new to the new-source wizard instead of a 404
+    ○ skipped sends a guessed /replay/vision to replay vision, not the recording-not-found scene
+    ○ skipped redirects the old /code_review path to /code-review, preserving the ?review= deep link and hash
+    ○ skipped redirects the product root without dropping scope or hash
+    ○ skipped redirects the project-prefixed test health path without dropping scope or hash
+    ○ skipped redirects the health path without dropping scope or hash
+    ○ skipped keeps a signed-in user on the password reset link instead of redirecting them away
+    ○ skipped persists the loaded scenes
+    ○ skipped does not blanket deny the combined alerts scene without insight access
+    ○ skipped renders the project access denied scene while the address names the refused project 12345
+    ○ skipped renders the project access denied scene while the address names the refused project phc_12345
+    ○ skipped renders the project access denied scene while the address names the refused project aBcDeFgHiJkLmN
+    /home honors the configured homepage
+      ○ skipped redirects /home to the configured dashboard homepage
+      ○ skipped stays on the launchpad at /home when no homepage is configured
+      ○ skipped bootstraps the homepage from APP_CONTEXT so a direct /home visit redirects on first paint
+      ○ skipped ignores a bootstrapped homepage whose scene no longer ships
+      ○ skipped drops a homepage whose object turned out not to exist, and lands on the launchpad
+      ○ skipped carries the hash and allow-listed params onto the launchpad when it drops the homepage
+      ○ skipped keeps the homepage when some other object is the missing one
+      ○ skipped drops the homepage without navigating when it is missing from an embedded render
+      ○ skipped forwards allow-listed query params onto the homepage redirect and drops the rest
+      ○ skipped does not loop when the launchpad is the homepage and a forwarded param is present
+      ○ skipped preserves the #panel hash across the / redirect when no homepage is configured
+      ○ skipped preserves the #panel hash across the / redirect when a dashboard homepage is configured
+      ○ skipped keeps a configured homepage hash across the / redirect with no incoming hash
+      ○ skipped keeps a configured homepage hash across the / redirect with an incoming #panel hash
+
+  ● sceneLogic › with the OS shell flag on, the OS shell frames the scene and the page skips the scene logic
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      111 |         expect(settingsTestLogic.isMounted()).toBe(sceneOnPage)
+      112 |         // The window frame sends its own pageview and view log, so the OS page must not send a second one.
+    > 113 |         expect(capture.mock.calls.some(([event]) => event === '$pageview')).toBe(sceneOnPage)
+          |                                                                             ^
+      114 |         expect(logView).toHaveBeenCalledTimes(sceneOnPage ? 1 : 0)
+      115 |         capture.mockRestore()
+      116 |         logView.mockRestore()
+
+      at src/scenes/sceneLogic.test.tsx:113:77
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 44 skipped, 1 passed, 46 total
+Snapshots:   0 total
+Time:        2.987 s, estimated 3 s
+Ran all test suites matching /src\/scenes\/sceneLogic.test.tsx/i with tests matching "OS shell flag".

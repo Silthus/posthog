@@ -1,0 +1,5 @@
+
+> @posthog/frontend@0.0.0 typescript:check /home/coder/posthog/.claude/worktrees/agent-ae16ea98a7f9104e9/frontend
+> tsgo --noEmit && echo "No errors reported by tsgo."
+
+No errors reported by tsgo.

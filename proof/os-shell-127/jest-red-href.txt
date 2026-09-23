@@ -1,0 +1,108 @@
+watchman warning:  Recrawled this watch 9 times, most recently because:
+dir missing from internal stateTo resolve, please review the information on
+https://facebook.github.io/watchman/docs/troubleshooting.html#recrawl
+To clear this warning, run:
+`watchman watch-del '/home/coder/posthog' ; watchman watch-project '/home/coder/posthog'`
+
+[90m19:20:38:692[0m [34m[xhr][0m constructing the interceptor...
+[90m19:20:38:692[0m [34m[websocket][0m constructing the interceptor...
+[90m19:20:40:50[0m [34m[xhr:apply][0m applying the interceptor...
+[90m19:20:40:50[0m [34m[xhr][0m retrieved global instance: undefined
+[90m19:20:40:50[0m [34m[xhr:apply][0m no running instance found, setting up a new instance...
+[90m19:20:40:50[0m [34m[xhr:setup][0m patching "XMLHttpRequest" module...
+[90m19:20:40:50[0m [34m[xhr:setup][0m native "XMLHttpRequest" module patched! XMLHttpRequest
+[90m19:20:40:50[0m [34m[xhr][0m set global instance! xhr
+[90m19:20:40:50[0m [34m[fetch:apply][0m applying the interceptor...
+[90m19:20:40:50[0m [34m[fetch:apply][0m no running instance found, setting up a new instance...
+[90m19:20:40:50[0m [34m[websocket:apply][0m applying the interceptor...
+[90m19:20:40:50[0m [34m[websocket][0m retrieved global instance: undefined
+[90m19:20:40:51[0m [34m[websocket:apply][0m no running instance found, setting up a new instance...
+[90m19:20:40:51[0m [34m[websocket][0m set global instance! websocket
+[90m19:20:40:51[0m [34m[xhr:on][0m adding "request" event listener: function () { [native code] }
+[90m19:20:40:51[0m [34m[fetch:on][0m adding "request" event listener: function () { [native code] }
+[90m19:20:40:51[0m [34m[websocket:on][0m adding "request" event listener: function () { [native code] }
+[90m19:20:40:51[0m [34m[xhr:on][0m adding "response" event listener: function () { [native code] }
+[90m19:20:40:51[0m [34m[fetch:on][0m adding "response" event listener: function () { [native code] }
+[90m19:20:40:51[0m [34m[websocket:on][0m adding "response" event listener: function () { [native code] }
+[90m19:20:40:51[0m [34m[xhr:on][0m adding "connection" event listener: function () { [native code] }
+[90m19:20:40:51[0m [34m[fetch:on][0m adding "connection" event listener: function () { [native code] }
+[90m19:20:40:51[0m [34m[websocket:on][0m adding "connection" event listener: function () { [native code] }
+[90m19:20:40:123[0m [34m[xhr:dispose][0m disposing the interceptor...
+[90m19:20:40:123[0m [34m[xhr][0m retrieved global instance: XMLHttpRequestInterceptor
+[90m19:20:40:123[0m [34m[xhr][0m cleared global instance! xhr
+[90m19:20:40:123[0m [34m[xhr:dispose][0m global symbol deleted: undefined
+[90m19:20:40:123[0m [34m[xhr:dispose][0m disposing of 1 subscriptions...
+[90m19:20:40:123[0m [34m[xhr:setup][0m native "XMLHttpRequest" module restored! XMLHttpRequest
+[90m19:20:40:123[0m [34m[xhr:dispose][0m disposed of all subscriptions! 0
+[90m19:20:40:123[0m [34m[xhr:dispose][0m destroyed the listener!
+[90m19:20:40:123[0m [34m[fetch:dispose][0m disposing the interceptor...
+[90m19:20:40:123[0m [34m[fetch:dispose][0m global symbol deleted: undefined
+[90m19:20:40:123[0m [34m[fetch:dispose][0m disposing of 1 subscriptions...
+[90m19:20:40:123[0m [34m[fetch:dispose][0m disposed of all subscriptions! 0
+[90m19:20:40:123[0m [34m[fetch:dispose][0m destroyed the listener!
+[90m19:20:40:123[0m [34m[websocket:dispose][0m disposing the interceptor...
+[90m19:20:40:123[0m [34m[websocket][0m retrieved global instance: WebSocketInterceptor
+[90m19:20:40:123[0m [34m[websocket][0m cleared global instance! websocket
+[90m19:20:40:123[0m [34m[websocket:dispose][0m global symbol deleted: undefined
+[90m19:20:40:123[0m [34m[websocket:dispose][0m disposing of 1 subscriptions...
+[90m19:20:40:123[0m [34m[websocket:dispose][0m disposed of all subscriptions! 0
+[90m19:20:40:123[0m [34m[websocket:dispose][0m destroyed the listener!
+FAIL src/scenes/os/windows/osWindowsLogic.test.ts
+  osWindowsLogic
+    ✕ opens an app link without a project id in the current project, and focuses that window the next time (46 ms)
+    ○ skipped opens the URL the page loaded on as the focused window
+    ○ skipped focuses the newest window and keeps the browser URL on the focused window
+    ○ skipped opening an open path focuses the window that already shows the path
+    ○ skipped opening an open path opens a second window when asked for a new one
+    ○ skipped refuses to open a protocol-relative URL
+    ○ skipped refuses to open an absolute URL on another site
+    ○ skipped refuses to open a script URL
+    ○ skipped hands focus and the URL to the window below when the focused window closes or minimizes
+    ○ skipped moves the URL without a router location change, so the page does not load the scene itself
+    ○ skipped leaves the URL alone when the last visible window goes away
+    ○ skipped opens a path the page navigates to, and ignores redirects it did not ask for
+    ○ skipped follows navigation inside a window, and moves the URL only for the focused one
+    ○ skipped maximizes and snaps a window, and goes back to the size it had before
+    ○ skipped keeps a maximized window filling the desktop and a moved window reachable when the desktop shrinks
+    ○ skipped tidies the visible windows into a grid in their left-to-right order and leaves minimized ones alone
+    ○ skipped runs keyboard commands on the focused window only
+    ○ skipped shows no window on the empty desktop route
+    after a reload
+      ○ skipped restores the same layout on the same URL
+      ○ skipped opens a deep link as the focused window on top of the restored layout
+      ○ skipped brings back a minimized window when the URL points at it
+      ○ skipped does not reopen a window that was closed on the URL it left behind
+      ○ skipped does not reopen the closed window when another tab saved the layout since
+      ○ skipped keeps each project on its own desktop
+      ○ skipped starts from the URL alone when the saved layout is not JSON
+      ○ skipped starts from the URL alone when the saved layout has the wrong shape
+      ○ skipped starts from the URL alone when the saved layout points a window at another site
+
+  ● osWindowsLogic › opens an app link without a project id in the current project, and focuses that window the next time
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "/project/997/replay/home",
+    -   "/project/997/insights",
+    +   "/insights",
+      ]
+
+      71 |         logic.actions.openWindow('/insights')
+      72 |
+    > 73 |         expect(logic.values.windows.map((w) => w.path)).toEqual([REPLAY, INSIGHTS])
+         |                                                  ^
+      74 |         expect(logic.values.focusedWindow?.path).toEqual(INSIGHTS)
+      75 |     })
+      76 |
+
+      at Object.<anonymous> (src/scenes/os/windows/osWindowsLogic.test.ts:73:50)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 26 skipped, 27 total
+Snapshots:   0 total
+Time:        2.343 s
+Ran all test suites matching /src\/scenes\/os\/windows\/osWindowsLogic.test.ts/i with tests matching "without a project id".

@@ -1,0 +1,8 @@
+App Store: white glyph 5.19:1
+Dashboards: white glyph 3.59:1
+Session replay: white glyph 3.32:1
+Feature flags: white glyph 4.08:1
+Error tracking: white glyph 3.96:1
+Web analytics: white glyph 4.23:1
+Heatmaps: white glyph 3.74:1
+Surveys: white glyph 5.01:1

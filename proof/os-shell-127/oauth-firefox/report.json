@@ -1,0 +1,30 @@
+{
+  "browser": "firefox",
+  "hasNavigationApi": true,
+  "results": [
+    {
+      "name": "link to a sign-in page",
+      "ok": true,
+      "topBefore": "http://localhost:8105/project/100001/insights",
+      "topAfter": "http://localhost:8105/project/100001/home",
+      "frameUrl": "http://localhost:8105/project/100001/insights",
+      "shot": "oauth-firefox/link-to-a-sign-in-page.jpg"
+    },
+    {
+      "name": "redirect in code to an OAuth provider",
+      "ok": true,
+      "topBefore": "http://localhost:8105/project/100001/insights",
+      "topAfter": "https://oauth.example.com/authorize?client_id=x",
+      "frameUrl": "(no window)",
+      "shot": "oauth-firefox/redirect-in-code-to-an-OAuth-provider.jpg"
+    },
+    {
+      "name": "redirect in code to a server sign-in path",
+      "ok": true,
+      "topBefore": "http://localhost:8105/project/100001/insights",
+      "topAfter": "http://localhost:8105/project/100001/home",
+      "frameUrl": "http://localhost:8105/project/100001/insights",
+      "shot": "oauth-firefox/redirect-in-code-to-a-server-sign-in-path.jpg"
+    }
+  ]
+}

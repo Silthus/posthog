@@ -1,0 +1,128 @@
+watchman warning:  Recrawled this watch 9 times, most recently because:
+dir missing from internal stateTo resolve, please review the information on
+https://facebook.github.io/watchman/docs/troubleshooting.html#recrawl
+To clear this warning, run:
+`watchman watch-del '/home/coder/posthog' ; watchman watch-project '/home/coder/posthog'`
+
+[90m19:26:48:115[0m [34m[xhr][0m constructing the interceptor...
+[90m19:26:48:115[0m [34m[websocket][0m constructing the interceptor...
+[90m19:26:48:750[0m [34m[xhr:apply][0m applying the interceptor...
+[90m19:26:48:750[0m [34m[xhr][0m retrieved global instance: undefined
+[90m19:26:48:750[0m [34m[xhr:apply][0m no running instance found, setting up a new instance...
+[90m19:26:48:750[0m [34m[xhr:setup][0m patching "XMLHttpRequest" module...
+[90m19:26:48:750[0m [34m[xhr:setup][0m native "XMLHttpRequest" module patched! XMLHttpRequest
+[90m19:26:48:751[0m [34m[xhr][0m set global instance! xhr
+[90m19:26:48:751[0m [34m[fetch:apply][0m applying the interceptor...
+[90m19:26:48:751[0m [34m[fetch:apply][0m no running instance found, setting up a new instance...
+[90m19:26:48:751[0m [34m[websocket:apply][0m applying the interceptor...
+[90m19:26:48:751[0m [34m[websocket][0m retrieved global instance: undefined
+[90m19:26:48:751[0m [34m[websocket:apply][0m no running instance found, setting up a new instance...
+[90m19:26:48:751[0m [34m[websocket][0m set global instance! websocket
+[90m19:26:48:751[0m [34m[xhr:on][0m adding "request" event listener: function () { [native code] }
+[90m19:26:48:751[0m [34m[fetch:on][0m adding "request" event listener: function () { [native code] }
+[90m19:26:48:751[0m [34m[websocket:on][0m adding "request" event listener: function () { [native code] }
+[90m19:26:48:751[0m [34m[xhr:on][0m adding "response" event listener: function () { [native code] }
+[90m19:26:48:751[0m [34m[fetch:on][0m adding "response" event listener: function () { [native code] }
+[90m19:26:48:751[0m [34m[websocket:on][0m adding "response" event listener: function () { [native code] }
+[90m19:26:48:752[0m [34m[xhr:on][0m adding "connection" event listener: function () { [native code] }
+[90m19:26:48:752[0m [34m[fetch:on][0m adding "connection" event listener: function () { [native code] }
+[90m19:26:48:752[0m [34m[websocket:on][0m adding "connection" event listener: function () { [native code] }
+[90m19:26:48:768[0m [34m[xhr:dispose][0m disposing the interceptor...
+[90m19:26:48:768[0m [34m[xhr][0m retrieved global instance: XMLHttpRequestInterceptor
+[90m19:26:48:768[0m [34m[xhr][0m cleared global instance! xhr
+[90m19:26:48:768[0m [34m[xhr:dispose][0m global symbol deleted: undefined
+[90m19:26:48:768[0m [34m[xhr:dispose][0m disposing of 1 subscriptions...
+[90m19:26:48:768[0m [34m[xhr:setup][0m native "XMLHttpRequest" module restored! XMLHttpRequest
+[90m19:26:48:768[0m [34m[xhr:dispose][0m disposed of all subscriptions! 0
+[90m19:26:48:768[0m [34m[xhr:dispose][0m destroyed the listener!
+[90m19:26:48:768[0m [34m[fetch:dispose][0m disposing the interceptor...
+[90m19:26:48:768[0m [34m[fetch:dispose][0m global symbol deleted: undefined
+[90m19:26:48:768[0m [34m[fetch:dispose][0m disposing of 1 subscriptions...
+[90m19:26:48:768[0m [34m[fetch:dispose][0m disposed of all subscriptions! 0
+[90m19:26:48:768[0m [34m[fetch:dispose][0m destroyed the listener!
+[90m19:26:48:768[0m [34m[websocket:dispose][0m disposing the interceptor...
+[90m19:26:48:768[0m [34m[websocket][0m retrieved global instance: WebSocketInterceptor
+[90m19:26:48:768[0m [34m[websocket][0m cleared global instance! websocket
+[90m19:26:48:768[0m [34m[websocket:dispose][0m global symbol deleted: undefined
+[90m19:26:48:768[0m [34m[websocket:dispose][0m disposing of 1 subscriptions...
+[90m19:26:48:768[0m [34m[websocket:dispose][0m disposed of all subscriptions! 0
+[90m19:26:48:768[0m [34m[websocket:dispose][0m destroyed the listener!
+FAIL src/scenes/os/bridge/osBridgeProtocol.test.ts
+  osBridgeProtocol
+    ✓ parses a location report (2 ms)
+    ✓ parses a request for a new window
+    ✓ parses a click into the frame
+    ✓ parses a changed user
+    ✓ parses a navigate, which only the OS page sends
+    ✓ parses a window shortcut (1 ms)
+    ✓ parses a page that must leave the frame
+    ✓ parses a side panel request
+    ✓ parses a spotlight request
+    ✓ parses a location with a long query in the hash
+    ✓ parses a message from another channel
+    ✓ parses a message from a newer protocol
+    ✓ parses an unknown type
+    ✓ parses a location without a path
+    ✓ parses an unknown window command (1 ms)
+    ✓ parses an open-top with a script url
+    ✓ parses an open-top with a data url
+    ✓ parses a string payload
+    ✓ parses null (1 ms)
+    ✓ parses a changed user from the OS page
+    ✓ parses a page to go to from the OS page
+    ✓ parses a page on another host from the OS page
+    ✓ parses a page on another host with a backslash from the OS page
+    ✓ parses a full url from the OS page
+    ✓ parses a script url from the OS page
+    ✕ parses a page on another host behind a tab from the OS page (1 ms)
+    ✕ parses a page on another host behind a newline from the OS page (1 ms)
+    ✓ parses a frame-only message from the OS page
+    ✓ parses a message from another channel from the OS page
+    ✓ parses a message from a newer protocol from the OS page
+    sender
+      ✓ accepts an OS window frame on this origin
+      ✓ accepts a page on another origin
+      ✓ accepts a window that is not an OS window frame
+      ✓ accepts a message without a source (1 ms)
+      ✓ ignores a frame that is not named as an OS window
+
+  ● osBridgeProtocol › parses a page on another host behind a tab from the OS page
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: null
+    Received: {"path": "/	/evil.example.com/x", "type": "navigate"}
+
+      90 |         ['a message from a newer protocol', { ...envelope({ type: 'user-changed' }), version: 2 }, null],
+      91 |     ])('parses %s from the OS page', (_description, data, expected) => {
+    > 92 |         expect(parseOsHostMessage(data)).toEqual(expected)
+         |                                                           ^
+      93 |     })
+      94 |
+      95 |     describe('sender', () => {
+
+      at src/scenes/os/bridge/osBridgeProtocol.test.ts:92:69
+
+  ● osBridgeProtocol › parses a page on another host behind a newline from the OS page
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: null
+    Received: {"path": "/
+    /evil.example.com/x", "type": "navigate"}
+
+      90 |         ['a message from a newer protocol', { ...envelope({ type: 'user-changed' }), version: 2 }, null],
+      91 |     ])('parses %s from the OS page', (_description, data, expected) => {
+    > 92 |         expect(parseOsHostMessage(data)).toEqual(expected)
+         |                                                           ^
+      93 |     })
+      94 |
+      95 |     describe('sender', () => {
+
+      at src/scenes/os/bridge/osBridgeProtocol.test.ts:92:69
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 33 passed, 35 total
+Snapshots:   0 total
+Time:        1.374 s
+Ran all test suites matching /src\/scenes\/os\/bridge\/osBridgeProtocol.test.ts/i.

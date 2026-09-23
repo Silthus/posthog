@@ -1,0 +1,32 @@
+[
+  {
+    "name": "regular layout on a deep link",
+    "ok": true,
+    "detail": "sidebar layout, no OS elements, no OS frames",
+    "shot": "flag-off/1-regular-layout-on-a-deep-link.jpg"
+  },
+  {
+    "name": "/app-store and /os show not found",
+    "ok": true,
+    "detail": "not found on app-store, os",
+    "shot": "flag-off/2--app-store-and-os-show-not-found.jpg"
+  },
+  {
+    "name": "Cmd+K opens the regular command menu",
+    "ok": true,
+    "detail": "command menu dialog, without the OS footer",
+    "shot": "flag-off/3-cmd-k-opens-the-regular-command-menu.jpg"
+  },
+  {
+    "name": "Ctrl+click on an app link opens a browser tab",
+    "ok": true,
+    "detail": "new tab about:blank",
+    "shot": "flag-off/4-ctrl-click-on-an-app-link-opens-a-browser-tab.jpg"
+  },
+  {
+    "name": "visiting Surveys still sends its product intent",
+    "ok": true,
+    "detail": "PATCH /api/projects/@current/add_product_intent/ {\"product_type\":\"surveys\",\"intent_context\":\"surveys_viewed\"}",
+    "shot": "flag-off/5-visiting-surveys-still-sends-its-product-intent.jpg"
+  }
+]

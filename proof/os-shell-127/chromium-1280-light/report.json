@@ -1,0 +1,135 @@
+[
+  {
+    "name": "first load of a deep link",
+    "ok": true,
+    "detail": "window /project/100001/feature_flags, address bar /project/100001/feature_flags",
+    "shot": "chromium-1280-light/01-first-load-of-a-deep-link.jpg",
+    "ms": 4945
+  },
+  {
+    "name": "open an app from the desktop",
+    "ok": true,
+    "detail": "new window /project/100001/replay/home",
+    "shot": "chromium-1280-light/02-open-an-app-from-the-desktop.jpg",
+    "ms": 639
+  },
+  {
+    "name": "open the same app again focuses its window",
+    "ok": true,
+    "detail": "2 windows, replay focused",
+    "shot": "chromium-1280-light/03-open-the-same-app-again-focuses-its-window.jpg",
+    "ms": 2329
+  },
+  {
+    "name": "open an app from the centered search",
+    "ok": true,
+    "detail": "spotlight opened /project/100001/surveys",
+    "shot": "chromium-1280-light/04-open-an-app-from-the-centered-search.jpg",
+    "ms": 1128
+  },
+  {
+    "name": "Cmd+K on the desktop opens the same spotlight",
+    "ok": true,
+    "detail": "spotlight dialog opened",
+    "shot": "chromium-1280-light/05-cmd-k-on-the-desktop-opens-the-same-spotlight.jpg",
+    "ms": 427
+  },
+  {
+    "name": "open the App Store from the dock",
+    "ok": true,
+    "detail": "store window /project/100001/app-store",
+    "shot": "chromium-1280-light/06-open-the-app-store-from-the-dock.jpg",
+    "ms": 3720
+  },
+  {
+    "name": "dock shows one tile per open app",
+    "ok": true,
+    "detail": "os-dock-app-store:App Store, active, os-dock-app:Feature flags, os-dock-app:Session replay, os-dock-app:Surveys",
+    "shot": "chromium-1280-light/07-dock-shows-one-tile-per-open-app.jpg",
+    "ms": 190
+  },
+  {
+    "name": "drag a window by its title bar",
+    "ok": true,
+    "detail": "moved by 80,60",
+    "shot": "chromium-1280-light/08-drag-a-window-by-its-title-bar.jpg",
+    "ms": 775
+  },
+  {
+    "name": "resize a window from its right edge",
+    "ok": true,
+    "detail": "width 1011 -> 951",
+    "shot": "chromium-1280-light/09-resize-a-window-from-its-right-edge.jpg",
+    "ms": 758
+  },
+  {
+    "name": "snap a window to the left half",
+    "ok": true,
+    "detail": "snap preview shown: true; window 8,58 632x750",
+    "shot": "chromium-1280-light/10-snap-a-window-to-the-left-half.jpg",
+    "ms": 1238
+  },
+  {
+    "name": "tidy up with Alt+Shift+G",
+    "ok": true,
+    "detail": "4 windows in a grid",
+    "shot": "chromium-1280-light/11-tidy-up-with-alt-shift-g.jpg",
+    "ms": 1200
+  },
+  {
+    "name": "minimize a window and restore it from the dock",
+    "ok": true,
+    "detail": "minimized, then restored and focused from the dock tile",
+    "shot": "chromium-1280-light/12-minimize-a-window-and-restore-it-from-the-dock.jpg",
+    "ms": 1783
+  },
+  {
+    "name": "app menu lists the focused app pages and navigates in place",
+    "ok": true,
+    "detail": "menu: Recordings\n, current page\nCollections\nComments\nFilter templates\nSettings\nNew window\nMinimize window\nClose window; window now at /project/100001/replay/playlists; title Collections",
+    "shot": "chromium-1280-light/13-app-menu-lists-the-focused-app-pages-and-navigates-in-place.jpg",
+    "ms": 3432
+  },
+  {
+    "name": "pin an app, close it, reload, then unpin",
+    "ok": true,
+    "detail": "pinned tile stayed after close and reload, and left after unpin",
+    "shot": "chromium-1280-light/14-pin-an-app-close-it-reload-then-unpin.jpg",
+    "ms": 9647
+  },
+  {
+    "name": "refresh restores the layout",
+    "ok": true,
+    "detail": "3 windows back with the same ids; bounds equal: true",
+    "shot": "chromium-1280-light/15-refresh-restores-the-layout.jpg",
+    "ms": 7878
+  },
+  {
+    "name": "plain link stays in its window, Cmd+click opens a new window",
+    "ok": true,
+    "detail": "/project/100001/feature_flags/templates: Cmd+click opened window 4; plain click stayed in the window at /project/100001/feature_flags/templates; tabs 1",
+    "shot": "chromium-1280-light/16-plain-link-stays-in-its-window-cmd-click-opens-a-new-window.jpg",
+    "ms": 10762
+  },
+  {
+    "name": "App Store preview, install from the bar, remove",
+    "ok": true,
+    "detail": "preview opened without an icon; install from the bar added the icon and hid the bar; remove took it away",
+    "shot": "chromium-1280-light/17-app-store-preview-install-from-the-bar-remove.jpg",
+    "ms": 8360
+  },
+  {
+    "name": "install from the store listing and open",
+    "ok": true,
+    "detail": "Open focused /project/100001/surveys (windows 5 -> 5), a second Open reused it",
+    "shot": "chromium-1280-light/18-install-from-the-store-listing-and-open.jpg",
+    "ms": 8416
+  },
+  {
+    "name": "no full page reloads during the run, no page errors",
+    "ok": true,
+    "detail": "page loads 4, page errors 0",
+    "shot": "chromium-1280-light/19-no-full-page-reloads-during-the-run-no-page-errors.jpg",
+    "ms": 99
+  }
+]
