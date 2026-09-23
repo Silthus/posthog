@@ -4,28 +4,30 @@ import { urls } from 'scenes/urls'
 import type { OsApp } from '../store/osAppCatalog'
 import type { OsWindowState } from '../windows/osWindowsLogic'
 
-export interface OsDockWindowState {
+/** The key of the App Store item. Store app keys are product tree paths, so they never take this value. */
+export const OS_DOCK_STORE_KEY = 'app-store'
+
+export interface OsDockItem {
+    /** The app key, `OS_DOCK_STORE_KEY`, or `window:<id>` for a window no app claims. */
+    key: string
+    /** The app, for its icon and link. Null for the App Store and for a window no app claims. */
+    app: OsApp | null
+    /** The app name, or the window title for a window no app claims. */
+    title: string
+    /** The app's open windows, in the order they opened. */
+    windowIds: string[]
+    pinned: boolean
     focused: boolean
+    /** The app has windows, and every one of them is minimized. */
     minimized: boolean
 }
 
-export interface OsDockWindowItem extends OsDockWindowState {
-    windowId: string
-    title: string
-    /** The app the window belongs to, for its icon. Null for a page no app claims, such as a person. */
-    app: OsApp | null
-}
-
-export interface OsDockStoreItem extends OsDockWindowState {
-    windowId: string | null
-}
-
 export interface OsDockItems {
-    store: OsDockStoreItem
-    windows: OsDockWindowItem[]
+    store: OsDockItem
+    apps: OsDockItem[]
 }
 
-export type OsDockClickAction = 'restore' | 'focus' | 'minimize'
+export type OsDockClick = { action: 'open' } | { action: 'restore' | 'focus' | 'minimize'; windowId: string }
 
 function pathnameOf(path: string): string {
     return removeProjectIdIfPresent(path.split(/[?#]/)[0]).replace(/\/+$/, '') || '/'
@@ -71,31 +73,67 @@ export function osAppForPath(path: string, apps: OsApp[]): OsApp | null {
 }
 
 /**
- * What the dock shows: the App Store, then one item per open window in the order the windows opened.
- * The top App Store window belongs to the App Store item, so it is not listed twice.
+ * What the dock shows: the App Store, then the pinned apps in the order they were pinned, then the other
+ * open apps in the order their first window opened. The windows of one app share one item, and a window
+ * moves to another item when it navigates to another app. A window no app claims gets an item of its own.
+ * A pin that no known app matches stays stored but is not shown, because the app list loads after the dock.
  */
-export function osDockItems(windows: OsWindowState[], focusedWindowId: string | null, apps: OsApp[]): OsDockItems {
-    const storeWindow = windows
-        .filter((w) => isAppStorePath(w.path))
-        .reduce<OsWindowState | null>((top, w) => (!top || w.zIndex > top.zIndex ? w : top), null)
-    const stateOf = (w: OsWindowState): OsDockWindowState => ({
-        focused: w.id === focusedWindowId,
-        minimized: w.minimized,
-    })
+export function osDockItems(
+    windows: OsWindowState[],
+    focusedWindowId: string | null,
+    apps: OsApp[],
+    pinnedKeys: string[]
+): OsDockItems {
+    const appsByKey = new Map(apps.map((app) => [app.key, app]))
+    const items = new Map<string, OsDockItem>()
+    const minimizedCount = new Map<string, number>()
+    const itemFor = (key: string, app: OsApp | null, title: string, pinned: boolean): OsDockItem => {
+        let item = items.get(key)
+        if (!item) {
+            item = { key, app, title, windowIds: [], pinned, focused: false, minimized: false }
+            items.set(key, item)
+        }
+        return item
+    }
+
+    const store = itemFor(OS_DOCK_STORE_KEY, null, 'App Store', false)
+    for (const key of pinnedKeys) {
+        const app = appsByKey.get(key)
+        if (app) {
+            itemFor(key, app, app.name, true)
+        }
+    }
+    for (const w of windows) {
+        const app = isAppStorePath(w.path) ? null : osAppForPath(w.path, apps)
+        const item = isAppStorePath(w.path)
+            ? store
+            : app
+              ? itemFor(app.key, app, app.name, false)
+              : itemFor(`window:${w.id}`, null, w.title, false)
+        item.windowIds.push(w.id)
+        item.focused ||= w.id === focusedWindowId
+        if (w.minimized) {
+            minimizedCount.set(item.key, (minimizedCount.get(item.key) ?? 0) + 1)
+        }
+    }
+    for (const item of items.values()) {
+        item.minimized = item.windowIds.length > 0 && minimizedCount.get(item.key) === item.windowIds.length
+    }
 
     return {
-        store: storeWindow
-            ? { windowId: storeWindow.id, ...stateOf(storeWindow) }
-            : { windowId: null, focused: false, minimized: false },
-        windows: windows
-            .filter((w) => w !== storeWindow)
-            .map((w) => ({ windowId: w.id, title: w.title, app: osAppForPath(w.path, apps), ...stateOf(w) })),
+        store,
+        apps: [...items.values()].filter((item) => item !== store && (item.pinned || item.windowIds.length > 0)),
     }
 }
 
-export function osDockClickAction({ focused, minimized }: OsDockWindowState): OsDockClickAction {
-    if (minimized) {
-        return 'restore'
+export function osDockClick(item: OsDockItem, windows: OsWindowState[]): OsDockClick {
+    const own = windows.filter((w) => item.windowIds.includes(w.id)).sort((a, b) => b.zIndex - a.zIndex)
+    const top = own.find((w) => !w.minimized)
+    if (!own.length) {
+        return { action: 'open' }
     }
-    return focused ? 'minimize' : 'focus'
+    if (!top) {
+        return { action: 'restore', windowId: own[0].id }
+    }
+    return { action: item.focused ? 'minimize' : 'focus', windowId: top.id }
 }
