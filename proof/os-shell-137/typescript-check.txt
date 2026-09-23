@@ -1,0 +1,7 @@
+! You are not logged in to FloxHub. Run 'flox auth login' to log in.
+
+> @posthog/frontend@0.0.0 typescript:check /home/coder/posthog/.claude/worktrees/agent-a1ec5127a42e7be25/frontend
+> tsgo --noEmit && echo "No errors reported by tsgo."
+
+No errors reported by tsgo.
+exit=0

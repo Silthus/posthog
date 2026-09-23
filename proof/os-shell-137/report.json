@@ -1,0 +1,61 @@
+{
+  "app": "Surveys",
+  "steps": {
+    "initialList": [
+      "Dashboards",
+      "Error tracking",
+      "Product analytics",
+      "Session replay",
+      "Web analytics"
+    ],
+    "iconBefore": 0,
+    "preview": {
+      "windows": 2,
+      "barText": "Previewing Surveys. Install it to add it to your desktop.\nInstall",
+      "iconOnDesktop": 0,
+      "list": [
+        "Dashboards",
+        "Error tracking",
+        "Product analytics",
+        "Session replay",
+        "Web analytics"
+      ]
+    },
+    "afterInstall": {
+      "barCount": 0,
+      "iconOnDesktop": 1,
+      "list": [
+        "Dashboards",
+        "Error tracking",
+        "Product analytics",
+        "Session replay",
+        "Surveys",
+        "Web analytics"
+      ]
+    },
+    "afterReload": {
+      "barCount": 0,
+      "iconOnDesktop": 1,
+      "windows": 2,
+      "list": [
+        "Dashboards",
+        "Error tracking",
+        "Product analytics",
+        "Session replay",
+        "Surveys",
+        "Web analytics"
+      ]
+    },
+    "afterRemove": {
+      "iconOnDesktop": 0,
+      "barCount": 1,
+      "list": [
+        "Dashboards",
+        "Error tracking",
+        "Product analytics",
+        "Session replay",
+        "Web analytics"
+      ]
+    }
+  }
+}
