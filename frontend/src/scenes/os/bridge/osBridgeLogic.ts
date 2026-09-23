@@ -1,6 +1,6 @@
 import { MakeLogicType, actions, afterMount, connect, kea, listeners, path } from 'kea'
 
-import { addProjectIdIfMissing, removeProjectIdIfPresent } from 'lib/utils/kea-router'
+import { addProjectIdIfMissing } from 'lib/utils/kea-router'
 import { userLogic } from 'scenes/userLogic'
 
 import { osSpotlightLogic } from '../spotlight/osSpotlightLogic'
@@ -9,6 +9,7 @@ import type { OsWindowState } from '../windows/osWindowsLogic'
 import { OsBridgeMessage, osBridgeSenderWindowId, parseOsBridgeMessage, postToOsFrames } from './osBridgeProtocol'
 import { OS_FRAME_NAME_PREFIX, osFrameName, osFrameSrc } from './osFrame'
 import { setOsWindowOpener } from './osFrameConnection'
+import { osPathShowsPage } from './osFrameRouting'
 import { osSidePanelPath } from './osSidePanelPath'
 
 function osWindowFrames(): HTMLIFrameElement[] {
@@ -111,7 +112,7 @@ export const osBridgeLogic = kea<osBridgeLogicType>([
         values: [osWindowsLogic, ['focusedWindow']],
         actions: [
             osWindowsLogic,
-            ['windowNavigated', 'focusWindow', 'openWindow', 'runWindowCommand'],
+            ['windowNavigated', 'focusWindow', 'openWindow', 'runWindowCommand', 'closeWindow'],
             osSpotlightLogic,
             ['showSpotlight'],
             userLogic,
@@ -191,6 +192,9 @@ export const osBridgeLogic = kea<osBridgeLogicType>([
             cache.pendingNavigations.set(windowId, { path, retried: false })
             postToOsFrames([frame], { type: 'navigate', path }, window.location.origin)
         },
+        closeWindow: ({ id }) => {
+            cache.pendingNavigations.delete(id)
+        },
         sidePanelRequested: ({ tab, options }) => {
             const panelPath = osSidePanelPath(tab, options)
             if (panelPath) {
@@ -205,7 +209,8 @@ export const osBridgeLogic = kea<osBridgeLogicType>([
             if (!pending) {
                 return
             }
-            if (removeProjectIdIfPresent(reportedPath) === removeProjectIdIfPresent(pending.path) || pending.retried) {
+            // A page can add its own query on load, such as filters, so only the path and the query sent must match.
+            if (osPathShowsPage(reportedPath, pending.path) || pending.retried) {
                 cache.pendingNavigations.delete(windowId)
                 return
             }

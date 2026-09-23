@@ -99,7 +99,7 @@ Bump `OS_BRIDGE_VERSION` for any change that a reader of the old version would g
 The OS page sends two messages to its frames:
 
 - `user-changed`, after it saves a change to the user, such as the theme in the menu bar. The frame reloads the user, so the new theme reaches every open window without a reload.
-- `navigate`, with a path on this origin, when the person picks a page in the menu bar's app menu. The frame pushes the path to its router, so the page changes without a reload. `osBridgeLogic.actions.navigateWindow(id, path)` sends it. A frame on another origin cannot read it, so that frame loads the path again.
+- `navigate`, with a path on this origin, when the person picks a page in the menu bar's app menu. The frame pushes the path to its router, so the page changes without a reload. `osBridgeLogic.actions.navigateWindow(id, path)` sends it. A frame on another origin cannot read it, so that frame loads the path again. A frame whose app is still loading drops it, so when the frame's next `location` report shows another page, the OS page sends it once more.
 
 A frame accepts them only when `event.source` is its parent and `event.origin` is its own origin.
 `parseOsHostMessage` drops a `navigate` whose path does not start with a single `/`.
@@ -138,10 +138,13 @@ With no focused window, it does not render.
 - An app claims its own link and every page it lists, and the longest match wins, the same as the dock (`osAppForPath`). Only apps the user can see claim pages.
 - An app without listed pages gets its home page.
 - "New" lists the product manifests' new items (`getTreeItemsNew`) that open one of the app's scenes, without the ones behind a feature flag that is off.
-- A page that another app owns is a related app (Dashboards under Product analytics). It opens in its own window, so the menu and the dock agree on the app of every page.
+- A page that another app owns is a related app (Dashboards under Product analytics). It opens in its own window. A "new" item that another app owns is left out. So a page picked in the menu never moves the window to another app.
+- A page listed with a `flag` shows only while that feature flag is on, the same as the app's tab. The first page of an app is the tab it opens on, and a URL without the tab key marks that page.
 
-The page the window shows is highlighted. Picking a page shows it in the focused window through the bridge's `navigate` message.
+The page the window shows is highlighted, and screen readers hear "current page". Picking a page shows it in the focused window through the bridge's `navigate` message.
 The menu also opens the app in a new window, and minimizes or closes the focused window.
+A window that no app claims, such as a person, gets its title and only the window items.
+The menu closes when another window comes to the front, or when the person clicks into a window.
 
 **The desktop** draws every icon in white, except the App Store, which is drawn in the accent color (`highlighted` in `osDesktopApps`).
 

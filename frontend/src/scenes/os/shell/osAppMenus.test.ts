@@ -6,6 +6,7 @@ import { OS_SYSTEM_APPS, osCatalogApps } from '../store/osAppCatalog'
 import { OS_APP_MENU_PAGES, osAppMenuFor } from './osAppMenus'
 
 const allFlagsOn = new Proxy({}, { get: () => true }) as Record<string, boolean>
+const flagsOff = new Proxy({}, { get: () => false }) as Record<string, boolean>
 const apps = [...OS_SYSTEM_APPS, ...osCatalogApps(getTreeItemsProducts(), allFlagsOn)]
 
 // kea-router patterns: `:name` is one segment, `*` is the rest, `(...)` is optional.
@@ -27,7 +28,7 @@ describe('osAppMenuFor', () => {
             app: 'Product analytics',
             active: 'History',
         },
-        { path: '/project/1/insights', app: 'Product analytics', active: 'All insights' },
+        { path: '/project/1/insights', app: 'Product analytics', active: 'Home' },
         { path: '/project/1/insights?tab=all', app: 'Product analytics', active: 'All insights' },
         { path: '/project/1/alerts', app: 'Product analytics', active: 'Alerts' },
         { path: '/project/1/insights/abc123/edit', app: 'Product analytics', active: null },
@@ -43,9 +44,17 @@ describe('osAppMenuFor', () => {
         expect(menu?.activePage?.label ?? null).toEqual(active)
     })
 
+    it.each([
+        ['on', allFlagsOn, 'Home'],
+        ['off', flagsOff, 'All insights'],
+    ])('marks the tab the app opens on when the home tab flag is %s', (_, flags, active) => {
+        expect(osAppMenuFor('/project/1/insights', apps, flags)?.activePage?.label).toEqual(active)
+    })
+
     it('lists the app pages in menu order, and links related apps separately', () => {
         const menu = osAppMenuFor('/project/1/insights', apps, allFlagsOn)
         expect(menu?.pages.map((page) => page.label)).toEqual([
+            'Home',
             'All insights',
             'My insights',
             'Alerts',
@@ -63,15 +72,17 @@ describe('osAppMenuFor', () => {
         expect(menu?.newItems.map((item) => item.label)).toContain('Dashboard')
     })
 
-    it('lists the "new" items of an app from the product manifests', () => {
+    it('lists the "new" items of an app from the product manifests, and only the ones that stay in the app', () => {
         const menu = osAppMenuFor('/project/1/insights', apps, allFlagsOn)
         expect(menu?.newItems.map((item) => item.label)).toEqual(
             expect.arrayContaining(['Trends', 'Funnel', 'Retention'])
         )
+        expect(menu?.newItems.map((item) => osAppMenuFor(item.href, apps, allFlagsOn)?.app.key)).toEqual(
+            menu?.newItems.map(() => 'Product analytics')
+        )
     })
 
     it('hides "new" items behind a feature flag that is off', () => {
-        const flagsOff = new Proxy({}, { get: () => false }) as Record<string, boolean>
         const labels = osAppMenuFor('/project/1/insights', apps, flagsOff)?.newItems.map((item) => item.label)
         expect(labels).toContain('Trends')
         expect(labels).not.toContain('Journeys')

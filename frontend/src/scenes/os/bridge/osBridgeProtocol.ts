@@ -118,9 +118,9 @@ export function parseOsHostMessage(data: unknown): OsHostMessage | null {
         case 'user-changed':
             return { type: 'user-changed' }
         case 'navigate': {
-            // Only a path on this origin: `//host/x` and full URLs would leave the app.
+            // Only a path on this origin: `//host/x`, `/\host/x` and full URLs would leave the app.
             const path = text(raw.path)
-            return path && path.startsWith('/') && !path.startsWith('//') ? { type: 'navigate', path } : null
+            return path && /^\/(?![/\\])/.test(path) ? { type: 'navigate', path } : null
         }
         default:
             return null

@@ -3,7 +3,6 @@ import { router } from 'kea-router'
 
 import { commandLogic } from 'lib/components/Command/commandLogic'
 import { lemonToast } from 'lib/lemon-ui/LemonToast/LemonToast'
-import { removeProjectIdIfPresent } from 'lib/utils/kea-router'
 import { userLogic } from 'scenes/userLogic'
 
 import { sidePanelStateLogic } from '~/layout/navigation-3000/sidepanel/sidePanelStateLogic'
@@ -12,7 +11,7 @@ import { SidePanelTab } from '~/types'
 import { osWindowCommandFor } from '../windows/osWindowShortcuts'
 import { OsBridgeMessage, isFromOsHost, parseOsHostMessage, postToOs } from './osBridgeProtocol'
 import { setOsWindowOpener } from './osFrameConnection'
-import { OsLinkTarget, osLinkTarget, osNavigationTarget } from './osFrameRouting'
+import { OsLinkTarget, osLinkTarget, osNavigationTarget, osPathShowsPage } from './osFrameRouting'
 import { osSidePanelPath } from './osSidePanelPath'
 
 /**
@@ -209,10 +208,7 @@ export const osFrameBridgeLogic = kea<osFrameBridgeLogicType>([
                     } else if (message?.type === 'navigate') {
                         const { pathname, search, hash } = router.values.location
                         // The OS page can send the same page twice while the app loads, and one history entry is enough.
-                        if (
-                            removeProjectIdIfPresent(`${pathname}${search}${hash}`) !==
-                            removeProjectIdIfPresent(message.path)
-                        ) {
+                        if (!osPathShowsPage(`${pathname}${search}${hash}`, message.path)) {
                             router.actions.push(message.path)
                         }
                     }

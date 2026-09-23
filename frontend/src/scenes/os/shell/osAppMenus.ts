@@ -1,6 +1,6 @@
 import { combineUrl } from 'kea-router'
 
-import { removeProjectIdIfPresent } from 'lib/utils/kea-router'
+import { FEATURE_FLAGS } from 'lib/constants'
 import { FeatureFlagsTab } from 'scenes/feature-flags/featureFlagsLogic'
 import { SurveysTabs } from 'scenes/surveys/surveysLogic'
 import { urls } from 'scenes/urls'
@@ -10,12 +10,18 @@ import { getTreeItemsMetadata, getTreeItemsNew, getTreeItemsProducts } from '~/p
 import { FileSystemImport } from '~/queries/schema/schema-general'
 import { ActivityTab, ExperimentsTabs, ReplayTabs, SavedInsightsTabs } from '~/types'
 
+import { osPathShowsPage, parseOsHref } from '../bridge/osFrameRouting'
 import { osAppForPath } from '../dock/osDockItems'
 import type { OsApp } from '../store/osAppCatalog'
 
 export interface OsAppMenuItem {
     label: string
     href: string
+}
+
+export interface OsAppMenuPage extends OsAppMenuItem {
+    /** Listed only while this feature flag is on, because the app shows the tab only then. */
+    flag?: string
 }
 
 export interface OsAppMenu {
@@ -36,12 +42,17 @@ const tabOf = (href: string, tab: string): string => combineUrl(href, { tab }).u
 
 /**
  * The pages of the apps that have a sub-navigation, keyed by the app's catalog key. The labels and the
- * order follow the tabs each app shows. A page must open in the same app, so a page that another app
- * owns (Dashboards) goes in `OS_RELATED_APPS` instead. Tabs behind a feature flag stay out.
+ * order follow the tabs each app shows, and the first page is the tab the app opens on. A page must open
+ * in the same app, so a page that another app owns (Dashboards) goes in `OS_RELATED_APPS` instead.
  */
-export const OS_APP_MENU_PAGES: Record<string, OsAppMenuItem[]> = {
+export const OS_APP_MENU_PAGES: Record<string, OsAppMenuPage[]> = {
     'Product analytics': [
-        { label: 'All insights', href: urls.insights() },
+        {
+            label: 'Home',
+            href: urls.savedInsights(SavedInsightsTabs.Home),
+            flag: FEATURE_FLAGS.PRODUCT_ANALYTICS_HOME_TAB,
+        },
+        { label: 'All insights', href: urls.savedInsights(SavedInsightsTabs.All) },
         { label: 'My insights', href: urls.savedInsights(SavedInsightsTabs.Yours) },
         { label: 'Alerts', href: urls.alerts() },
         { label: 'Notifications', href: urls.savedInsights(SavedInsightsTabs.Notifications) },
@@ -102,37 +113,31 @@ const OS_RELATED_APPS: Record<string, string[]> = {
     'Product analytics': ['Dashboards'],
 }
 
-interface ParsedHref {
-    pathname: string
-    params: URLSearchParams
-}
-
-function parseHref(href: string): ParsedHref {
-    const url = new URL(removeProjectIdIfPresent(href), 'http://os.invalid')
-    return { pathname: url.pathname.replace(/\/+$/, '') || '/', params: url.searchParams }
-}
-
 /**
- * The listed page a window shows: the page with the same path whose query the window's URL contains.
- * When several match, the page with the longest query wins, so `?tab=history` beats the page without a tab.
+ * The listed page a window shows. When several match, the page with the longest query wins, so
+ * `?tab=history` beats the page without a tab. A URL without the tab key shows the tab the app opens
+ * on, which is the first page with that path.
  */
 function activePageOf(path: string, pages: OsAppMenuItem[]): OsAppMenuItem | null {
-    const current = parseHref(path)
     let best: OsAppMenuItem | null = null
     let bestParams = -1
     for (const page of pages) {
-        const { pathname, params } = parseHref(page.href)
-        const entries = [...params.entries()]
-        if (
-            pathname === current.pathname &&
-            entries.every(([key, value]) => current.params.get(key) === value) &&
-            entries.length > bestParams
-        ) {
+        const params = [...parseOsHref(page.href).params.keys()].length
+        if (osPathShowsPage(path, page.href) && params > bestParams) {
             best = page
-            bestParams = entries.length
+            bestParams = params
         }
     }
-    return best
+    if (best) {
+        return best
+    }
+    const current = parseOsHref(path)
+    return (
+        pages.find((page) => {
+            const { pathname, params } = parseOsHref(page.href)
+            return pathname === current.pathname && [...params.keys()].every((key) => !current.params.has(key))
+        }) ?? null
+    )
 }
 
 function itemName(item: FileSystemImport): string {
@@ -155,7 +160,7 @@ function newItemsOf(app: OsApp, featureFlags: FeatureFlags): OsAppMenuItem[] {
                     (!!item.type && item.type === treeItem.type))
         )
         .sort((a, b) => (a.visualOrder ?? Infinity) - (b.visualOrder ?? Infinity))
-        .map((item) => ({ label: itemName(item), href: item.href as string }))
+        .map((item) => ({ label: itemName(item).replace(/^New /, ''), href: item.href as string }))
 }
 
 /**
@@ -167,16 +172,18 @@ export function osAppMenuFor(path: string | null, apps: OsApp[], featureFlags: F
     if (!path) {
         return null
     }
+    const pagesOf = (app: OsApp): OsAppMenuPage[] | undefined =>
+        OS_APP_MENU_PAGES[app.key]?.filter((page) => !page.flag || !!featureFlags[page.flag])
     const claims = apps.flatMap((app) => [
         app,
-        ...(OS_APP_MENU_PAGES[app.key] ?? []).map((page): OsApp => ({ ...app, href: page.href })),
+        ...(pagesOf(app) ?? []).map((page): OsApp => ({ ...app, href: page.href })),
     ])
-    const owner = osAppForPath(path, claims)
-    const app = owner && apps.find((candidate) => candidate.key === owner.key)
+    const ownerKey = (href: string): string | null => osAppForPath(href, claims)?.key ?? null
+    const app = apps.find((candidate) => candidate.key === ownerKey(path))
     if (!app) {
         return null
     }
-    const pages = OS_APP_MENU_PAGES[app.key] ?? [{ label: app.name, href: app.href }]
+    const pages = pagesOf(app) ?? [{ label: app.name, href: app.href }]
     return {
         app,
         pages,
@@ -185,6 +192,7 @@ export function osAppMenuFor(path: string | null, apps: OsApp[], featureFlags: F
             const related = apps.find((candidate) => candidate.key === key)
             return related ? [{ label: related.name, href: related.href }] : []
         }),
-        newItems: newItemsOf(app, featureFlags),
+        // A "new" item that opens another app, such as a new SQL insight, would move this window to that app.
+        newItems: newItemsOf(app, featureFlags).filter((item) => ownerKey(item.href) === app.key),
     }
 }

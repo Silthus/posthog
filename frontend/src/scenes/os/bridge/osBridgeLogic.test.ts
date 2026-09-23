@@ -135,7 +135,13 @@ describe('osBridgeLogic', () => {
         send({ type: 'location', path: INSIGHTS, title: 'Insights', traversed: false })
         expect(navigates()).toEqual(2)
 
-        send({ type: 'location', path: `/project/${MOCK_TEAM_ID}/alerts`, title: 'Alerts', traversed: false })
+        // The page adds its own query on load, which still counts as the page that was sent.
+        send({
+            type: 'location',
+            path: `/project/${MOCK_TEAM_ID}/alerts?alert_id=1`,
+            title: 'Alerts',
+            traversed: false,
+        })
         send({ type: 'location', path: INSIGHTS, title: 'Insights', traversed: false })
         expect(navigates()).toEqual(2)
     })

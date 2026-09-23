@@ -75,6 +75,11 @@ describe('osBridgeProtocol', () => {
             { type: 'navigate', path: '/insights?tab=history' },
         ],
         ['a page on another host', envelope({ type: 'navigate', path: '//evil.example.com/x' }), null],
+        [
+            'a page on another host with a backslash',
+            envelope({ type: 'navigate', path: '/\\evil.example.com/x' }),
+            null,
+        ],
         ['a full url', envelope({ type: 'navigate', path: 'https://evil.example.com/x' }), null],
         ['a script url', envelope({ type: 'navigate', path: 'javascript:alert(1)' }), null],
         ['a frame-only message', envelope({ type: 'open-window', path: '/project/1/replay' }), null],
