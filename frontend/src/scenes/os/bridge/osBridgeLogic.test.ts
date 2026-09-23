@@ -122,7 +122,8 @@ describe('osBridgeLogic', () => {
     it('sends a page to its window once more when the frame was still loading, and stops after that', () => {
         const postMessage = jest.spyOn(frame.contentWindow as Window, 'postMessage')
         const navigates = (): number =>
-            postMessage.mock.calls.filter(([data]) => (data as { type?: string }).type === 'navigate').length
+            (postMessage.mock.calls as unknown[][]).filter((call) => (call[0] as { type?: string }).type === 'navigate')
+                .length
         const id = windows.values.windows[0].id
 
         bridge.actions.navigateWindow(id, '/alerts')
