@@ -1,0 +1,2 @@
+Finished in 141ms on 26 files using 16 threads.
+oxfmt exit 0
