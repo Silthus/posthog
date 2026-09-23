@@ -2,7 +2,7 @@
 const STORAGE_KEY_PREFIX = 'posthog-os-dock:'
 const STORAGE_VERSION = 1
 // Bounds what a corrupted or hand-edited entry can make the dock hold.
-const MAX_PINS = 100
+export const OS_DOCK_MAX_PINS = 100
 const MAX_KEY_LENGTH = 200
 
 export function osDockPinsStorageKey(teamId: number | null): string | null {
@@ -23,7 +23,7 @@ export function readOsDockPins(teamId: number | null): string[] {
         const keys = (parsed.keys as unknown[]).filter(
             (value): value is string => typeof value === 'string' && value.length > 0 && value.length <= MAX_KEY_LENGTH
         )
-        return [...new Set(keys)].slice(0, MAX_PINS)
+        return [...new Set(keys)].slice(0, OS_DOCK_MAX_PINS)
     } catch {
         return []
     }

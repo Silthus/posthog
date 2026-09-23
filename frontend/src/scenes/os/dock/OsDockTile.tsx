@@ -1,5 +1,5 @@
 import { useActions } from 'kea'
-import { useRef } from 'react'
+import { KeyboardEvent, useRef } from 'react'
 
 import { Tooltip } from 'lib/lemon-ui/Tooltip'
 import { ButtonPrimitive } from 'lib/ui/Button/ButtonPrimitives'
@@ -33,13 +33,21 @@ function originOf(from: Element | null): OsPoint | undefined {
 }
 
 function accessibleName({ title, focused, minimized, pinned, windowIds }: OsDockItem): string {
-    if (!windowIds.length) {
-        return pinned ? `${title}, pinned` : title
+    const state = minimized ? 'minimized' : focused ? 'active' : null
+    const windows = windowIds.length > 1 ? `${windowIds.length} windows` : null
+    return [title, pinned ? 'pinned' : null, state, windows].filter(Boolean).join(', ')
+}
+
+// Up opens the item's menu, like the macOS dock, because Mac keyboards have no context menu key.
+function openMenuFromKeyboard(event: KeyboardEvent<HTMLButtonElement>): void {
+    if (event.key !== 'ArrowUp' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+        return
     }
-    if (minimized) {
-        return `${title}, minimized`
-    }
-    return focused ? `${title}, active` : title
+    event.preventDefault()
+    const { left, top, width } = event.currentTarget.getBoundingClientRect()
+    event.currentTarget.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: left + width / 2, clientY: top })
+    )
 }
 
 export function OsDockTile({ item, icon, 'data-attr': dataAttr }: OsDockTileProps): JSX.Element {
@@ -65,6 +73,7 @@ export function OsDockTile({ item, icon, 'data-attr': dataAttr }: OsDockTileProp
                             aria-label={accessibleName(item)}
                             aria-current={item.focused ? 'true' : undefined}
                             onClick={(event) => activateItem(item.key, originOf(event.currentTarget))}
+                            onKeyDown={openMenuFromKeyboard}
                             data-attr={dataAttr}
                         >
                             {icon}
@@ -112,25 +121,26 @@ export function OsDockTile({ item, icon, 'data-attr': dataAttr }: OsDockTileProp
                                 {open ? 'Open in new window' : 'Open'}
                             </ButtonPrimitive>
                         </ContextMenuItem>
-                        {open && (
+                        {open && !item.minimized && (
                             <ContextMenuItem asChild>
-                                {item.minimized ? (
-                                    <ButtonPrimitive
-                                        menuItem
-                                        onClick={() => restoreItem(item.key)}
-                                        data-attr="os-dock-restore"
-                                    >
-                                        Restore
-                                    </ButtonPrimitive>
-                                ) : (
-                                    <ButtonPrimitive
-                                        menuItem
-                                        onClick={() => minimizeItem(item.key)}
-                                        data-attr="os-dock-minimize"
-                                    >
-                                        Minimize
-                                    </ButtonPrimitive>
-                                )}
+                                <ButtonPrimitive
+                                    menuItem
+                                    onClick={() => minimizeItem(item.key)}
+                                    data-attr="os-dock-minimize"
+                                >
+                                    Minimize
+                                </ButtonPrimitive>
+                            </ContextMenuItem>
+                        )}
+                        {item.someMinimized && (
+                            <ContextMenuItem asChild>
+                                <ButtonPrimitive
+                                    menuItem
+                                    onClick={() => restoreItem(item.key)}
+                                    data-attr="os-dock-restore"
+                                >
+                                    Restore
+                                </ButtonPrimitive>
                             </ContextMenuItem>
                         )}
                     </ContextMenuGroup>

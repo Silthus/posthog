@@ -20,6 +20,7 @@ export interface OsDockItem {
     focused: boolean
     /** The app has windows, and every one of them is minimized. */
     minimized: boolean
+    someMinimized: boolean
 }
 
 export interface OsDockItems {
@@ -45,14 +46,14 @@ function isAppStorePath(path: string): boolean {
 /**
  * The app a window path belongs to. An app claims every page under its link, and the longest link
  * wins. Several apps start on a sub-page (Session replay opens `/replay/home`), so a page that no link
- * covers goes to the only app that shares its top-level segment. When several apps share it, the
- * page belongs to none of them, because a guess would show another app's icon.
+ * covers goes to the app that shares its top-level segment. When several apps share it, the page stays
+ * with `previousKey`, the app the window showed before, if that app is one of them. Otherwise the page
+ * belongs to none of them, because a guess would show another app's icon.
  */
-export function osAppForPath(path: string, apps: OsApp[]): OsApp | null {
+export function osAppForPath(path: string, apps: OsApp[], previousKey?: string): OsApp | null {
     const pathname = pathnameOf(path)
-    let best: OsApp | null = null
+    let best: OsApp[] = []
     let bestScore = 0
-    let tied = false
     for (const app of apps) {
         const href = pathnameOf(app.href)
         const score =
@@ -62,27 +63,31 @@ export function osAppForPath(path: string, apps: OsApp[]): OsApp | null {
                   ? 1
                   : 0
         if (score > bestScore) {
-            best = app
+            best = [app]
             bestScore = score
-            tied = false
-        } else if (score > 0 && score === bestScore && app.key !== best?.key) {
-            tied = true
+        } else if (score > 0 && score === bestScore && !best.some((known) => known.key === app.key)) {
+            best.push(app)
         }
     }
-    return tied ? null : best
+    if (best.length === 1) {
+        return best[0]
+    }
+    return best.find((app) => app.key === previousKey) ?? null
 }
 
 /**
  * What the dock shows: the App Store, then the pinned apps in the order they were pinned, then the other
  * open apps in the order their first window opened. The windows of one app share one item, and a window
- * moves to another item when it navigates to another app. A window no app claims gets an item of its own.
+ * moves to another item when it navigates to another app. `previousAppKeys` maps a window id to the app it
+ * showed before, for pages that several apps could claim. A window no app claims gets an item of its own.
  * A pin that no known app matches stays stored but is not shown, because the app list loads after the dock.
  */
 export function osDockItems(
     windows: OsWindowState[],
     focusedWindowId: string | null,
     apps: OsApp[],
-    pinnedKeys: string[]
+    pinnedKeys: string[],
+    previousAppKeys: Record<string, string> = {}
 ): OsDockItems {
     const appsByKey = new Map(apps.map((app) => [app.key, app]))
     const items = new Map<string, OsDockItem>()
@@ -90,7 +95,7 @@ export function osDockItems(
     const itemFor = (key: string, app: OsApp | null, title: string, pinned: boolean): OsDockItem => {
         let item = items.get(key)
         if (!item) {
-            item = { key, app, title, windowIds: [], pinned, focused: false, minimized: false }
+            item = { key, app, title, windowIds: [], pinned, focused: false, minimized: false, someMinimized: false }
             items.set(key, item)
         }
         return item
@@ -104,7 +109,7 @@ export function osDockItems(
         }
     }
     for (const w of windows) {
-        const app = isAppStorePath(w.path) ? null : osAppForPath(w.path, apps)
+        const app = isAppStorePath(w.path) ? null : osAppForPath(w.path, apps, previousAppKeys[w.id])
         const item = isAppStorePath(w.path)
             ? store
             : app
@@ -117,7 +122,9 @@ export function osDockItems(
         }
     }
     for (const item of items.values()) {
-        item.minimized = item.windowIds.length > 0 && minimizedCount.get(item.key) === item.windowIds.length
+        const minimized = minimizedCount.get(item.key) ?? 0
+        item.minimized = item.windowIds.length > 0 && minimized === item.windowIds.length
+        item.someMinimized = minimized > 0
     }
 
     return {

@@ -110,6 +110,42 @@ describe('osDockLogic', () => {
         expect(JSON.parse(localStorage.getItem(PINS_KEY) ?? 'null')).toEqual({ version: 1, keys: ['Surveys'] })
     })
 
+    it('keeps earlier pins when localStorage refuses the write', () => {
+        const setItem = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw new Error('QuotaExceededError')
+        })
+        try {
+            logic.actions.pinApp('Surveys')
+            logic.actions.pinApp('Feature flags')
+            expect(dockKeys()).toEqual(['Surveys', 'Feature flags'])
+        } finally {
+            setItem.mockRestore()
+        }
+    })
+
+    it('follows pins changed or cleared in another tab', () => {
+        localStorage.setItem(PINS_KEY, JSON.stringify({ version: 1, keys: ['Surveys'] }))
+        window.dispatchEvent(new StorageEvent('storage', { key: PINS_KEY }))
+        expect(dockKeys()).toEqual(['Surveys'])
+
+        localStorage.clear()
+        window.dispatchEvent(new StorageEvent('storage', { key: null }))
+        expect(dockKeys()).toEqual([])
+    })
+
+    it('keeps a window on its app when it navigates to a page several apps could claim', () => {
+        const aiObservability = logic.values.knownApps.find((app) => app.href === urls.aiObservabilityDashboard())
+        if (!aiObservability) {
+            throw new Error('no AI observability app in the catalog')
+        }
+        osWindowsLogic.actions.openWindow(urls.aiObservabilityDashboard())
+        const id = windowAt(urls.aiObservabilityDashboard())
+
+        osWindowsLogic.actions.windowNavigated(id, '/ai-observability/traces')
+
+        expect(dockKeys()).toEqual([aiObservability.key])
+    })
+
     it.each([
         ['text that is not JSON', '{nope', []],
         ['another version', JSON.stringify({ version: 99, keys: ['Surveys'] }), []],
