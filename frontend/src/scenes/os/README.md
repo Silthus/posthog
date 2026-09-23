@@ -136,7 +136,8 @@ With no focused window, it does not render.
 `shell/osAppMenus.ts` finds the app for the window's path:
 
 - `OS_APP_MENU_PAGES` lists the pages of the apps that have tabs, with the labels and the order of those tabs. Tabs behind a feature flag stay out.
-- An app claims its own link and every page it lists, and the longest match wins, the same as the dock (`osAppForPath`). Only apps the user can see claim pages.
+- An app claims its own link and every page it lists (`osAppClaims`), and the longest match wins (`osAppForPath`). Only apps the user can see claim pages.
+- A page that several apps could claim, such as `/ai-observability/traces`, keeps the app the window showed before. The menu bar reads that app from the dock (`osDockLogic.windowAppKeys`), so the two always agree.
 - An app without listed pages gets its home page.
 - "New" lists the product manifests' new items (`getTreeItemsNew`) that open one of the app's scenes, without the ones behind a feature flag that is off.
 - A page that another app owns is a related app (Dashboards under Product analytics). It opens in its own window. A "new" item that another app owns is left out. So a page picked in the menu never moves the window to another app.
@@ -180,25 +181,27 @@ The OS page accepts these messages only from its own window frames on the same o
 
 **The dock** (`dock/osDockLogic`) shows the App Store, a divider, then the pinned apps in the order they were pinned, then the other open apps in the order their first window opened.
 Opening an app adds it, and closing its last window removes it, unless it is pinned.
-All windows of one app share one item, found by `osAppForPath`, so a window that navigates to another app moves to that app's item.
+All windows of one app share one item, found by `osAppForPath` over `osAppClaims`, the same as the menu bar, so a window that navigates to another app moves to that app's item.
+A window that navigates to a page several apps could claim stays on the item it had. After a reload, such a window gets its own item until it navigates again.
 A window that no app claims, or that several apps could claim, gets an item of its own with a plain window icon, and it cannot be pinned.
 Every App Store window belongs to the App Store item, which is always first.
 Each item shows the app icon (`OsAppIcon`), the app name as its tooltip, and a dot while the app has a window.
 The item of the focused window is highlighted, and an app whose windows are all minimized is dimmed.
 A click (`activateItem`, decided by `osDockClick`) opens an app without a window, minimizes the focused window of the app in front, brings the top visible window of an app in the background to the front, and restores the top window of an app whose windows are all minimized.
 
-A right-click on an item, or Shift+F10 and the context menu key on a focused item, opens its menu:
+A right-click on an item opens its menu. On a focused item, Up opens it too, like the macOS dock, and so do Shift+F10 and the context menu key:
 
-| Item                          | Shown                      | Effect                                                                    |
-| ----------------------------- | -------------------------- | ------------------------------------------------------------------------- |
-| Pin to dock / Unpin from dock | For apps                   | `pinApp(key)` / `unpinApp(key)`                                           |
-| Open / Open in new window     | Always                     | Opens the app. With a window open, it always opens another one.           |
-| Minimize / Restore            | While the app has a window | Minimizes every window of the app, or restores all of them in stack order |
-| Close                         | While the app has a window | Closes every window of the app                                            |
+| Item                          | Shown                      | Effect                                                                                                                                                  |
+| ----------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pin to dock / Unpin from dock | For apps                   | `pinApp(key)` / `unpinApp(key)`                                                                                                                         |
+| Open / Open in new window     | Always                     | Opens the app. With a window open, it always opens another one.                                                                                         |
+| Minimize / Restore            | While the app has a window | Minimize shows while a window is visible, and minimizes all of them. Restore shows while a window is minimized, and restores all of them in stack order |
+| Close                         | While the app has a window | Closes every window of the app                                                                                                                          |
 
 **Pins persist per project** in `localStorage` under `posthog-os-dock:<project id>`, as `{ version: 1, keys }` with the app keys.
 Entries that do not parse are dropped, and a pin whose app is not in the app list (the list is still loading, or the app is gone) stays stored but is not shown.
-Each pin or unpin applies to what is stored, and the dock follows `storage` events, so tabs of one project agree.
+Each pin or unpin applies to what is stored and what is in memory, so a pin survives a storage write that fails. The dock follows `storage` events, so tabs of one project agree.
+At 100 pins, pins of apps that are gone make room first.
 The dock sits below the window layer, so maximized and snapped windows stop above it.
 Tiles shrink so every item keeps a tile on screen.
 In the DOM the dock comes right after the menu bar, so the keyboard reaches it before the windows.

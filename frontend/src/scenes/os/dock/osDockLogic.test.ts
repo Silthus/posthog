@@ -9,6 +9,7 @@ import { useMocks } from '~/mocks/jest'
 import { initKeaTests } from '~/test/init'
 
 import { osFrameName } from '../bridge/osFrame'
+import { osMenuBarLogic } from '../shell/osMenuBarLogic'
 import { osStoreOpenApp } from '../store/osStoreMessages'
 import { osWindowsLogic } from '../windows/osWindowsLogic'
 import { OS_DOCK_STORE_KEY } from './osDockItems'
@@ -18,6 +19,7 @@ const PINS_KEY = `posthog-os-dock:${MOCK_TEAM_ID}`
 
 describe('osDockLogic', () => {
     let logic: ReturnType<typeof osDockLogic.build>
+    let menuBar: ReturnType<typeof osMenuBarLogic.build>
 
     const windowsAt = (path: string): string[] =>
         osWindowsLogic.values.windows.filter((w) => w.path === path).map((w) => w.id)
@@ -34,9 +36,12 @@ describe('osDockLogic', () => {
     })
     const dockKeys = (): string[] => logic.values.dock.apps.map((item) => item.key)
     const remount = (): void => {
+        menuBar.unmount()
         logic.unmount()
         logic = osDockLogic()
         logic.mount()
+        menuBar = osMenuBarLogic()
+        menuBar.mount()
     }
 
     beforeEach(() => {
@@ -47,9 +52,12 @@ describe('osDockLogic', () => {
         router.actions.push(`/project/${MOCK_TEAM_ID}${urls.os()}`)
         logic = osDockLogic()
         logic.mount()
+        menuBar = osMenuBarLogic()
+        menuBar.mount()
     })
 
     afterEach(() => {
+        menuBar?.unmount()
         logic?.unmount()
         document.body.innerHTML = ''
     })
@@ -144,6 +152,14 @@ describe('osDockLogic', () => {
         osWindowsLogic.actions.windowNavigated(id, '/ai-observability/traces')
 
         expect(dockKeys()).toEqual([aiObservability.key])
+        expect(menuBar.values.appMenu?.app.key).toEqual(aiObservability.key)
+    })
+
+    it('gives a page an app menu lists to that app, the same as the menu bar', () => {
+        osWindowsLogic.actions.openWindow(urls.alerts())
+
+        expect(dockKeys()).toEqual(['Product analytics'])
+        expect(menuBar.values.appMenu?.app.key).toEqual('Product analytics')
     })
 
     it.each([

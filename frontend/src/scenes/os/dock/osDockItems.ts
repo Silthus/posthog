@@ -79,7 +79,8 @@ export function osAppForPath(path: string, apps: OsApp[], previousKey?: string):
  * What the dock shows: the App Store, then the pinned apps in the order they were pinned, then the other
  * open apps in the order their first window opened. The windows of one app share one item, and a window
  * moves to another item when it navigates to another app. `previousAppKeys` maps a window id to the app it
- * showed before, for pages that several apps could claim. A window no app claims gets an item of its own.
+ * showed before, for pages that several apps could claim. `claims` adds the pages each app lists in its menu
+ * (`osAppClaims`). A window no app claims gets an item of its own.
  * A pin that no known app matches stays stored but is not shown, because the app list loads after the dock.
  */
 export function osDockItems(
@@ -87,7 +88,8 @@ export function osDockItems(
     focusedWindowId: string | null,
     apps: OsApp[],
     pinnedKeys: string[],
-    previousAppKeys: Record<string, string> = {}
+    previousAppKeys: Record<string, string> = {},
+    claims: OsApp[] = apps
 ): OsDockItems {
     const appsByKey = new Map(apps.map((app) => [app.key, app]))
     const items = new Map<string, OsDockItem>()
@@ -109,7 +111,8 @@ export function osDockItems(
         }
     }
     for (const w of windows) {
-        const app = isAppStorePath(w.path) ? null : osAppForPath(w.path, apps, previousAppKeys[w.id])
+        const owner = isAppStorePath(w.path) ? null : osAppForPath(w.path, claims, previousAppKeys[w.id])
+        const app = owner ? (appsByKey.get(owner.key) ?? owner) : null
         const item = isAppStorePath(w.path)
             ? store
             : app
