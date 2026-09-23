@@ -19,7 +19,6 @@ import { osStorePreviewApp } from './osStoreMessages'
 describe('osAppPreviewLogic', () => {
     let logic: ReturnType<typeof osAppPreviewLogic.build>
     let writes: { product_path: string; enabled: boolean }[]
-    let serverPaths: string[]
 
     const postPreview = (key: string): void => {
         const frame = document.createElement('iframe')
@@ -39,13 +38,9 @@ describe('osAppPreviewLogic', () => {
         localStorage.clear()
         sessionStorage.clear()
         writes = []
-        serverPaths = []
         useMocks({
             get: {
-                '/api/environments/:team_id/user_product_list/': () => [
-                    200,
-                    { results: serverPaths.map((product_path) => ({ id: product_path, product_path, enabled: true })) },
-                ],
+                '/api/environments/:team_id/user_product_list/': { results: [] },
             },
             patch: {
                 '/api/environments/:team_id/user_product_list/bulk_update/': async ({ request }) => {
@@ -75,7 +70,7 @@ describe('osAppPreviewLogic', () => {
             title: 'Surveys',
             preview: 'Surveys',
         })
-        expect(writes).toEqual([{ product_path: 'Surveys', enabled: false }])
+        expect(writes).toEqual([])
         expect(logic.values.previewBarApps['Surveys']?.name).toEqual('Surveys')
         expect(osInstalledAppsLogic.values.installedKeys.has('Surveys')).toBe(false)
         expect(customProductsLogic.values.enabledToolPaths.has('Surveys')).toBe(false)
@@ -84,34 +79,23 @@ describe('osAppPreviewLogic', () => {
             osInstalledAppsLogic.actions.installApp('Surveys')
         }).toFinishAllListeners()
 
-        expect(writes).toEqual([
-            { product_path: 'Surveys', enabled: false },
-            { product_path: 'Surveys', enabled: true },
-        ])
+        expect(writes).toEqual([{ product_path: 'Surveys', enabled: true }])
         expect(logic.values.previewBarApps['Surveys']).toBeUndefined()
         expect(customProductsLogic.values.enabledToolPaths.has('Surveys')).toBe(true)
     })
 
     it('leaves nothing behind when a preview closes', async () => {
         await expectLogic(logic, () => postPreview('Surveys')).toFinishAllListeners()
+        const layoutKey = `posthog-os-windows:${MOCK_TEAM_ID}`
+        expect(localStorage.getItem(layoutKey)).toContain('Surveys')
 
         osWindowsLogic.actions.closeWindow(osWindowsLogic.values.windows[0].id)
         await expectLogic(logic).toFinishAllListeners()
 
         expect(osWindowsLogic.values.windows).toEqual([])
-        expect(writes.filter((write) => write.enabled)).toEqual([])
-        expect(customProductsLogic.values.enabledToolPaths.has('Surveys')).toBe(false)
-        expect(localStorage.getItem(`posthog-os-windows:${MOCK_TEAM_ID}`)).not.toContain('Surveys')
-    })
-
-    it('opens an app the server already lists as installed without a preview, and writes nothing', async () => {
-        serverPaths = ['Surveys']
-
-        await expectLogic(logic, () => postPreview('Surveys')).toFinishAllListeners()
-
-        expect(osWindowsLogic.values.windows).toHaveLength(1)
-        expect(osWindowsLogic.values.windows[0].preview).toBeUndefined()
         expect(writes).toEqual([])
+        expect(customProductsLogic.values.enabledToolPaths.has('Surveys')).toBe(false)
+        expect(localStorage.getItem(layoutKey)).not.toContain('Surveys')
     })
 
     it.each([

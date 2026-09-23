@@ -2,6 +2,7 @@ import { useActions, useValues } from 'kea'
 
 import { LemonButton } from '@posthog/lemon-ui'
 
+import { isOsFrame } from '../bridge/osFrame'
 import type { OsApp } from './osAppCatalog'
 import { osAppStoreSceneLogic } from './osAppStoreSceneLogic'
 
@@ -31,7 +32,7 @@ export function OsAppActions({ app, showRemove = false, size = 'small' }: OsAppA
                 >
                     Install
                 </LemonButton>
-                {!installing && (
+                {!installing && isOsFrame(window) && (
                     <LemonButton
                         type="secondary"
                         size={size}

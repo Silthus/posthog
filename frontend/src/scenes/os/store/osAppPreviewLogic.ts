@@ -1,6 +1,5 @@
 import { MakeLogicType, actions, afterMount, connect, kea, listeners, path, selectors } from 'kea'
 
-import api from 'lib/api'
 import { addProjectIdIfMissing } from 'lib/utils/kea-router'
 
 import { osAppSrc } from '../shell/osAppSrc'
@@ -68,25 +67,14 @@ export const osAppPreviewLogic = kea<osAppPreviewLogicType>([
         ],
     }),
     listeners(({ actions, values }) => ({
-        previewApp: async ({ key }) => {
+        previewApp: ({ key }) => {
             // Only apps this user can see in the store, so a frame cannot preview a flag-gated app or a URL.
             const app = values.catalogApps.find((known) => known.key === key)
             // A path without the project id makes the OS page redirect its own address bar, which opens a second window.
             const src = app ? osAppSrc(addProjectIdIfMissing(app.href), window.location.origin) : null
-            if (!app || !src) {
-                return
+            if (app && src) {
+                actions.openWindow(src, { title: app.name, preview: app.key })
             }
-            // The store frame decides from its own copy of the list, so check the saved list before writing.
-            let installed = values.installedKeys.has(key)
-            try {
-                const { results } = await api.userProductList.list()
-                installed = results.some((item) => item.product_path === key)
-                if (!installed) {
-                    // The app's product intents would install it, but the server does not add an app that has a disabled row.
-                    await api.userProductList.bulkUpdate([{ product_path: key, enabled: false }])
-                }
-            } catch {}
-            actions.openWindow(src, { title: app.name, preview: installed ? undefined : app.key })
         },
     })),
     afterMount(({ actions, cache }) => {

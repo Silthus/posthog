@@ -189,15 +189,19 @@ Tiles shrink so every window keeps a tile on screen.
 In the DOM the dock comes right after the menu bar, so the keyboard reaches it before the windows.
 
 **Preview** opens an app in a window without installing it.
-Each listing that is not installed offers Preview next to Install.
+Each listing that is not installed offers Preview next to Install, only inside an OS window.
 The store window sends `preview-app`, and `store/osAppPreviewLogic` on the OS page opens the app with `openWindow(href, { preview: key })`.
 It only opens apps in the catalog, so a frame cannot preview an app behind an off flag, a system app, or a URL.
-A preview does not install the app, so the app gets no desktop icon and no entry in "My tools".
-Many apps record a product intent when they load, and the server adds the app to `UserProductList` for it, which would install the app.
-The server skips that when the user has a disabled row for the app, so before the window opens the preview reloads the list and writes `enabled: false` for an app that is not installed. Remove leaves the same row.
-So a previewed app that is not installed is not added to "My tools" later by its product intents.
-A path without the project id makes the OS page redirect its own address bar, so the preview opens the project-scoped path.
-The window keeps the mark (`preview` on the window state), and `store/OsAppPreviewBar` draws a slim bar under its title bar while the app is not installed.
-Install in the bar installs the app, and the bar goes away as soon as the install starts. If the write fails, the bar comes back.
-The mark stays on the window, so the bar comes back if the app is removed while the window is open.
-Closing the window removes the mark with it, so a closed preview leaves nothing behind.
+It opens the project-scoped path, because a path without the project id makes the OS page redirect its own address bar.
+The window keeps the mark (`preview` on the window state), so it is still a preview after a reload.
+
+While the previewed app is not installed, the window shows `store/OsAppPreviewBar` under its title bar, and its frame carries the `data-os-preview` attribute.
+A frame with that attribute sends no product intents (`isOsPreviewFrame` in `lib/utils/product-intents.ts`).
+The server adds the products of each intent to "My tools", so without this, loading an app would install it and apps that share its intents.
+A preview therefore writes nothing: no desktop icon, no "My tools" entry, and no row in `UserProductList`.
+Intents that the server records on its own, for example when a replay filter is saved, can still add an app.
+
+Install in the bar installs the app. The bar and the attribute go away as soon as the install starts, and they come back if the write fails.
+The mark stays on the window, also when the window moves to another app's page, so the bar names the app the window opened for.
+If the app is removed while its preview window is open, the bar comes back.
+Closing the window removes the mark, so a closed preview leaves nothing behind.

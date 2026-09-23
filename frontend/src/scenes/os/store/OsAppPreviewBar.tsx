@@ -1,18 +1,13 @@
-import { useActions, useValues } from 'kea'
+import { useActions } from 'kea'
 
 import { LemonButton } from '@posthog/lemon-ui'
 
+import type { OsApp } from './osAppCatalog'
 import { OsAppIcon } from './OsAppIcon'
 import { osAppPreviewLogic } from './osAppPreviewLogic'
 
-export function OsAppPreviewBar({ appKey }: { appKey: string }): JSX.Element | null {
-    const { previewBarApps } = useValues(osAppPreviewLogic)
+export function OsAppPreviewBar({ app }: { app: OsApp }): JSX.Element {
     const { installApp } = useActions(osAppPreviewLogic)
-    const app = previewBarApps[appKey]
-
-    if (!app) {
-        return null
-    }
 
     return (
         <div

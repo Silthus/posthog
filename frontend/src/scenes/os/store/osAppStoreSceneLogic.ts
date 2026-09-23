@@ -114,9 +114,7 @@ export const osAppStoreSceneLogic = kea<osAppStoreSceneLogicType>([
             }
         },
         previewApp: ({ app }) => {
-            if (!postToOs(osStorePreviewApp(app.key))) {
-                router.actions.push(app.href)
-            }
+            postToOs(osStorePreviewApp(app.key))
         },
     })),
     urlToAction(({ actions, values }) => ({
