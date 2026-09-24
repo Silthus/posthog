@@ -1,0 +1,518 @@
+{
+    "scenario": "restore",
+    "baseUrl": "http://localhost:8106",
+    "windows": [
+        {
+            "app": "store",
+            "firstPaintMs": 4876,
+            "firstRenderMs": 17608,
+            "state": {
+                "hasMain": true,
+                "textLen": 3216,
+                "bodyLen": 3309,
+                "errorPage": false,
+                "bodyStart": "PostHog running in DEBUG mode!\nCurrent branch: os-shell/perf\nCurrent revision: ac75a86b258\n×\nApp Store\n\nInstall the apps you use, and find new ones.\n\nUnderstand",
+                "mainStart": "App Store\n\nInstall the apps you use, and find new ones.\n\nUnderstand usage\nDashboards\nInstalled\n\nCreate and manage your d",
+                "rootEmpty": false,
+                "loaders": 0,
+                "href": "/project/100001/app-store",
+                "ready": "interactive"
+            }
+        },
+        {
+            "app": "flags",
+            "firstPaintMs": 4597,
+            "firstRenderMs": 19476,
+            "state": {
+                "hasMain": true,
+                "textLen": 15514,
+                "bodyLen": 15607,
+                "errorPage": false,
+                "bodyStart": "PostHog running in DEBUG mode!\nCurrent branch: os-shell/perf\nCurrent revision: ac75a86b258\n×\nFeature flags\nFeedback\nNew\n\nUse feature flags to safely deploy and ",
+                "mainStart": "Feature flags\nFeedback\nNew\n\nUse feature flags to safely deploy and roll back new features in an easy-to-manage way. Roll",
+                "rootEmpty": false,
+                "loaders": 0,
+                "href": "/project/100001/feature_flags",
+                "ready": "interactive"
+            }
+        },
+        {
+            "app": "dashboards",
+            "firstPaintMs": 1792,
+            "firstRenderMs": 4026,
+            "state": {
+                "hasMain": true,
+                "textLen": 429,
+                "bodyLen": 522,
+                "errorPage": false,
+                "bodyStart": "PostHog running in DEBUG mode!\nCurrent branch: os-shell/perf\nCurrent revision: ac75a86b258\n×\nDashboards\nNew dashboard\n\nCreate and manage your dashboards\n\nAll da",
+                "mainStart": "Dashboards\nNew dashboard\n\nCreate and manage your dashboards\n\nAll dashboards\nMy dashboards\nTemplates\nSaved views\nNew\nFilt",
+                "rootEmpty": false,
+                "loaders": 0,
+                "href": "/project/100001/dashboard",
+                "ready": "complete"
+            }
+        },
+        {
+            "app": "workflows",
+            "firstPaintMs": 1803,
+            "firstRenderMs": 4799,
+            "state": {
+                "hasMain": true,
+                "textLen": 584,
+                "bodyLen": 677,
+                "errorPage": false,
+                "bodyStart": "PostHog running in DEBUG mode!\nCurrent branch: os-shell/perf\nCurrent revision: ac75a86b258\n×\nWorkflows\n\nAutomate user communication and internal processes\n\nWork",
+                "mainStart": "Workflows\n\nAutomate user communication and internal processes\n\nWorkflows\nMessage users when it matters\n\nBuild journeys o",
+                "rootEmpty": false,
+                "loaders": 0,
+                "href": "/project/100001/workflows",
+                "ready": "interactive"
+            }
+        }
+    ],
+    "network": {
+        "(top)": {
+            "requests": 460,
+            "bytes": 680161,
+            "failed": 9,
+            "slowest": [
+                [3201, "/i/v1/metrics?token=phc_Bgb2dsTjJgU3PniXp9vcZpwmxYFBEwFG5Ro2rwpV6ksy"],
+                [1331, "/array/phc_Bgb2dsTjJgU3PniXp9vcZpwmxYFBEwFG5Ro2rwpV6ksy/config"],
+                [
+                    1016,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [799, "/static/1.434.10/tracing-headers.js"],
+                [
+                    799,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ]
+            ],
+            "statuses": {
+                "200": 451,
+                "403": 7,
+                "404": 1,
+                "net::ERR_ABORTED": 1
+            }
+        },
+        "502BFBC97851D1104ADE2E11BAE20439": {
+            "requests": 1,
+            "bytes": 0,
+            "failed": 1,
+            "slowest": [[2, "/e/?compression=base64"]],
+            "statuses": {
+                "net::ERR_ABORTED": 1
+            }
+        },
+        "C369FA826284886A549D571E0B5F4525": {
+            "requests": 1,
+            "bytes": 0,
+            "failed": 1,
+            "slowest": [[31, "/e/?compression=base64"]],
+            "statuses": {
+                "net::ERR_ABORTED": 1
+            }
+        },
+        "45494B00359EE82F8C841BA497F11860": {
+            "requests": 1,
+            "bytes": 0,
+            "failed": 1,
+            "slowest": [[4, "/e/?compression=base64"]],
+            "statuses": {
+                "net::ERR_ABORTED": 1
+            }
+        },
+        "4B4001304CC10495FCC57116D28CE3FA": {
+            "requests": 1,
+            "bytes": 0,
+            "failed": 1,
+            "slowest": [[2, "/e/?compression=base64"]],
+            "statuses": {
+                "net::ERR_ABORTED": 1
+            }
+        },
+        "posthog-os-window:vlm3w5x6": {
+            "requests": 424,
+            "bytes": 726539,
+            "failed": 9,
+            "slowest": [
+                [
+                    -1,
+                    "PENDING /api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    -1,
+                    "PENDING /api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    -1,
+                    "PENDING /api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    11634,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    9698,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ]
+            ],
+            "statuses": {
+                "200": 412,
+                "204": 1,
+                "403": 8,
+                "pending": 3
+            }
+        },
+        "posthog-os-window:yvqirkl1": {
+            "requests": 458,
+            "bytes": 609576,
+            "failed": 10,
+            "slowest": [
+                [-1, "PENDING /static/1.434.10/tracing-headers.js"],
+                [
+                    -1,
+                    "PENDING /api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    -1,
+                    "PENDING /api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    -1,
+                    "PENDING /api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    16621,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ]
+            ],
+            "statuses": {
+                "200": 444,
+                "204": 1,
+                "403": 9,
+                "pending": 4
+            }
+        },
+        "posthog-os-window:ir1fy8vp": {
+            "requests": 361,
+            "bytes": 654901,
+            "failed": 8,
+            "slowest": [
+                [-1, "PENDING /array/phc_Bgb2dsTjJgU3PniXp9vcZpwmxYFBEwFG5Ro2rwpV6ksy/config.js"],
+                [-1, "PENDING /static/1.434.10/tracing-headers.js"],
+                [
+                    -1,
+                    "PENDING /api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    -1,
+                    "PENDING /api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    -1,
+                    "PENDING /api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ]
+            ],
+            "statuses": {
+                "200": 343,
+                "204": 1,
+                "403": 7,
+                "404": 1,
+                "pending": 9
+            }
+        },
+        "posthog-os-window:h0yh22o2": {
+            "requests": 302,
+            "bytes": 542660,
+            "failed": 6,
+            "slowest": [
+                [-1, "PENDING /array/phc_Bgb2dsTjJgU3PniXp9vcZpwmxYFBEwFG5Ro2rwpV6ksy/config.js"],
+                [-1, "PENDING /static/1.434.10/tracing-headers.js"],
+                [
+                    -1,
+                    "PENDING /api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [-1, "PENDING /i/v1/metrics?token=phc_Bgb2dsTjJgU3PniXp9vcZpwmxYFBEwFG5Ro2rwpV6ksy"],
+                [
+                    -1,
+                    "PENDING /api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ]
+            ],
+            "statuses": {
+                "200": 290,
+                "204": 1,
+                "403": 5,
+                "pending": 6
+            }
+        }
+    },
+    "errors": {
+        "(top)": [
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 729.8999999999069
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 730.1999999997206
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 874.3999999999069
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1393.6000000000931
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 2216.600000000093
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [RemoteConfig] Failed to fetch remote config from PostHog.",
+                "t": 2217.100000000093
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 2644.2999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [RemoteConfig] Failed to fetch remote config from PostHog.",
+                "t": 2644.6999999997206
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 2646.399999999907
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 4072.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 16311.69999999972
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [metrics] Failed to send metrics batch: metrics request failed with status 403",
+                "t": 16312.399999999907
+            }
+        ],
+        "posthog-os-window:vlm3w5x6": [
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1246.1000000000931
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1510.9000000003725
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 2128.2000000001863
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 2570.8000000002794
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [RemoteConfig] Failed to fetch remote config from PostHog.",
+                "t": 2571.3000000002794
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 2978.600000000093
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 9081.30000000028
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [RemoteConfig] Failed to fetch remote config from PostHog.",
+                "t": 9081.600000000093
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 16275.400000000373
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [metrics] Failed to send metrics batch: metrics request failed with status 403",
+                "t": 16275.80000000028
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 16455.600000000093
+            }
+        ],
+        "posthog-os-window:yvqirkl1": [
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1522.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1522.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 2194.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 2206.7000000001863
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 3667.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 9457
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [RemoteConfig] Failed to fetch remote config from PostHog.",
+                "t": 9457.600000000093
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 13728.100000000093
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [RemoteConfig] Failed to fetch remote config from PostHog.",
+                "t": 13729.100000000093
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 16486.299999999814
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 20377.799999999814
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [metrics] Failed to send metrics batch: metrics request failed with status 403",
+                "t": 20378.100000000093
+            }
+        ],
+        "posthog-os-window:ir1fy8vp": [
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 6888.200000000186
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 6888.700000000186
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 15330.80000000028
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 18029.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 18174.5
+            }
+        ],
+        "posthog-os-window:h0yh22o2": [
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 6816.399999999907
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 6817
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 15772
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 17917.899999999907
+            }
+        ]
+    },
+    "longTasks": {
+        "(top)": {
+            "count": 27,
+            "totalMs": 7474
+        },
+        "posthog-os-window:vlm3w5x6": {
+            "count": 24,
+            "totalMs": 7214
+        },
+        "posthog-os-window:yvqirkl1": {
+            "count": 24,
+            "totalMs": 7213
+        },
+        "posthog-os-window:ir1fy8vp": {
+            "count": 18,
+            "totalMs": 6738
+        },
+        "posthog-os-window:h0yh22o2": {
+            "count": 18,
+            "totalMs": 6738
+        }
+    },
+    "frameNavigations": 9,
+    "topNavigations": [
+        "/os",
+        "/project/100001/os",
+        "/os",
+        "/project/100001/os",
+        "/project/100001/app-store",
+        "/project/100001/feature_flags",
+        "/project/100001/dashboard",
+        "/project/100001/workflows",
+        "/project/100001/workflows"
+    ],
+    "totalMs": 22106
+}

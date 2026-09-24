@@ -1,0 +1,673 @@
+{
+    "scenario": "drag",
+    "baseUrl": "http://localhost:8106",
+    "windows": [
+        {
+            "app": "store",
+            "firstPaintMs": 1558,
+            "firstRenderMs": 1558,
+            "state": {
+                "hasMain": true,
+                "textLen": 3216,
+                "bodyLen": 3309,
+                "errorPage": false,
+                "bodyStart": "PostHog running in DEBUG mode!\nCurrent branch: os-shell/perf\nCurrent revision: 1e45237c796\n×\nApp Store\n\nInstall the apps you use, and find new ones.\n\nUnderstand",
+                "mainStart": "App Store\n\nInstall the apps you use, and find new ones.\n\nUnderstand usage\nDashboards\nInstalled\n\nCreate and manage your d",
+                "rootEmpty": false,
+                "loaders": 0,
+                "href": "/project/100001/app-store",
+                "ready": "interactive"
+            }
+        },
+        {
+            "app": "flags",
+            "firstPaintMs": 1318,
+            "firstRenderMs": 4916,
+            "state": {
+                "hasMain": true,
+                "textLen": 15514,
+                "bodyLen": 15607,
+                "errorPage": false,
+                "bodyStart": "PostHog running in DEBUG mode!\nCurrent branch: os-shell/perf\nCurrent revision: 1e45237c796\n×\nFeature flags\nFeedback\nNew\n\nUse feature flags to safely deploy and ",
+                "mainStart": "Feature flags\nFeedback\nNew\n\nUse feature flags to safely deploy and roll back new features in an easy-to-manage way. Roll",
+                "rootEmpty": false,
+                "loaders": 0,
+                "href": "/project/100001/feature_flags",
+                "ready": "interactive"
+            }
+        },
+        {
+            "app": "dashboards",
+            "firstPaintMs": 1457,
+            "firstRenderMs": 4088,
+            "state": {
+                "hasMain": true,
+                "textLen": 429,
+                "bodyLen": 522,
+                "errorPage": false,
+                "bodyStart": "PostHog running in DEBUG mode!\nCurrent branch: os-shell/perf\nCurrent revision: 1e45237c796\n×\nDashboards\nNew dashboard\n\nCreate and manage your dashboards\n\nAll da",
+                "mainStart": "Dashboards\nNew dashboard\n\nCreate and manage your dashboards\n\nAll dashboards\nMy dashboards\nTemplates\nSaved views\nNew\nFilt",
+                "rootEmpty": false,
+                "loaders": 0,
+                "href": "/project/100001/dashboard",
+                "ready": "interactive"
+            }
+        },
+        {
+            "app": "workflows",
+            "firstPaintMs": 1524,
+            "firstRenderMs": 5289,
+            "state": {
+                "hasMain": true,
+                "textLen": 584,
+                "bodyLen": 677,
+                "errorPage": false,
+                "bodyStart": "PostHog running in DEBUG mode!\nCurrent branch: os-shell/perf\nCurrent revision: 1e45237c796\n×\nWorkflows\n\nAutomate user communication and internal processes\n\nWork",
+                "mainStart": "Workflows\n\nAutomate user communication and internal processes\n\nWorkflows\nMessage users when it matters\n\nBuild journeys o",
+                "rootEmpty": false,
+                "loaders": 0,
+                "href": "/project/100001/workflows",
+                "ready": "interactive"
+            }
+        }
+    ],
+    "dragMs": 4318,
+    "dragLongTasks": [],
+    "frameNavsDuringDrag": 0,
+    "network": {
+        "posthog-os-window:75orod4e": {
+            "requests": 312,
+            "bytes": 709081,
+            "failed": 7,
+            "slowest": [
+                [6597, "/static/1.434.10/tracing-headers.js"],
+                [
+                    5577,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    5204,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    5100,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    4965,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ]
+            ],
+            "statuses": {
+                "200": 304,
+                "204": 1,
+                "403": 7
+            }
+        },
+        "posthog-os-window:csej88xv": {
+            "requests": 367,
+            "bytes": 1445059,
+            "failed": 11,
+            "slowest": [
+                [6652, "/static/1.434.10/tracing-headers.js"],
+                [5607, "/array/phc_Bgb2dsTjJgU3PniXp9vcZpwmxYFBEwFG5Ro2rwpV6ksy/config.js"],
+                [
+                    5520,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    5407,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    5404,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ]
+            ],
+            "statuses": {
+                "200": 355,
+                "204": 1,
+                "403": 10,
+                "404": 1
+            }
+        },
+        "posthog-os-window:nprvn73p": {
+            "requests": 424,
+            "bytes": 2453763,
+            "failed": 10,
+            "slowest": [
+                [5945, "/static/1.434.10/tracing-headers.js"],
+                [5574, "/array/phc_Bgb2dsTjJgU3PniXp9vcZpwmxYFBEwFG5Ro2rwpV6ksy/config.js"],
+                [
+                    5504,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    5387,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [
+                    5380,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ]
+            ],
+            "statuses": {
+                "200": 413,
+                "204": 1,
+                "403": 10
+            }
+        },
+        "posthog-os-window:z436r5mi": {
+            "requests": 456,
+            "bytes": 2987617,
+            "failed": 10,
+            "slowest": [
+                [
+                    5468,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [5412, "/array/phc_Bgb2dsTjJgU3PniXp9vcZpwmxYFBEwFG5Ro2rwpV6ksy/config.js"],
+                [4931, "/static/1.434.10/tracing-headers.js"],
+                [
+                    4700,
+                    "/api/projects/100001/event_definitions/?names=%24ai_generation%2C%24ai_trace%2C%24ai_span%2C%24ai_embedding%2C%24excepti"
+                ],
+                [3836, "/@react-refresh"]
+            ],
+            "statuses": {
+                "200": 445,
+                "204": 1,
+                "403": 10
+            }
+        },
+        "(top)": {
+            "requests": 2,
+            "bytes": 9538,
+            "failed": 2,
+            "slowest": [
+                [1454, "/e/"],
+                [573, "/i/v1/metrics?token=phc_Bgb2dsTjJgU3PniXp9vcZpwmxYFBEwFG5Ro2rwpV6ksy"]
+            ],
+            "statuses": {
+                "403": 2
+            }
+        }
+    },
+    "errors": {
+        "(top)": [
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1004.8999999994412
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1052.699999999255
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1210.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1740.199999999255
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 1888.2999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [RemoteConfig] Failed to fetch remote config from PostHog.",
+                "t": 1888.699999999255
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1983
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 2069.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [RemoteConfig] Failed to fetch remote config from PostHog.",
+                "t": 2069.899999999441
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 3869.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 9309.099999999627
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 11499.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [metrics] Failed to send metrics batch: metrics request failed with status 403",
+                "t": 11499.699999999255
+            }
+        ],
+        "posthog-os-window:75orod4e": [
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 452.3999999994412
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 465
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 719.1999999992549
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1122.199999999255
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 1908.199999999255
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [RemoteConfig] Failed to fetch remote config from PostHog.",
+                "t": 1908.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 2813.199999999255
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [RemoteConfig] Failed to fetch remote config from PostHog.",
+                "t": 2813.699999999255
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 3267.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 4743.799999999814
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 10440.399999999441
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [metrics] Failed to send metrics batch: metrics request failed with status 403",
+                "t": 10442.199999999255
+            }
+        ],
+        "posthog-os-window:csej88xv": [
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1820.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1837.0999999996275
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2071.399999999441
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2071.5999999996275
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2071.7000000001863
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2071.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2071.899999999441
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2071.899999999441
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2072
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2072.0999999996275
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2072.2000000001863
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2072.2999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2072.399999999441
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2072.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2072.5999999996275
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2072.7000000001863
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2072.7000000001863
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2072.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2072.899999999441
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2074.899999999441
+            }
+        ],
+        "posthog-os-window:nprvn73p": [
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1939.4000000003725
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1960.9000000003725
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1981.2000000001863
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2015.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016.1000000005588
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016.2000000001863
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016.4000000003725
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016.4000000003725
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016.4000000003725
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016.6000000005588
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016.9000000003725
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2016.9000000003725
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2017
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2017.1000000005588
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 2017.2000000001863
+            }
+        ],
+        "posthog-os-window:z436r5mi": [
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1216
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 2181.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 2337.7000000001863
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 2999.5999999996275
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 3100.399999999441
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3260.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3260.5999999996275
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3260.7000000001863
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3260.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3260.899999999441
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3261
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3261.0999999996275
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3261.0999999996275
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3261.2000000001863
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3261.2999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3261.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3261.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3261.5999999996275
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3261.5999999996275
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 3261.7000000001863
+            }
+        ]
+    },
+    "longTasks": {
+        "(top)": {
+            "count": 11,
+            "totalMs": 1055
+        },
+        "posthog-os-window:75orod4e": {
+            "count": 8,
+            "totalMs": 838
+        },
+        "posthog-os-window:csej88xv": {
+            "count": 8,
+            "totalMs": 838
+        },
+        "posthog-os-window:nprvn73p": {
+            "count": 7,
+            "totalMs": 743
+        },
+        "posthog-os-window:z436r5mi": {
+            "count": 7,
+            "totalMs": 743
+        }
+    },
+    "frameNavigations": 5,
+    "topNavigations": [
+        "/os",
+        "/project/100001/os",
+        "/os",
+        "/project/100001/os",
+        "/project/100001/app-store",
+        "/project/100001/feature_flags",
+        "/project/100001/dashboard",
+        "/project/100001/workflows"
+    ],
+    "totalMs": 18556,
+    "trace": {
+        "mainThreadBusyMs": 5390,
+        "longTaskCount": 9,
+        "longTaskTotalMs": 968,
+        "rendererThreads": 1
+    }
+}

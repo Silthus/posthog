@@ -1,0 +1,6 @@
+    ✓ shows a new window as loading until its app reports its first page, then as ready (51 ms)
+    ✓ loads two frames at a time, and starts the top queued window when a frame loads (29 ms)
+    ✓ loads a minimized window only when it is restored, and keeps a loaded frame while minimized (40 ms)
+    ✓ marks a frame as slow after 20 seconds, lets the next window load, and reloads it on request (41 ms)
+    ✓ starts the next queued window when a loading window closes (20 ms)
+Tests:       5 passed, 5 total

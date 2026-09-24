@@ -1,0 +1,132 @@
+{
+    "scenario": "toplevel-flags",
+    "baseUrl": "http://localhost:8105",
+    "windows": [
+        {
+            "app": "flags",
+            "firstPaintMs": 304,
+            "firstRenderMs": 3390,
+            "state": {
+                "hasMain": true,
+                "textLen": 15554,
+                "bodyLen": 16140,
+                "errorPage": false,
+                "bodyStart": "Skip to content\nH\nHedgebox\nSearch\nCtrl\nK\nBrowse\nChat\nPROJECT\nHome\nActivity\nData\nFiles\nTools\nRECENTS\nMY TOOLS\nAnalytics\nDashboards\nData catalog BETA\nProduct anal",
+                "mainStart": "This is a demo project with dummy data.\nFeature flags\nFeedback\nNew\n\nUse feature flags to safely deploy and roll back new",
+                "rootEmpty": false,
+                "loaders": 0,
+                "href": "/project/100001/feature_flags",
+                "ready": "complete"
+            }
+        }
+    ],
+    "network": {
+        "(top)": {
+            "requests": 1791,
+            "bytes": 77264063,
+            "failed": 12,
+            "slowest": [
+                [529, "/array/phc_Bgb2dsTjJgU3PniXp9vcZpwmxYFBEwFG5Ro2rwpV6ksy/config"],
+                [498, "/api/billing/"],
+                [409, "/api/projects/100001/feature_flags/?limit=100&offset=0"],
+                [383, "/static/1.434.10/tracing-headers.js"],
+                [372, "/api/projects/100001/event_ingestion_restrictions/"]
+            ],
+            "statuses": {
+                "200": 1775,
+                "204": 2,
+                "304": 3,
+                "403": 8,
+                "404": 1,
+                "net::ERR_ABORTED": 2
+            }
+        }
+    },
+    "errors": {
+        "(top)": [
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 888.2999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 891.2999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 951.0999999996275
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1138.1999999997206
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 1350.7999999998137
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [RemoteConfig] Failed to fetch remote config from PostHog.",
+                "t": 1356.0999999996275
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1469.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 1580.6999999997206
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [RemoteConfig] Failed to fetch remote config from PostHog.",
+                "t": 1584
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 3765.399999999907
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 11250.299999999814
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] [metrics] Failed to send metrics batch: metrics request failed with status 403",
+                "t": 11250.799999999814
+            }
+        ]
+    },
+    "longTasks": {
+        "(top)": {
+            "count": 4,
+            "totalMs": 797
+        }
+    },
+    "frameNavigations": 0,
+    "topNavigations": [
+        "/project/100001/",
+        "/project/100001/",
+        "/project/100001",
+        "/project/100001/home",
+        "/project/100001/home",
+        "/project/100001/feature_flags",
+        "/project/100001/feature_flags?tab=overview"
+    ],
+    "totalMs": 12196,
+    "trace": {
+        "mainThreadBusyMs": 2809,
+        "longTaskCount": 4,
+        "longTaskTotalMs": 798,
+        "rendererThreads": 1
+    }
+}

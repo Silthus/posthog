@@ -1,0 +1,8 @@
+  ● osWindowFramesLogic › loads a window as soon as it comes to the front, also while two frames load
+  ● osWindowFramesLogic › treats a page that is not the app, such as an error page or another site, as loaded
+    TypeError: frames.actions.framePageLoaded is not a function
+  ● OsWindow › shows a page that is not the app as soon as the frame loads it
+  ● OsWindow › keeps the loading state when the frame loads the app, until the app reports
+    TypeError: Cannot read properties of null (reading 'appendChild')
+  ● osBridgeLogic › sends a page to a window whose frame is not in the page yet, once its app reports
+Tests:       5 failed, 18 passed, 23 total

@@ -1,0 +1,22 @@
+[90m03:54:15:542[0m [34m[fetch][0m request has not been handled, passthrough...
+[90m03:54:15:544[0m [34m[fetch][0m original fetch performed {}
+FAIL src/scenes/os/windows/osWindowFramesLogic.test.ts
+  osWindowFramesLogic
+    ✕ shows a new window as loading until its app reports its first page, then as ready (43 ms)
+  ● osWindowFramesLogic › shows a new window as loading until its app reports its first page, then as ready
+    expect(received).toEqual(expected) // deep equality
+    Expected: "loading"
+    Received: undefined
+      44 |         mountAt(INSIGHTS)
+      45 |
+    > 46 |         expect(frames.values.frameStatus[idOf(INSIGHTS)]).toEqual('loading')
+         |                                                  ^
+      47 |
+      48 |         windows.actions.windowNavigated(idOf(INSIGHTS), INSIGHTS, 'Insights')
+      49 |
+      at Object.<anonymous> (src/scenes/os/windows/osWindowFramesLogic.test.ts:46:50)
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 total
+Snapshots:   0 total
+Time:        1.483 s
+Ran all test suites matching /src\/scenes\/os\/windows\/osWindowFramesLogic.test.ts/i.

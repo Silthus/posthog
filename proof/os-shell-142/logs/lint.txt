@@ -1,0 +1,6 @@
+oxlint exit 0
+Checking formatting...
+
+All matched files use the correct format.
+Finished in 244ms on 16 files using 16 threads.
+oxfmt exit 0

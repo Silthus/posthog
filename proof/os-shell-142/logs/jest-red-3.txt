@@ -1,0 +1,15 @@
+    ✓ shows a new window as loading until its app reports its first page, then as ready (45 ms)
+    ✓ loads two frames at a time, and starts the top queued window when a frame loads (31 ms)
+    ✕ loads a minimized window only when it is restored, and keeps a loaded frame while minimized (37 ms)
+    ✕ starts the next queued window when a loading window closes (24 ms)
+    - Expected  - 2
+    + Received  + 2
+    -   "/project/997/feature_flags": "queued",
+    +   "/project/997/feature_flags": "loading",
+    -   "/project/997/replay/home": "queued",
+    +   "/project/997/replay/home": "loading",
+    - Expected  - 1
+    + Received  + 1
+    -   "/project/997/feature_flags": "loading",
+    +   "/project/997/feature_flags": "queued",
+Tests:       2 failed, 2 passed, 4 total

@@ -1,0 +1,174 @@
+{
+    "scenario": "toplevel-flags",
+    "baseUrl": "http://localhost:8107",
+    "windows": [
+        {
+            "app": "flags",
+            "firstPaintMs": 382,
+            "firstRenderMs": 2829,
+            "state": {
+                "hasMain": true,
+                "textLen": 15554,
+                "bodyLen": 16140,
+                "errorPage": false,
+                "bodyStart": "Skip to content\nH\nHedgebox\nSearch\nCtrl\nK\nBrowse\nChat\nPROJECT\nHome\nActivity\nData\nFiles\nTools\nRECENTS\nMY TOOLS\nAnalytics\nDashboards\nData catalog BETA\nProduct anal",
+                "mainStart": "This is a demo project with dummy data.\nFeature flags\nFeedback\nNew\n\nUse feature flags to safely deploy and roll back new",
+                "rootEmpty": false,
+                "loaders": 0,
+                "href": "/project/100001/feature_flags",
+                "ready": "complete"
+            }
+        }
+    ],
+    "network": {
+        "(top)": {
+            "requests": 368,
+            "bytes": 932981,
+            "failed": 12,
+            "slowest": [
+                [1571, "/array/phc_Bgb2dsTjJgU3PniXp9vcZpwmxYFBEwFG5Ro2rwpV6ksy/config"],
+                [1120, "/api/projects/100001/feature_flags/?limit=1"],
+                [1099, "/api/projects/100001/feature_flags/?limit=1&archived=true"],
+                [1051, "/static/1.434.10/tracing-headers.js"],
+                [1045, "/api/billing/"]
+            ],
+            "statuses": {
+                "200": 354,
+                "204": 2,
+                "403": 9,
+                "404": 1,
+                "net::ERR_ABORTED": 2
+            }
+        }
+    },
+    "errors": {
+        "(top)": [
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 641.3000000002794
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 702
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 971.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1151.3000000002794
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1151.4000000003725
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1151.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1219.3000000002794
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1226
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1234.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1239.4000000003725
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1333
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1333.2000000001863
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1333.3000000002794
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1333.4000000003725
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1333.5
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1334.3000000002794
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1341.8000000002794
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] This capture call is ignored due to client rate limiting.",
+                "t": 1344.3000000002794
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Bad HTTP status: 403 <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"robots\" content=\"NONE,NOARCHIVE\">\n  <title>403 Forbidden</title>\n  <style>\n    html * { padding:0; margin:0; }\n    body * { padding:10px 20px;",
+                "t": 1725.3000000002794
+            },
+            {
+                "kind": "console.error",
+                "text": "[PostHog.js] Unexpected token '<', \"<!doctype \"... is not valid JSON",
+                "t": 1729.7000000001863
+            }
+        ]
+    },
+    "longTasks": {
+        "(top)": {
+            "count": 5,
+            "totalMs": 768
+        }
+    },
+    "frameNavigations": 0,
+    "topNavigations": [
+        "/project/100001/",
+        "/project/100001",
+        "/project/100001/home",
+        "/project/100001/home",
+        "/project/100001/",
+        "/project/100001",
+        "/project/100001/home",
+        "/project/100001/home",
+        "/project/100001/feature_flags",
+        "/project/100001/feature_flags?tab=overview"
+    ],
+    "totalMs": 5847,
+    "trace": {
+        "mainThreadBusyMs": 1964,
+        "longTaskCount": 5,
+        "longTaskTotalMs": 786,
+        "rendererThreads": 1
+    }
+}

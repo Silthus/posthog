@@ -1,0 +1,2 @@
+    ✓ shows a new window as loading until its app reports its first page, then as ready (42 ms)
+Tests:       1 passed, 1 total

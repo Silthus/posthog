@@ -1,0 +1,4 @@
+    ✕ keeps the same frame while the app loads, and while the window is minimized, restored or covered (129 ms)
+    ✓ shows a page that is not the app as soon as the frame loads it (45 ms)
+    ✓ keeps the loading state when the frame loads the app, until the app reports (47 ms)
+Tests:       1 failed, 2 passed, 3 total
