@@ -23,7 +23,7 @@ import { MessagingTabActions } from './MessagingTabActions'
 import { messagingNavTabs } from './messagingTabs'
 import { newWorkflowLogic } from './Workflows/newWorkflowLogic'
 import { NewWorkflowModal } from './Workflows/NewWorkflowModal'
-import { WorkflowsTable } from './Workflows/WorkflowsTable'
+import { WorkflowsListPrototypes } from './Workflows/prototypes/WorkflowsListPrototypes'
 
 const WORKFLOW_SCENE_TABS = ['workflows', 'library', 'channels', 'opt-outs', 'suppression', 'reputation'] as const
 export type WorkflowsSceneTab = (typeof WORKFLOW_SCENE_TABS)[number]
@@ -129,7 +129,7 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
         {
             label: 'Workflows',
             key: 'workflows',
-            content: <WorkflowsTable />,
+            content: <WorkflowsListPrototypes />,
             link: urls.workflows(),
         },
         ...messagingNavTabs((tab) => urls.workflows(tab)),
