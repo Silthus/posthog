@@ -13,7 +13,8 @@ import { workflowsPrototypeLogic } from '../shared/workflowsPrototypeLogic'
 import { workflowsTagsVariantLogic } from './workflowsTagsVariantLogic'
 import { tagsOfItem } from './workflowTagFacets'
 
-const MAX_VISIBLE_TAGS = 3
+// Compact rows keep every row on one line, so they show fewer pills before the overflow count.
+const MAX_VISIBLE_TAGS = { compact: 2, comfortable: 3 }
 
 export function WorkflowTagsCell({ item, rowKey }: { item: WorkflowListItem; rowKey: string }): JSX.Element {
     const { editingRowKey, vocabulary, store, compact } = useValues(workflowsTagsVariantLogic)
@@ -41,7 +42,8 @@ export function WorkflowTagsCell({ item, rowKey }: { item: WorkflowListItem; row
         )
     }
 
-    const visible = tags.slice(0, MAX_VISIBLE_TAGS)
+    const maxVisible = compact ? MAX_VISIBLE_TAGS.compact : MAX_VISIBLE_TAGS.comfortable
+    const visible = tags.slice(0, maxVisible)
     const hidden = tags.length - visible.length
 
     return (
@@ -63,7 +65,7 @@ export function WorkflowTagsCell({ item, rowKey }: { item: WorkflowListItem; row
                 </LemonTag>
             ))}
             {hidden > 0 && (
-                <LemonTag size="small" type="muted" title={tags.slice(MAX_VISIBLE_TAGS).join(', ')}>
+                <LemonTag size="small" type="muted" title={tags.slice(maxVisible).join(', ')}>
                     +{hidden}
                 </LemonTag>
             )}
