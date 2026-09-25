@@ -11,18 +11,18 @@ import { escapePath, joinPath, splitPath } from '~/layout/panel-layout/ProjectTr
 import type { FileSystemEntry } from '~/queries/schema/schema-general'
 
 import { combinedVariantLogic } from '../combined/combinedVariantLogic'
-import { FolderRow, WORKFLOWS_ROOT, foldersVariantLogic } from '../folders/foldersVariantLogic'
+import { FolderRow, foldersVariantLogic } from '../folders/foldersVariantLogic'
 
 function startsWith(segments: string[], prefix: string[]): boolean {
     return prefix.length <= segments.length && prefix.every((segment, index) => segments[index] === segment)
 }
 
 function folderPath(segments: string[]): string {
-    return joinPath([WORKFLOWS_ROOT, ...segments])
+    return joinPath(segments)
 }
 
 interface Values {
-    entries: { items: FileSystemEntry[]; folders: FileSystemEntry[] }
+    projectFolders: FileSystemEntry[]
     rowsById: Record<string, FolderRow>
     folderPaths: string[][]
     scope: string[]
@@ -44,7 +44,7 @@ interface Actions {
 export const browserVariantLogic = kea<MakeLogicType<Values, Actions>>([
     path(['products', 'workflows', 'frontend', 'Workflows', 'prototypes', 'browser', 'browserVariantLogic']),
     connect(() => ({
-        values: [foldersVariantLogic, ['entries', 'rowsById', 'folderPaths'], combinedVariantLogic, ['scope']],
+        values: [combinedVariantLogic, ['projectFolders', 'rowsById', 'folderPaths', 'scope']],
         actions: [
             foldersVariantLogic,
             ['loadEntries'],
@@ -65,7 +65,7 @@ export const browserVariantLogic = kea<MakeLogicType<Values, Actions>>([
             try {
                 // The backend creates parent folders on the fly, so a folder can exist only through its items.
                 const entry =
-                    values.entries.folders.find((folder) => folder.path === folderPath(segments)) ??
+                    values.projectFolders.find((folder) => folder.path === folderPath(segments)) ??
                     (await api.fileSystem.create({
                         id: '',
                         path: folderPath(segments),
@@ -82,7 +82,7 @@ export const browserVariantLogic = kea<MakeLogicType<Values, Actions>>([
             }
         },
         deleteFolder: async ({ segments }) => {
-            const entry = values.entries.folders.find((folder) => folder.path === folderPath(segments))
+            const entry = values.projectFolders.find((folder) => folder.path === folderPath(segments))
             try {
                 if (entry?.id) {
                     await api.fileSystem.delete(entry.id)

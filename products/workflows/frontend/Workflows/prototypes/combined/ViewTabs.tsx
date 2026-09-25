@@ -91,7 +91,7 @@ export function ViewActions(): JSX.Element {
     const { activeView, store, scope, isModified, canUpdateActiveView, activeViewChanges } =
         useValues(combinedVariantLogic)
     const { saveViewAs, updateActiveView, resetView, renameView, deleteView } = useActions(combinedVariantLogic)
-    const scopeLabel = ['Workflows', ...scope].join(' / ')
+    const scopeLabel = scope.join(' / ')
     const loadingReason = !store ? 'Saved views are still loading' : undefined
 
     const openSaveDialog = (): void =>

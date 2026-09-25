@@ -29,7 +29,8 @@ import type { FileSystemEntry } from '~/queries/schema/schema-general'
 import type { UserType } from '~/types'
 
 import { newWorkflowLogic } from '../../newWorkflowLogic'
-import { FolderLocation, FolderRow, WORKFLOWS_ROOT, foldersVariantLogic } from '../folders/foldersVariantLogic'
+import { setItemFolders } from '../folders/folderFacet'
+import { FolderLocation, FolderRow, foldersVariantLogic } from '../folders/foldersVariantLogic'
 import {
     FacetFilter,
     WorkflowQuery,
@@ -51,6 +52,8 @@ import {
     CombinedStore,
     CombinedView,
     DEFAULT_COLUMNS,
+    SHIPPED_VIEWS,
+    SHIPPED_VIEWS_INDEX,
     TagColor,
     fallbackTagColor,
     normalizeColumns,
@@ -62,16 +65,31 @@ import { setNewWorkflowContext } from './newWorkflowContext'
 
 const TEAM_URL = 'api/environments/@current/'
 
+/** The list's root is the project's root. The label says what a click on it does. */
+export const ROOT_LABEL = 'All folders'
+
+/** Where the backend files items that have no project tree row yet. */
+const UNFILED_WORKFLOWS = ['Unfiled', 'Workflows']
+const UNFILED_EMAIL_TEMPLATES = ['Unfiled', 'Email templates']
+const LIST_TYPES = ['hog_flow', 'hog_flow_template', 'message_template']
+
+/** Items from other products in one folder, which this list doesn't show. */
+export interface OtherProductItems {
+    folder: string
+    count: number
+    byType: Record<string, number>
+}
+
 function startsWith(segments: string[], prefix: string[]): boolean {
     return prefix.length <= segments.length && prefix.every((segment, index) => segments[index] === segment)
 }
 
-/** The open folder under the Workflows root. The root is `[]`, and it means "everywhere". */
+/** The open folder, as a full project path. The project root is `[]`, and it means "everywhere". */
 export function scopeOf(location: FolderLocation): string[] {
     return location.type === 'folder' ? location.segments : []
 }
 
-/** Unfiled items sit in the root. */
+/** The row's folder as a full project path. */
 export function placementOf(row: FolderRow): string[] {
     return row.segments ?? []
 }
@@ -176,6 +194,11 @@ function withTags(store: CombinedStore, updates: Record<string, string[]>): Comb
 
 interface Values {
     user: UserType | null
+    treeRows: FolderRow[]
+    entries: { items: FileSystemEntry[]; folders: FileSystemEntry[] }
+    projectFolders: FileSystemEntry[]
+    createdFolders: string[]
+    otherProductItems: OtherProductItems | null
     rows: FolderRow[]
     rowsById: Record<string, FolderRow>
     folderPaths: string[][]
@@ -220,6 +243,12 @@ interface Values {
 interface Actions {
     setLocation: (location: FolderLocation) => { location: FolderLocation }
     loadEntries: () => {}
+    loadEntriesSuccess: (entries: unknown) => { entries: unknown }
+    loadSourcesSuccess: (sources: unknown) => { sources: unknown }
+    loadProjectFolders: () => {}
+    loadOtherProductItems: () => {}
+    loadOtherProductItemsFailure: (error: string) => { error: string }
+    restoreShippedViews: () => { value: true }
     loadEntriesFailure: (error: string) => { error: string }
     loadSources: () => {}
     loadSourcesFailure: (error: string) => { error: string }
@@ -268,15 +297,15 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
             userLogic,
             ['user'],
             foldersVariantLogic,
-            ['rows', 'rowsById', 'folderPaths', 'location', 'entriesLoading'],
+            ['rows as treeRows', 'entries', 'location', 'entriesLoading'],
             workflowsPrototypeLogic,
             ['filters', 'search', 'query', 'hasActiveQuery', 'hasLoaded', 'facetsVersion'],
         ],
         actions: [
             foldersVariantLogic,
-            ['setLocation', 'loadEntries', 'loadEntriesFailure', 'moveRows', 'movesSettled'],
+            ['setLocation', 'loadEntries', 'loadEntriesSuccess', 'loadEntriesFailure', 'moveRows', 'movesSettled'],
             workflowsPrototypeLogic,
-            ['setFilters', 'setSearch', 'addFilter', 'loadSources', 'loadSourcesFailure'],
+            ['setFilters', 'setSearch', 'addFilter', 'loadSources', 'loadSourcesSuccess', 'loadSourcesFailure'],
         ],
     })),
     actions({
@@ -303,6 +332,7 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
         renameView: (id: string, name: string) => ({ id, name }),
         upsertView: (view: CombinedView) => ({ view }),
         deleteView: (id: string) => ({ id }),
+        restoreShippedViews: true,
         createFolderAt: (parent: string[], name: string) => ({ parent, name }),
         startNewWorkflow: true,
         showWorkflowsUsingTemplate: (name: string) => ({ name }),
@@ -326,6 +356,41 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                             await breakpoint(3000)
                         }
                     }
+                },
+            },
+        ],
+        // Every folder in the project, so rename and delete find the folder's own row at any depth.
+        projectFolders: [
+            [] as FileSystemEntry[],
+            {
+                loadProjectFolders: async () =>
+                    (await api.fileSystem.list({ type: 'folder', limit: 5000 } as any)).results,
+            },
+        ],
+        otherProductItems: [
+            null as OtherProductItems | null,
+            {
+                loadOtherProductItems: async (_, breakpoint) => {
+                    const scope = scopeOf(foldersVariantLogic.values.location)
+                    if (!scope.length) {
+                        return null
+                    }
+                    await breakpoint(100)
+                    const folder = joinPath(scope)
+                    const { results } = await api.fileSystem.list({ parent: folder, limit: 500 } as any)
+                    // `parent` lists everything below the folder, so keep only what sits in it directly.
+                    const others = results.filter(
+                        (entry: FileSystemEntry) =>
+                            entry.type !== 'folder' &&
+                            !LIST_TYPES.includes(entry.type ?? '') &&
+                            splitPath(entry.path).length === scope.length + 1
+                    )
+                    const byType: Record<string, number> = {}
+                    others.forEach((entry: FileSystemEntry) => {
+                        const type = entry.type ?? 'item'
+                        byType[type] = (byType[type] ?? 0) + 1
+                    })
+                    return { folder, count: others.length, byType }
                 },
             },
         ],
@@ -411,8 +476,22 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                     ? { ...state, views: state.views.map((view) => (view.id === id ? { ...view, name } : view)) }
                     : state,
             deleteView: (state, { id }) =>
-                state ? { ...state, views: state.views.filter((view) => view.id !== id) } : state,
+                state
+                    ? {
+                          ...state,
+                          views: state.views.filter((view) => view.id !== id),
+                          removedShippedViews: SHIPPED_VIEWS.some((view) => view.id === id)
+                              ? Array.from(new Set([...state.removedShippedViews, id]))
+                              : state.removedShippedViews,
+                      }
+                    : state,
+            restoreShippedViews: (state) => (state ? { ...state, removedShippedViews: [] } : state),
         },
+        // A folder made here shows until the page reloads, even while it's empty, so you can open it and fill it.
+        createdFolders: [
+            [] as string[],
+            { createFolderAt: (state, { parent, name }) => [...state, joinPath([...parent, name.trim()])] },
+        ],
         saving: [false, { persist: () => true, persistDone: () => false }],
         columns: [
             DEFAULT_COLUMNS,
@@ -437,6 +516,44 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
         manageTagsOpen: [false, { setManageTagsOpen: (_, { open }) => open }],
     })),
     selectors({
+        // Every row placed by its full project path. Items without a tree row sit where the backend would file them.
+        // Empty until the tree has loaded, so nothing flashes in Unfiled first.
+        rows: [
+            (s) => [s.treeRows, s.entries],
+            (treeRows: FolderRow[], entries: { items: FileSystemEntry[] }): FolderRow[] =>
+                entries.items.length === 0
+                    ? []
+                    : treeRows.map((row) => ({
+                          ...row,
+                          segments: row.entry
+                              ? splitPath(row.entry.path).slice(0, -1)
+                              : row.kind === 'workflow'
+                                ? UNFILED_WORKFLOWS
+                                : UNFILED_EMAIL_TEMPLATES,
+                      })),
+        ],
+        rowsById: [
+            (s) => [s.rows],
+            (rows: FolderRow[]): Record<string, FolderRow> => Object.fromEntries(rows.map((row) => [row.id, row])),
+        ],
+        // Only folders with a workflow or an email template somewhere below them. Other products' folders stay out.
+        folderPaths: [
+            (s) => [s.listRows, s.createdFolders],
+            (rows: FolderRow[], createdFolders: string[]): string[][] => {
+                const seen = new Map<string, string[]>()
+                const add = (segments: string[]): void => {
+                    for (let depth = 1; depth <= segments.length; depth++) {
+                        const prefix = segments.slice(0, depth)
+                        seen.set(joinPath(prefix), prefix)
+                    }
+                }
+                rows.forEach((row) => add(placementOf(row)))
+                createdFolders.forEach((folder) => add(splitPath(folder)))
+                return Array.from(seen.values()).sort((a, b) =>
+                    joinPath(a).localeCompare(joinPath(b), undefined, { sensitivity: 'base' })
+                )
+            },
+        ],
         scope: [(s) => [s.location], (location: FolderLocation): string[] => scopeOf(location)],
         // Any search or filter looks through the scope folder and everything below it.
         effectiveFlat: [(s) => [s.hasActiveQuery], (hasActiveQuery: boolean) => hasActiveQuery],
@@ -557,7 +674,18 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
         ],
         views: [
             (s) => [s.store],
-            (store: CombinedStore | null): CombinedView[] => [...BUILT_IN_VIEWS, ...(store?.views ?? [])],
+            (store: CombinedStore | null): CombinedView[] => {
+                const stored = store?.views ?? []
+                const shipped = SHIPPED_VIEWS.filter((view) => !store?.removedShippedViews.includes(view.id)).map(
+                    (view) => stored.find((candidate) => candidate.id === view.id) ?? view
+                )
+                return [
+                    ...BUILT_IN_VIEWS.slice(0, SHIPPED_VIEWS_INDEX),
+                    ...shipped,
+                    ...BUILT_IN_VIEWS.slice(SHIPPED_VIEWS_INDEX),
+                    ...stored.filter((view) => !SHIPPED_VIEWS.some((candidate) => candidate.id === view.id)),
+                ]
+            },
         ],
         activeView: [
             (s) => [s.views, s.activeViewId],
@@ -667,7 +795,32 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 if (values.activeViewId === id) {
                     actions.applyView(BUILT_IN_VIEWS[0])
                 }
+                const shipped = SHIPPED_VIEWS.find((view) => view.id === id)
+                if (shipped) {
+                    lemonToast.success(`Deleted ${shipped.name} for everyone`, {
+                        button: { label: 'Undo', action: () => actions.restoreShippedViews() },
+                    })
+                }
                 actions.persist()
+            },
+            restoreShippedViews: () => {
+                lemonToast.success(`Restored ${SHIPPED_VIEWS.map((view) => view.name).join(', ')} for everyone`)
+                actions.persist()
+            },
+            loadEntriesSuccess: () => {
+                // Runs after the folders logic's listener, so the `folder:` facet reads full project paths.
+                setItemFolders(new Map(values.rows.map((row) => [row.id, placementOf(row)])))
+                actions.loadProjectFolders()
+            },
+            loadSourcesSuccess: () => {
+                if (values.treeRows.some((row) => row.entry)) {
+                    setItemFolders(new Map(values.rows.map((row) => [row.id, placementOf(row)])))
+                }
+            },
+            setLocation: () => actions.loadOtherProductItems(),
+            loadOtherProductItemsFailure: async (_, breakpoint) => {
+                await breakpoint(3000)
+                actions.loadOtherProductItems()
             },
             setScope: ({ scope }) => actions.setLocation({ type: 'folder', segments: scope }),
             movesSettled: () => actions.clearSelection(),
@@ -741,7 +894,7 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 try {
                     await api.fileSystem.create({
                         id: '',
-                        path: joinPath([WORKFLOWS_ROOT, ...segments]),
+                        path: joinPath(segments),
                         type: 'folder',
                     } as FileSystemEntry)
                 } catch {
@@ -765,7 +918,7 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
             startNewWorkflow: () => {
                 // The usual chooser opens. Whatever it creates lands in the scope folder with the filter's tags.
                 setNewWorkflowContext(
-                    values.scope.length ? joinPath([WORKFLOWS_ROOT, ...values.scope]) : null,
+                    values.scope.length ? joinPath(values.scope) : null,
                     tagsFromFilters(values.filters)
                 )
                 newWorkflowLogic.actions.startNewWorkflow()
@@ -812,7 +965,12 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
         }
         return { [urls.workflows()]: sync, [urls.workflows('workflows')]: sync }
     }),
-    afterMount(({ actions }) => {
+    afterMount(({ actions, values }) => {
         actions.loadStore()
+        actions.loadProjectFolders()
+        actions.loadOtherProductItems()
+        if (values.treeRows.some((row) => row.entry)) {
+            setItemFolders(new Map(values.rows.map((row) => [row.id, placementOf(row)])))
+        }
     }),
 ])

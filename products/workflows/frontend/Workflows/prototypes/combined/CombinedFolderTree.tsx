@@ -11,7 +11,7 @@ import { LemonField } from 'lib/lemon-ui/LemonField'
 
 import { joinPath } from '~/layout/panel-layout/ProjectTree/utils'
 
-import { combinedVariantLogic } from './combinedVariantLogic'
+import { ROOT_LABEL, combinedVariantLogic } from './combinedVariantLogic'
 
 const ROOT_KEY = 'root'
 
@@ -160,7 +160,7 @@ export function CombinedFolderTree(): JSX.Element {
         const children = folderPaths.filter(
             (path) => path.length === segments.length + 1 && segments.every((segment, index) => path[index] === segment)
         )
-        const label = segments.length ? segments[segments.length - 1] : 'Workflows'
+        const label = segments.length ? segments[segments.length - 1] : ROOT_LABEL
         const isOpen = expanded.has(key)
         return [
             <TreeRow

@@ -93,12 +93,14 @@ export interface CombinedView {
     /** The pills, in the same syntax as the `q` URL param. `me` stands for the signed-in person. */
     q: string
     text: string
-    /** The scope folder under the Workflows root (`''` is the root). `null` keeps whatever folder is open. */
+    /** The scope folder, a full project path (`''` is the project root). `null` keeps whatever folder is open. */
     folder: string | null
     columns: ColumnKey[]
     /** The user's uuid. Only they get "Update view". */
     createdBy?: string | null
     builtIn?: boolean
+    /** Ships with the product like a built-in, but works like a saved view: anyone can change or delete it. */
+    shipped?: boolean
 }
 
 /** Views from before v2 lack columns, so they get the defaults. Stored `flat` and `compact` flags are ignored. */
@@ -120,6 +122,8 @@ export interface CombinedStore {
     pinnedTags: string[]
     colors: Record<string, TagColor>
     views: CombinedView[]
+    /** Shipped views someone deleted. Views are shared, so this hides them for the whole project. */
+    removedShippedViews: string[]
 }
 
 export function readCombinedStore(extraSettings: Record<string, any> | null | undefined): CombinedStore {
@@ -136,6 +140,9 @@ export function readCombinedStore(extraSettings: Record<string, any> | null | un
         pinnedTags: Array.isArray(tagsBlob.pinned_tags) ? tagsBlob.pinned_tags : [],
         colors,
         views: Array.isArray(combinedBlob.views) ? combinedBlob.views.map(normalizeView) : [],
+        removedShippedViews: Array.isArray(combinedBlob.removed_shipped_views)
+            ? combinedBlob.removed_shipped_views.map(String)
+            : [],
     }
 }
 
@@ -157,10 +164,11 @@ export function writeCombinedStore(
         [COMBINED_STORE_KEY]: {
             version: 2,
             tag_colors: store.colors,
-            views: store.views.map(({ createdBy, builtIn: _builtIn, ...view }) => ({
+            views: store.views.map(({ createdBy, builtIn: _builtIn, shipped: _shipped, ...view }) => ({
                 ...view,
                 created_by: createdBy ?? null,
             })),
+            removed_shipped_views: store.removedShippedViews,
         },
     }
 }
@@ -179,7 +187,6 @@ const builtIn = (id: string, name: string, q: string, columns: ColumnKey[] = DEF
 export const BUILT_IN_VIEWS: CombinedView[] = [
     builtIn('all', 'All', ''),
     builtIn('templates', 'Templates', 'kind:email-template'),
-    builtIn('mine', 'Mine', 'created-by:me'),
     builtIn('needs-attention', 'Needs attention', 'health:failing status:active', [
         'tags',
         'status',
@@ -190,3 +197,23 @@ export const BUILT_IN_VIEWS: CombinedView[] = [
     ]),
     builtIn('drafts', 'Drafts', 'status:draft'),
 ]
+
+/**
+ * Views that ship with the product but behave like saved views. A stored view with the same id replaces the shipped
+ * one, so "Save for everyone" and "Rename" work on it like on any other view.
+ */
+export const SHIPPED_VIEWS: CombinedView[] = [
+    {
+        id: 'my-workflows',
+        name: 'My workflows',
+        q: 'kind:workflow created-by:me',
+        text: '',
+        folder: null,
+        columns: DEFAULT_COLUMNS,
+        createdBy: null,
+        shipped: true,
+    },
+]
+
+/** Where shipped views sit in the tabs: right after "All", so they stay visible at narrow widths. */
+export const SHIPPED_VIEWS_INDEX = 1

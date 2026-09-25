@@ -5,14 +5,14 @@ import { useActions, useValues } from 'kea'
 import { IconFolder } from '@posthog/icons'
 import { LemonButton, LemonMenu, Link } from '@posthog/lemon-ui'
 
-import { combinedVariantLogic, tagsFromFilters } from './combinedVariantLogic'
+import { ROOT_LABEL, combinedVariantLogic, tagsFromFilters } from './combinedVariantLogic'
 import { ListOptionsMenu } from './ListOptionsMenu'
 
 export function NewWorkflowButton(): JSX.Element {
     const { scope, filters } = useValues(combinedVariantLogic)
     const { startNewWorkflow } = useActions(combinedVariantLogic)
     const tags = tagsFromFilters(filters)
-    const where = scope.length ? `in ${scope.join(' / ')}` : 'unfiled'
+    const where = `in ${scope.length ? scope.join(' / ') : 'Unfiled / Workflows'}`
     return (
         <LemonButton
             size="small"
@@ -28,9 +28,14 @@ export function NewWorkflowButton(): JSX.Element {
 
 /** `folderMenuClassName` adds a menu of every folder, for widths or layouts without the tree. */
 export function ScopeBreadcrumbs({ folderMenuClassName }: { folderMenuClassName?: string }): JSX.Element {
-    const { scope, folderPaths, contents, hasLoaded, hasActiveQuery } = useValues(combinedVariantLogic)
+    const { scope, folderPaths, contents, childFolders, hasLoaded, hasActiveQuery } = useValues(combinedVariantLogic)
     const { setScope } = useActions(combinedVariantLogic)
     const count = contents.filter((row) => row.rowType === 'item').length
+    // The project root usually holds only folders, where "0 items" would read as empty.
+    const summary =
+        count === 0 && !hasActiveQuery && childFolders.length > 0
+            ? `${childFolders.length} ${childFolders.length === 1 ? 'folder' : 'folders'}`
+            : `${count === 1 ? '1 item' : `${count} items`}${hasActiveQuery ? ` match${scope.length ? ', subfolders included' : ''}` : ''}`
 
     return (
         <div className="flex flex-wrap items-center gap-1 text-sm min-w-0" data-attr="workflows-combined-breadcrumbs">
@@ -38,7 +43,7 @@ export function ScopeBreadcrumbs({ folderMenuClassName }: { folderMenuClassName?
                 <span className={folderMenuClassName}>
                     <LemonMenu
                         items={[
-                            { label: 'Workflows', onClick: () => setScope([]) },
+                            { label: ROOT_LABEL, onClick: () => setScope([]) },
                             ...folderPaths.map((path) => ({
                                 label: `${'\u00a0\u00a0\u00a0'.repeat(path.length)}${path[path.length - 1]}`,
                                 onClick: () => setScope(path),
@@ -53,10 +58,10 @@ export function ScopeBreadcrumbs({ folderMenuClassName }: { folderMenuClassName?
             )}
             {scope.length ? (
                 <Link subtle onClick={() => setScope([])}>
-                    Workflows
+                    {ROOT_LABEL}
                 </Link>
             ) : (
-                <span className="font-semibold">Workflows</span>
+                <span className="font-semibold">{ROOT_LABEL}</span>
             )}
             {scope.map((segment, index) => (
                 <span key={index} className="flex items-center gap-1">
@@ -72,8 +77,7 @@ export function ScopeBreadcrumbs({ folderMenuClassName }: { folderMenuClassName?
             ))}
             {hasLoaded && (
                 <span className="text-secondary text-xs ml-1" translate="no">
-                    {count === 1 ? '1 item' : `${count} items`}
-                    {hasActiveQuery ? ` match${scope.length ? ', subfolders included' : ''}` : ''}
+                    {summary}
                 </span>
             )}
         </div>

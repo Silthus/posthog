@@ -6,6 +6,7 @@ import { ScopedSearchBar } from '../combined/ScopedSearchBar'
 import { ViewTabs } from '../combined/ViewTabs'
 import { BrowserToolbar } from './BrowserToolbar'
 import { FolderRowActions } from './FolderRowActions'
+import { OtherProductItemsNote } from './OtherProductItemsNote'
 import { useBrowserRowProps } from './useBrowserRowProps'
 
 export function BrowserVariant(): JSX.Element {
@@ -18,6 +19,7 @@ export function BrowserVariant(): JSX.Element {
             </div>
             <div className="@container">
                 <BrowserToolbar />
+                <OtherProductItemsNote />
                 <BulkBar />
                 <ItemsTable
                     showFolderRows

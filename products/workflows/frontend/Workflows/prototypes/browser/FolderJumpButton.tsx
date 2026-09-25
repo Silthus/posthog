@@ -7,7 +7,7 @@ import { LemonButton, LemonInput, Popover } from '@posthog/lemon-ui'
 
 import { joinPath } from '~/layout/panel-layout/ProjectTree/utils'
 
-import { combinedVariantLogic } from '../combined/combinedVariantLogic'
+import { ROOT_LABEL, combinedVariantLogic } from '../combined/combinedVariantLogic'
 
 function samePath(a: string[], b: string[]): boolean {
     return a.length === b.length && a.every((segment, index) => segment === b[index])
@@ -52,7 +52,7 @@ export function FolderJumpButton(): JSX.Element {
                             <span className="text-secondary text-sm px-2 py-1">No folder matches “{search}”</span>
                         )}
                         {folders.map((segments) => {
-                            const label = segments.length ? segments[segments.length - 1] : 'Workflows'
+                            const label = segments.length ? segments[segments.length - 1] : ROOT_LABEL
                             const active = samePath(segments, scope)
                             return (
                                 <div

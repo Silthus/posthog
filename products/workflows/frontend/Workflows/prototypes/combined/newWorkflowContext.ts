@@ -10,7 +10,7 @@ const STORAGE_KEY = 'workflows-prototype-new-workflow-context'
 const MAX_AGE_MS = 30 * 60 * 1000
 
 export interface NewWorkflowContext {
-    /** A project tree folder, for example `Workflows/Billing`. `null` leaves the workflow unfiled. */
+    /** A project tree folder, for example `Billing/Cards`. `null` files it in `Unfiled/Workflows`. */
     folder: string | null
     tags: string[]
     createdAt: number

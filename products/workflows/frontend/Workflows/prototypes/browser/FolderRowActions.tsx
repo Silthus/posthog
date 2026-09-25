@@ -6,7 +6,6 @@ import { LemonButton, LemonDialog, LemonMenu } from '@posthog/lemon-ui'
 
 import { combinedVariantLogic } from '../combined/combinedVariantLogic'
 import { FolderListRow } from '../combined/ItemsTable'
-import { foldersVariantLogic } from '../folders/foldersVariantLogic'
 import { browserVariantLogic } from './browserVariantLogic'
 import { openFolderNameDialog } from './openFolderNameDialog'
 
@@ -19,7 +18,7 @@ function childNames(folderPaths: string[][], parent: string[]): string[] {
 }
 
 export function FolderRowActions({ folder }: { folder: FolderListRow }): JSX.Element {
-    const { folderPaths } = useValues(foldersVariantLogic)
+    const { folderPaths } = useValues(combinedVariantLogic)
     const { createFolderAt } = useActions(combinedVariantLogic)
     const { renameFolder, deleteFolder } = useActions(browserVariantLogic)
     const hasSubfolders = childNames(folderPaths, folder.segments).length > 0

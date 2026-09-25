@@ -13,7 +13,7 @@ import { openFolderNameDialog } from './openFolderNameDialog'
 export function BrowserToolbar(): JSX.Element {
     const { scope, folderPaths } = useValues(combinedVariantLogic)
     const { createFolderAt } = useActions(combinedVariantLogic)
-    const here = scope.length ? scope[scope.length - 1] : 'Workflows'
+    const here = scope.length ? scope[scope.length - 1] : 'the project root'
     const siblings = folderPaths
         .filter((path) => path.length === scope.length + 1 && scope.every((segment, index) => path[index] === segment))
         .map((path) => path[path.length - 1])

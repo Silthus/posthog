@@ -299,7 +299,9 @@ export function ItemsTable({ showFolderRows = false, folderRowActions, onRow }: 
 
     const emptyText = hasActiveQuery
         ? `Nothing ${scope.length ? `in ${scope.join(' / ')} ` : ''}matches. Remove a filter${scope.length ? ' or the folder' : ''} to see more.`
-        : 'This folder is empty. Create a workflow here, or move items in with "Move to".'
+        : !scope.length && childFolders.length > 0
+          ? 'Everything sits in a folder. Open one on the left, or search to look through all of them.'
+          : 'This folder is empty. Create a workflow here, or move items in with "Move to".'
 
     return (
         <>
