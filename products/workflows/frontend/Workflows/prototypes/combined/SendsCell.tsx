@@ -10,7 +10,7 @@ import { WorkflowDispatchSummary } from '../shared/WorkflowDispatchSummary'
 import { combinedVariantLogic } from './combinedVariantLogic'
 
 export function SendsCell({ row }: { row: FolderRow }): JSX.Element | null {
-    const { usedByCounts, compact } = useValues(combinedVariantLogic)
+    const { usedByCounts } = useValues(combinedVariantLogic)
     const { showWorkflowsUsingTemplate } = useActions(combinedVariantLogic)
     const { item } = row
 
@@ -34,7 +34,6 @@ export function SendsCell({ row }: { row: FolderRow }): JSX.Element | null {
     if (!item.channels.length) {
         return null
     }
-    const senders = Array.from(new Set(item.emailSteps.map((step) => step.fromAddress).filter(Boolean)))
     const summary = <WorkflowDispatchSummary item={item} />
     if (!item.emailSteps.length) {
         return summary
@@ -60,12 +59,6 @@ export function SendsCell({ row }: { row: FolderRow }): JSX.Element | null {
         >
             <div className="flex items-center gap-2 min-w-0" data-attr="workflows-combined-sends">
                 {summary}
-                {!compact && senders.length > 0 && (
-                    <span className="text-xs text-secondary truncate max-w-48">
-                        {senders[0]}
-                        {senders.length > 1 ? ` +${senders.length - 1}` : ''}
-                    </span>
-                )}
             </div>
         </Tooltip>
     )

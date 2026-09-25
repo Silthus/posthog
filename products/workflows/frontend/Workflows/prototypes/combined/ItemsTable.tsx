@@ -1,6 +1,7 @@
-// PROTOTYPE (throwaway): the list itself, shared by every layout. It shows the items in the scope folder, with a `..`
-// row to go up. In flat mode (or while searching) it shows everything below the scope too, and each title carries its
-// path relative to the scope: `Cards / Card expiring reminder`. Layouts without a side tree pass `showFolderRows`.
+// PROTOTYPE (throwaway): the list itself, shared by every layout. Rows are always compact. It shows the items in the
+// scope folder, with a `..` row to go up. While searching or filtering it shows everything below the scope too, and
+// each title carries its path relative to the scope: `Cards / Card expiring reminder`. Each folder in that path opens
+// the folder. Layouts without a side tree pass `showFolderRows`.
 import { useActions, useValues } from 'kea'
 import type { HTMLProps } from 'react'
 
@@ -49,32 +50,11 @@ interface ItemsTableProps {
 }
 
 function ItemTitle({ row }: { row: FolderRow }): JSX.Element {
-    const { scope, effectiveFlat, compact } = useValues(combinedVariantLogic)
+    const { scope, effectiveFlat } = useValues(combinedVariantLogic)
+    const { setScope } = useActions(combinedVariantLogic)
     const relative = effectiveFlat ? relativePathOf(row, scope) : []
     const link = rowLink(row)
-    const title = (
-        // The path gives way before the name does when the row is narrow.
-        <span
-            className="flex min-w-0 overflow-hidden whitespace-nowrap"
-            title={[...relative, row.item.name].join(' / ')}
-        >
-            {relative.length > 0 && (
-                <>
-                    <span className="text-secondary truncate min-w-5">{relative.join(' / ')}</span>
-                    <span className="text-secondary shrink-0">&nbsp;/&nbsp;</span>
-                </>
-            )}
-            <span
-                className={
-                    relative.length > 0
-                        ? 'font-semibold truncate shrink-0 max-w-[calc(100%-2.5rem)]'
-                        : 'font-semibold truncate min-w-0'
-                }
-            >
-                {row.item.name}
-            </span>
-        </span>
-    )
+    const name = <span className="font-semibold truncate">{row.item.name}</span>
     return (
         <div className="flex items-center gap-2 min-w-0 max-w-52 @2xl:max-w-72 @4xl:max-w-80 @5xl:max-w-md">
             {row.kind === 'workflow' ? (
@@ -82,23 +62,44 @@ function ItemTitle({ row }: { row: FolderRow }): JSX.Element {
             ) : (
                 <IconLetter className="text-lg text-warning shrink-0" />
             )}
-            <div className="flex flex-col min-w-0">
-                {link ? (
-                    <Link
-                        to={link}
-                        subtle
-                        className="flex min-w-0 text-primary"
-                        data-attr="workflows-combined-row-link"
-                    >
-                        {title}
-                    </Link>
-                ) : (
-                    <span className="flex min-w-0">{title}</span>
+            {/* The path gives way before the name does when the row is narrow. */}
+            <span
+                className="flex min-w-0 overflow-hidden whitespace-nowrap"
+                title={[...relative, row.item.name].join(' / ')}
+            >
+                {relative.length > 0 && (
+                    <span className="flex min-w-5 truncate text-secondary" data-attr="workflows-combined-row-path">
+                        {relative.map((segment, index) => (
+                            <span key={index} className="flex min-w-0 shrink">
+                                <button
+                                    type="button"
+                                    className="truncate cursor-pointer hover:underline hover:text-primary"
+                                    title={`Open ${[...scope, ...relative.slice(0, index + 1)].join(' / ')}`}
+                                    onClick={() => setScope([...scope, ...relative.slice(0, index + 1)])}
+                                    data-attr="workflows-combined-row-path-segment"
+                                >
+                                    {segment}
+                                </button>
+                                <span className="shrink-0">&nbsp;/&nbsp;</span>
+                            </span>
+                        ))}
+                    </span>
                 )}
-                {!compact && row.item.description && (
-                    <span className="text-xs text-secondary truncate">{row.item.description}</span>
-                )}
-            </div>
+                <span className={relative.length > 0 ? 'flex shrink-0 max-w-[calc(100%-2.5rem)]' : 'flex min-w-0'}>
+                    {link ? (
+                        <Link
+                            to={link}
+                            subtle
+                            className="flex min-w-0 text-primary"
+                            data-attr="workflows-combined-row-link"
+                        >
+                            {name}
+                        </Link>
+                    ) : (
+                        name
+                    )}
+                </span>
+            </span>
         </div>
     )
 }
@@ -200,7 +201,7 @@ function optionalColumn(key: ColumnKey): LemonTableColumn<ListRow, any> {
 }
 
 export function ItemsTable({ showFolderRows = false, folderRowActions, onRow }: ItemsTableProps): JSX.Element {
-    const { contents, childFolders, selectedIds, hasLoaded, entriesLoading, hasActiveQuery, compact, columns, scope } =
+    const { contents, childFolders, selectedIds, hasLoaded, entriesLoading, hasActiveQuery, columns, scope } =
         useValues(combinedVariantLogic)
     const { setScope, toggleSelected, setSelectedIds, moveRows } = useActions(combinedVariantLogic)
 
@@ -309,7 +310,7 @@ export function ItemsTable({ showFolderRows = false, folderRowActions, onRow }: 
                 columns={tableColumns}
                 pagination={{ pageSize: 100 }}
                 emptyState={emptyText}
-                size={compact ? 'small' : 'middle'}
+                size="small"
                 rowClassName="group/row"
                 onRow={onRow}
                 data-attr="workflows-combined-contents"

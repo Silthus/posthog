@@ -1,20 +1,18 @@
-// PROTOTYPE (throwaway): a row's colored tags. Clicking a tag filters by it, hovering shows an × that removes it.
-// An Edit button shows while the pointer is over the row and swaps the cell for the inline tag editor.
-import clsx from 'clsx'
+// PROTOTYPE (throwaway): a row's colored tags. The cell has three targets: a pill filters by its tag, the × on a
+// hovered pill removes it, and a click anywhere else in the cell (the empty space too) opens the inline tag editor.
 import { useActions, useValues } from 'kea'
 
 import { IconPencil } from '@posthog/icons'
-import { LemonButton } from '@posthog/lemon-ui'
 
 import { workflowsPrototypeLogic } from '../shared/workflowsPrototypeLogic'
 import { combinedVariantLogic } from './combinedVariantLogic'
 import { InlineTagEditor, orderTags } from './InlineTagEditor'
 import { TagPill } from './TagPill'
 
-const MAX_VISIBLE_TAGS = { compact: 2, comfortable: 4 }
+const MAX_VISIBLE_TAGS = 2
 
 export function RowTagsCell({ itemId }: { itemId: string }): JSX.Element {
-    const { store, colors, compact, editingRowKey } = useValues(combinedVariantLogic)
+    const { store, colors, editingRowKey } = useValues(combinedVariantLogic)
     const { setEditingRowKey, setItemTags } = useActions(combinedVariantLogic)
     const { addFilter } = useActions(workflowsPrototypeLogic)
     const tags = store?.tags[itemId] ?? []
@@ -24,23 +22,36 @@ export function RowTagsCell({ itemId }: { itemId: string }): JSX.Element {
     }
 
     const ordered = orderTags(tags)
-    const maxVisible = compact ? MAX_VISIBLE_TAGS.compact : MAX_VISIBLE_TAGS.comfortable
-    const visible = ordered.slice(0, maxVisible)
+    const visible = ordered.slice(0, MAX_VISIBLE_TAGS)
     const hidden = ordered.length - visible.length
+    const edit = (): void => {
+        if (store) {
+            setEditingRowKey(itemId)
+        }
+    }
 
     return (
         <div
-            className={clsx(
-                'relative flex items-center gap-1 w-full min-w-20 min-h-6',
-                compact ? 'flex-nowrap' : 'flex-wrap min-w-44 max-w-72'
-            )}
+            role="button"
+            tabIndex={store ? 0 : -1}
+            aria-label={tags.length ? 'Edit tags' : 'Add tags'}
+            title={store ? (tags.length ? 'Click to edit tags' : 'Click to add tags') : undefined}
+            className="relative flex flex-nowrap items-center gap-1 w-full min-w-20 min-h-7 -my-1 py-1 rounded cursor-pointer"
+            onClick={edit}
+            onKeyDown={(event) => {
+                if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+                    event.preventDefault()
+                    edit()
+                }
+            }}
+            data-attr="workflows-combined-tag-area"
         >
             {visible.map((tag) => (
                 <TagPill
                     key={tag}
                     tag={tag}
                     color={colors[tag]}
-                    size={compact ? 'xsmall' : 'small'}
+                    size="xsmall"
                     onClick={() => addFilter({ facet: 'tag', value: tag, negated: false })}
                     onRemove={() =>
                         setItemTags(
@@ -52,23 +63,23 @@ export function RowTagsCell({ itemId }: { itemId: string }): JSX.Element {
                 />
             ))}
             {hidden > 0 && (
-                <span className="text-xs text-secondary whitespace-nowrap" title={ordered.slice(maxVisible).join(', ')}>
+                <span
+                    className="text-xs text-secondary whitespace-nowrap"
+                    title={ordered.slice(MAX_VISIBLE_TAGS).join(', ')}
+                >
                     +{hidden}
                 </span>
             )}
             {store && (
-                <LemonButton
-                    size="xsmall"
-                    type="tertiary"
-                    icon={<IconPencil />}
-                    tooltip={tags.length ? 'Edit tags' : 'Add tags'}
-                    onClick={() => setEditingRowKey(itemId)}
-                    // Floats over the end of the cell, so the column never reserves room for a button that only shows on hover.
-                    className="absolute right-0 top-1/2 -translate-y-1/2 bg-surface-primary opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
+                // Floats over the cell's end, so the column never reserves room for a hint that only shows on hover.
+                <span
+                    className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1 px-1.5 py-0.5 rounded text-xs text-secondary bg-surface-primary border opacity-0 group-hover/row:opacity-100 pointer-events-none"
+                    aria-hidden
                     data-attr="workflows-combined-tag-edit"
                 >
-                    Edit
-                </LemonButton>
+                    <IconPencil />
+                    {tags.length ? 'Edit' : 'Add tags'}
+                </span>
             )}
         </div>
     )

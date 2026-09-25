@@ -95,15 +95,13 @@ export interface CombinedView {
     text: string
     /** The scope folder under the Workflows root (`''` is the root). `null` keeps whatever folder is open. */
     folder: string | null
-    flat: boolean
-    compact: boolean
     columns: ColumnKey[]
     /** The user's uuid. Only they get "Update view". */
     createdBy?: string | null
     builtIn?: boolean
 }
 
-/** Saved views from before v2 lack the display settings, so they get the defaults. */
+/** Views from before v2 lack columns, so they get the defaults. Stored `flat` and `compact` flags are ignored. */
 export function normalizeView(raw: Record<string, any>): CombinedView {
     return {
         id: String(raw.id),
@@ -111,8 +109,6 @@ export function normalizeView(raw: Record<string, any>): CombinedView {
         q: String(raw.q ?? ''),
         text: String(raw.text ?? ''),
         folder: typeof raw.folder === 'string' ? raw.folder : null,
-        flat: !!raw.flat,
-        compact: raw.compact === undefined ? true : !!raw.compact,
         columns: normalizeColumns(raw.columns),
         createdBy: raw.created_by ?? raw.createdBy ?? null,
         builtIn: !!raw.builtIn,
@@ -175,8 +171,6 @@ const builtIn = (id: string, name: string, q: string, columns: ColumnKey[] = DEF
     q,
     text: '',
     folder: null,
-    flat: false,
-    compact: true,
     columns: normalizeColumns(columns),
     builtIn: true,
 })

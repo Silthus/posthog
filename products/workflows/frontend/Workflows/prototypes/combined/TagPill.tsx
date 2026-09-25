@@ -1,6 +1,6 @@
 // PROTOTYPE (throwaway): a tag in its color, GitHub label style. Tint and text mix the color with the theme's
 // surface and text colors, so a pill stays readable in light and dark mode. With `onRemove`, hovering the pill
-// shows an × that removes it, and the rest of the pill keeps its click.
+// shows an × over its end that removes it, and the rest of the pill keeps its click.
 import clsx from 'clsx'
 
 import { IconX } from '@posthog/icons'
@@ -39,7 +39,7 @@ export function TagPill({
         </span>
     )
     const className = clsx(
-        'group/pill inline-flex items-center border rounded-full font-medium whitespace-nowrap leading-none',
+        'group/pill relative inline-flex items-center border rounded-full font-medium whitespace-nowrap leading-none',
         size === 'xsmall' ? 'text-[0.6875rem] px-1.5 py-0.5 max-w-32' : 'text-xs px-2 py-1 max-w-48'
     )
     return (
@@ -48,7 +48,10 @@ export function TagPill({
                 <button
                     type="button"
                     className="min-w-0 cursor-pointer hover:underline"
-                    onClick={onClick}
+                    onClick={(event) => {
+                        event.stopPropagation()
+                        onClick()
+                    }}
                     title={title}
                 >
                     {content}
@@ -59,18 +62,19 @@ export function TagPill({
                 </span>
             )}
             {onRemove && (
+                // Laid over the pill's end instead of added after it, so showing it never moves the tags beside it.
                 <button
                     type="button"
                     aria-label={`Remove ${tag}`}
                     title={`Remove ${tag}`}
-                    className="hidden group-hover/pill:inline-flex focus-visible:inline-flex items-center -mr-0.5 ml-0.5 rounded-full cursor-pointer hover:bg-fill-button-tertiary-hover"
+                    className="absolute inset-y-0 right-0 flex items-center pl-1 pr-0.5 rounded-r-full bg-inherit cursor-pointer opacity-0 pointer-events-none group-hover/pill:opacity-100 group-hover/pill:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto"
                     onClick={(event) => {
                         event.stopPropagation()
                         onRemove()
                     }}
                     data-attr="workflows-combined-tag-remove"
                 >
-                    <IconX className="size-3" />
+                    <IconX className="size-3 rounded-full hover:bg-fill-button-tertiary-hover" />
                 </button>
             )}
         </span>

@@ -5,7 +5,8 @@ import { IconFolderPlus } from '@posthog/icons'
 import { LemonButton } from '@posthog/lemon-ui'
 
 import { combinedVariantLogic } from '../combined/combinedVariantLogic'
-import { DisplayOptions, NewWorkflowButton, ScopeBreadcrumbs } from '../combined/ListToolbar'
+import { ListOptionsMenu } from '../combined/ListOptionsMenu'
+import { NewWorkflowButton, ScopeBreadcrumbs } from '../combined/ListToolbar'
 import { FolderJumpButton } from './FolderJumpButton'
 import { openFolderNameDialog } from './openFolderNameDialog'
 
@@ -41,7 +42,7 @@ export function BrowserToolbar(): JSX.Element {
                 </LemonButton>
             </div>
             <div className="flex items-center gap-2 ml-auto">
-                <DisplayOptions />
+                <ListOptionsMenu />
                 <NewWorkflowButton />
             </div>
         </div>

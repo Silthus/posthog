@@ -1,12 +1,12 @@
-// PROTOTYPE (throwaway): the row above the list. Where you are on the left. How the list shows, and the one
-// "New workflow" button, on the right.
+// PROTOTYPE (throwaway): the row above the list. Where you are on the left. The options menu and the one
+// "New workflow" button on the right.
 import { useActions, useValues } from 'kea'
 
-import { IconEllipsis, IconFolder, IconPalette } from '@posthog/icons'
-import { LemonButton, LemonMenu, LemonSwitch, Link } from '@posthog/lemon-ui'
+import { IconFolder } from '@posthog/icons'
+import { LemonButton, LemonMenu, Link } from '@posthog/lemon-ui'
 
-import { ColumnPicker } from './ColumnPicker'
 import { combinedVariantLogic, tagsFromFilters } from './combinedVariantLogic'
+import { ListOptionsMenu } from './ListOptionsMenu'
 
 export function NewWorkflowButton(): JSX.Element {
     const { scope, filters } = useValues(combinedVariantLogic)
@@ -40,7 +40,7 @@ export function ScopeBreadcrumbs({ folderMenuClassName }: { folderMenuClassName?
                         items={[
                             { label: 'Workflows', onClick: () => setScope([]) },
                             ...folderPaths.map((path) => ({
-                                label: `${' '.repeat(path.length - 1)}${path[path.length - 1]}`,
+                                label: `${'\u00a0\u00a0\u00a0'.repeat(path.length)}${path[path.length - 1]}`,
                                 onClick: () => setScope(path),
                             })),
                         ]}
@@ -80,52 +80,13 @@ export function ScopeBreadcrumbs({ folderMenuClassName }: { folderMenuClassName?
     )
 }
 
-export function DisplayOptions(): JSX.Element {
-    const { flat, compact, hasActiveQuery } = useValues(combinedVariantLogic)
-    const { setFlat, setCompact, setManageTagsOpen } = useActions(combinedVariantLogic)
-    return (
-        <div className="flex items-center gap-2">
-            <LemonSwitch
-                size="small"
-                label="Flat list"
-                checked={flat || hasActiveQuery}
-                onChange={setFlat}
-                tooltip="Show everything in this folder and its subfolders in one list"
-                disabledReason={hasActiveQuery ? 'Search results always include subfolders' : undefined}
-                data-attr="workflows-combined-flat"
-            />
-            <LemonSwitch
-                size="small"
-                label="Compact"
-                checked={compact}
-                onChange={setCompact}
-                tooltip="One line per row, without descriptions"
-                data-attr="workflows-combined-compact"
-            />
-            <ColumnPicker />
-            <LemonMenu
-                items={[
-                    {
-                        label: 'Manage tags',
-                        icon: <IconPalette />,
-                        onClick: () => setManageTagsOpen(true),
-                        'data-attr': 'workflows-combined-manage-tags-open',
-                    },
-                ]}
-            >
-                <LemonButton size="small" type="tertiary" icon={<IconEllipsis />} aria-label="More options" />
-            </LemonMenu>
-        </div>
-    )
-}
-
-/** Breadcrumbs, display options and New workflow. */
+/** Breadcrumbs, the options menu and New workflow. */
 export function ListToolbar({ folderMenuClassName }: { folderMenuClassName?: string }): JSX.Element {
     return (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-h-8 mb-1">
             <ScopeBreadcrumbs folderMenuClassName={folderMenuClassName} />
             <div className="flex items-center gap-2 ml-auto">
-                <DisplayOptions />
+                <ListOptionsMenu />
                 <NewWorkflowButton />
             </div>
         </div>

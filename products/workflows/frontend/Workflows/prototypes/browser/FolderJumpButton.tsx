@@ -57,8 +57,8 @@ export function FolderJumpButton(): JSX.Element {
                             return (
                                 <div
                                     key={joinPath(segments) || 'root'}
-                                    // Indentation follows the folder depth, which Tailwind can't express as a class.
-                                    style={{ paddingLeft: needle ? 0 : Math.max(segments.length - 1, 0) * 14 }}
+                                    // The depth is data, which a Tailwind class can't express.
+                                    style={{ paddingLeft: needle ? 0 : segments.length * 16 }}
                                 >
                                     <LemonButton
                                         size="small"

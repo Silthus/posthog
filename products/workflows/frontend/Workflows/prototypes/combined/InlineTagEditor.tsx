@@ -1,6 +1,7 @@
-// PROTOTYPE (throwaway): edit a row's tags in place. The row's tags sit as pills in a small input. Typing filters
-// the suggestions, Enter adds the highlighted tag or creates a new one, Backspace on an empty input drops the last
-// pill. Several tags can go in at once, and Esc or a click outside saves them.
+// PROTOTYPE (throwaway): edit a row's tags in place. The row's tags sit as pills in a small input. Below it, the
+// picker lists every other tag: ungrouped tags first, then each `/` group under its heading. Typing filters across all
+// of them, Enter adds the highlighted tag or creates a new one, Backspace on an empty input drops the last pill.
+// Several tags can go in at once, and Esc or a click outside saves them.
 import clsx from 'clsx'
 import { useActions, useValues } from 'kea'
 import { useMemo, useRef, useState } from 'react'
@@ -12,11 +13,30 @@ import { normalizeTagName, randomTagColor, tagGroup } from './combinedStore'
 import { combinedVariantLogic } from './combinedVariantLogic'
 import { TagPill } from './TagPill'
 
-const MAX_SUGGESTIONS = 8
-
 interface Suggestion {
     tag: string
     isNew: boolean
+}
+
+interface SuggestionSection {
+    group: string | null
+    suggestions: Suggestion[]
+}
+
+/** Ungrouped first, then one section per group, alphabetical. A new tag goes last, in its own section. */
+function sectionsOf(suggestions: Suggestion[]): SuggestionSection[] {
+    const sections = new Map<string | null, Suggestion[]>()
+    for (const suggestion of suggestions) {
+        const group = suggestion.isNew ? '__new__' : tagGroup(suggestion.tag)
+        sections.set(group, [...(sections.get(group) ?? []), suggestion])
+    }
+    const key = (group: string | null): string => (group === null ? '' : group === '__new__' ? '\uffff' : group)
+    return Array.from(sections.entries())
+        .sort(([a], [b]) => key(a).localeCompare(key(b)))
+        .map(([group, groupSuggestions]) => ({
+            group: group === '__new__' ? null : group,
+            suggestions: groupSuggestions,
+        }))
 }
 
 /** Ungrouped tags first, then each group's tags, alphabetical inside both. */
@@ -45,12 +65,16 @@ export function InlineTagEditor({ itemId, tags }: { itemId: string; tags: string
         const available = orderTags(vocabulary.filter((tag) => !draft.includes(tag)))
         const matching = available
             .filter((tag) => !name || tag.includes(name) || tag.replace('/', ' ').includes(name))
-            .slice(0, MAX_SUGGESTIONS)
             .map((tag) => ({ tag, isNew: false }))
-        return name && !vocabulary.includes(name) && !draft.includes(name)
-            ? [...matching, { tag: name, isNew: true }]
-            : matching
+        const withNew =
+            name && !vocabulary.includes(name) && !draft.includes(name)
+                ? [...matching, { tag: name, isNew: true }]
+                : matching
+        return sectionsOf(withNew).flatMap((section) => section.suggestions)
     }, [vocabulary, draft, name])
+    const sections = useMemo(() => sectionsOf(suggestions), [suggestions])
+
+    const scrollIntoView = (element: HTMLButtonElement | null): void => element?.scrollIntoView({ block: 'nearest' })
 
     const colorOf = (tag: string): ReturnType<typeof randomTagColor> =>
         colors[tag] ?? newColors[tag] ?? randomTagColor()
@@ -114,22 +138,43 @@ export function InlineTagEditor({ itemId, tags }: { itemId: string; tags: string
                     onMouseDown={(event) => event.preventDefault()}
                     data-attr="workflows-combined-tag-editor-suggestions"
                 >
-                    {suggestions.map((suggestion, index) => (
-                        <button
-                            key={suggestion.tag}
-                            type="button"
-                            className={clsx(
-                                'flex items-center gap-2 px-2 py-1 rounded text-left cursor-pointer',
-                                index === highlighted && 'bg-fill-button-tertiary-hover'
-                            )}
-                            onMouseEnter={() => setHighlighted(index)}
-                            onClick={() => add(suggestion)}
-                        >
-                            {suggestion.isNew && <IconPlus className="text-secondary shrink-0" />}
-                            {suggestion.isNew && <span className="text-secondary text-xs">Create</span>}
-                            <TagPill tag={suggestion.tag} color={colorOf(suggestion.tag)} size="xsmall" />
-                        </button>
-                    ))}
+                    <div className="flex flex-col max-h-72 overflow-y-auto">
+                        {sections.map((section) => (
+                            <div key={section.group ?? ''} className="flex flex-col">
+                                {section.group && (
+                                    <div className="px-2 pt-2 pb-0.5 text-xs font-semibold text-secondary">
+                                        {section.group}
+                                    </div>
+                                )}
+                                {section.suggestions.map((suggestion) => {
+                                    const index = suggestions.indexOf(suggestion)
+                                    return (
+                                        <button
+                                            key={suggestion.tag}
+                                            type="button"
+                                            ref={index === highlighted ? scrollIntoView : undefined}
+                                            className={clsx(
+                                                'flex items-center gap-2 py-1 pr-2 rounded text-left cursor-pointer',
+                                                section.group ? 'pl-4' : 'pl-2',
+                                                index === highlighted && 'bg-fill-button-tertiary-hover'
+                                            )}
+                                            onMouseEnter={() => setHighlighted(index)}
+                                            onClick={() => add(suggestion)}
+                                            data-attr="workflows-combined-tag-editor-option"
+                                        >
+                                            {suggestion.isNew && <IconPlus className="text-secondary shrink-0" />}
+                                            {suggestion.isNew && <span className="text-secondary text-xs">Create</span>}
+                                            <TagPill
+                                                tag={suggestion.tag}
+                                                color={colorOf(suggestion.tag)}
+                                                size="xsmall"
+                                            />
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        ))}
+                    </div>
                     {!suggestions.length && (
                         <span className="px-2 py-1 text-xs text-secondary">
                             {vocabulary.length

@@ -117,8 +117,6 @@ export interface ViewState {
     filters: FacetFilter[]
     search: string
     scope: string[]
-    flat: boolean
-    compact: boolean
     columns: ColumnKey[]
 }
 
@@ -140,12 +138,6 @@ export function viewChanges(view: CombinedView, state: ViewState, user: UserType
     }
     if (view.folder !== null && view.folder !== joinPath(state.scope)) {
         changes.push('folder')
-    }
-    if (view.flat !== state.flat) {
-        changes.push('flat list')
-    }
-    if (view.compact !== state.compact) {
-        changes.push('row size')
     }
     if (view.columns.join(',') !== state.columns.join(',')) {
         changes.push('columns')
@@ -198,8 +190,6 @@ interface Values {
     store: CombinedStore | null
     storeLoading: boolean
     saving: boolean
-    flat: boolean
-    compact: boolean
     columns: ColumnKey[]
     activeViewId: string
     selectedIds: string[]
@@ -242,8 +232,6 @@ interface Actions {
     loadStoreSuccess: (store: CombinedStore | null) => { store: CombinedStore | null }
     loadStoreFailure: (error: string) => { error: string }
     setScope: (scope: string[]) => { scope: string[] }
-    setFlat: (flat: boolean) => { flat: boolean }
-    setCompact: (compact: boolean) => { compact: boolean }
     setColumns: (columns: ColumnKey[]) => { columns: ColumnKey[] }
     toggleColumn: (column: ColumnKey, shown: boolean) => { column: ColumnKey; shown: boolean }
     setActiveViewId: (id: string) => { id: string }
@@ -293,8 +281,6 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
     })),
     actions({
         setScope: (scope: string[]) => ({ scope }),
-        setFlat: (flat: boolean) => ({ flat }),
-        setCompact: (compact: boolean) => ({ compact }),
         setColumns: (columns: ColumnKey[]) => ({ columns }),
         toggleColumn: (column: ColumnKey, shown: boolean) => ({ column, shown }),
         setActiveViewId: (id: string) => ({ id }),
@@ -428,8 +414,6 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 state ? { ...state, views: state.views.filter((view) => view.id !== id) } : state,
         },
         saving: [false, { persist: () => true, persistDone: () => false }],
-        flat: [false, { setFlat: (_, { flat }) => flat }],
-        compact: [true, { setCompact: (_, { compact }) => compact }],
         columns: [
             DEFAULT_COLUMNS,
             {
@@ -455,10 +439,7 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
     selectors({
         scope: [(s) => [s.location], (location: FolderLocation): string[] => scopeOf(location)],
         // Any search or filter looks through the scope folder and everything below it.
-        effectiveFlat: [
-            (s) => [s.flat, s.hasActiveQuery],
-            (flat: boolean, hasActiveQuery: boolean) => flat || hasActiveQuery,
-        ],
+        effectiveFlat: [(s) => [s.hasActiveQuery], (hasActiveQuery: boolean) => hasActiveQuery],
         // Workflow templates live in the "New workflow" chooser, not in this list.
         listRows: [
             (s) => [s.rows],
@@ -584,15 +565,8 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 views.find((view) => view.id === activeViewId) ?? views[0],
         ],
         viewState: [
-            (s) => [s.filters, s.search, s.scope, s.flat, s.compact, s.columns],
-            (filters, search, scope, flat, compact, columns): ViewState => ({
-                filters,
-                search,
-                scope,
-                flat,
-                compact,
-                columns,
-            }),
+            (s) => [s.filters, s.search, s.scope, s.columns],
+            (filters, search, scope, columns): ViewState => ({ filters, search, scope, columns }),
         ],
         activeViewChanges: [
             (s) => [s.activeView, s.viewState, s.user],
@@ -600,11 +574,8 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 viewChanges(activeView, viewState, user),
         ],
         isModified: [(s) => [s.activeViewChanges], (changes: string[]): boolean => changes.length > 0],
-        canUpdateActiveView: [
-            (s) => [s.activeView, s.user],
-            (activeView: CombinedView, user: UserType | null): boolean =>
-                !activeView.builtIn && !!user && activeView.createdBy === user.uuid,
-        ],
+        // Saved views are shared by the whole project, so anyone can save them for everyone. Built-ins are fixed.
+        canUpdateActiveView: [(s) => [s.activeView], (activeView: CombinedView): boolean => !activeView.builtIn],
         viewCounts: [
             (s) => [s.views, s.listRows, s.user, s.facetsVersion],
             (views: CombinedView[], rows: FolderRow[], user: UserType | null): Record<string, number> =>
@@ -650,8 +621,6 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
             q: serializeFilters(values.filters),
             text: values.search.trim(),
             folder: pinScope ? joinPath(values.scope) : null,
-            flat: values.flat,
-            compact: values.compact,
             columns: values.columns,
             createdBy: values.user?.uuid ?? null,
         })
@@ -748,8 +717,6 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 if (view.folder !== null) {
                     actions.setLocation({ type: 'folder', segments: splitPath(view.folder) })
                 }
-                actions.setFlat(view.flat)
-                actions.setCompact(view.compact)
                 actions.setColumns(view.columns)
                 actions.clearSelection()
                 cache.applyingView = false
@@ -759,7 +726,7 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 const view = viewFrom(`view-${Date.now().toString(36)}`, name, pinScope)
                 actions.upsertView(view)
                 actions.setActiveViewId(view.id)
-                lemonToast.success(`Saved the ${name} view`)
+                lemonToast.success(`Saved ${name} as a new view`)
             },
             updateActiveView: () => {
                 const current = values.activeView
@@ -767,7 +734,7 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                     ...viewFrom(current.id, current.name, current.folder !== null),
                     createdBy: current.createdBy,
                 })
-                lemonToast.success(`Updated the ${current.name} view`)
+                lemonToast.success(`Saved ${current.name} for everyone`)
             },
             createFolderAt: async ({ parent, name }) => {
                 const segments = [...parent, name.trim()]
@@ -817,20 +784,12 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
             if (values.activeViewId !== 'all') {
                 searchParams.view = values.activeViewId
             }
-            if (values.flat) {
-                searchParams.flat = 1
-            }
-            if (!values.compact) {
-                searchParams.compact = 0
-            }
             if (values.columns.join(',') !== DEFAULT_COLUMNS.join(',')) {
                 searchParams.cols = values.columns.join(',')
             }
             return [router.values.location.pathname, searchParams, router.values.hashParams, { replace: true }]
         }
         return {
-            setFlat: buildURL,
-            setCompact: buildURL,
             setColumns: buildURL,
             toggleColumn: buildURL,
             setActiveViewId: buildURL,
@@ -845,14 +804,6 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
             const view = searchParams.view ? String(searchParams.view) : 'all'
             if (view !== values.activeViewId) {
                 actions.setActiveViewId(view)
-            }
-            const flat = !!searchParams.flat
-            if (flat !== values.flat) {
-                actions.setFlat(flat)
-            }
-            const compact = String(searchParams.compact) !== '0'
-            if (compact !== values.compact) {
-                actions.setCompact(compact)
             }
             const columns = searchParams.cols ? normalizeColumns(String(searchParams.cols).split(',')) : DEFAULT_COLUMNS
             if (columns.join(',') !== values.columns.join(',')) {
