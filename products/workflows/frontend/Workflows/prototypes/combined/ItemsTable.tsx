@@ -2,6 +2,7 @@
 // row to go up. In flat mode (or while searching) it shows everything below the scope too, and each title carries its
 // path relative to the scope: `Cards / Card expiring reminder`. Layouts without a side tree pass `showFolderRows`.
 import { useActions, useValues } from 'kea'
+import type { HTMLProps } from 'react'
 
 import { IconArrowLeft, IconDecisionTree, IconEllipsis, IconFolder, IconLetter } from '@posthog/icons'
 import { LemonButton, LemonCheckbox, LemonMenu, LemonTag, Link } from '@posthog/lemon-ui'
@@ -39,6 +40,13 @@ function rowLink(row: FolderRow): string | undefined {
 }
 
 type ItemRow = Extract<ListRow, { rowType: 'item' }>
+export type FolderListRow = Extract<ListRow, { rowType: 'folder' }>
+
+interface ItemsTableProps {
+    showFolderRows?: boolean
+    folderRowActions?: (folder: FolderListRow) => JSX.Element
+    onRow?: (row: ListRow) => Omit<HTMLProps<HTMLTableRowElement>, 'key'>
+}
 
 function ItemTitle({ row }: { row: FolderRow }): JSX.Element {
     const { scope, effectiveFlat, compact } = useValues(combinedVariantLogic)
@@ -191,7 +199,7 @@ function optionalColumn(key: ColumnKey): LemonTableColumn<ListRow, any> {
     }
 }
 
-export function ItemsTable({ showFolderRows = false }: { showFolderRows?: boolean }): JSX.Element {
+export function ItemsTable({ showFolderRows = false, folderRowActions, onRow }: ItemsTableProps): JSX.Element {
     const { contents, childFolders, selectedIds, hasLoaded, entriesLoading, hasActiveQuery, compact, columns, scope } =
         useValues(combinedVariantLogic)
     const { setScope, toggleSelected, setSelectedIds, moveRows } = useActions(combinedVariantLogic)
@@ -266,17 +274,24 @@ export function ItemsTable({ showFolderRows = false }: { showFolderRows?: boolea
             width: 0,
             render: (_, row) =>
                 row.rowType === 'item' ? (
-                    <LemonMenu
-                        items={[
-                            {
-                                label: 'Move to…',
-                                onClick: () => moveRows([row.id]),
-                                disabledReason: row.row.movable ? undefined : 'This item isn’t in the project tree yet',
-                            },
-                        ]}
-                    >
-                        <LemonButton size="xsmall" icon={<IconEllipsis />} aria-label="More actions" />
-                    </LemonMenu>
+                    // Right-aligned so item menus line up with wider folder row actions.
+                    <div className="flex justify-end">
+                        <LemonMenu
+                            items={[
+                                {
+                                    label: 'Move to…',
+                                    onClick: () => moveRows([row.id]),
+                                    disabledReason: row.row.movable
+                                        ? undefined
+                                        : 'This item isn’t in the project tree yet',
+                                },
+                            ]}
+                        >
+                            <LemonButton size="xsmall" icon={<IconEllipsis />} aria-label="More actions" />
+                        </LemonMenu>
+                    </div>
+                ) : row.rowType === 'folder' && folderRowActions ? (
+                    folderRowActions(row)
                 ) : null,
         },
     ]
@@ -296,6 +311,7 @@ export function ItemsTable({ showFolderRows = false }: { showFolderRows?: boolea
                 emptyState={emptyText}
                 size={compact ? 'small' : 'middle'}
                 rowClassName="group/row"
+                onRow={onRow}
                 data-attr="workflows-combined-contents"
             />
             {items.length === 0 && dataSource.length > 0 && !(showFolderRows && childFolders.length) && (
