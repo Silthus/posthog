@@ -14,7 +14,10 @@ import {
     findWorkflowFacet,
     formatFacetValue,
     getWorkflowFacets,
+    groupOfValue,
+    isGroupFilterValue,
 } from './workflowFacets'
+import type { WorkflowListItem } from './workflowListItems'
 import { workflowsPrototypeLogic } from './workflowsPrototypeLogic'
 
 interface Draft {
@@ -25,15 +28,73 @@ interface Draft {
     rest: string
 }
 
+type SuggestionKind = 'facet' | 'value' | 'search' | 'none'
+
 interface Suggestion {
     key: string
+    kind: SuggestionKind
     label: string
     detail?: string
     count?: number
+    /** A group row, for example `team` above `team/marketing`. */
+    heading?: boolean
+    indent?: boolean
     apply: () => void
 }
 
+/** Orders values so each group's members follow a row for the group itself. Ungrouped values come first. */
+function groupValueSuggestions(
+    facet: WorkflowFacet,
+    values: Suggestion[],
+    valueOf: (s: Suggestion) => string
+): Suggestion[] {
+    if (!facet.groupSeparator) {
+        return values
+    }
+    const ungrouped: Suggestion[] = []
+    const groups = new Map<string, { header: Suggestion | null; members: Suggestion[] }>()
+    for (const suggestion of values) {
+        const value = valueOf(suggestion)
+        const group = groupOfValue(facet, value)
+        if (!group) {
+            ungrouped.push(suggestion)
+            continue
+        }
+        const entry = groups.get(group) ?? { header: null, members: [] }
+        if (isGroupFilterValue(facet, value)) {
+            entry.header = {
+                ...suggestion,
+                heading: true,
+                label: group,
+                detail: `Any ${group}${facet.groupSeparator}… tag`,
+            }
+        } else {
+            entry.members.push(suggestion)
+        }
+        groups.set(group, entry)
+    }
+    const grouped = Array.from(groups.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .flatMap(([group, { header, members }]) =>
+            header
+                ? [
+                      header,
+                      ...members.map((member) => ({
+                          ...member,
+                          indent: true,
+                          label: member.label.replace(`${group}${facet.groupSeparator}`, ''),
+                      })),
+                  ]
+                : members
+        )
+    return [...ungrouped, ...grouped]
+}
+
 const MAX_VALUE_SUGGESTIONS = 50
+
+function caretAtEnd(input: HTMLInputElement): boolean {
+    return input.selectionStart === input.value.length && input.selectionEnd === input.value.length
+}
 const MAX_CROSS_FACET_SUGGESTIONS = 8
 
 function parseDraft(input: string): Draft | null {
@@ -59,8 +120,10 @@ function pillLabel(filter: FacetFilter): string {
     return `${facet?.label ?? filter.facet}${filter.negated ? ' is not' : ''}: ${value}`
 }
 
-export function WorkflowsSearchBar(): JSX.Element {
-    const { items, filters, search, query, facetsVersion } = useValues(workflowsPrototypeLogic)
+/** `items` lets a variant count suggestions over rows the shared logic doesn't load, like Library email templates. */
+export function WorkflowsSearchBar({ items: itemsOverride }: { items?: WorkflowListItem[] } = {}): JSX.Element {
+    const { items: sharedItems, filters, search, query, facetsVersion } = useValues(workflowsPrototypeLogic)
+    const items = itemsOverride ?? sharedItems
     const { addFilter, removeFilter, removeLastFilter, setSearch } = useActions(workflowsPrototypeLogic)
 
     const [input, setInput] = useState(search)
@@ -112,16 +175,30 @@ export function WorkflowsSearchBar(): JSX.Element {
                     return !partial || label.includes(partial) || value.toLowerCase().includes(partial)
                 })
                 .slice(0, MAX_VALUE_SUGGESTIONS)
-                .map(({ value, count }) => ({
-                    key: `value-${value}`,
-                    label: `${draft.negated ? 'Not ' : ''}${formatFacetValue(draft.facet, value)}`,
-                    detail: draft.negated ? `Hides ${count}` : undefined,
-                    count: draft.negated ? undefined : count,
-                    apply: () => commitFilter({ facet: draft.facet.key, value, negated: draft.negated }, draft.rest),
-                }))
-            return values.length
-                ? values
-                : [{ key: 'none', label: 'No values match the other filters', apply: () => setOpen(false) }]
+                .map(
+                    ({ value, count }): Suggestion => ({
+                        key: `value-${value}`,
+                        kind: 'value',
+                        label: `${draft.negated ? 'Not ' : ''}${formatFacetValue(draft.facet, value)}`,
+                        detail: draft.negated ? `Hides ${count}` : undefined,
+                        count: draft.negated ? undefined : count,
+                        apply: () =>
+                            commitFilter({ facet: draft.facet.key, value, negated: draft.negated }, draft.rest),
+                    })
+                )
+            const ordered = groupValueSuggestions(draft.facet, values, (suggestion) =>
+                suggestion.key.slice('value-'.length)
+            )
+            return ordered.length
+                ? ordered
+                : [
+                      {
+                          key: 'none',
+                          kind: 'none',
+                          label: 'No values match the other filters',
+                          apply: () => setOpen(false),
+                      },
+                  ]
         }
 
         const facets = getWorkflowFacets()
@@ -130,6 +207,7 @@ export function WorkflowsSearchBar(): JSX.Element {
         if (!token) {
             return facets.map((facet) => ({
                 key: `facet-${facet.key}`,
+                kind: 'facet' as const,
                 label: `${facet.key}:`,
                 detail: facet.description,
                 apply: () => {
@@ -144,6 +222,7 @@ export function WorkflowsSearchBar(): JSX.Element {
         const bare = (negated ? token.slice(1) : token).toLowerCase()
         const searchSuggestion: Suggestion = {
             key: 'search',
+            kind: 'search',
             label: `Search for "${input.trim()}"`,
             apply: () => setOpen(false),
         }
@@ -152,6 +231,7 @@ export function WorkflowsSearchBar(): JSX.Element {
             if (bare && (facet.key.startsWith(bare) || facet.label.toLowerCase().startsWith(bare))) {
                 result.push({
                     key: `facet-${facet.key}`,
+                    kind: 'facet',
                     label: `${negated ? '-' : ''}${facet.key}:`,
                     detail: facet.description,
                     apply: () => {
@@ -177,6 +257,7 @@ export function WorkflowsSearchBar(): JSX.Element {
                     }
                     valueMatches.push({
                         key: `value-${facet.key}-${value}`,
+                        kind: 'value',
                         label: `${negated ? 'Not ' : ''}${facet.label}: ${label}`,
                         count,
                         apply: () => commitFilter({ facet: facet.key, value, negated }, rest),
@@ -196,6 +277,30 @@ export function WorkflowsSearchBar(): JSX.Element {
           ? 'Search or filter'
           : 'Filter by'
 
+    const highlightedSuggestion = suggestions[highlighted]
+    const isFilterSuggestion = (suggestion: Suggestion | undefined): boolean =>
+        suggestion?.kind === 'facet' || suggestion?.kind === 'value'
+    // Tab and the right arrow never run a plain search. They take the highlighted filter, or the first one offered.
+    // With an empty input, Tab keeps moving focus out of the bar.
+    const tabTarget: Suggestion | undefined = !input.trim()
+        ? undefined
+        : isFilterSuggestion(highlightedSuggestion)
+          ? highlightedSuggestion
+          : suggestions.find(isFilterSuggestion)
+    const verb = (suggestion: Suggestion): string =>
+        suggestion.kind === 'facet' ? `pick ${suggestion.label}` : 'add filter'
+    const enterHint =
+        highlightedSuggestion?.kind === 'search'
+            ? 'Enter to search'
+            : isFilterSuggestion(highlightedSuggestion)
+              ? `Enter${tabTarget === highlightedSuggestion ? ' or Tab' : ''} to ${verb(highlightedSuggestion!)}`
+              : null
+    const tabHint =
+        tabTarget && tabTarget !== highlightedSuggestion
+            ? `Tab or → to ${tabTarget.kind === 'facet' ? verb(tabTarget) : 'add as filter'}`
+            : null
+    const hint = [enterHint, tabHint, '↑↓ to move', 'Esc to close'].filter(Boolean)
+
     const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
         if (event.key === 'ArrowDown') {
             event.preventDefault()
@@ -204,12 +309,16 @@ export function WorkflowsSearchBar(): JSX.Element {
         } else if (event.key === 'ArrowUp') {
             event.preventDefault()
             setHighlighted((index) => Math.max(index - 1, 0))
-        } else if ((event.key === 'Enter' || event.key === 'Tab') && open && suggestions[highlighted]) {
-            if (event.key === 'Tab' && !draft) {
-                return
-            }
+        } else if (event.key === 'Enter' && open && suggestions[highlighted]) {
             event.preventDefault()
             suggestions[highlighted].apply()
+        } else if (
+            (event.key === 'Tab' || (event.key === 'ArrowRight' && caretAtEnd(event.currentTarget))) &&
+            open &&
+            tabTarget
+        ) {
+            event.preventDefault()
+            tabTarget.apply()
         } else if (event.key === 'Enter') {
             setOpen(false)
         } else if (event.key === 'Escape') {
@@ -227,31 +336,49 @@ export function WorkflowsSearchBar(): JSX.Element {
             placement="bottom-start"
             matchWidth
             overlay={
-                <div className="max-h-96 overflow-y-auto" onMouseDown={(event) => event.preventDefault()}>
-                    <div className="px-2 py-1 text-xs font-semibold text-secondary">{title}</div>
-                    {suggestions.map((suggestion, index) => (
-                        <LemonButton
-                            key={suggestion.key}
-                            fullWidth
-                            size="small"
-                            active={index === highlighted}
-                            onMouseEnter={() => setHighlighted(index)}
-                            onClick={suggestion.apply}
-                            data-attr="workflows-prototype-search-suggestion"
-                        >
-                            <span className="flex items-center gap-2 w-full min-w-0">
-                                <span className="font-medium truncate">{suggestion.label}</span>
-                                {suggestion.detail && (
-                                    <span className="text-secondary truncate">{suggestion.detail}</span>
-                                )}
-                                {suggestion.count !== undefined && (
-                                    <span className="ml-auto text-secondary tabular-nums" translate="no">
-                                        {suggestion.count}
+                <div onMouseDown={(event) => event.preventDefault()}>
+                    <div className="max-h-96 overflow-y-auto">
+                        <div className="px-2 py-1 text-xs font-semibold text-secondary">{title}</div>
+                        {suggestions.map((suggestion, index) => (
+                            <LemonButton
+                                key={suggestion.key}
+                                fullWidth
+                                size="small"
+                                active={index === highlighted}
+                                onMouseEnter={() => setHighlighted(index)}
+                                onClick={suggestion.apply}
+                                data-attr="workflows-prototype-search-suggestion"
+                            >
+                                <span
+                                    className={`flex items-center gap-2 w-full min-w-0${suggestion.indent ? ' pl-4' : ''}`}
+                                >
+                                    <span
+                                        className={
+                                            suggestion.heading ? 'font-semibold truncate' : 'font-medium truncate'
+                                        }
+                                    >
+                                        {suggestion.label}
                                     </span>
-                                )}
-                            </span>
-                        </LemonButton>
-                    ))}
+                                    {suggestion.detail && (
+                                        <span className="text-secondary truncate">{suggestion.detail}</span>
+                                    )}
+                                    {suggestion.count !== undefined && (
+                                        <span className="ml-auto text-secondary tabular-nums" translate="no">
+                                            {suggestion.count}
+                                        </span>
+                                    )}
+                                </span>
+                            </LemonButton>
+                        ))}
+                    </div>
+                    <div
+                        className="flex flex-wrap gap-x-3 px-2 pt-1 mt-1 border-t text-xs text-secondary"
+                        data-attr="workflows-prototype-search-hint"
+                    >
+                        {hint.map((part) => (
+                            <span key={part}>{part}</span>
+                        ))}
+                    </div>
                 </div>
             }
         >

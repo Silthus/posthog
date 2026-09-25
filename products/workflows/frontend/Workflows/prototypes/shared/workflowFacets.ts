@@ -17,6 +17,8 @@ export interface WorkflowFacet {
     hierarchical?: boolean
     /** Lower sorts first in the facet list. */
     order?: number
+    /** Values that contain this separator belong to a group, so `team/marketing` sits under `team`. */
+    groupSeparator?: string
 }
 
 export interface FacetFilter {
@@ -31,11 +33,44 @@ export interface WorkflowQuery {
 }
 
 const facetRegistry = new Map<string, WorkflowFacet>()
+const facetExtensions = new Map<string, Partial<WorkflowFacet>>()
 const listeners = new Set<() => void>()
 
 export function registerWorkflowFacet(facet: WorkflowFacet): void {
-    facetRegistry.set(facet.key, facet)
+    facetRegistry.set(facet.key, { ...facet, ...facetExtensions.get(facet.key) })
     listeners.forEach((listener) => listener())
+}
+
+/** Adds options to a facet that another module owns. They survive when that module registers the facet again. */
+export function extendWorkflowFacet(key: string, extension: Partial<WorkflowFacet>): void {
+    facetExtensions.set(key, { ...facetExtensions.get(key), ...extension })
+    const existing = facetRegistry.get(key)
+    if (existing) {
+        registerWorkflowFacet(existing)
+    }
+}
+
+// --- value groups ---------------------------------------------------------------------------------
+
+const GROUP_WILDCARD = '*'
+
+/** The pill value that matches every value in a group, for example `team/*`. */
+export function groupFilterValue(facet: WorkflowFacet, group: string): string {
+    return `${group}${facet.groupSeparator ?? '/'}${GROUP_WILDCARD}`
+}
+
+/** The group a value belongs to, or null. For `team/*` it returns `team` too. */
+export function groupOfValue(facet: WorkflowFacet | undefined, value: string): string | null {
+    const separator = facet?.groupSeparator
+    if (!separator) {
+        return null
+    }
+    const index = value.indexOf(separator)
+    return index > 0 ? value.slice(0, index) : null
+}
+
+export function isGroupFilterValue(facet: WorkflowFacet | undefined, value: string): boolean {
+    return !!facet?.groupSeparator && value.endsWith(`${facet.groupSeparator}${GROUP_WILDCARD}`)
 }
 
 export function onWorkflowFacetsChanged(listener: () => void): () => void {
@@ -53,6 +88,9 @@ export function findWorkflowFacet(key: string): WorkflowFacet | undefined {
 }
 
 export function formatFacetValue(facet: WorkflowFacet | undefined, value: string): string {
+    if (isGroupFilterValue(facet, value)) {
+        return `any ${groupOfValue(facet, value)}${facet?.groupSeparator ?? '/'}`
+    }
     return facet?.formatValue ? facet.formatValue(value) : value
 }
 
@@ -198,6 +236,10 @@ export function filterKey(filter: FacetFilter): string {
 
 function itemHasValue(item: WorkflowListItem, facet: WorkflowFacet, value: string): boolean {
     const target = value.toLowerCase()
+    if (isGroupFilterValue(facet, value)) {
+        const prefix = target.slice(0, -GROUP_WILDCARD.length)
+        return facet.getValues(item).some((candidate) => candidate.toLowerCase().startsWith(prefix))
+    }
     return facet.getValues(item).some((candidate) => {
         const lower = candidate.toLowerCase()
         return lower === target || (facet.hierarchical && lower.startsWith(`${target} / `))
@@ -267,7 +309,14 @@ export function facetValueCounts(items: WorkflowListItem[], facetKey: string, qu
         if (!matchesFilters(item, otherFilters) || !matchesSearch(item, query.search)) {
             continue
         }
-        for (const value of new Set(facet.getValues(item))) {
+        const values = new Set(facet.getValues(item))
+        for (const value of Array.from(values)) {
+            const group = groupOfValue(facet, value)
+            if (group) {
+                values.add(groupFilterValue(facet, group))
+            }
+        }
+        for (const value of values) {
             counts.set(value, (counts.get(value) ?? 0) + 1)
         }
     }

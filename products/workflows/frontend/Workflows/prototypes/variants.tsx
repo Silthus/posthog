@@ -1,6 +1,7 @@
 // PROTOTYPE (throwaway): every workflows list variant, switchable with `?variant=` on the Workflows tab.
 // Variant workers edit only their own directory. This registry already points at each of them.
 import { WorkflowsTable } from '../WorkflowsTable'
+import { CombinedVariant } from './combined'
 import { EmailsVariant } from './emails'
 import { FoldersVariant } from './folders'
 import { SearchVariant } from './search'
@@ -16,6 +17,12 @@ export interface WorkflowsListVariant {
 
 export const WORKFLOWS_LIST_VARIANTS: WorkflowsListVariant[] = [
     { key: 'baseline', label: 'Baseline', description: "Today's list, unchanged", Component: WorkflowsTable },
+    {
+        key: 'combined',
+        label: 'Combined',
+        description: 'Folders, saved views, pill search and colored tags together',
+        Component: CombinedVariant,
+    },
     {
         key: 'search',
         label: 'Search',
