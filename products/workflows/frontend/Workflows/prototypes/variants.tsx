@@ -36,3 +36,6 @@ export const WORKFLOWS_LIST_VARIANTS: WorkflowsListVariant[] = [
 ]
 
 export const DEFAULT_WORKFLOWS_LIST_VARIANT = 'baseline'
+
+/** Variants whose list header carries the one "New workflow" button, so the scene header drops its own. */
+export const VARIANTS_WITH_OWN_NEW_WORKFLOW_BUTTON = new Set(['combined', 'browser'])

@@ -1,25 +1,17 @@
-// PROTOTYPE (throwaway): the folder tree. Hovering a folder swaps its count for a "new folder here" button in the
+// PROTOTYPE (throwaway): the folder tree. Opening a folder sets the search scope. Hovering a folder swaps its count for a "new folder here" button in the
 // same spot, and shows a chevron in front that expands or collapses it without opening it.
 import clsx from 'clsx'
 import { useActions, useValues } from 'kea'
 import { useEffect, useState } from 'react'
 
-import {
-    IconChevronDown,
-    IconChevronRight,
-    IconFolder,
-    IconFolderOpen,
-    IconFolderPlus,
-    IconStack,
-} from '@posthog/icons'
+import { IconChevronDown, IconChevronRight, IconFolder, IconFolderOpen, IconFolderPlus } from '@posthog/icons'
 import { LemonButton, LemonDialog, LemonInput } from '@posthog/lemon-ui'
 
 import { LemonField } from 'lib/lemon-ui/LemonField'
 
 import { joinPath } from '~/layout/panel-layout/ProjectTree/utils'
 
-import { FolderLocation } from '../folders/foldersVariantLogic'
-import { combinedVariantLogic, currentSegments, isTemplatesLocation } from './combinedVariantLogic'
+import { combinedVariantLogic } from './combinedVariantLogic'
 
 const ROOT_KEY = 'root'
 
@@ -116,20 +108,20 @@ function TreeRow({
 }
 
 export function CombinedFolderTree(): JSX.Element {
-    const { folderPaths, folderCounts, workflowTemplatesCount, location } = useValues(combinedVariantLogic)
-    const { setLocation, createFolderAt } = useActions(combinedVariantLogic)
+    const { folderPaths, folderCounts, scope } = useValues(combinedVariantLogic)
+    const { setScope, createFolderAt } = useActions(combinedVariantLogic)
     const [expanded, setExpanded] = useState<Set<string>>(() => new Set([ROOT_KEY]))
 
     // Opening a folder from the table, a breadcrumb or the URL reveals it and its subfolders in the tree.
     useEffect(() => {
-        const segments = currentSegments(location)
+        const segments = scope
         setExpanded((current) => {
             const next = new Set(current)
             next.add(ROOT_KEY)
             segments.forEach((_, index) => next.add(folderKey(segments.slice(0, index + 1))))
             return next.size === current.size ? current : next
         })
-    }, [location])
+    }, [scope])
 
     const toggle = (key: string): void =>
         setExpanded((current) => {
@@ -161,7 +153,7 @@ export function CombinedFolderTree(): JSX.Element {
             },
         })
 
-    const activeKey = isTemplatesLocation(location) ? 'templates' : folderKey(currentSegments(location))
+    const activeKey = folderKey(scope)
 
     const renderFolder = (segments: string[], depth: number): JSX.Element[] => {
         const key = folderKey(segments)
@@ -170,7 +162,6 @@ export function CombinedFolderTree(): JSX.Element {
         )
         const label = segments.length ? segments[segments.length - 1] : 'Workflows'
         const isOpen = expanded.has(key)
-        const target: FolderLocation = { type: 'folder', segments }
         return [
             <TreeRow
                 key={key}
@@ -181,7 +172,7 @@ export function CombinedFolderTree(): JSX.Element {
                 expanded={isOpen}
                 hasChildren={children.length > 0}
                 icon={activeKey === key ? <IconFolderOpen /> : <IconFolder />}
-                onOpen={() => setLocation(target)}
+                onOpen={() => setScope(segments)}
                 onToggle={() => toggle(key)}
                 onCreateFolder={() => openNewFolder(segments, label)}
             />,
@@ -192,18 +183,6 @@ export function CombinedFolderTree(): JSX.Element {
     return (
         <nav aria-label="Workflow folders" className="flex flex-col p-1" data-attr="workflows-combined-tree">
             {renderFolder([], 0)}
-            <div className="border-t my-1" />
-            <TreeRow
-                label="Workflow templates"
-                depth={0}
-                count={workflowTemplatesCount}
-                active={activeKey === 'templates'}
-                expanded={false}
-                hasChildren={false}
-                icon={<IconStack />}
-                secondary
-                onOpen={() => setLocation({ type: 'library' })}
-            />
         </nav>
     )
 }

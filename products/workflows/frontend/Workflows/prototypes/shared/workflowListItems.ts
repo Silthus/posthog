@@ -104,14 +104,13 @@ function channelOf(action: HogFlowAction): WorkflowChannel | null {
     }
 }
 
-function parseOwners(description: string, createdBy: UserBasicType | null): string[] {
-    const explicit = [...description.matchAll(/owner:\s*@([\w.-]+)/gi)].map((match) => match[1].toLowerCase())
+/** An explicit `Owner: @x` in the description wins, with trailing punctuation trimmed. Otherwise the creator owns it. */
+export function parseOwners(description: string, createdBy: UserBasicType | null): string[] {
+    const explicit = [...description.matchAll(/owner:\s*@([\w.-]+)/gi)]
+        .map((match) => match[1].replace(/[.-]+$/, '').toLowerCase())
+        .filter(Boolean)
     if (explicit.length) {
         return Array.from(new Set(explicit))
-    }
-    const mentioned = [...description.matchAll(/@([\w-]+(?:\.[\w-]+)*)/g)].map((match) => match[1].toLowerCase())
-    if (mentioned.length) {
-        return Array.from(new Set(mentioned))
     }
     return createdBy?.first_name ? [createdBy.first_name.toLowerCase()] : []
 }

@@ -51,17 +51,72 @@ export function normalizeTagName(tag: string): string {
         .join(TAG_GROUP_SEPARATOR)
 }
 
+/** Optional list columns. Name is always shown. */
+export type ColumnKey = 'tags' | 'status' | 'sends' | 'updated' | 'trigger' | 'owner' | 'createdBy' | 'last7' | 'health'
+
+export const COLUMN_LABELS: Record<ColumnKey, string> = {
+    tags: 'Tags',
+    status: 'Status',
+    sends: 'Sends',
+    updated: 'Updated',
+    trigger: 'Trigger',
+    owner: 'Owner',
+    createdBy: 'Created by',
+    last7: 'Last 7 days',
+    health: 'Health',
+}
+
+/** Picker order: the default set first, then the optional ones. */
+export const COLUMN_ORDER: ColumnKey[] = [
+    'tags',
+    'status',
+    'sends',
+    'updated',
+    'trigger',
+    'owner',
+    'createdBy',
+    'last7',
+    'health',
+]
+export const DEFAULT_COLUMNS: ColumnKey[] = ['tags', 'status', 'sends', 'updated']
+
+export function normalizeColumns(columns: unknown): ColumnKey[] {
+    if (!Array.isArray(columns)) {
+        return DEFAULT_COLUMNS
+    }
+    return COLUMN_ORDER.filter((key) => columns.includes(key))
+}
+
 export interface CombinedView {
     id: string
     name: string
     /** The pills, in the same syntax as the `q` URL param. `me` stands for the signed-in person. */
     q: string
     text: string
-    /** Folder path under the Workflows root (`''` is the root). `null` keeps whatever folder is open. */
+    /** The scope folder under the Workflows root (`''` is the root). `null` keeps whatever folder is open. */
     folder: string | null
-    flat?: boolean
-    compact?: boolean
+    flat: boolean
+    compact: boolean
+    columns: ColumnKey[]
+    /** The user's uuid. Only they get "Update view". */
+    createdBy?: string | null
     builtIn?: boolean
+}
+
+/** Saved views from before v2 lack the display settings, so they get the defaults. */
+export function normalizeView(raw: Record<string, any>): CombinedView {
+    return {
+        id: String(raw.id),
+        name: String(raw.name ?? 'Untitled view'),
+        q: String(raw.q ?? ''),
+        text: String(raw.text ?? ''),
+        folder: typeof raw.folder === 'string' ? raw.folder : null,
+        flat: !!raw.flat,
+        compact: raw.compact === undefined ? true : !!raw.compact,
+        columns: normalizeColumns(raw.columns),
+        createdBy: raw.created_by ?? raw.createdBy ?? null,
+        builtIn: !!raw.builtIn,
+    }
 }
 
 export interface CombinedStore {
@@ -84,7 +139,7 @@ export function readCombinedStore(extraSettings: Record<string, any> | null | un
         tags: tagsBlob.tags && typeof tagsBlob.tags === 'object' ? tagsBlob.tags : {},
         pinnedTags: Array.isArray(tagsBlob.pinned_tags) ? tagsBlob.pinned_tags : [],
         colors,
-        views: Array.isArray(combinedBlob.views) ? combinedBlob.views : [],
+        views: Array.isArray(combinedBlob.views) ? combinedBlob.views.map(normalizeView) : [],
     }
 }
 
@@ -103,22 +158,41 @@ export function writeCombinedStore(
             tags: store.tags,
             pinned_tags: store.pinnedTags,
         },
-        [COMBINED_STORE_KEY]: { version: 1, tag_colors: store.colors, views: store.views },
+        [COMBINED_STORE_KEY]: {
+            version: 2,
+            tag_colors: store.colors,
+            views: store.views.map(({ createdBy, builtIn: _builtIn, ...view }) => ({
+                ...view,
+                created_by: createdBy ?? null,
+            })),
+        },
     }
 }
 
+const builtIn = (id: string, name: string, q: string, columns: ColumnKey[] = DEFAULT_COLUMNS): CombinedView => ({
+    id,
+    name,
+    q,
+    text: '',
+    folder: null,
+    flat: false,
+    compact: true,
+    columns: normalizeColumns(columns),
+    builtIn: true,
+})
+
+/** Built-in views keep whatever folder is open, so browsing the tree doesn't mark them modified. */
 export const BUILT_IN_VIEWS: CombinedView[] = [
-    { id: 'all', name: 'All', q: '', text: '', folder: null, builtIn: true },
-    { id: 'templates', name: 'Templates', q: 'kind:email-template', text: '', folder: null, flat: true, builtIn: true },
-    { id: 'mine', name: 'Mine', q: 'created-by:me', text: '', folder: null, flat: true, builtIn: true },
-    {
-        id: 'needs-attention',
-        name: 'Needs attention',
-        q: 'health:failing status:active',
-        text: '',
-        folder: null,
-        flat: true,
-        builtIn: true,
-    },
-    { id: 'drafts', name: 'Drafts', q: 'status:draft', text: '', folder: null, flat: true, builtIn: true },
+    builtIn('all', 'All', ''),
+    builtIn('templates', 'Templates', 'kind:email-template'),
+    builtIn('mine', 'Mine', 'created-by:me'),
+    builtIn('needs-attention', 'Needs attention', 'health:failing status:active', [
+        'tags',
+        'status',
+        'sends',
+        'last7',
+        'health',
+        'updated',
+    ]),
+    builtIn('drafts', 'Drafts', 'status:draft'),
 ]

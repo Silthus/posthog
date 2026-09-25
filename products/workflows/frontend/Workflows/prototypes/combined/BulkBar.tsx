@@ -10,7 +10,7 @@ import { TagPicker } from './TagPicker'
 import { TagPill } from './TagPill'
 
 export function BulkBar(): JSX.Element | null {
-    const { selectedIds, selectedTagCounts, colors, saving, store, rowsById } = useValues(combinedVariantLogic)
+    const { selectedIds, selectedTagCounts, colors, saving, store } = useValues(combinedVariantLogic)
     const { addTagsToSelection, removeTagsFromSelection, clearSelection, moveRows } = useActions(combinedVariantLogic)
     const [addOpen, setAddOpen] = useState(false)
     const [removeOpen, setRemoveOpen] = useState(false)
@@ -18,7 +18,7 @@ export function BulkBar(): JSX.Element | null {
     if (!selectedIds.length) {
         return null
     }
-    const workflowIds = selectedIds.filter((id) => rowsById[id]?.kind === 'workflow')
+    const workflowIds = selectedIds
     const presentTags = Object.entries(selectedTagCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
 
     return (
@@ -35,7 +35,7 @@ export function BulkBar(): JSX.Element | null {
                 placement="bottom-start"
                 overlay={
                     <TagPicker
-                        title={`Add to ${workflowIds.length === 1 ? '1 selected workflow' : `${workflowIds.length} selected workflows`}`}
+                        title={`Add to ${workflowIds.length === 1 ? '1 selected item' : `${workflowIds.length} selected items`}`}
                         selected={[]}
                         onToggle={(tag, checked) => checked && addTagsToSelection(workflowIds, [tag])}
                     />
@@ -46,13 +46,7 @@ export function BulkBar(): JSX.Element | null {
                     type="secondary"
                     icon={<IconPlus />}
                     onClick={() => setAddOpen(!addOpen)}
-                    disabledReason={
-                        !store
-                            ? 'Tags are still loading'
-                            : !workflowIds.length
-                              ? 'Only workflows can carry tags for now'
-                              : undefined
-                    }
+                    disabledReason={!store ? 'Tags are still loading' : undefined}
                     data-attr="workflows-combined-bulk-add-tags"
                 >
                     Add tags
@@ -64,7 +58,7 @@ export function BulkBar(): JSX.Element | null {
                 placement="bottom-start"
                 overlay={
                     <div className="flex flex-col gap-1 p-2 w-64">
-                        <span className="text-secondary text-xs">Remove a tag from every selected workflow</span>
+                        <span className="text-secondary text-xs">Remove a tag from every selected item</span>
                         {presentTags.map(([tag, count]) => (
                             <LemonButton
                                 key={tag}

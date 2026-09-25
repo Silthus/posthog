@@ -50,6 +50,7 @@ import {
     type HogFlowEdge,
     type HogFlowSchedule,
 } from './hogflows/types'
+import { applyNewWorkflowContext, newWorkflowCreateFields } from './prototypes/combined/newWorkflowContext'
 import { openPublishConfirmDialog } from './PublishImpactDialog'
 import { prepareWorkflowDuplicate } from './workflowDuplication'
 import { workflowSceneLogic } from './workflowSceneLogic'
@@ -3151,7 +3152,12 @@ export const workflowLogic = kea<workflowLogicType>([
                         updates = sanitizeWorkflow(updates, values.hogFunctionTemplatesById)
 
                         if (!props.id || props.id === 'new') {
-                            const result = await api.hogFlows.createHogFlow(updates)
+                            // PROTOTYPE (prototype/workflows-list): file the workflow where the list's "New workflow" was.
+                            const result = await api.hogFlows.createHogFlow({
+                                ...updates,
+                                ...newWorkflowCreateFields(),
+                            } as Partial<HogFlow>)
+                            await applyNewWorkflowContext(result.id)
 
                             if (props.templateId) {
                                 posthog.capture('hog_flow_created_from_template', {

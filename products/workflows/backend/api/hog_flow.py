@@ -2916,6 +2916,12 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
         max_length=400, required=False, allow_null=True, allow_blank=True, help_text="Workflow name."
     )
     description = serializers.CharField(required=False, allow_blank=True, default="", help_text="Optional description.")
+    _create_in_folder = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        write_only=True,
+        help_text="Project tree folder to file a new workflow in, for example `Workflows/Billing`. Ignored on update.",
+    )
     status = serializers.ChoiceField(
         choices=HogFlow.State.choices,
         required=False,
@@ -3187,6 +3193,7 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             "email_sending_paused_by",
             "email_sending_pause_requires_support",
             "email_sending_resumed_at",
+            "_create_in_folder",
         ]
         read_only_fields = [
             "id",
@@ -3373,11 +3380,14 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
         team_id = self.context["team_id"]
         validated_data["created_by"] = request.user
         validated_data["team_id"] = team_id
+        if not validated_data.get("_create_in_folder"):
+            validated_data.pop("_create_in_folder", None)
         self._strip_secret_inputs(validated_data)
 
         return super().create(validated_data=validated_data)
 
     def update(self, instance, validated_data):
+        validated_data.pop("_create_in_folder", None)
         self._strip_secret_inputs(validated_data)
         return super().update(instance, validated_data)
 

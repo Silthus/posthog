@@ -1,7 +1,8 @@
 import './combinedFacets'
 
-// PROTOTYPE (throwaway): state for the combined variant. It builds on the folders logic (tree rows, location,
-// moves) and the shared pill search, and adds the flat and compact toggles, colored tags and saved views.
+// PROTOTYPE (throwaway): state for the combined variant, and for any layout over the same pieces (the side tree
+// here, the folder rows of the browser variant). It builds on the folders logic (tree rows, location, moves) and the
+// shared pill search, and adds the scope, views that know when they are modified, per-view columns, and tags.
 import {
     MakeLogicType,
     actions,
@@ -23,80 +24,102 @@ import api from 'lib/api'
 import { urls } from 'scenes/urls'
 import { userLogic } from 'scenes/userLogic'
 
-import { escapePath, joinPath, splitPath } from '~/layout/panel-layout/ProjectTree/utils'
+import { joinPath, splitPath } from '~/layout/panel-layout/ProjectTree/utils'
 import type { FileSystemEntry } from '~/queries/schema/schema-general'
 import type { UserType } from '~/types'
 
-import type { HogFlow } from '../../hogflows/types'
-import { NEW_WORKFLOW } from '../../workflowLogic'
+import { newWorkflowLogic } from '../../newWorkflowLogic'
 import { FolderLocation, FolderRow, WORKFLOWS_ROOT, foldersVariantLogic } from '../folders/foldersVariantLogic'
-import { FacetFilter, WorkflowQuery, applyWorkflowQuery, serializeFilters } from '../shared/workflowFacets'
+import {
+    FacetFilter,
+    WorkflowQuery,
+    applyWorkflowQuery,
+    findWorkflowFacet,
+    isGroupFilterValue,
+    parseFilters,
+    serializeFilters,
+} from '../shared/workflowFacets'
 import type { WorkflowListItem } from '../shared/workflowListItems'
 import { workflowsPrototypeLogic } from '../shared/workflowsPrototypeLogic'
 import { resolveViewFilters } from '../tags/workflowsTagsVariantLogic'
 import { setWorkflowTagsForFacets } from '../tags/workflowTagFacets'
+import { setItemTagsForFacets } from './combinedFacets'
 import {
     BUILT_IN_VIEWS,
+    COLUMN_ORDER,
+    ColumnKey,
     CombinedStore,
     CombinedView,
+    DEFAULT_COLUMNS,
     TagColor,
     fallbackTagColor,
+    normalizeColumns,
     normalizeTagName,
     readCombinedStore,
     writeCombinedStore,
 } from './combinedStore'
+import { setNewWorkflowContext } from './newWorkflowContext'
 
 const TEAM_URL = 'api/environments/@current/'
-
-/** Where a row shows up: a folder under the Workflows root, or the secondary workflow templates node. */
-export type Placement = string[] | 'workflow-templates'
-
-/** Unfiled workflows and email templates sit in the root. Unfiled workflow templates get their own node. */
-export function placementOf(row: FolderRow): Placement {
-    if (row.segments) {
-        return row.segments
-    }
-    return row.kind === 'workflow_template' ? 'workflow-templates' : []
-}
 
 function startsWith(segments: string[], prefix: string[]): boolean {
     return prefix.length <= segments.length && prefix.every((segment, index) => segments[index] === segment)
 }
 
-export function isTemplatesLocation(location: FolderLocation): boolean {
-    return location.type === 'library'
-}
-
-export function currentSegments(location: FolderLocation): string[] {
+/** The open folder under the Workflows root. The root is `[]`, and it means "everywhere". */
+export function scopeOf(location: FolderLocation): string[] {
     return location.type === 'folder' ? location.segments : []
 }
 
-function rowIn(row: FolderRow, location: FolderLocation, flat: boolean): boolean {
-    const placement = placementOf(row)
-    if (isTemplatesLocation(location)) {
-        return placement === 'workflow-templates'
-    }
-    if (placement === 'workflow-templates') {
-        return false
-    }
-    const segments = currentSegments(location)
-    return flat
-        ? startsWith(placement, segments)
-        : placement.length === segments.length && startsWith(placement, segments)
+/** Unfiled items sit in the root. */
+export function placementOf(row: FolderRow): string[] {
+    return row.segments ?? []
 }
 
-const KIND_ORDER: Record<FolderRow['kind'], number> = { workflow: 0, email_template: 1, workflow_template: 2 }
+/** Where a row sits relative to the scope: `[]` for the scope itself, `['Cards']` for a subfolder. */
+export function relativePathOf(row: FolderRow, scope: string[]): string[] {
+    return placementOf(row).slice(scope.length)
+}
 
-export type CombinedRow =
-    | { rowType: 'up'; id: string; parent: FolderLocation }
+function compareNames(a: string, b: string): number {
+    return a.localeCompare(b, undefined, { sensitivity: 'base' })
+}
+
+/** Tree order: at every level, each subfolder's items as a block (subfolders alphabetical), then the loose items. */
+export function compareTreeOrder(a: FolderRow, b: FolderRow, scope: string[]): number {
+    const pathA = relativePathOf(a, scope)
+    const pathB = relativePathOf(b, scope)
+    for (let depth = 0; ; depth++) {
+        const segmentA = pathA[depth]
+        const segmentB = pathB[depth]
+        if (segmentA === undefined && segmentB === undefined) {
+            return compareNames(a.item.name, b.item.name)
+        }
+        if (segmentA === undefined) {
+            return 1
+        }
+        if (segmentB === undefined) {
+            return -1
+        }
+        const bySegment = compareNames(segmentA, segmentB)
+        if (bySegment !== 0) {
+            return bySegment
+        }
+    }
+}
+
+export type ListRow =
+    | { rowType: 'up'; id: string; parent: string[] }
+    | { rowType: 'folder'; id: string; name: string; segments: string[]; count: number }
     | { rowType: 'item'; id: string; row: FolderRow }
 
-export function viewFolderToLocation(folder: string): FolderLocation {
-    return folder === ':templates' ? { type: 'library' } : { type: 'folder', segments: splitPath(folder) }
-}
-
-export function locationToViewFolder(location: FolderLocation): string {
-    return isTemplatesLocation(location) ? ':templates' : joinPath(currentSegments(location))
+export interface ViewState {
+    filters: FacetFilter[]
+    search: string
+    scope: string[]
+    flat: boolean
+    compact: boolean
+    columns: ColumnKey[]
 }
 
 function filtersSignature(filters: FacetFilter[]): string {
@@ -104,6 +127,59 @@ function filtersSignature(filters: FacetFilter[]): string {
         .map((filter) => serializeFilters([filter]))
         .sort()
         .join(' ')
+}
+
+/** Which parts of the current state differ from the view. Empty when the view shows as saved. */
+export function viewChanges(view: CombinedView, state: ViewState, user: UserType | null): string[] {
+    const changes: string[] = []
+    if (filtersSignature(resolveViewFilters(view.q, user)) !== filtersSignature(state.filters)) {
+        changes.push('filters')
+    }
+    if (view.text !== state.search.trim()) {
+        changes.push('search')
+    }
+    if (view.folder !== null && view.folder !== joinPath(state.scope)) {
+        changes.push('folder')
+    }
+    if (view.flat !== state.flat) {
+        changes.push('flat list')
+    }
+    if (view.compact !== state.compact) {
+        changes.push('row size')
+    }
+    if (view.columns.join(',') !== state.columns.join(',')) {
+        changes.push('columns')
+    }
+    return changes
+}
+
+/** Tag filters that name one tag, so a new workflow can carry them. Group pills and exclusions don't count. */
+export function tagsFromFilters(filters: FacetFilter[]): string[] {
+    const tagFacet = findWorkflowFacet('tag')
+    return filters
+        .filter((filter) => filter.facet === 'tag' && !filter.negated && !isGroupFilterValue(tagFacet, filter.value))
+        .map((filter) => filter.value)
+}
+
+function renameTagInQuery(q: string, from: string, to: string): string {
+    return serializeFilters(
+        parseFilters(q).map((filter) =>
+            filter.facet === 'tag' && filter.value === from ? { ...filter, value: to } : filter
+        )
+    )
+}
+
+function withTags(store: CombinedStore, updates: Record<string, string[]>): CombinedStore {
+    const tags = { ...store.tags }
+    for (const [id, value] of Object.entries(updates)) {
+        const normalized = Array.from(new Set(value.map(normalizeTagName).filter(Boolean)))
+        if (normalized.length) {
+            tags[id] = normalized
+        } else {
+            delete tags[id]
+        }
+    }
+    return { ...store, tags }
 }
 
 interface Values {
@@ -124,19 +200,29 @@ interface Values {
     saving: boolean
     flat: boolean
     compact: boolean
+    columns: ColumnKey[]
+    activeViewId: string
     selectedIds: string[]
     editingRowKey: string | null
-    creatingWorkflow: boolean
+    manageTagsOpen: boolean
+    scope: string[]
+    effectiveFlat: boolean
+    listRows: FolderRow[]
     allItems: WorkflowListItem[]
     matchingRows: FolderRow[]
-    contents: CombinedRow[]
-    hiddenBelowCount: number
+    contents: ListRow[]
+    childFolders: Extract<ListRow, { rowType: 'folder' }>[]
     folderCounts: Record<string, number>
-    workflowTemplatesCount: number
+    usedByCounts: Record<string, number>
     vocabulary: string[]
     colors: Record<string, TagColor>
+    tagUsage: Record<string, number>
     views: CombinedView[]
-    activeViewId: string | null
+    activeView: CombinedView
+    viewState: ViewState
+    activeViewChanges: string[]
+    isModified: boolean
+    canUpdateActiveView: boolean
     viewCounts: Record<string, number>
     selectedTagCounts: Record<string, number>
 }
@@ -151,41 +237,40 @@ interface Actions {
     movesSettled: (moved: unknown[]) => { moved: unknown[] }
     setFilters: (filters: FacetFilter[]) => { filters: FacetFilter[] }
     setSearch: (search: string) => { search: string }
+    addFilter: (filter: FacetFilter) => { filter: FacetFilter }
     loadStore: () => {}
     loadStoreSuccess: (store: CombinedStore | null) => { store: CombinedStore | null }
     loadStoreFailure: (error: string) => { error: string }
+    setScope: (scope: string[]) => { scope: string[] }
     setFlat: (flat: boolean) => { flat: boolean }
     setCompact: (compact: boolean) => { compact: boolean }
+    setColumns: (columns: ColumnKey[]) => { columns: ColumnKey[] }
+    toggleColumn: (column: ColumnKey, shown: boolean) => { column: ColumnKey; shown: boolean }
+    setActiveViewId: (id: string) => { id: string }
     setSelectedIds: (ids: string[]) => { ids: string[] }
     toggleSelected: (ids: string[], selected: boolean) => { ids: string[]; selected: boolean }
     clearSelection: () => { value: true }
     setEditingRowKey: (rowKey: string | null) => { rowKey: string | null }
-    setWorkflowTags: (workflowId: string, tags: string[]) => { workflowId: string; tags: string[] }
+    setItemTags: (itemId: string, tags: string[]) => { itemId: string; tags: string[] }
     addTagsToSelection: (ids: string[], tags: string[]) => { ids: string[]; tags: string[] }
     removeTagsFromSelection: (ids: string[], tags: string[]) => { ids: string[]; tags: string[] }
     createTag: (tag: string, color: TagColor) => { tag: string; color: TagColor }
     setTagColor: (tag: string, color: TagColor) => { tag: string; color: TagColor }
-    saveView: (view: CombinedView) => { view: CombinedView }
-    deleteView: (id: string) => { id: string }
+    renameTag: (from: string, to: string) => { from: string; to: string }
+    deleteTag: (tag: string) => { tag: string }
+    setManageTagsOpen: (open: boolean) => { open: boolean }
     applyView: (view: CombinedView) => { view: CombinedView }
+    resetView: () => { value: true }
+    saveViewAs: (name: string, pinScope: boolean) => { name: string; pinScope: boolean }
+    updateActiveView: () => { value: true }
+    renameView: (id: string, name: string) => { id: string; name: string }
+    upsertView: (view: CombinedView) => { view: CombinedView }
+    deleteView: (id: string) => { id: string }
     createFolderAt: (parent: string[], name: string) => { parent: string[]; name: string }
-    createWorkflowHere: () => { value: true }
-    createWorkflowDone: () => { value: true }
+    startNewWorkflow: () => { value: true }
+    showWorkflowsUsingTemplate: (name: string) => { name: string }
     persist: () => { value: true }
     persistDone: () => { value: true }
-}
-
-function withTags(store: CombinedStore, updates: Record<string, string[]>): CombinedStore {
-    const tags = { ...store.tags }
-    for (const [id, value] of Object.entries(updates)) {
-        const normalized = Array.from(new Set(value.map(normalizeTagName).filter(Boolean)))
-        if (normalized.length) {
-            tags[id] = normalized
-        } else {
-            delete tags[id]
-        }
-    }
-    return { ...store, tags }
 }
 
 export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
@@ -203,27 +288,38 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
             foldersVariantLogic,
             ['setLocation', 'loadEntries', 'loadEntriesFailure', 'moveRows', 'movesSettled'],
             workflowsPrototypeLogic,
-            ['setFilters', 'setSearch', 'loadSources', 'loadSourcesFailure'],
+            ['setFilters', 'setSearch', 'addFilter', 'loadSources', 'loadSourcesFailure'],
         ],
     })),
     actions({
+        setScope: (scope: string[]) => ({ scope }),
         setFlat: (flat: boolean) => ({ flat }),
         setCompact: (compact: boolean) => ({ compact }),
+        setColumns: (columns: ColumnKey[]) => ({ columns }),
+        toggleColumn: (column: ColumnKey, shown: boolean) => ({ column, shown }),
+        setActiveViewId: (id: string) => ({ id }),
         setSelectedIds: (ids: string[]) => ({ ids }),
         toggleSelected: (ids: string[], selected: boolean) => ({ ids, selected }),
         clearSelection: true,
         setEditingRowKey: (rowKey: string | null) => ({ rowKey }),
-        setWorkflowTags: (workflowId: string, tags: string[]) => ({ workflowId, tags }),
+        setItemTags: (itemId: string, tags: string[]) => ({ itemId, tags }),
         addTagsToSelection: (ids: string[], tags: string[]) => ({ ids, tags }),
         removeTagsFromSelection: (ids: string[], tags: string[]) => ({ ids, tags }),
         createTag: (tag: string, color: TagColor) => ({ tag, color }),
         setTagColor: (tag: string, color: TagColor) => ({ tag, color }),
-        saveView: (view: CombinedView) => ({ view }),
-        deleteView: (id: string) => ({ id }),
+        renameTag: (from: string, to: string) => ({ from, to }),
+        deleteTag: (tag: string) => ({ tag }),
+        setManageTagsOpen: (open: boolean) => ({ open }),
         applyView: (view: CombinedView) => ({ view }),
+        resetView: true,
+        saveViewAs: (name: string, pinScope: boolean) => ({ name, pinScope }),
+        updateActiveView: true,
+        renameView: (id: string, name: string) => ({ id, name }),
+        upsertView: (view: CombinedView) => ({ view }),
+        deleteView: (id: string) => ({ id }),
         createFolderAt: (parent: string[], name: string) => ({ parent, name }),
-        createWorkflowHere: true,
-        createWorkflowDone: true,
+        startNewWorkflow: true,
+        showWorkflowsUsingTemplate: (name: string) => ({ name }),
         persist: true,
         persistDone: true,
     }),
@@ -251,7 +347,7 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
     reducers(() => ({
         // Every edit is a no-op until the stored blob has loaded, so a write can never replace it with an empty one.
         store: {
-            setWorkflowTags: (state, { workflowId, tags }) => (state ? withTags(state, { [workflowId]: tags }) : state),
+            setItemTags: (state, { itemId, tags }) => (state ? withTags(state, { [itemId]: tags }) : state),
             addTagsToSelection: (state, { ids, tags }) =>
                 state
                     ? withTags(state, Object.fromEntries(ids.map((id) => [id, [...(state.tags[id] ?? []), ...tags]])))
@@ -273,13 +369,46 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 }
                 return {
                     ...state,
-                    colors: { ...state.colors, [name]: color },
+                    colors: { ...state.colors, [name]: state.colors[name] ?? color },
                     pinnedTags: state.pinnedTags.includes(name) ? state.pinnedTags : [...state.pinnedTags, name],
                 }
             },
             setTagColor: (state, { tag, color }) =>
                 state ? { ...state, colors: { ...state.colors, [tag]: color } } : state,
-            saveView: (state, { view }) => {
+            // Renaming onto an existing tag merges the two: items keep one copy, and the target keeps its color.
+            renameTag: (state, { from, to }) => {
+                const target = normalizeTagName(to)
+                if (!state || !target || target === from) {
+                    return state
+                }
+                const tags = Object.fromEntries(
+                    Object.entries(state.tags).map(([id, value]) => [
+                        id,
+                        Array.from(new Set(value.map((tag) => (tag === from ? target : tag)))),
+                    ])
+                )
+                const { [from]: fromColor, ...colors } = state.colors
+                return {
+                    ...state,
+                    tags,
+                    colors: { ...colors, [target]: state.colors[target] ?? fromColor ?? fallbackTagColor(target) },
+                    pinnedTags: Array.from(new Set(state.pinnedTags.map((tag) => (tag === from ? target : tag)))),
+                    views: state.views.map((view) => ({ ...view, q: renameTagInQuery(view.q, from, target) })),
+                }
+            },
+            deleteTag: (state, { tag }) => {
+                if (!state) {
+                    return state
+                }
+                const { [tag]: _color, ...colors } = state.colors
+                const tags = Object.fromEntries(
+                    Object.entries(state.tags)
+                        .map(([id, value]) => [id, value.filter((existing) => existing !== tag)] as const)
+                        .filter(([, value]) => value.length > 0)
+                )
+                return { ...state, tags, colors, pinnedTags: state.pinnedTags.filter((existing) => existing !== tag) }
+            },
+            upsertView: (state, { view }) => {
                 if (!state) {
                     return state
                 }
@@ -291,12 +420,25 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                         : [...state.views, view],
                 }
             },
+            renameView: (state, { id, name }) =>
+                state
+                    ? { ...state, views: state.views.map((view) => (view.id === id ? { ...view, name } : view)) }
+                    : state,
             deleteView: (state, { id }) =>
                 state ? { ...state, views: state.views.filter((view) => view.id !== id) } : state,
         },
         saving: [false, { persist: () => true, persistDone: () => false }],
         flat: [false, { setFlat: (_, { flat }) => flat }],
-        compact: [false, { persist: true, prefix: 'combined' }, { setCompact: (_, { compact }) => compact }],
+        compact: [true, { setCompact: (_, { compact }) => compact }],
+        columns: [
+            DEFAULT_COLUMNS,
+            {
+                setColumns: (_, { columns }) => normalizeColumns(columns),
+                toggleColumn: (state, { column, shown }) =>
+                    COLUMN_ORDER.filter((key) => (key === column ? shown : state.includes(key))),
+            },
+        ],
+        activeViewId: ['all', { setActiveViewId: (_, { id }) => id, applyView: (_, { view }) => view.id }],
         selectedIds: [
             [] as string[],
             {
@@ -308,12 +450,23 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
             },
         ],
         editingRowKey: [null as string | null, { setEditingRowKey: (_, { rowKey }) => rowKey }],
-        creatingWorkflow: [false, { createWorkflowHere: () => true, createWorkflowDone: () => false }],
+        manageTagsOpen: [false, { setManageTagsOpen: (_, { open }) => open }],
     })),
     selectors({
-        allItems: [(s) => [s.rows], (rows: FolderRow[]): WorkflowListItem[] => rows.map((row) => row.item)],
+        scope: [(s) => [s.location], (location: FolderLocation): string[] => scopeOf(location)],
+        // Any search or filter looks through the scope folder and everything below it.
+        effectiveFlat: [
+            (s) => [s.flat, s.hasActiveQuery],
+            (flat: boolean, hasActiveQuery: boolean) => flat || hasActiveQuery,
+        ],
+        // Workflow templates live in the "New workflow" chooser, not in this list.
+        listRows: [
+            (s) => [s.rows],
+            (rows: FolderRow[]): FolderRow[] => rows.filter((row) => row.kind !== 'workflow_template'),
+        ],
+        allItems: [(s) => [s.listRows], (rows: FolderRow[]): WorkflowListItem[] => rows.map((row) => row.item)],
         matchingRows: [
-            (s) => [s.rows, s.query, s.facetsVersion],
+            (s) => [s.listRows, s.query, s.facetsVersion],
             (rows: FolderRow[], query: WorkflowQuery): FolderRow[] => {
                 const ids = new Set(
                     applyWorkflowQuery(
@@ -325,32 +478,46 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
             },
         ],
         contents: [
-            (s) => [s.matchingRows, s.location, s.flat],
-            (matchingRows: FolderRow[], location: FolderLocation, flat: boolean): CombinedRow[] => {
+            (s) => [s.matchingRows, s.scope, s.effectiveFlat],
+            (matchingRows: FolderRow[], scope: string[], effectiveFlat: boolean): ListRow[] => {
                 const items = matchingRows
-                    .filter((row) => rowIn(row, location, flat))
-                    .sort(
-                        (a, b) =>
-                            KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
-                            a.item.name.localeCompare(b.item.name, undefined, { sensitivity: 'base' })
+                    .filter((row) =>
+                        effectiveFlat
+                            ? startsWith(placementOf(row), scope)
+                            : placementOf(row).length === scope.length && startsWith(placementOf(row), scope)
                     )
-                    .map((row): CombinedRow => ({ rowType: 'item', id: row.id, row }))
-                const segments = currentSegments(location)
-                if (!isTemplatesLocation(location) && segments.length === 0) {
-                    return items
-                }
-                const parent: FolderLocation = isTemplatesLocation(location)
-                    ? { type: 'folder', segments: [] }
-                    : { type: 'folder', segments: segments.slice(0, -1) }
-                return [{ rowType: 'up', id: 'up', parent }, ...items]
+                    .sort((a, b) =>
+                        effectiveFlat
+                            ? compareTreeOrder(a, b, scope)
+                            : (a.kind === b.kind ? 0 : a.kind === 'workflow' ? -1 : 1) ||
+                              compareNames(a.item.name, b.item.name)
+                    )
+                    .map((row): ListRow => ({ rowType: 'item', id: row.id, row }))
+                return scope.length ? [{ rowType: 'up', id: 'up', parent: scope.slice(0, -1) }, ...items] : items
             },
         ],
-        hiddenBelowCount: [
-            (s) => [s.matchingRows, s.location, s.flat],
-            (matchingRows: FolderRow[], location: FolderLocation, flat: boolean): number =>
-                flat || isTemplatesLocation(location)
-                    ? 0
-                    : matchingRows.filter((row) => rowIn(row, location, true) && !rowIn(row, location, false)).length,
+        // Folder rows for layouts without a side tree. Empty in flat mode, where subfolders' items show instead.
+        childFolders: [
+            (s) => [s.folderPaths, s.matchingRows, s.scope, s.effectiveFlat, s.hasActiveQuery],
+            (
+                folderPaths: string[][],
+                matchingRows: FolderRow[],
+                scope: string[],
+                effectiveFlat: boolean,
+                hasActiveQuery: boolean
+            ): Extract<ListRow, { rowType: 'folder' }>[] =>
+                effectiveFlat
+                    ? []
+                    : folderPaths
+                          .filter((segments) => segments.length === scope.length + 1 && startsWith(segments, scope))
+                          .map((segments) => ({
+                              rowType: 'folder' as const,
+                              id: `folder:${joinPath(segments)}`,
+                              name: segments[segments.length - 1],
+                              segments,
+                              count: matchingRows.filter((row) => startsWith(placementOf(row), segments)).length,
+                          }))
+                          .filter((folder) => !hasActiveQuery || folder.count > 0),
         ],
         folderCounts: [
             (s) => [s.matchingRows],
@@ -358,9 +525,6 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 const counts: Record<string, number> = {}
                 for (const row of matchingRows) {
                     const placement = placementOf(row)
-                    if (placement === 'workflow-templates') {
-                        continue
-                    }
                     for (let depth = 0; depth <= placement.length; depth++) {
                         const key = joinPath(placement.slice(0, depth))
                         counts[key] = (counts[key] ?? 0) + 1
@@ -369,10 +533,21 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 return counts
             },
         ],
-        workflowTemplatesCount: [
-            (s) => [s.matchingRows],
-            (matchingRows: FolderRow[]): number =>
-                matchingRows.filter((row) => placementOf(row) === 'workflow-templates').length,
+        usedByCounts: [
+            (s) => [s.listRows],
+            (rows: FolderRow[]): Record<string, number> => {
+                const counts: Record<string, number> = {}
+                for (const row of rows) {
+                    if (row.kind !== 'workflow') {
+                        continue
+                    }
+                    const templateIds = new Set(
+                        row.item.emailSteps.map((step) => step.libraryTemplateId).filter(Boolean)
+                    )
+                    templateIds.forEach((id) => (counts[id!] = (counts[id!] ?? 0) + 1))
+                }
+                return counts
+            },
         ],
         vocabulary: [
             (s) => [s.store],
@@ -387,40 +562,59 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
             (vocabulary: string[], store: CombinedStore | null): Record<string, TagColor> =>
                 Object.fromEntries(vocabulary.map((tag) => [tag, store?.colors[tag] ?? fallbackTagColor(tag)])),
         ],
+        tagUsage: [
+            (s) => [s.store, s.rowsById],
+            (store: CombinedStore | null, rowsById: Record<string, FolderRow>): Record<string, number> => {
+                const counts: Record<string, number> = {}
+                for (const [id, tags] of Object.entries(store?.tags ?? {})) {
+                    if (rowsById[id]) {
+                        tags.forEach((tag) => (counts[tag] = (counts[tag] ?? 0) + 1))
+                    }
+                }
+                return counts
+            },
+        ],
         views: [
             (s) => [s.store],
             (store: CombinedStore | null): CombinedView[] => [...BUILT_IN_VIEWS, ...(store?.views ?? [])],
         ],
-        activeViewId: [
-            (s) => [s.views, s.filters, s.search, s.location, s.user],
-            (
-                views: CombinedView[],
-                filters: FacetFilter[],
-                search: string,
-                location: FolderLocation,
-                user: UserType | null
-            ): string | null => {
-                const current = filtersSignature(filters)
-                const folder = locationToViewFolder(location)
-                const match = views.find(
-                    (view) =>
-                        filtersSignature(resolveViewFilters(view.q, user)) === current &&
-                        view.text === search.trim() &&
-                        (view.folder === null || view.folder === folder)
-                )
-                return match?.id ?? null
-            },
+        activeView: [
+            (s) => [s.views, s.activeViewId],
+            (views: CombinedView[], activeViewId: string): CombinedView =>
+                views.find((view) => view.id === activeViewId) ?? views[0],
+        ],
+        viewState: [
+            (s) => [s.filters, s.search, s.scope, s.flat, s.compact, s.columns],
+            (filters, search, scope, flat, compact, columns): ViewState => ({
+                filters,
+                search,
+                scope,
+                flat,
+                compact,
+                columns,
+            }),
+        ],
+        activeViewChanges: [
+            (s) => [s.activeView, s.viewState, s.user],
+            (activeView: CombinedView, viewState: ViewState, user: UserType | null): string[] =>
+                viewChanges(activeView, viewState, user),
+        ],
+        isModified: [(s) => [s.activeViewChanges], (changes: string[]): boolean => changes.length > 0],
+        canUpdateActiveView: [
+            (s) => [s.activeView, s.user],
+            (activeView: CombinedView, user: UserType | null): boolean =>
+                !activeView.builtIn && !!user && activeView.createdBy === user.uuid,
         ],
         viewCounts: [
-            (s) => [s.views, s.rows, s.user, s.facetsVersion],
+            (s) => [s.views, s.listRows, s.user, s.facetsVersion],
             (views: CombinedView[], rows: FolderRow[], user: UserType | null): Record<string, number> =>
                 Object.fromEntries(
                     views.map((view) => {
-                        // A view pinned to a folder counts what it shows there: that folder, and its subfolders when flat.
+                        // A view pinned to a folder counts what it shows: that folder and everything below it.
                         const scoped =
                             view.folder === null
                                 ? rows
-                                : rows.filter((row) => rowIn(row, viewFolderToLocation(view.folder!), !!view.flat))
+                                : rows.filter((row) => startsWith(placementOf(row), splitPath(view.folder!)))
                         const matches = applyWorkflowQuery(
                             scoped.map((row) => row.item),
                             { filters: resolveViewFilters(view.q, user), search: view.text }
@@ -446,17 +640,30 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
         const tagsChanged = (): void => {
             if (values.store) {
                 setWorkflowTagsForFacets(values.store.tags)
+                setItemTagsForFacets(values.store.tags)
             }
             actions.persist()
         }
+        const viewFrom = (id: string, name: string, pinScope: boolean): CombinedView => ({
+            id,
+            name,
+            q: serializeFilters(values.filters),
+            text: values.search.trim(),
+            folder: pinScope ? joinPath(values.scope) : null,
+            flat: values.flat,
+            compact: values.compact,
+            columns: values.columns,
+            createdBy: values.user?.uuid ?? null,
+        })
         return {
             loadStoreSuccess: ({ store }) => {
                 setWorkflowTagsForFacets(store?.tags ?? {})
+                setItemTagsForFacets(store?.tags ?? {})
             },
             loadStoreFailure: () => {
                 lemonToast.error("Couldn't load tags and saved views. Refresh the page to try again.")
             },
-            setWorkflowTags: tagsChanged,
+            setItemTags: tagsChanged,
             addTagsToSelection: ({ ids, tags }) => {
                 lemonToast.success(
                     `Tagged ${ids.length === 1 ? '1 item' : `${ids.length} items`} with ${tags.join(', ')}`
@@ -464,10 +671,36 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 tagsChanged()
             },
             removeTagsFromSelection: tagsChanged,
+            renameTag: ({ from, to }) => {
+                const target = normalizeTagName(to)
+                if (values.filters.some((filter) => filter.facet === 'tag' && filter.value === from)) {
+                    actions.setFilters(
+                        values.filters.map((filter) =>
+                            filter.facet === 'tag' && filter.value === from ? { ...filter, value: target } : filter
+                        )
+                    )
+                }
+                tagsChanged()
+            },
+            deleteTag: ({ tag }) => {
+                if (values.filters.some((filter) => filter.facet === 'tag' && filter.value === tag)) {
+                    actions.setFilters(
+                        values.filters.filter((filter) => !(filter.facet === 'tag' && filter.value === tag))
+                    )
+                }
+                tagsChanged()
+            },
             createTag: () => actions.persist(),
             setTagColor: () => actions.persist(),
-            saveView: () => actions.persist(),
-            deleteView: () => actions.persist(),
+            upsertView: () => actions.persist(),
+            renameView: () => actions.persist(),
+            deleteView: ({ id }) => {
+                if (values.activeViewId === id) {
+                    actions.applyView(BUILT_IN_VIEWS[0])
+                }
+                actions.persist()
+            },
+            setScope: ({ scope }) => actions.setLocation({ type: 'folder', segments: scope }),
             movesSettled: () => actions.clearSelection(),
             // The shared dev stack returns 502 while it reloads, so try the folder tree and the list again.
             loadEntriesFailure: async (_, breakpoint) => {
@@ -510,18 +743,27 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 actions.setFilters(resolveViewFilters(view.q, values.user))
                 actions.setSearch(view.text)
                 if (view.folder !== null) {
-                    actions.setLocation(viewFolderToLocation(view.folder))
-                } else if (view.builtIn && view.flat) {
-                    // Built-in views start from everything. The tab stays active while you narrow it with the tree.
-                    actions.setLocation({ type: 'folder', segments: [] })
+                    actions.setLocation({ type: 'folder', segments: splitPath(view.folder) })
                 }
-                if (view.flat !== undefined) {
-                    actions.setFlat(view.flat)
-                }
-                if (view.compact !== undefined) {
-                    actions.setCompact(view.compact)
-                }
+                actions.setFlat(view.flat)
+                actions.setCompact(view.compact)
+                actions.setColumns(view.columns)
                 actions.clearSelection()
+            },
+            resetView: () => actions.applyView(values.activeView),
+            saveViewAs: ({ name, pinScope }) => {
+                const view = viewFrom(`view-${Date.now().toString(36)}`, name, pinScope)
+                actions.upsertView(view)
+                actions.setActiveViewId(view.id)
+                lemonToast.success(`Saved the ${name} view`)
+            },
+            updateActiveView: () => {
+                const current = values.activeView
+                actions.upsertView({
+                    ...viewFrom(current.id, current.name, current.folder !== null),
+                    createdBy: current.createdBy,
+                })
+                lemonToast.success(`Updated the ${current.name} view`)
             },
             createFolderAt: async ({ parent, name }) => {
                 const segments = [...parent, name.trim()]
@@ -538,53 +780,76 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 actions.loadEntries()
                 actions.setLocation({ type: 'folder', segments })
             },
-            createWorkflowHere: async () => {
-                const segments = isTemplatesLocation(values.location) ? [] : currentSegments(values.location)
-                const { actions: steps, edges, conversion, exit_condition } = NEW_WORKFLOW
-                try {
-                    // Hog flows don't accept `_create_in_folder`, so create a draft and move its tree row.
-                    const created = await api.hogFlows.createHogFlow({
-                        name: 'Untitled workflow',
-                        actions: steps,
-                        edges,
-                        conversion,
-                        exit_condition,
-                        status: 'draft',
-                    } as Partial<HogFlow>)
-                    if (segments.length) {
-                        const { results } = await api.fileSystem.list({ type: 'hog_flow', ref: created.id })
-                        const entry = results[0]
-                        if (entry?.id) {
-                            await api.fileSystem.move(
-                                entry.id,
-                                `${joinPath([WORKFLOWS_ROOT, ...segments])}/${escapePath(created.name)}`
-                            )
-                        }
-                    }
-                    router.actions.push(urls.workflow(created.id, 'workflow'))
-                } catch {
-                    lemonToast.error("Couldn't create the workflow. Try again in a moment.")
+            // The workflows that send a template can sit in any folder, so this searches everywhere, and a `kind:`
+            // pill that would hide workflows goes.
+            showWorkflowsUsingTemplate: ({ name }) => {
+                actions.setFilters([
+                    ...values.filters.filter((filter) => filter.facet !== 'kind' && filter.facet !== 'library'),
+                    { facet: 'library', value: name, negated: false },
+                ])
+                if (values.scope.length) {
+                    actions.setScope([])
                 }
-                actions.createWorkflowDone()
+            },
+            startNewWorkflow: () => {
+                // The usual chooser opens. Whatever it creates lands in the scope folder with the filter's tags.
+                setNewWorkflowContext(
+                    values.scope.length ? joinPath([WORKFLOWS_ROOT, ...values.scope]) : null,
+                    tagsFromFilters(values.filters)
+                )
+                newWorkflowLogic.actions.startNewWorkflow()
             },
         }
     }),
-    actionToUrl(({ values }) => ({
-        setFlat: () => {
-            const { flat: _flat, ...searchParams } = router.values.searchParams
-            return [
-                router.values.location.pathname,
-                values.flat ? { ...searchParams, flat: 1 } : searchParams,
-                router.values.hashParams,
-                { replace: true },
-            ]
-        },
-    })),
+    actionToUrl(({ values }) => {
+        const buildURL = (): [string, Record<string, any>, Record<string, any>, { replace: boolean }] => {
+            const {
+                flat: _flat,
+                compact: _compact,
+                cols: _cols,
+                view: _view,
+                ...searchParams
+            } = router.values.searchParams
+            if (values.activeViewId !== 'all') {
+                searchParams.view = values.activeViewId
+            }
+            if (values.flat) {
+                searchParams.flat = 1
+            }
+            if (!values.compact) {
+                searchParams.compact = 0
+            }
+            if (values.columns.join(',') !== DEFAULT_COLUMNS.join(',')) {
+                searchParams.cols = values.columns.join(',')
+            }
+            return [router.values.location.pathname, searchParams, router.values.hashParams, { replace: true }]
+        }
+        return {
+            setFlat: buildURL,
+            setCompact: buildURL,
+            setColumns: buildURL,
+            toggleColumn: buildURL,
+            setActiveViewId: buildURL,
+            applyView: buildURL,
+        }
+    }),
     urlToAction(({ actions, values }) => {
         const sync = (_: Record<string, string | undefined>, searchParams: Record<string, any>): void => {
+            const view = searchParams.view ? String(searchParams.view) : 'all'
+            if (view !== values.activeViewId) {
+                actions.setActiveViewId(view)
+            }
             const flat = !!searchParams.flat
             if (flat !== values.flat) {
                 actions.setFlat(flat)
+            }
+            const compact = String(searchParams.compact) !== '0'
+            if (compact !== values.compact) {
+                actions.setCompact(compact)
+            }
+            const columns = searchParams.cols ? normalizeColumns(String(searchParams.cols).split(',')) : DEFAULT_COLUMNS
+            if (columns.join(',') !== values.columns.join(',')) {
+                actions.setColumns(columns)
             }
         }
         return { [urls.workflows()]: sync, [urls.workflows('workflows')]: sync }

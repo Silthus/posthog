@@ -42,7 +42,7 @@ export function TagPicker({
     title: string
 }): JSX.Element {
     const { vocabulary, colors } = useValues(combinedVariantLogic)
-    const { createTag, setTagColor } = useActions(combinedVariantLogic)
+    const { createTag, setTagColor, setManageTagsOpen } = useActions(combinedVariantLogic)
     const [query, setQuery] = useState('')
     const [newColor, setNewColor] = useState<TagColor>(randomTagColor)
     const [recoloring, setRecoloring] = useState<string | null>(null)
@@ -140,7 +140,12 @@ export function TagPicker({
                     <TagColorSwatches value={newColor} onChange={setNewColor} />
                 </div>
             )}
-            <span className="text-xs text-secondary">Use / to group tags, for example team/marketing.</span>
+            <div className="flex items-center gap-2 text-xs text-secondary">
+                <span className="flex-1">Use / to group tags, for example team/marketing.</span>
+                <LemonButton size="xsmall" type="tertiary" onClick={() => setManageTagsOpen(true)}>
+                    Manage tags
+                </LemonButton>
+            </div>
         </div>
     )
 }

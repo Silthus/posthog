@@ -1,36 +1,34 @@
-// PROTOTYPE (throwaway): the blend picked in round 1 (Silthus/posthog#154). Folders are the base, saved views sit
-// as tabs above the pill search, and workflows carry colored tags with `/` groups.
-import './combinedFacets'
-
-import { useValues } from 'kea'
-
-import { WorkflowsSearchBar } from '../shared/WorkflowsSearchBar'
+// PROTOTYPE (throwaway): the combined variant, round 2 (Silthus/posthog#155). This file is only the layout: view
+// tabs, the scoped pill search, and the side tree beside the list. Every piece is layout-agnostic, so another layout
+// (the browser variant, with folder rows instead of a tree) reuses them with its own shell:
+//   ViewTabs, ScopedSearchBar, ListToolbar (or ScopeBreadcrumbs, DisplayOptions, NewWorkflowButton), BulkBar,
+//   ItemsTable (`showFolderRows`), ManageTagsModal, all driven by combinedVariantLogic.
 import { BulkBar } from './BulkBar'
-import { CombinedBreadcrumbs } from './CombinedBreadcrumbs'
-import { CombinedContents } from './CombinedContents'
 import { CombinedFolderTree } from './CombinedFolderTree'
-import { combinedVariantLogic } from './combinedVariantLogic'
-import { CombinedViewTabs } from './CombinedViewTabs'
+import { ItemsTable } from './ItemsTable'
+import { ListToolbar } from './ListToolbar'
+import { ManageTagsModal } from './ManageTagsModal'
+import { ScopedSearchBar } from './ScopedSearchBar'
+import { ViewTabs } from './ViewTabs'
 
 export function CombinedVariant(): JSX.Element {
-    const { allItems } = useValues(combinedVariantLogic)
-
     return (
-        <div className="@container" data-attr="workflows-prototype-combined-variant">
-            <CombinedViewTabs />
+        <div className="@container/variant" data-attr="workflows-prototype-combined-variant">
+            <ViewTabs />
             <div className="mb-3">
-                <WorkflowsSearchBar items={allItems} />
+                <ScopedSearchBar />
             </div>
             <div className="flex gap-3 items-start">
-                <aside className="hidden @3xl:block w-52 @5xl:w-60 shrink-0 border rounded bg-surface-primary sticky top-0 max-h-[80vh] overflow-y-auto">
+                <aside className="hidden @4xl/variant:block w-52 @5xl/variant:w-60 shrink-0 border rounded bg-surface-primary sticky top-0 max-h-[80vh] overflow-y-auto">
                     <CombinedFolderTree />
                 </aside>
-                <div className="flex-1 min-w-0">
-                    <CombinedBreadcrumbs />
+                <div className="flex-1 min-w-0 @container">
+                    <ListToolbar folderMenuClassName="@4xl/variant:hidden" />
                     <BulkBar />
-                    <CombinedContents />
+                    <ItemsTable />
                 </div>
             </div>
+            <ManageTagsModal />
         </div>
     )
 }

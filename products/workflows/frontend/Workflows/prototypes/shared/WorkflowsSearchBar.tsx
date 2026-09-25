@@ -3,7 +3,7 @@
 import { useActions, useValues } from 'kea'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { IconSearch } from '@posthog/icons'
+import { IconFolder, IconSearch } from '@posthog/icons'
 import { LemonButton, LemonInput, LemonSnack, Popover } from '@posthog/lemon-ui'
 
 import {
@@ -120,8 +120,20 @@ function pillLabel(filter: FacetFilter): string {
     return `${facet?.label ?? filter.facet}${filter.negated ? ' is not' : ''}: ${value}`
 }
 
-/** `items` lets a variant count suggestions over rows the shared logic doesn't load, like Library email templates. */
-export function WorkflowsSearchBar({ items: itemsOverride }: { items?: WorkflowListItem[] } = {}): JSX.Element {
+/** A folder the search is limited to. It shows as the first pill, and removing it searches everywhere. */
+export interface SearchScopePill {
+    label: string
+    onRemove: () => void
+}
+
+/**
+ * `items` lets a variant count suggestions over rows the shared logic doesn't load, like Library email templates.
+ * `scope` shows a removable folder pill before the filter pills.
+ */
+export function WorkflowsSearchBar({
+    items: itemsOverride,
+    scope,
+}: { items?: WorkflowListItem[]; scope?: SearchScopePill | null } = {}): JSX.Element {
     const { items: sharedItems, filters, search, query, facetsVersion } = useValues(workflowsPrototypeLogic)
     const items = itemsOverride ?? sharedItems
     const { addFilter, removeFilter, removeLastFilter, setSearch } = useActions(workflowsPrototypeLogic)
@@ -326,6 +338,9 @@ export function WorkflowsSearchBar({ items: itemsOverride }: { items?: WorkflowL
         } else if (event.key === 'Backspace' && input === '' && filters.length > 0) {
             event.preventDefault()
             removeLastFilter()
+        } else if (event.key === 'Backspace' && input === '' && scope) {
+            event.preventDefault()
+            scope.onRemove()
         }
     }
 
@@ -388,13 +403,25 @@ export function WorkflowsSearchBar({ items: itemsOverride }: { items?: WorkflowL
                     fullWidth
                     className="!h-auto leading-7 flex-wrap"
                     placeholder={
-                        filters.length
+                        filters.length || scope
                             ? 'Add a filter or search'
                             : 'Search workflows, or filter with status:, channel:, from:, owner: and more'
                     }
                     prefix={
                         <>
                             <IconSearch className="text-secondary shrink-0" />
+                            {scope && (
+                                <LemonSnack
+                                    title={`Searching ${scope.label} and its subfolders. Remove to search everywhere.`}
+                                    onClose={scope.onRemove}
+                                    data-attr="workflows-prototype-search-scope"
+                                >
+                                    <span className="inline-flex items-center gap-1">
+                                        <IconFolder className="shrink-0" />
+                                        <span className="text-secondary">in:</span> {scope.label}
+                                    </span>
+                                </LemonSnack>
+                            )}
                             {filters.map((filter) => (
                                 <LemonSnack
                                     key={filterKey(filter)}

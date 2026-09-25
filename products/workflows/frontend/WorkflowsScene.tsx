@@ -1,5 +1,5 @@
 import { MakeLogicType, actions, kea, path, props, reducers, selectors, useActions, useValues } from 'kea'
-import { urlToAction } from 'kea-router'
+import { router, urlToAction } from 'kea-router'
 
 import { LemonButton } from '@posthog/lemon-ui'
 
@@ -23,6 +23,7 @@ import { MessagingTabActions } from './MessagingTabActions'
 import { messagingNavTabs } from './messagingTabs'
 import { newWorkflowLogic } from './Workflows/newWorkflowLogic'
 import { NewWorkflowModal } from './Workflows/NewWorkflowModal'
+import { VARIANTS_WITH_OWN_NEW_WORKFLOW_BUTTON } from './Workflows/prototypes/variants'
 import { WorkflowsListPrototypes } from './Workflows/prototypes/WorkflowsListPrototypes'
 
 const WORKFLOW_SCENE_TABS = ['workflows', 'library', 'channels', 'opt-outs', 'suppression', 'reputation'] as const
@@ -125,6 +126,9 @@ export const scene: SceneExport<WorkflowsSceneProps> = {
 export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
     const { currentTab } = useValues(workflowsSceneLogic(props))
     const { startNewWorkflow } = useActions(newWorkflowLogic)
+    // PROTOTYPE (prototype/workflows-list): some list variants put the only "New workflow" button in the list header.
+    const { searchParams } = useValues(router)
+    const listOwnsNewButton = VARIANTS_WITH_OWN_NEW_WORKFLOW_BUTTON.has(String(searchParams.variant ?? ''))
     const tabs: LemonTab<WorkflowsSceneTab>[] = [
         {
             label: 'Workflows',
@@ -145,7 +149,7 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
                 }}
                 actions={
                     <>
-                        {currentTab === 'workflows' && (
+                        {currentTab === 'workflows' && !listOwnsNewButton && (
                             <AccessControlAction
                                 resourceType={AccessControlResourceType.Workflow}
                                 minAccessLevel={AccessControlLevel.Editor}
