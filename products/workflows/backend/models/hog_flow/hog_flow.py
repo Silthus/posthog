@@ -8,6 +8,9 @@ from django.utils.functional import Promise
 import structlog
 
 from posthog.helpers.encrypted_fields import EncryptedJSONStringField
+from posthog.models.file_system.constants import DEFAULT_SURFACE
+from posthog.models.file_system.file_system_mixin import FileSystemSyncMixin
+from posthog.models.file_system.file_system_representation import FileSystemRepresentation
 from posthog.models.team.team import Team
 from posthog.models.utils import UUIDTModel
 from posthog.plugins.plugin_server_api import reload_hog_flows_on_workers
@@ -107,7 +110,7 @@ def hog_flow_origin_product_choices() -> list[tuple[str, str | Promise]]:
     return list(HogFlow.OriginProduct.choices)
 
 
-class HogFlow(UUIDTModel):
+class HogFlow(FileSystemSyncMixin, UUIDTModel):
     """
     Stores the version, layout and other meta information for each HogFlow
     """
@@ -122,6 +125,24 @@ class HogFlow(UUIDTModel):
         constraints = [
             models.UniqueConstraint(fields=["team", "version", "id"], name="unique_version_per_flow"),
         ]
+
+    # PROTOTYPE (prototype/workflows-list): workflows join the project tree like hog functions do.
+    # Archived workflows keep their row so they stay in their folder.
+    @classmethod
+    def get_file_system_unfiled(cls, team: "Team", surface: str = DEFAULT_SURFACE) -> "models.QuerySet[HogFlow]":
+        base_qs = HogFlow.objects.filter(team=team)
+        return cls._filter_unfiled_queryset(base_qs, team, type="hog_flow", ref_field="id", surface=surface)
+
+    def get_file_system_representation(self) -> FileSystemRepresentation:
+        return FileSystemRepresentation(
+            base_folder=self._get_assigned_folder("Unfiled/Workflows"),
+            type="hog_flow",
+            ref=str(self.pk),
+            name=self.name or "Untitled",
+            href=f"/workflows/{self.pk}/workflow",
+            meta={"created_at": str(self.created_at), "created_by": self.created_by_id},
+            should_delete=False,
+        )
 
     class State(models.TextChoices):
         DRAFT = "draft"

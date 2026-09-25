@@ -488,7 +488,9 @@ class FileSystemViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
         """
         queryset = self._scope_by_project(queryset)
         # type !~ 'hog_function/.*' or team = $current
-        queryset = queryset.filter(Q(**self.parent_query_kwargs) | ~Q(type__startswith="hog_function/"))
+        queryset = queryset.filter(
+            Q(**self.parent_query_kwargs) | ~(Q(type__startswith="hog_function/") | Q(type__startswith="hog_flow"))
+        )
         return queryset
 
     def _filter_queryset_by_parents_lookups(self, queryset):
