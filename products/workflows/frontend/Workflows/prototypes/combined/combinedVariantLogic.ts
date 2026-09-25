@@ -636,7 +636,7 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
             },
         ],
     }),
-    listeners(({ actions, values }) => {
+    listeners(({ actions, values, cache }) => {
         const tagsChanged = (): void => {
             if (values.store) {
                 setWorkflowTagsForFacets(values.store.tags)
@@ -740,6 +740,9 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 actions.persistDone()
             },
             applyView: ({ view }) => {
+                // Each step below rewrites the URL before this view's id reaches it, so the URL sync must not
+                // read the old id back in the meantime.
+                cache.applyingView = true
                 actions.setFilters(resolveViewFilters(view.q, values.user))
                 actions.setSearch(view.text)
                 if (view.folder !== null) {
@@ -749,6 +752,7 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
                 actions.setCompact(view.compact)
                 actions.setColumns(view.columns)
                 actions.clearSelection()
+                cache.applyingView = false
             },
             resetView: () => actions.applyView(values.activeView),
             saveViewAs: ({ name, pinScope }) => {
@@ -833,8 +837,11 @@ export const combinedVariantLogic = kea<MakeLogicType<Values, Actions>>([
             applyView: buildURL,
         }
     }),
-    urlToAction(({ actions, values }) => {
+    urlToAction(({ actions, values, cache }) => {
         const sync = (_: Record<string, string | undefined>, searchParams: Record<string, any>): void => {
+            if (cache.applyingView) {
+                return
+            }
             const view = searchParams.view ? String(searchParams.view) : 'all'
             if (view !== values.activeViewId) {
                 actions.setActiveViewId(view)
