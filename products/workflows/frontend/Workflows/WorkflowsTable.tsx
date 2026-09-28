@@ -1,9 +1,8 @@
 import { useActions, useValues } from 'kea'
 import { useMemo } from 'react'
 
-import { LemonCheckbox, LemonDivider, LemonInput, LemonSelect, LemonTag, Link, Tooltip } from '@posthog/lemon-ui'
+import { LemonCheckbox, LemonInput, LemonSelect, LemonTag, Link, Tooltip } from '@posthog/lemon-ui'
 
-import { AccessControlAction } from 'lib/components/AccessControlAction'
 import { AppMetricsSparkline } from 'lib/components/AppMetrics/AppMetricsSparkline'
 import { MemberSelect } from 'lib/components/MemberSelect'
 import { useOnMountEffect } from 'lib/hooks/useOnMountEffect'
@@ -16,11 +15,10 @@ import { ProfilePicture } from 'lib/lemon-ui/ProfilePicture'
 import { capitalizeFirstLetter } from 'lib/utils/strings'
 import { urls } from 'scenes/urls'
 
-import { AccessControlLevel, AccessControlResourceType } from '~/types'
-
 import { getHogFlowStep } from './hogflows/steps/HogFlowSteps'
 import { HogFlow } from './hogflows/types'
 import { workflowLogic } from './workflowLogic'
+import { WorkflowRowMenuOverlay } from './WorkflowRowMenuOverlay'
 import { findMatchingWorkflowSteps } from './workflowSearchMatches'
 import {
     WORKFLOW_TRIGGER_TYPE_OPTIONS,
@@ -29,13 +27,8 @@ import {
     WorkflowTypeFilter,
     workflowsLogic,
 } from './workflowsLogic'
+import { WorkflowStatusTag } from './WorkflowStatusTag'
 import { WorkflowStepMatches } from './WorkflowStepMatches'
-
-const STATUS_CONFIG: Record<string, { label: string; type: 'success' | 'default' | 'muted' }> = {
-    active: { label: 'Active', type: 'success' },
-    draft: { label: 'Draft', type: 'default' },
-    archived: { label: 'Archived', type: 'muted' },
-}
 
 function WorkflowTypeTag({ workflow }: { workflow: HogFlow }): JSX.Element {
     const hasMessagingAction = useMemo(() => {
@@ -276,10 +269,7 @@ export function WorkflowsTable(): JSX.Element {
         {
             title: 'Status',
             width: 0,
-            render: (_, item) => {
-                const config = STATUS_CONFIG[item.status] || STATUS_CONFIG.draft
-                return <LemonTag type={config.type}>{config.label}</LemonTag>
-            },
+            render: (_, item) => <WorkflowStatusTag status={item.status} />,
         },
         {
             width: 0,
@@ -287,71 +277,15 @@ export function WorkflowsTable(): JSX.Element {
                 return (
                     <More
                         overlay={
-                            <>
-                                {workflow.status !== 'archived' && (
-                                    <AccessControlAction
-                                        resourceType={AccessControlResourceType.Workflow}
-                                        minAccessLevel={AccessControlLevel.Editor}
-                                        userAccessLevel={workflow.user_access_level}
-                                    >
-                                        <LemonButton
-                                            data-attr="workflow-edit"
-                                            fullWidth
-                                            status={workflow.status === 'draft' ? 'default' : 'danger'}
-                                            onClick={() => toggleWorkflowStatus(workflow)}
-                                            tooltip={
-                                                workflow.status === 'draft'
-                                                    ? 'Enables the workflow to start sending messages'
-                                                    : 'Disables the workflow from sending any new messages. In-progress workflows will end immediately.'
-                                            }
-                                        >
-                                            {workflow.status === 'draft' ? 'Enable' : 'Disable'}
-                                        </LemonButton>
-                                    </AccessControlAction>
-                                )}
-                                <LemonButton
-                                    data-attr="workflow-duplicate"
-                                    fullWidth
-                                    onClick={() => duplicateWorkflow(workflow)}
-                                >
-                                    Duplicate
-                                </LemonButton>
-                                <LemonDivider />
-                                <AccessControlAction
-                                    resourceType={AccessControlResourceType.Workflow}
-                                    minAccessLevel={AccessControlLevel.Editor}
-                                    userAccessLevel={workflow.user_access_level}
-                                >
-                                    <LemonButton
-                                        data-attr="workflow-archive-restore"
-                                        fullWidth
-                                        status={workflow.status === 'archived' ? 'default' : 'danger'}
-                                        onClick={() => {
-                                            workflow.status === 'archived'
-                                                ? restoreWorkflow(workflow)
-                                                : archiveWorkflow(workflow)
-                                        }}
-                                    >
-                                        {workflow.status === 'archived' ? 'Restore' : 'Archive'}
-                                    </LemonButton>
-                                </AccessControlAction>
-                                {workflow.status === 'archived' && (
-                                    <AccessControlAction
-                                        resourceType={AccessControlResourceType.Workflow}
-                                        minAccessLevel={AccessControlLevel.Editor}
-                                        userAccessLevel={workflow.user_access_level}
-                                    >
-                                        <LemonButton
-                                            data-attr="workflow-delete"
-                                            fullWidth
-                                            status="danger"
-                                            onClick={() => deleteWorkflow(workflow)}
-                                        >
-                                            Delete
-                                        </LemonButton>
-                                    </AccessControlAction>
-                                )}
-                            </>
+                            <WorkflowRowMenuOverlay
+                                status={workflow.status}
+                                userAccessLevel={workflow.user_access_level}
+                                onToggleStatus={() => toggleWorkflowStatus(workflow)}
+                                onDuplicate={() => duplicateWorkflow(workflow)}
+                                onArchive={() => archiveWorkflow(workflow)}
+                                onRestore={() => restoreWorkflow(workflow)}
+                                onDelete={() => deleteWorkflow(workflow)}
+                            />
                         }
                     />
                 )
