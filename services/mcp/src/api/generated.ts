@@ -51972,10 +51972,10 @@ export namespace Schemas {
      * * `live` - Live
      * * `draft` - Draft
      */
-    export type StepSearchSourceEnum = typeof StepSearchSourceEnum[keyof typeof StepSearchSourceEnum];
+    export type StepSearchVersionEnum = typeof StepSearchVersionEnum[keyof typeof StepSearchVersionEnum];
 
 
-    export const StepSearchSourceEnum = {
+    export const StepSearchVersionEnum = {
       Live: 'live',
       Draft: 'draft',
     } as const;
@@ -51994,7 +51994,7 @@ export namespace Schemas {
        *
        * * `live` - Live
        * * `draft` - Draft */
-      source: StepSearchSourceEnum;
+      matched_in: StepSearchVersionEnum;
       /** The matched text with the surrounding words, whitespace collapsed. Ellipses mark cut text. */
       excerpt: string;
     }
@@ -52011,7 +52011,7 @@ export namespace Schemas {
       readonly status: HogFlowStateEnum;
       readonly origin_product: HogFlowOriginProductEnum | null;
       readonly created_at: string;
-      readonly created_by: UserBasic;
+      readonly created_by: UserBasic | null;
       readonly updated_at: string;
       /**
          * The effective access level the user has for this object
@@ -116821,7 +116821,7 @@ export namespace Schemas {
      */
     offset?: number;
     /**
-     * Text to find, at most 200 characters. Case-insensitive, and a space also matches a dash or an underscore. Matches the workflow name and description, and the step names and the subject line, preheader and body text of email steps, in both the live workflow and its pending draft.
+     * Text to find. Case-insensitive, and a space also matches a dash or an underscore. Matches the workflow name and description, and the step names and the subject line, preheader and body text of email steps, in both the live workflow and its pending draft.
      * @minLength 1
      * @maxLength 200
      */

@@ -1888,9 +1888,9 @@ export const StepSearchFieldEnumApi = {
  * * `live` - Live
  * * `draft` - Draft
  */
-export type StepSearchSourceEnumApi = (typeof StepSearchSourceEnumApi)[keyof typeof StepSearchSourceEnumApi]
+export type StepSearchVersionEnumApi = (typeof StepSearchVersionEnumApi)[keyof typeof StepSearchVersionEnumApi]
 
-export const StepSearchSourceEnumApi = {
+export const StepSearchVersionEnumApi = {
     Live: 'live',
     Draft: 'draft',
 } as const
@@ -1909,7 +1909,7 @@ export interface HogFlowSearchStepMatchApi {
      *
      * * `live` - Live
      * * `draft` - Draft */
-    source: StepSearchSourceEnumApi
+    matched_in: StepSearchVersionEnumApi
     /** The matched text with the surrounding words, whitespace collapsed. Ellipses mark cut text. */
     excerpt: string
 }
@@ -1926,7 +1926,7 @@ export interface HogFlowSearchResultApi {
     readonly status: HogFlowStateEnumApi
     readonly origin_product: HogFlowOriginProductEnumApi | null
     readonly created_at: string
-    readonly created_by: UserBasicApi
+    readonly created_by: UserBasicApi | null
     readonly updated_at: string
     /**
      * The effective access level the user has for this object
@@ -2453,7 +2453,7 @@ export type HogFlowsSearchListParams = {
      */
     offset?: number
     /**
-     * Text to find, at most 200 characters. Case-insensitive, and a space also matches a dash or an underscore. Matches the workflow name and description, and the step names and the subject line, preheader and body text of email steps, in both the live workflow and its pending draft.
+     * Text to find. Case-insensitive, and a space also matches a dash or an underscore. Matches the workflow name and description, and the step names and the subject line, preheader and body text of email steps, in both the live workflow and its pending draft.
      * @minLength 1
      * @maxLength 200
      */
