@@ -51953,6 +51953,76 @@ export namespace Schemas {
     }
 
     /**
+     * * `step_name` - Step Name
+     * * `subject` - Subject
+     * * `preheader` - Preheader
+     * * `body` - Body
+     */
+    export type StepSearchFieldEnum = typeof StepSearchFieldEnum[keyof typeof StepSearchFieldEnum];
+
+
+    export const StepSearchFieldEnum = {
+      StepName: 'step_name',
+      Subject: 'subject',
+      Preheader: 'preheader',
+      Body: 'body',
+    } as const;
+
+    /**
+     * * `live` - Live
+     * * `draft` - Draft
+     */
+    export type StepSearchSourceEnum = typeof StepSearchSourceEnum[keyof typeof StepSearchSourceEnum];
+
+
+    export const StepSearchSourceEnum = {
+      Live: 'live',
+      Draft: 'draft',
+    } as const;
+
+    export interface HogFlowSearchStepMatch {
+      /** ID of the step that matched. */
+      action_id: string;
+      /** The first field of the step that matched: the step name, or the email subject, preheader or body text.
+       *
+       * * `step_name` - Step Name
+       * * `subject` - Subject
+       * * `preheader` - Preheader
+       * * `body` - Body */
+      field: StepSearchFieldEnum;
+      /** `live` when the published step matched, `draft` when only the version staged in the draft matched.
+       *
+       * * `live` - Live
+       * * `draft` - Draft */
+      source: StepSearchSourceEnum;
+      /** The matched text with the surrounding words, whitespace collapsed. Ellipses mark cut text. */
+      excerpt: string;
+    }
+
+    /**
+     * A workflow that matched a search: its metadata and the steps that matched.
+     */
+    export interface HogFlowSearchResult {
+      readonly id: string;
+      /** @nullable */
+      readonly name: string | null;
+      readonly description: string;
+      readonly version: number;
+      readonly status: HogFlowStateEnum;
+      readonly origin_product: HogFlowOriginProductEnum | null;
+      readonly created_at: string;
+      readonly created_by: UserBasic;
+      readonly updated_at: string;
+      /**
+         * The effective access level the user has for this object
+         * @nullable
+         */
+      readonly user_access_level: string | null;
+      /** The steps that matched the search, one entry per step. Empty when only the workflow name or description matched. */
+      readonly matched_steps: readonly HogFlowSearchStepMatch[];
+    }
+
+    /**
      * @nullable
      */
     export type HogFlowTemplateCreatedBy = { [key: string]: unknown } | null;
@@ -66645,6 +66715,15 @@ export namespace Schemas {
       /** @nullable */
       previous?: string | null;
       results: HogFlowRevisionBasic[];
+    }
+
+    export interface PaginatedHogFlowSearchResultList {
+      count: number;
+      /** @nullable */
+      next?: string | null;
+      /** @nullable */
+      previous?: string | null;
+      results: HogFlowSearchResult[];
     }
 
     export interface PaginatedHogFlowTemplateList {
@@ -116730,6 +116809,23 @@ export namespace Schemas {
      * Case-insensitive workflow name filter. Applied before the worst-50 cap, so it finds workflows the unfiltered response cuts off.
      */
     search?: string;
+    };
+
+    export type HogFlowsSearchListParams = {
+    /**
+     * Number of results to return per page.
+     */
+    limit?: number;
+    /**
+     * The initial index from which to return the results.
+     */
+    offset?: number;
+    /**
+     * Text to find, at most 200 characters. Case-insensitive, and a space also matches a dash or an underscore. Matches the workflow name and description, and the step names and the subject line, preheader and body text of email steps, in both the live workflow and its pending draft.
+     * @minLength 1
+     * @maxLength 200
+     */
+    q: string;
     };
 
     export type HogFunctionTemplatesListParams = {
