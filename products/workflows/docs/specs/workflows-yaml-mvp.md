@@ -98,11 +98,11 @@ The renderer warns when a pulled workflow sets one of them.
 
 ### Triggers
 
-| `type`                             | Fields                                                                                            | Compiles to                                                                            |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `event`                            | `event` (required), `properties` (conditions, optional), `filter_test_accounts` (default `false`) | An event trigger with one `events` entry, as `definition.json` in the sample set shows |
-| `schedule`                         | none                                                                                              | A schedule trigger. The cadence is attached with the schedules API, as today           |
-| any other value of `TRIGGER_TYPES` | `config` (object, required)                                                                       | The definition's trigger `config` verbatim, with `type` set from the document          |
+| `type`                             | Fields                                                                                            | Compiles to                                                                   |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `event`                            | `event` (required), `properties` (conditions, optional), `filter_test_accounts` (default `false`) | An event trigger whose `filters.events` holds that one event                  |
+| `schedule`                         | none                                                                                              | A schedule trigger. The cadence is attached with the schedules API, as today  |
+| any other value of `TRIGGER_TYPES` | `config` (object, required)                                                                       | The definition's trigger `config` verbatim, with `type` set from the document |
 
 Every trigger may carry `name` and `description`.
 The trigger node's id is always `trigger_node` and the exit node's id is always `exit_node`.
