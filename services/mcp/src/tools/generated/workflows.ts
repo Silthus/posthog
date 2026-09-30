@@ -521,6 +521,7 @@ const workflowsSearch = (): ToolBase<
             path: `/api/projects/${encodeURIComponent(String(projectId))}/hog_flows/search/`,
             query: {
                 broadcast_eligible: params.broadcast_eligible,
+                broadcast_status: params.broadcast_status,
                 created_at: params.created_at,
                 created_by: params.created_by,
                 excerpt_chars: params.excerpt_chars,
@@ -528,6 +529,7 @@ const workflowsSearch = (): ToolBase<
                 limit: params.limit,
                 max_matched_steps: params.max_matched_steps,
                 offset: params.offset,
+                optimization_enabled: params.optimization_enabled,
                 origin_product: params.origin_product,
                 output: params.output,
                 q: params.q,
