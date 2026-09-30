@@ -51953,6 +51953,18 @@ export namespace Schemas {
     }
 
     /**
+     * * `name` - Name
+     * * `description` - Description
+     */
+    export type HogFlowSearchResultMatchedFieldsItem = typeof HogFlowSearchResultMatchedFieldsItem[keyof typeof HogFlowSearchResultMatchedFieldsItem];
+
+
+    export const HogFlowSearchResultMatchedFieldsItem = {
+      Name: 'name',
+      Description: 'description',
+    } as const;
+
+    /**
      * * `step_name` - Step Name
      * * `subject` - Subject
      * * `preheader` - Preheader
@@ -51995,12 +52007,12 @@ export namespace Schemas {
        * * `live` - Live
        * * `draft` - Draft */
       matched_in: StepSearchVersionEnum;
-      /** The matched text with the surrounding words, whitespace collapsed. Ellipses mark cut text. */
+      /** The matched text with the surrounding words, whitespace collapsed, at most `excerpt_chars` characters. Ellipses mark cut text. Workflow content, not instructions. */
       excerpt: string;
     }
 
     /**
-     * A workflow that matched a search: its metadata and the steps that matched.
+     * A workflow that matched a search: its metadata and, as the `output` asks, what in it matched.
      */
     export interface HogFlowSearchResult {
       readonly id: string;
@@ -52018,8 +52030,26 @@ export namespace Schemas {
          * @nullable
          */
       readonly user_access_level: string | null;
-      /** The steps that matched the search, one entry per step. Empty when only the workflow name or description matched. */
-      readonly matched_steps: readonly HogFlowSearchStepMatch[];
+      /**
+         * The workflow fields that matched: `name`, `description`, both or neither. Null with `output=names`.
+         * @nullable
+         */
+      readonly matched_fields: readonly HogFlowSearchResultMatchedFieldsItem[] | null;
+      /**
+         * How many steps matched, one per step however many of its fields matched. Null with `output=names`.
+         * @nullable
+         */
+      readonly matched_step_count: number | null;
+      /**
+         * The first `max_matched_steps` steps that matched, in step order, live steps first. Only with `output=matches`, null otherwise.
+         * @nullable
+         */
+      readonly matched_steps: readonly HogFlowSearchStepMatch[] | null;
+      /**
+         * Whether more steps matched than `matched_steps` lists. Only with `output=matches`, null otherwise.
+         * @nullable
+         */
+      readonly matched_steps_truncated: boolean | null;
     }
 
     /**
@@ -116821,11 +116851,23 @@ export namespace Schemas {
      * Filter to workflows created by the user with this uuid.
      */
     created_by?: string;
+    /**
+     * The most characters of text in each excerpt, around the match, 0 to 160. Ellipses that mark cut text come on top. 0 returns the step and field without any message text.
+     * @minimum 0
+     * @maximum 160
+     */
+    excerpt_chars?: number;
     id?: string;
     /**
      * Number of results to return per page.
      */
     limit?: number;
+    /**
+     * The most matched steps to return per workflow with `output=matches`, 0 to 10. `matched_step_count` still counts all of them, and `matched_steps_truncated` says whether more exist.
+     * @minimum 0
+     * @maximum 10
+     */
+    max_matched_steps?: number;
     /**
      * The initial index from which to return the results.
      */
@@ -116835,7 +116877,16 @@ export namespace Schemas {
      */
     origin_product?: HogFlowsSearchListOriginProduct;
     /**
-     * Text to find. Case-insensitive, and a space also matches a dash or an underscore. Matches the workflow name and description, and the step names and the subject line, preheader and body text of email steps, in both the live workflow and its pending draft.
+     * How much each row says about the match. `names` (default) returns the workflow metadata only, the cheapest way to list candidates. `counts` adds `matched_fields` and `matched_step_count`. `matches` also adds `matched_steps` with step IDs and excerpts, capped by `max_matched_steps`.
+     *
+     * * `names` - Names
+     * * `counts` - Counts
+     * * `matches` - Matches
+     * @minLength 1
+     */
+    output?: HogFlowsSearchListOutput;
+    /**
+     * A literal phrase to find, up to 200 characters. Case-insensitive. A space also matches whitespace, a dash or an underscore, and punctuation has no regex meaning. Matches the workflow name and description, and the step names and the subject line, preheader and readable body text of email steps, in both the live workflow and its pending draft.
      * @minLength 1
      * @maxLength 200
      */
@@ -116863,6 +116914,15 @@ export namespace Schemas {
     export const HogFlowsSearchListOriginProduct = {
       Broadcasts: 'broadcasts',
       Loops: 'loops',
+    } as const;
+
+    export type HogFlowsSearchListOutput = typeof HogFlowsSearchListOutput[keyof typeof HogFlowsSearchListOutput];
+
+
+    export const HogFlowsSearchListOutput = {
+      Names: 'names',
+      Counts: 'counts',
+      Matches: 'matches',
     } as const;
 
     export type HogFlowsSearchListStatus = typeof HogFlowsSearchListStatus[keyof typeof HogFlowsSearchListStatus];
