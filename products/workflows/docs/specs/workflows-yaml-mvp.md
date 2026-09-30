@@ -30,7 +30,7 @@ The server owns both translations, so a new workflow feature needs no client rel
 No secrets in the MVP.
 `check` and `apply` refuse a value for a secret-typed template input, with a located error that names the step and the input.
 "Keep a value set in the UI" was not picked: a code-managed workflow is read-only in the UI, so nobody could set that value there without releasing the workflow first.
-One thing works without new code: when a file leaves a secret-typed input out, the serializer's existing re-merge keeps a value already stored under the same step id (#73).
+One thing works without new code: when a file leaves a secret-typed input out, the serializer's existing re-merge keeps a value already stored on the live workflow under the same step id (#73).
 The spec states this as behavior, not as a feature.
 
 ## The document
@@ -60,7 +60,7 @@ steps:
           - type: email
             name: Thank the new customer
             from: { integration_ids: [12], name: The Example team }
-            to: '{person.properties.email}'
+            to: '{{ person.properties.email }}'
             subject: Thanks for upgrading
             text: Your pro plan is live.
             html: <p>Your pro plan is live.</p>
@@ -87,7 +87,7 @@ exit:
 | `name`           | yes      | The workflow name.                                                                                                                                                                                |
 | `description`    | no       | Defaults to empty.                                                                                                                                                                                |
 | `status`         | no       | `draft` or `active`, default `draft` (locked on #69). The file wins on every apply, so an apply can re-enable a workflow a person disabled.                                                       |
-| `exit_condition` | no       | One of the model's `ExitCondition` values, default `exit_only_at_end`.                                                                                                                            |
+| `exit_condition` | no       | One of the model's `ExitCondition` values, default `exit_only_at_end`. The compiler always sends it, because the model's own default is `exit_on_conversion`.                                     |
 | `variables`      | no       | A list of `{key, type, default}`, the shape `HogFlowVariableSerializer` accepts.                                                                                                                  |
 | `trigger`        | yes      | One trigger, dispatched on `type`.                                                                                                                                                                |
 | `steps`          | yes      | The steps in run order. May be empty.                                                                                                                                                             |
@@ -111,14 +111,14 @@ The trigger node's id is always `trigger_node` and the exit node's id is always 
 
 Every step has `type` and `name` (required), and `id` and `description` (optional).
 
-| `type`     | Fields                                                                                                                             | Compiles to                                                                                           |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `delay`    | `duration`, the `<number><unit>` form `delay_duration` accepts (`30m`, `3d`)                                                       | `delay`                                                                                               |
-| `branch`   | `arms`: one or more `{name, when, then}`. `when` is one or more conditions. `then` is one or more steps                            | `conditional_branch` with one condition per arm                                                       |
-| `email`    | `from: {integration_ids, name, email}`, `to`, `subject`, `text`, `html`, `preheader`                                               | `function_email` on `template-email`, with the `design` built by `build_html_wrap_design` from `html` |
-| `webhook`  | `url` (required), `method` (default `POST`), `headers`, `body`                                                                     | `function` on `template-webhook`                                                                      |
-| `function` | `template` (a template id), `inputs` (a map of input key to value)                                                                 | `function` on that template, each input wrapped as `{value}`                                          |
-| `step`     | `action_type` (any action type except `trigger` and `exit`), `config` (object), `branches` (a list of step lists, by branch index) | That action verbatim. The escape hatch for every action the typed steps do not cover                  |
+| `type`     | Fields                                                                                                                                                                                                       | Compiles to                                                                                                                                                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `delay`    | `duration`, the `<number><unit>` form `delay_duration` accepts (`30m`, `3d`), at most `30d`, because the runtime clamps a longer delay to 30 days without a word                                             | `delay`                                                                                                                                                                                                                                            |
+| `branch`   | `arms`: one or more `{name, when, then}`. `when` is one or more conditions. `then` is one or more steps                                                                                                      | `conditional_branch` with one condition per arm                                                                                                                                                                                                    |
+| `email`    | `from: {integration_ids, name, email}`, `to` (an address string, or `{email, name}`), `subject`, `text`, `html`, `preheader`. Values use the email template's Liquid syntax, `{{ person.properties.email }}` | `function_email` on `template-email`: `integration_ids` becomes `integrationIds`, a string `to` becomes `{email, name: ""}`. The compiler leaves `design` out, because the serializer already wraps HTML-only emails with `build_html_wrap_design` |
+| `webhook`  | `url` (required), `method` (default `POST`), `headers`, `body`                                                                                                                                               | `function` on `template-webhook`                                                                                                                                                                                                                   |
+| `function` | `template` (a template id), `inputs` (a map of input key to value)                                                                                                                                           | `function` on that template, each input wrapped as `{value}`                                                                                                                                                                                       |
+| `step`     | `action_type` (any action type except `trigger` and `exit`), `config` (object), `branches` (a list of step lists, by branch index)                                                                           | That action verbatim. The escape hatch for every action the typed steps do not cover                                                                                                                                                               |
 
 A condition is `{person: <property>, operator, value}` or `{event: <property>, operator, value}`.
 It compiles to one entry in the arm's `filters.properties` with `type` `person` or `event`.
@@ -184,14 +184,15 @@ Both go through the same models.
 
 `yaml_loader.py` parses with PyYAML, already a dependency, through a `SafeLoader` subclass with these changes:
 
-- **YAML 1.2 core scalar rules.** Only `true`/`false` (three casings) are booleans and only `null`, `~` and the empty value are null. `on`, `off`, `yes`, `no`, `y` and `n` stay strings. So `on:` can never become the key `True`, and `no:` can never become `False` (research section 2.3).
+- **YAML 1.2 core scalar rules.** The loader replaces PyYAML's YAML 1.1 implicit resolvers with the YAML 1.2 core schema's. Only `true`/`false` (three casings) are booleans and only `null`, `~` and the empty value are null. `on`, `off`, `yes`, `no`, `y` and `n` stay strings. So `on:` can never become the key `True`, and `no:` can never become `False` (research section 2.3). The int and float resolvers are the 1.2 core ones, so `1:30` stays a string instead of the sexagesimal `90`. There is no timestamp resolver, so `2026-09-30` stays a string instead of a date.
 - **Refused, each with a located `yaml_feature_not_allowed` error:** anchors and aliases, merge keys (`<<`), explicit tags, and mapping keys that are not strings.
 - **Duplicate keys are refused** with `duplicate_key` at the second key. PyYAML keeps the last one silently otherwise.
 - **Positions.** The loader keeps a map from each value's path to the line and column of its node, so every error can point at the file.
 
 The request carries the file as a string (`content`).
-A JSON document is valid YAML 1.2, so a caller that holds JSON can send it as `content` too.
-There is one input format and one error format.
+A caller that holds JSON may send the JSON text as `content`: when `content` starts with `{` after whitespace, the server parses it with `json.loads` instead of PyYAML, because PyYAML rejects tabs between tokens and splits `😀` into lone surrogates.
+JSON content has no position map, so its errors carry a `path` and null `line` and `column`.
+There is one field and one error format.
 
 ## Errors
 
@@ -209,10 +210,10 @@ Every document error has this shape:
 }
 ```
 
-- `status` is a machine code from one `TextChoices` class. The set: `invalid_yaml`, `yaml_feature_not_allowed`, `duplicate_key`, `content_too_large`, `unsupported_version`, `missing_field`, `unknown_field`, `invalid_value`, `unknown_type`, `duplicate_step_id`, `secret_input`, `unknown_template`, `invalid_workflow`, and `status_change_not_allowed`. Slice D adds its ownership refusals.
+- `status` is a machine code from one `TextChoices` class. The set: `invalid_yaml`, `yaml_feature_not_allowed`, `duplicate_key`, `content_too_large`, `unsupported_version`, `missing_field`, `unknown_field`, `invalid_value`, `unknown_type`, `duplicate_step_id`, `secret_input`, `unknown_template`, `invalid_workflow`, `status_change_not_allowed`, and `conflict`. Slice D adds its ownership refusals, returned with HTTP 403 in this same shape.
 - `path` uses the document's own names (`steps[1].arms[0].then[0].subject`), never the definition's, and drops the union tag Pydantic puts in its `loc`.
-- `line` and `column` are 1-based and point at the value, or at the key for `unknown_field`, or at the parent mapping for `missing_field`. They are null only when no node exists (an empty file).
-- Errors the serializer or `validate_graph` raise after compiling are mapped back to the step through the compiler's map from action id to document path, and carry `status: invalid_workflow`.
+- `line` and `column` are 1-based and point at the value, or at the key for `unknown_field`, or at the parent mapping for `missing_field`. They are null when no node exists (an empty file) and for JSON content.
+- Errors the serializer or `validate_graph` raise after compiling are mapped back to the step through the compiler's map from action id to document path, and carry `status: invalid_workflow`. The serializer runs with `enforce_graph_structure: True` in its context, as the `graph` action does; without it graph errors are only logged.
 - All errors are collected and returned together, in file order, not only the first.
 
 A document error returns HTTP 400 with `{"errors": [...]}` from both `check` and `apply`.
@@ -251,7 +252,12 @@ Request:
 
 `content` is required, at most 1 MiB; longer content is `content_too_large`.
 
-Steps, in order: parse, validate the models, compile, look the workflow up by `key` through the viewset's queryset (so access control applies), validate the compiled definition through `HogFlowSerializer` exactly as `apply` would, then build the plan.
+Steps, in order:
+
+1. Parse, validate the models, compile.
+2. Look the workflow up by `key` in the team. The viewset's access-level filter covers only `list`, so check the caller's access to the found workflow explicitly with `user_access_control.check_access_level_for_object(workflow, "viewer")`, and return 403 when it fails.
+3. Validate a deep copy of the compiled definition through `HogFlowSerializer`, with the context `apply` would use and `enforce_graph_structure: True`. Validation writes nothing to the database, but it changes the dicts it gets, which is why it gets a copy.
+4. Build the plan by comparing the serializer's `validated_data` with the stored row, normalized the way `_stage_revision_bump` normalizes both sides (secrets stripped, bytecode and other derived keys dropped). Comparing raw compiled dicts would report every step as changed, because validation adds bytecode, filter defaults and the email design.
 
 Response 200:
 
@@ -297,22 +303,24 @@ Response 200:
 }
 ```
 
-- `result` is `create`, `update` or `unchanged`. It is `unchanged` when no stored field would change. `workflow` is null on `create`.
-- `removed_steps`, `in_flight_runs`, `position_unknown`, `empty_variables` and `schedule_conflicts` come from `build_publish_impact` in `presentation/views/publish_impact.py` and the viewset's `_get_in_flight_counts`, with the stored live graph as "live" and the compiled definition as "draft". Their serializers are the existing `HogFlowPublishImpact*Serializer` classes. Counts are best effort: `runs` and `in_flight_runs` are null when the counting service is unavailable, never 0.
+- `result` is `create`, `update`, `stage` (see "Active workflows through MCP" below) or `unchanged`. It is `unchanged` when no stored field would change. `workflow` is null on `create`.
+- `removed_steps` is the `deleted_steps` list `build_publish_impact` returns (`presentation/views/publish_impact.py`). `in_flight_runs`, `position_unknown`, `empty_variables` and `schedule_conflicts` come from the same call and from the viewset's `_get_in_flight_counts`, with the stored live graph as "live" and the validated definition as "draft". Their serializers are the existing `HogFlowPublishImpact*Serializer` classes. Counts are best effort: `runs` and `in_flight_runs` are null when the counting service is unavailable, never 0.
 - `changed_steps` compares steps by action id. `changes` lists the dotted paths, at most two levels deep, whose values differ.
-- `discards_draft` is true when the stored workflow has a staged draft; `apply` replaces the live content and discards it.
+- `discards_draft` is true when the stored workflow has a staged draft that `apply` would discard by writing live content. It is false when `result` is `stage`.
 - A removed step with people in it adds one warning, as above.
 
 ### `POST code_apply/`
 
 Same request as `check`.
-It runs every step of `check`, then writes:
+It runs steps 1 and 2 of `check` (with `"editor"` as the access level on an existing workflow), then writes:
 
 - **Create** when no workflow has the key: through `HogFlowSerializer` with `key` set on save, as `perform_create` does. The first revision comes from PostHog/posthog#104156 once that is on the base; `apply` does not duplicate it.
-- **Update** when the key exists: `check_object_permissions` on the row, then under `select_for_update` the same sequence `publish` uses today: `_refresh_action_redirects`, `_stage_revision_bump`, `serializer.save()`, `_append_revisions` when the content changed. It then clears a staged draft the way `discard_draft` does, including `unstage_workflow_proposals`.
+- **Update** when the key exists: inside one `transaction.atomic()`, lock the row with `select_for_update`, build the serializer on the locked row and validate there, then run the sequence `publish` uses today: `_refresh_action_redirects`, `_stage_revision_bump`, `serializer.save()`, `_append_revisions` when the content changed. Validating before the lock would compare against a stale row; PostHog/posthog#103540 fixed the same race in `perform_update`. It then clears a staged draft the way `discard_draft` does, including `unstage_workflow_proposals`.
+- **Secrets on update** come from the live row only. The serializer's `existing_encrypted_inputs` context normally merges the staged draft's secrets last; apply builds that context from the live `encrypted_inputs` alone, so discarding a draft never puts the draft's secrets live.
 - **Unchanged**: no write, no revision, no activity log entry.
 - After a write: `_maybe_reschedule_timing_edits`, `_pause_schedules_on_audience_change`, the activity log, and `_emit_resource_edited`, as `perform_update` does.
 - **Status through MCP.** A request from the MCP transport may not create an `active` workflow or change the stored `status`, the rule `perform_create` and `perform_update` already apply. It gets `status_change_not_allowed`, whose `fix` names `workflows-enable` and `workflows-disable`.
+- **Active workflows through MCP.** Through the MCP transport, a content change to an active workflow is staged as a draft with the viewset's `_write_draft`, the way `perform_update` routes MCP edits today, and `result` is `staged`. The agent then publishes it with `workflows-publish`, whose preview and confirm token stay the only way an agent puts content live. Every other caller writes live, as the raw API does today.
 - **A concurrent create** of the same key hits the unique constraint from PostHog/posthog#105958 and returns 409 with `status: conflict` and a `fix` that says to retry.
 
 Response 201 on create, 200 otherwise:
@@ -332,7 +340,7 @@ Response 201 on create, 200 otherwise:
 }
 ```
 
-`result` is `created`, `updated` or `unchanged`.
+`result` is `created`, `updated`, `staged` or `unchanged`.
 `apply` never refuses a change because people are in a removed step.
 Whether it should is Michael's open decision on #98, listed in the map as "Breaking changes to code-defined workflows".
 
@@ -388,7 +396,7 @@ Slice C lifts the walk (arm detection, placements, warnings) into `workflow_code
 - **A workflow without a key** gets the kebab-case slug of its name and a warning that applying the file creates a new workflow, because adopting an existing workflow is deferred (#72).
 - **Quoting.** The dumper quotes every string that YAML 1.1 or 1.2 would read as something else (`on`, `no`, `1.10`, `012`), so the file reads the same in any editor and in the loader.
 - **Warnings** also open the file as `#` comment lines, so they survive a copy of `content` alone.
-- **The round trip** `compile(parse(render(d))) == d` is one parametrized Python test over the fixtures of #104452. Each `.ts` becomes a `.yaml`; the `.json` and `.roundtrip.json` inputs stay.
+- **The round trip** is one parametrized Python test over the fixtures of #104452: `compile(parse(render(d)))`, validated by the serializer, equals the normalized definition, which is the `.roundtrip.json` fixture where one exists and the `.json` input otherwise. Each `.ts` becomes a `.yaml`; the `.json` and `.roundtrip.json` inputs stay.
 
 The Copy code button and its frontend logic from #104452 are not in the MVP.
 They come back with the read-only editor, behind its flag, and call `{id}/code/`.
@@ -421,7 +429,7 @@ Slice F replaces the npm-shaped work of #101 and #102 (PostHog/posthog#104157 an
 
 The job calls production endpoints, so the PR merges only after slices B and D serve there.
 
-# 96 stays, rewritten: once the MVP PRs are merged and deployed, one live check, apply and pull against a throwaway PostHog project, with the project and key from Michael out of band, plus the customer-facing docs and launch surface the map lists as not yet specified.
+Ticket #96 stays, rewritten: once the MVP PRs are merged and deployed, one live check, apply and pull against a throwaway PostHog project, with the project and key from Michael out of band, plus the customer-facing docs and launch surface the map lists as not yet specified.
 
 ## Slices
 
@@ -437,13 +445,16 @@ Every slice is a draft PR on upstream `PostHog/posthog` from a branch on the for
 | E     | The authoring skill teaches YAML and the MCP tools                        | The branch of PostHog/posthog#104313, rewritten in place                                                                                                                   | C, D       |
 | F     | PostHog's own workflows are YAML files that CI checks and applies         | Upstream `master`                                                                                                                                                          | D          |
 
+The tickets on the fork: A is #169, B is #170, C is #171, D is #172, E is #173, F is #174.
+Bare PR numbers below (#105958, #103849, #104156, #104202, #103540, #104313, #104452) are on upstream `PostHog/posthog`.
+
 Why this shape:
 
 - **A carries only the column.** Check and apply need `key` only to look a workflow up and to set it on create. #105958 is the model and its two migrations, four files that apply cleanly to `master`. The serializer and list-filter work of #103849 still edits the old `api/hog_flow.py` and is not needed.
 - **A is safe alone.** It writes nothing, and its MCP tools stay behind the flag. B follows closely.
 - **C does not wait for B.** The round trip needs the compiler, not the write path. B and C touch the same shared files (below), so the conductor runs them one after the other.
 - **D is the only slice that needs #103540.** Ownership columns, the code-ownership guard, the first revision on create and the project secret key path all arrive with it. D restacks those commits in its own branch; if the other session has already restacked #105958, #103849, #104156 or #104202, D carries their current heads instead. D never pushes to any of those PRs' branches or to #103540's.
-- **D's authored work**: `code_apply` accepts `source: {repository, path, ref}` and `allow_move`. With `source`, apply sets `managed_by: code`, the three `source_*` fields and `created_via`, so the revision records the source. An apply over a code-managed workflow is refused with the guard's `status`, `message`, `why`, `fix` when it has no `source`, when it comes through the MCP transport, or when its repository and path differ from the stored ones and `allow_move` is not set. The four action names join `psak_allowed_actions`. The guard's copy that says to push with the workflows CLI names `apply` instead. The plan gains `managed_by: {from, to}`.
+- **D's authored work**: `code_apply` accepts `source: {repository, path, ref}` and `allow_move`. With `source`, apply sets `managed_by: code` and the three `source_*` fields, so the revision records the source. `created_via` stays what #103540 makes it: read-only, stamped from the event source on create, never changed afterwards. The #103540 guard (`code_ownership.py`) exempts every non-session, non-MCP API request today, so the apply refusals are new rules, not existing ones: an apply over a code-managed workflow is refused when it has no `source`, when it comes through the MCP transport, or when its repository and path differ from the stored ones and `allow_move` is not set. The code actions return these refusals as HTTP 403 in the document error shape (`status` is the refusal kind); the guard's own 403 shape for other actions stays as #103540 has it. The four action names join `psak_allowed_actions`. The guard's copy that says to push with the workflows CLI (`code_ownership.py`, the claim refusal) names `apply` instead. The plan gains `managed_by: {from, to}`.
 - **E updates #104313 in place.** It is four files with no carried commits, so a rewrite on the same branch keeps its review history. The ticket records the old head `1af2608455a` before a `--force-with-lease` push.
 - **C opens a new PR instead of updating #104452.** That branch carries #103540 and the phase 1a work, the TypeScript printer and fixtures, and the frontend button. Over 8,000 lines, almost all of it would be replaced. #104452 is superseded by slice C.
 - **F needs no backend commits.** It is a workflow file and YAML files. Its proof runs against a local PostHog on slice D's branch.
