@@ -36838,7 +36838,7 @@ export namespace Schemas {
        * * `CNAME` - CNAME record
        * * `MX` - MX record */
       recordType: EmailDomainRecordTypeEnum;
-      /** Fully qualified record name. Many DNS hosts append the zone, so enter only the part before it. */
+      /** Fully qualified record name, or `@` for the sending domain itself. Many DNS hosts append the zone, so enter only the part before it. */
       recordHostname: string;
       /** Exact record value to publish. */
       recordValue: string;
