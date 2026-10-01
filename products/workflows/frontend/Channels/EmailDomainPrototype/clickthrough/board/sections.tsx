@@ -514,8 +514,10 @@ export function SenderSection({ sim }: { sim: SetupSimulation }): JSX.Element {
                     disabledReason={state.firstWorkflowState === 'creating' ? 'Creating…' : undefined}
                 >
                     {state.firstWorkflowState === 'created'
-                        ? 'Open the welcome workflow'
-                        : 'Create the welcome email workflow'}
+                        ? 'Go catch your customers'
+                        : state.firstWorkflowState === 'creating'
+                          ? 'Wrangling your first workflow together…'
+                          : 'Create the welcome email workflow'}
                 </LemonButton>
             </div>
         </div>

@@ -1,5 +1,6 @@
 // PROTOTYPE (throwaway): the hoggies the click-through variants share, as lazy PNGs.
 import * as climberPng from '@posthog/brand/hoggies/png/climber-1'
+import * as cowboyLassoPng from '@posthog/brand/hoggies/png/cowboy-lasso'
 import * as deskWizardPng from '@posthog/brand/hoggies/png/desk-wizard'
 import * as explorerPng from '@posthog/brand/hoggies/png/explorer'
 import * as hourglassPng from '@posthog/brand/hoggies/png/hourglass'
@@ -16,6 +17,7 @@ import * as wizardPng from '@posthog/brand/hoggies/png/wizard-1'
 import { pngHoggie } from 'lib/brand/hoggies'
 
 export const HedgehogClimber = pngHoggie(climberPng)
+export const HedgehogCowboyLasso = pngHoggie(cowboyLassoPng)
 export const HedgehogDeskWizard = pngHoggie(deskWizardPng)
 export const HedgehogExplorer = pngHoggie(explorerPng)
 export const HedgehogHourglass = pngHoggie(hourglassPng)

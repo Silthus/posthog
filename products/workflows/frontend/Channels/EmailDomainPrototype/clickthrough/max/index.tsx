@@ -379,7 +379,11 @@ function buildTranscript(
                         active={active}
                         chips={[
                             {
-                                label: created ? 'Open the welcome workflow' : 'Create the welcome email workflow',
+                                label: created
+                                    ? 'Go catch your customers'
+                                    : creating
+                                      ? 'Wrangling your first workflow together…'
+                                      : 'Create the welcome email workflow',
                                 primary: true,
                                 loading: creating,
                                 disabledReason: creating ? 'Creating…' : null,

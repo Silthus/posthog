@@ -333,7 +333,7 @@ export function useSetupSimulation(scenario: SetupScenario): SetupSimulation {
         if (state.firstWorkflowState !== 'creating') {
             return
         }
-        const timer = setTimeout(() => setState((prev) => ({ ...prev, firstWorkflowState: 'created' })), ms(1000))
+        const timer = setTimeout(() => setState((prev) => ({ ...prev, firstWorkflowState: 'created' })), 3600)
         return () => clearTimeout(timer)
     }, [state.firstWorkflowState, ms])
 
