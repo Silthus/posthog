@@ -1,9 +1,11 @@
 import { MakeLogicType, actions, kea, path, props, reducers, selectors, useActions, useValues } from 'kea'
-import { urlToAction } from 'kea-router'
+import { router, urlToAction } from 'kea-router'
+import { useEffect } from 'react'
 
 import { LemonButton } from '@posthog/lemon-ui'
 
 import { AccessControlAction } from 'lib/components/AccessControlAction'
+import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
 import { LemonTab, LemonTabs } from 'lib/lemon-ui/LemonTabs'
 import { trackedActionToUrl } from 'lib/logic/scenes/trackedActionToUrl'
 import { addProductIntent } from 'lib/utils/product-intents'
@@ -17,6 +19,7 @@ import { SceneTitleSection } from '~/layout/scenes/components/SceneTitleSection'
 import { ProductIntentContext, ProductKey } from '~/queries/schema/schema-general'
 import { AccessControlLevel, AccessControlResourceType, Breadcrumb } from '~/types'
 
+import { audienceUrlForMovedTab, isTabMovedToAudience } from './Audience/movedMessagingTabs'
 import { EmailSuspensionBanner } from './EmailSuspensionBanner'
 import { workflowsEmptyState } from './emptyState/workflowsEmptyState'
 import { MessagingTabActions } from './MessagingTabActions'
@@ -125,6 +128,14 @@ export const scene: SceneExport<WorkflowsSceneProps> = {
 export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
     const { currentTab } = useValues(workflowsSceneLogic(props))
     const { startNewWorkflow } = useActions(newWorkflowLogic)
+    const audienceEnabled = useFeatureFlag('WORKFLOWS_AUDIENCE')
+
+    useEffect(() => {
+        if (audienceEnabled && isTabMovedToAudience(currentTab)) {
+            router.actions.replace(audienceUrlForMovedTab(currentTab))
+        }
+    }, [audienceEnabled, currentTab])
+
     const tabs: LemonTab<WorkflowsSceneTab>[] = [
         {
             label: 'Workflows',
@@ -132,7 +143,9 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
             content: <WorkflowsTable />,
             link: urls.workflows(),
         },
-        ...messagingNavTabs((tab) => urls.workflows(tab)),
+        ...messagingNavTabs((tab) => urls.workflows(tab)).filter(
+            (tab) => !audienceEnabled || !isTabMovedToAudience(tab.key)
+        ),
     ]
 
     return (

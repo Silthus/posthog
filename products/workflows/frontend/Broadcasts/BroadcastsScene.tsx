@@ -1,9 +1,11 @@
 import { useActions, useValues } from 'kea'
 import { router } from 'kea-router'
+import { useEffect } from 'react'
 
 import { LemonButton } from '@posthog/lemon-ui'
 
 import { AccessControlAction } from 'lib/components/AccessControlAction'
+import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
 import { LemonTabs } from 'lib/lemon-ui/LemonTabs'
 import { SceneExport } from 'scenes/sceneTypes'
 import { urls } from 'scenes/urls'
@@ -13,6 +15,7 @@ import { SceneTitleSection } from '~/layout/scenes/components/SceneTitleSection'
 import { ProductKey } from '~/queries/schema/schema-general'
 import { AccessControlLevel, AccessControlResourceType } from '~/types'
 
+import { audienceUrlForMovedTab, isTabMovedToAudience } from '../Audience/movedMessagingTabs'
 import { EmailSuspensionBanner } from '../EmailSuspensionBanner'
 import { MessagingTabActions } from '../MessagingTabActions'
 import { MESSAGING_NAV_TAB_KEYS, MessagingNavTabKey, messagingNavTabs } from '../messagingTabs'
@@ -33,6 +36,13 @@ export function BroadcastsScene(): JSX.Element {
     const currentTab: MessagingNavTabKey | 'broadcasts' = MESSAGING_NAV_TAB_KEYS.includes(lastSegment)
         ? lastSegment
         : 'broadcasts'
+    const audienceEnabled = useFeatureFlag('WORKFLOWS_AUDIENCE')
+
+    useEffect(() => {
+        if (audienceEnabled && isTabMovedToAudience(currentTab)) {
+            router.actions.replace(audienceUrlForMovedTab(currentTab))
+        }
+    }, [audienceEnabled, currentTab])
 
     return (
         <SceneContent>
@@ -75,7 +85,9 @@ export function BroadcastsScene(): JSX.Element {
                             </>
                         ),
                     },
-                    ...messagingNavTabs((tab) => urls.broadcasts(tab)),
+                    ...messagingNavTabs((tab) => urls.broadcasts(tab)).filter(
+                        (tab) => !audienceEnabled || !isTabMovedToAudience(tab.key)
+                    ),
                 ]}
                 sceneInset
             />
