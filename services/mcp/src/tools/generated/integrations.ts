@@ -229,9 +229,9 @@ const integrationsEmailVerifyCreate = (): ToolBase<
 const IntegrationsGithubReposRetrieveSchema = () => {
     const IntegrationsGithubReposRetrieveParams = orvalSchemas.IntegrationsGithubReposRetrieveParams()
     const IntegrationsGithubReposRetrieveQueryParams = orvalSchemas.IntegrationsGithubReposRetrieveQueryParams()
-    return IntegrationsGithubReposRetrieveParams.omit({ project_id: true }).extend(
-        IntegrationsGithubReposRetrieveQueryParams.shape
-    )
+    return IntegrationsGithubReposRetrieveParams.omit({ project_id: true })
+        .extend(IntegrationsGithubReposRetrieveQueryParams.shape)
+        .extend({ compact: IntegrationsGithubReposRetrieveQueryParams.shape['compact'].default(true).optional() })
 }
 
 const integrationsGithubReposRetrieve = (): ToolBase<
@@ -246,6 +246,7 @@ const integrationsGithubReposRetrieve = (): ToolBase<
             method: 'GET',
             path: `/api/projects/${encodeURIComponent(String(projectId))}/integrations/${encodeURIComponent(String(params.id))}/github_repos/`,
             query: {
+                compact: params.compact,
                 limit: params.limit,
                 offset: params.offset,
                 search: params.search,

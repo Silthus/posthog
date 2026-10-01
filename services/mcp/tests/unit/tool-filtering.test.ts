@@ -1048,9 +1048,10 @@ describe('Tool Filtering - Feature Flags', () => {
                 'context-layer',
                 'warehouse-multi-destination',
                 'autoresearch',
+                'today-rail-nav',
             ])
         )
-        expect(flags).toHaveLength(38)
+        expect(flags).toHaveLength(39)
     })
 
     it('every loops tool is gated on the loops flag', () => {
