@@ -9,6 +9,8 @@ import { HedgehogMailbox } from '../shared/hoggies'
 import { DomainProblem, INFERRED_DOMAINS, SEND_PREFIX_OPTIONS, SetupSimulation } from '../simulation'
 import { BigAction, QuestionHeading } from './pieces'
 
+const CUSTOM_PREFIX = '__custom__'
+
 const PROBLEM_COPY: Record<Exclude<DomainProblem, null>, string> = {
     free_mailbox: 'That is a free mailbox provider. Use a domain you own, like yourcompany.com.',
     taken_by_other_org:
@@ -105,7 +107,11 @@ function AnotherDomain({ sim }: { sim: SetupSimulation }): JSX.Element {
 function Outcome({ sim }: { sim: SetupSimulation }): JSX.Element {
     const { state, derived, actions } = sim
     const [advancedOpen, setAdvancedOpen] = useState(false)
-    const chosen = SEND_PREFIX_OPTIONS.find((option) => option.prefix === state.sendPrefix) ?? SEND_PREFIX_OPTIONS[0]
+    const [customOpen, setCustomOpen] = useState(false)
+    const preset = SEND_PREFIX_OPTIONS.find((option) => option.prefix === state.sendPrefix)
+    const custom = customOpen || !preset
+    const segmentValue = custom ? CUSTOM_PREFIX : state.sendPrefix
+    const why = custom ? 'Any name works, as long as nothing else uses it yet.' : preset!.why
     return (
         <section className="rounded-lg border bg-gradient-to-br from-accent-highlight-secondary to-surface-primary p-5 flex flex-col gap-4">
             <div className="flex flex-col gap-1">
@@ -116,11 +122,35 @@ function Outcome({ sim }: { sim: SetupSimulation }): JSX.Element {
                 <span className="text-sm">Sending subdomain</span>
                 <LemonSegmentedButton
                     size="small"
-                    value={state.sendPrefix}
-                    onChange={actions.setSendPrefix}
-                    options={SEND_PREFIX_OPTIONS.map((option) => ({ value: option.prefix, label: option.label }))}
+                    value={segmentValue}
+                    onChange={(value) => {
+                        if (value === CUSTOM_PREFIX) {
+                            setCustomOpen(true)
+                            actions.setSendPrefix('news')
+                        } else {
+                            setCustomOpen(false)
+                            actions.setSendPrefix(value)
+                        }
+                    }}
+                    options={[
+                        ...SEND_PREFIX_OPTIONS.map((option) => ({ value: option.prefix, label: option.label })),
+                        { value: CUSTOM_PREFIX, label: 'Custom' },
+                    ]}
                 />
-                <span className="text-sm text-secondary">{chosen.why}</span>
+                {custom && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <LemonInput
+                            id="focus-send-prefix"
+                            className="w-40 font-mono"
+                            value={state.sendPrefix}
+                            onChange={(value) => actions.setSendPrefix(value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                            placeholder="news"
+                            autoFocus
+                        />
+                        <span className="font-mono text-secondary break-all">.{state.rootDomain}</span>
+                    </div>
+                )}
+                <span className="text-sm text-secondary">{why}</span>
             </div>
             {advancedOpen ? (
                 <div className="flex flex-col gap-1.5 text-sm">

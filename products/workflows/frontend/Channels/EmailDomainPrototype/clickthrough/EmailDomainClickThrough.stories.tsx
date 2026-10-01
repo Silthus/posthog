@@ -6,7 +6,7 @@ import { LemonTag } from '@posthog/lemon-ui'
 
 import { AgentHandoffModal } from './shared/AgentHandoffModal'
 import { CloudflareApprovalOverlay } from './shared/CloudflareApprovalOverlay'
-import { HostKey, OutcomeKey, SetupScenario, SpeedKey, useSetupSimulation } from './simulation'
+import { HostKey, OutcomeKey, SetupScenario, SpeedKey, TrustKey, useSetupSimulation } from './simulation'
 import { CLICK_THROUGH_VARIANTS, DEFAULT_CLICK_THROUGH_VARIANT } from './variants'
 import { VariantSwitcher } from './VariantSwitcher'
 
@@ -18,6 +18,7 @@ interface ClickThroughArgs {
     host: HostKey
     outcome: OutcomeKey
     speed: SpeedKey
+    trust: TrustKey
     width: 'full' | 'narrow'
 }
 
@@ -33,9 +34,17 @@ const meta: Meta<ClickThroughArgs> = {
         host: { control: 'select', options: ['cloudflare', 'route53', 'namecheap', 'unknown'] },
         outcome: { control: 'radio', options: ['success', 'stuck'] },
         speed: { control: 'radio', options: [1, 4] },
+        trust: { control: 'select', options: ['inline', 'step4', 'later', 'checklist'] },
         width: { control: 'radio', options: ['full', 'narrow'], description: '"narrow" pins the scene to 520px' },
     },
-    args: { variant: DEFAULT_CLICK_THROUGH_VARIANT, host: 'cloudflare', outcome: 'success', speed: 1, width: 'full' },
+    args: {
+        variant: DEFAULT_CLICK_THROUGH_VARIANT,
+        host: 'cloudflare',
+        outcome: 'success',
+        speed: 1,
+        trust: 'inline',
+        width: 'full',
+    },
 }
 export default meta
 
@@ -68,12 +77,13 @@ function ClickThroughScene(args: ClickThroughArgs): JSX.Element {
         host: args.host,
         outcome: args.outcome,
         speed: args.speed,
+        trust: args.trust,
     })
     const [runId, setRunId] = useState(0)
     useEffect(() => setVariantKey(args.variant), [args.variant])
     useEffect(
-        () => setScenario({ host: args.host, outcome: args.outcome, speed: args.speed }),
-        [args.host, args.outcome, args.speed]
+        () => setScenario({ host: args.host, outcome: args.outcome, speed: args.speed, trust: args.trust }),
+        [args.host, args.outcome, args.speed, args.trust]
     )
 
     const current =

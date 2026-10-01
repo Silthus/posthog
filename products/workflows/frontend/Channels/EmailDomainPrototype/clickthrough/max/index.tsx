@@ -126,7 +126,9 @@ function buildTranscript(
     const max = (key: string, hoggie: Hoggie, render: (active: boolean) => ReactNode, wide = false): void => {
         items.push({ key, from: 'max', hoggie, wide, render })
     }
-    const user = (key: string, text: string): void => items.push({ key, from: 'user', render: () => text })
+    const user = (key: string, text: string): void => {
+        items.push({ key, from: 'user', render: () => text })
+    }
     const root = state.rootDomain ?? 'your domain'
     const hostName = state.host?.name ?? 'your DNS host'
     const agentChip: Chip = { label: 'Hand it to my coding agent', onClick: actions.openAgentModal }

@@ -1,13 +1,13 @@
-// PROTOTYPE (throwaway): Focus phase 4, the celebration, the first sender and the trust ladder.
+// PROTOTYPE (throwaway): Focus phase 4, the celebration, the first sender, the records and the trust hand-off.
 import { useEffect } from 'react'
 
-import { IconCheck, IconSend } from '@posthog/icons'
-import { LemonButton, LemonInput, lemonToast } from '@posthog/lemon-ui'
+import { IconArrowRight, IconCheck, IconSend } from '@posthog/icons'
+import { LemonButton, LemonCollapse, LemonInput, lemonToast } from '@posthog/lemon-ui'
 
-import { SenderSecurityLadder } from '../../SenderSecurityLadder'
 import { HedgehogRocket } from '../shared/hoggies'
 import { SetupSimulation } from '../simulation'
-import { QuestionHeading } from './pieces'
+import { BigAction, QuestionHeading, RecordRows } from './pieces'
+import { TrustChecklist, TrustInline } from './TrustOptions'
 
 function FirstSender({ sim }: { sim: SetupSimulation }): JSX.Element {
     const { state, derived, actions } = sim
@@ -69,8 +69,34 @@ function FirstSender({ sim }: { sim: SetupSimulation }): JSX.Element {
     )
 }
 
-export function VerifiedQuestion({ sim }: { sim: SetupSimulation }): JSX.Element {
-    const { derived } = sim
+function RecordsInPlace({ sim }: { sim: SetupSimulation }): JSX.Element {
+    const { state, derived } = sim
+    return (
+        <LemonCollapse
+            panels={[
+                {
+                    key: 'records',
+                    header: (
+                        <span className="flex items-center gap-2">
+                            <IconCheck className="text-success" />
+                            {derived.records.length} settings in place at {state.host?.name ?? 'your DNS host'}
+                        </span>
+                    ),
+                    content: <RecordRows records={derived.records} showStatus />,
+                },
+            ]}
+        />
+    )
+}
+
+export interface VerifiedQuestionProps {
+    sim: SetupSimulation
+    onContinueToTrust: () => void
+    onFinish: () => void
+}
+
+export function VerifiedQuestion({ sim, onContinueToTrust, onFinish }: VerifiedQuestionProps): JSX.Element {
+    const { derived, scenario } = sim
     return (
         <div className="flex flex-col gap-8">
             <div className="rounded-xl border border-success bg-gradient-to-br from-success-highlight via-surface-primary to-accent-highlight-secondary p-6 @md:p-8">
@@ -85,7 +111,27 @@ export function VerifiedQuestion({ sim }: { sim: SetupSimulation }): JSX.Element
                 />
             </div>
             <FirstSender sim={sim} />
-            <SenderSecurityLadder level={derived.ladderLevel} />
+            <RecordsInPlace sim={sim} />
+            {scenario.trust === 'inline' && <TrustInline sim={sim} />}
+            {scenario.trust === 'checklist' && <TrustChecklist sim={sim} />}
+            {scenario.trust === 'step4' && (
+                <div className="flex flex-col items-center gap-2">
+                    <BigAction icon={<IconArrowRight />} onClick={onContinueToTrust}>
+                        Continue to sender trust
+                    </BigAction>
+                    <span className="text-xs text-secondary">One more step. Two minutes, and optional.</span>
+                </div>
+            )}
+            {scenario.trust === 'later' && (
+                <div className="flex flex-col items-center gap-2">
+                    <BigAction icon={<IconCheck />} onClick={onFinish}>
+                        Finish
+                    </BigAction>
+                    <span className="text-xs text-secondary">
+                        You can raise sender trust any time from the domain page.
+                    </span>
+                </div>
+            )}
         </div>
     )
 }
