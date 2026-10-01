@@ -3,9 +3,7 @@ import { ReactNode, useEffect, useRef, useState } from 'react'
 
 import { LemonTag, Spinner, lemonToast } from '@posthog/lemon-ui'
 
-import { LadderLevel, SenderSecurityLadder } from '../../SenderSecurityLadder'
 import {
-    HedgehogClimber,
     HedgehogDeskWizard,
     HedgehogHourglass,
     HedgehogMagnifyingGlass,
@@ -59,7 +57,6 @@ function statusLabel(sim: SetupSimulation): string {
 export function MaxVariant({ sim }: { sim: SetupSimulation }): JSX.Element {
     const { state, derived, actions } = sim
     const [choices, setChoices] = useState<LocalChoices>(NO_CHOICES)
-    const [ladderOverride, setLadderOverride] = useState<LadderLevel | null>(null)
     const choose = (patch: Partial<LocalChoices>): void => setChoices((prev) => ({ ...prev, ...patch }))
     const endRef = useRef<HTMLDivElement>(null)
 
@@ -73,7 +70,6 @@ export function MaxVariant({ sim }: { sim: SetupSimulation }): JSX.Element {
     useEffect(() => {
         if (state.phase === 'domain' && !state.rootDomain) {
             setChoices(NO_CHOICES)
-            setLadderOverride(null)
         }
     }, [state.phase, state.rootDomain])
 
@@ -83,7 +79,7 @@ export function MaxVariant({ sim }: { sim: SetupSimulation }): JSX.Element {
         }
     }, [state.testEmailState])
 
-    const items = buildTranscript(sim, choices, choose, ladderOverride ?? derived.ladderLevel, setLadderOverride)
+    const items = buildTranscript(sim, choices, choose)
     const lastMaxIndex = items.map((item) => item.from).lastIndexOf('max')
     const scrollKey = `${items.map((item) => item.key).join('|')}:${choices.customOpen}:${choices.subdomainOpen}:${derived.foundCount}`
 
@@ -94,10 +90,7 @@ export function MaxVariant({ sim }: { sim: SetupSimulation }): JSX.Element {
 
     return (
         <div className="min-h-full bg-gradient-to-b from-accent-highlight-secondary/40 to-primary">
-            <TopBar
-                status={statusLabel(sim)}
-                ladderLevel={state.phase === 'verified' ? (ladderOverride ?? derived.ladderLevel) : null}
-            />
+            <TopBar status={statusLabel(sim)} verified={state.phase === 'verified'} />
             <div className="max-w-176 mx-auto px-4 pt-6 pb-28 flex flex-col gap-4">
                 {items.map((item, index) =>
                     item.from === 'user' ? (
@@ -117,9 +110,7 @@ export function MaxVariant({ sim }: { sim: SetupSimulation }): JSX.Element {
 function buildTranscript(
     sim: SetupSimulation,
     choices: LocalChoices,
-    choose: (patch: Partial<LocalChoices>) => void,
-    ladderLevel: LadderLevel,
-    onLadderChange: (level: LadderLevel) => void
+    choose: (patch: Partial<LocalChoices>) => void
 ): TranscriptItem[] {
     const { state, derived, actions } = sim
     const items: TranscriptItem[] = []
@@ -372,16 +363,38 @@ function buildTranscript(
         user('sender-echo', 'Skip the test')
     }
     if (state.testEmailState === 'sent' || choices.testSkipped) {
+        const creating = state.firstWorkflowState === 'creating'
+        const created = state.firstWorkflowState === 'created'
         max(
-            'ladder',
-            HedgehogClimber,
-            () => (
+            'first-workflow',
+            HedgehogMailbox,
+            (active) => (
                 <>
                     <p className="m-0 text-sm">
-                        {state.testEmailState === 'sent' ? `Sent to ${USER_EMAIL}. ` : ''}You're at level {ladderLevel}{' '}
-                        of 5 on sender trust. Want to climb?
+                        {state.testEmailState === 'sent' ? `Sent to ${USER_EMAIL}. ` : ''}Want to put{' '}
+                        <strong>{derived.sendingDomain}</strong> to work? A welcome email when someone signs up is the
+                        usual first one. I'll open the template with your sender filled in.
                     </p>
-                    <SenderSecurityLadder level={ladderLevel} onLevelChange={onLadderChange} />
+                    <Chips
+                        active={active}
+                        chips={[
+                            {
+                                label: created ? 'Open the welcome workflow' : 'Create the welcome email workflow',
+                                primary: true,
+                                loading: creating,
+                                disabledReason: creating ? 'Creating…' : null,
+                                onClick: actions.createFirstWorkflow,
+                            },
+                            {
+                                label: 'Pick another template',
+                                onClick: () => lemonToast.info('Would open the template library'),
+                            },
+                            {
+                                label: 'Go to workflows',
+                                onClick: () => lemonToast.info('Would open the workflows list'),
+                            },
+                        ]}
+                    />
                 </>
             ),
             true

@@ -1,9 +1,8 @@
-// PROTOTYPE (throwaway): the sticky "Sender trust" rail of the Board variant.
+// PROTOTYPE (throwaway): the sticky "Your settings" rail of the Board variant.
 import clsx from 'clsx'
 
 import { DnsRecordKind, PrototypeDnsRecord, RECORD_KIND_LABEL } from '../../prototypeData'
-import { SenderSecurityLadder } from '../../SenderSecurityLadder'
-import { HedgehogClimber, HedgehogExplorer } from '../shared/hoggies'
+import { HedgehogExplorer, HedgehogMagnifyingGlass } from '../shared/hoggies'
 import { SetupSimulation } from '../simulation'
 
 interface KindSummary {
@@ -53,31 +52,25 @@ function SettingLine({ summary }: { summary: KindSummary }): JSX.Element {
     )
 }
 
-export function TrustRail({ sim }: { sim: SetupSimulation }): JSX.Element {
+export function SettingsRail({ sim }: { sim: SetupSimulation }): JSX.Element {
     const { state, derived } = sim
     if (!state.rootDomain) {
         return (
             <section className="rounded-lg border bg-surface-primary p-5 flex flex-col items-center text-center gap-3">
-                <span className="text-xs uppercase tracking-wide text-muted self-start">Sender trust</span>
+                <span className="text-xs uppercase tracking-wide text-muted self-start">Your settings</span>
                 <HedgehogExplorer className="w-28" />
-                <p className="m-0 text-sm text-secondary">Pick a domain and Max starts climbing.</p>
+                <p className="m-0 text-sm text-secondary">Pick a domain and Max explains each setting as it lands.</p>
             </section>
         )
     }
     return (
         <div className="flex flex-col gap-3">
-            <span className="text-xs uppercase tracking-wide text-muted">Sender trust</span>
-            {derived.ladderLevel === 0 && (
-                <div className="flex items-center gap-3 rounded-lg border bg-surface-primary p-3">
-                    <HedgehogClimber className="w-14 shrink-0" />
-                    <span className="text-sm text-secondary">
-                        Max is waiting at the bottom. The first two levels come free once your settings are verified.
-                    </span>
+            <span className="text-xs uppercase tracking-wide text-muted">Your settings</span>
+            <section className="rounded-lg border bg-surface-primary p-4 flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                    <HedgehogMagnifyingGlass className="w-14 shrink-0" />
+                    <h3 className="m-0 text-sm font-semibold">What each setting does</h3>
                 </div>
-            )}
-            <SenderSecurityLadder level={derived.ladderLevel} />
-            <section className="rounded-lg border bg-surface-primary p-4 flex flex-col gap-2">
-                <h3 className="m-0 text-sm font-semibold">What each setting does</h3>
                 <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
                     {summarizeKinds(derived.records).map((summary) => (
                         <SettingLine key={summary.kind} summary={summary} />

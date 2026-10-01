@@ -1,13 +1,12 @@
 // PROTOTYPE (throwaway): Focus phase 4, the celebration, the first sender, the records and the trust hand-off.
 import { useEffect } from 'react'
 
-import { IconArrowRight, IconCheck, IconSend } from '@posthog/icons'
-import { LemonButton, LemonCollapse, LemonInput, lemonToast } from '@posthog/lemon-ui'
+import { IconCheck, IconPlus, IconSend } from '@posthog/icons'
+import { LemonButton, LemonCollapse, LemonInput, Link, lemonToast } from '@posthog/lemon-ui'
 
-import { HedgehogRocket } from '../shared/hoggies'
+import { HedgehogMailbox, HedgehogRocket } from '../shared/hoggies'
 import { SetupSimulation } from '../simulation'
 import { BigAction, QuestionHeading, RecordRows } from './pieces'
-import { TrustChecklist, TrustInline } from './TrustOptions'
 
 function FirstSender({ sim }: { sim: SetupSimulation }): JSX.Element {
     const { state, derived, actions } = sim
@@ -89,14 +88,47 @@ function RecordsInPlace({ sim }: { sim: SetupSimulation }): JSX.Element {
     )
 }
 
-export interface VerifiedQuestionProps {
-    sim: SetupSimulation
-    onContinueToTrust: () => void
-    onFinish: () => void
+function NextWorkflowCard({ sim }: { sim: SetupSimulation }): JSX.Element {
+    const { state, derived, actions } = sim
+    const creating = state.firstWorkflowState === 'creating'
+    const created = state.firstWorkflowState === 'created'
+    useEffect(() => {
+        if (created) {
+            lemonToast.success('Welcome email workflow created. Would open the editor.')
+        }
+    }, [created])
+    return (
+        <section className="rounded-xl border border-accent bg-gradient-to-br from-accent-highlight-secondary via-surface-primary to-surface-primary p-6 @md:p-8 flex flex-col gap-5">
+            <div className="flex items-start gap-4">
+                <HedgehogMailbox className="w-20 shrink-0" />
+                <div className="flex flex-col gap-1 min-w-0">
+                    <span className="text-xs uppercase tracking-wide text-secondary">Next</span>
+                    <h2 className="m-0 text-xl font-semibold">Send your first email from {derived.sendingDomain}</h2>
+                    <p className="m-0 text-sm text-secondary">
+                        Start with a welcome email that goes out when someone signs up. We open the Welcome email
+                        sequence template with <span className="font-medium">{state.senderName || 'your sender'}</span>{' '}
+                        <span className="font-mono">&lt;{derived.fromAddress}&gt;</span> already filled in.
+                    </p>
+                </div>
+            </div>
+            <BigAction
+                icon={created ? <IconCheck /> : <IconPlus />}
+                loading={creating}
+                disabledReason={creating ? 'Creating' : undefined}
+                onClick={actions.createFirstWorkflow}
+            >
+                {created ? 'Open the welcome workflow' : 'Create the welcome email workflow'}
+            </BigAction>
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
+                <Link onClick={() => lemonToast.info('Would open the template library')}>Pick another template</Link>
+                <Link onClick={() => lemonToast.info('Would open the workflows list')}>Go to workflows</Link>
+            </div>
+        </section>
+    )
 }
 
-export function VerifiedQuestion({ sim, onContinueToTrust, onFinish }: VerifiedQuestionProps): JSX.Element {
-    const { derived, scenario } = sim
+export function VerifiedQuestion({ sim }: { sim: SetupSimulation }): JSX.Element {
+    const { derived } = sim
     return (
         <div className="flex flex-col gap-8">
             <div className="rounded-xl border border-success bg-gradient-to-br from-success-highlight via-surface-primary to-accent-highlight-secondary p-6 @md:p-8">
@@ -112,26 +144,7 @@ export function VerifiedQuestion({ sim, onContinueToTrust, onFinish }: VerifiedQ
             </div>
             <FirstSender sim={sim} />
             <RecordsInPlace sim={sim} />
-            {scenario.trust === 'inline' && <TrustInline sim={sim} />}
-            {scenario.trust === 'checklist' && <TrustChecklist sim={sim} />}
-            {scenario.trust === 'step4' && (
-                <div className="flex flex-col items-center gap-2">
-                    <BigAction icon={<IconArrowRight />} onClick={onContinueToTrust}>
-                        Continue to sender trust
-                    </BigAction>
-                    <span className="text-xs text-secondary">One more step. Two minutes, and optional.</span>
-                </div>
-            )}
-            {scenario.trust === 'later' && (
-                <div className="flex flex-col items-center gap-2">
-                    <BigAction icon={<IconCheck />} onClick={onFinish}>
-                        Finish
-                    </BigAction>
-                    <span className="text-xs text-secondary">
-                        You can raise sender trust any time from the domain page.
-                    </span>
-                </div>
-            )}
+            <NextWorkflowCard sim={sim} />
         </div>
     )
 }

@@ -21,7 +21,7 @@ export interface Chip {
     disabledReason?: string | null
 }
 
-export function TopBar({ status, ladderLevel }: { status: string; ladderLevel: number | null }): JSX.Element {
+export function TopBar({ status, verified }: { status: string; verified: boolean }): JSX.Element {
     return (
         <div className="sticky top-0 z-10 border-b bg-surface-primary/95 backdrop-blur">
             <div className="max-w-176 mx-auto px-4 h-12 flex items-center gap-3">
@@ -34,24 +34,11 @@ export function TopBar({ status, ladderLevel }: { status: string; ladderLevel: n
                     <span
                         className={clsx(
                             'w-1.5 h-1.5 rounded-full',
-                            ladderLevel != null ? 'bg-success' : 'bg-accent motion-safe:animate-pulse'
+                            verified ? 'bg-success' : 'bg-accent motion-safe:animate-pulse'
                         )}
                     />
                     {status}
                 </span>
-                {ladderLevel != null && (
-                    <span className="inline-flex items-center gap-1" title={`Sender trust level ${ladderLevel} of 5`}>
-                        {[1, 2, 3, 4, 5].map((level) => (
-                            <span
-                                key={level}
-                                className={clsx(
-                                    'h-1.5 w-3 rounded-full',
-                                    level <= ladderLevel ? 'bg-success' : 'bg-border'
-                                )}
-                            />
-                        ))}
-                    </span>
-                )}
             </div>
         </div>
     )

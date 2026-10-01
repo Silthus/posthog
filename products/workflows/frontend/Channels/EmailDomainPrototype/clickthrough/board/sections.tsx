@@ -500,6 +500,24 @@ export function SenderSection({ sim }: { sim: SetupSimulation }): JSX.Element {
                     {sent ? 'Send another test email' : 'Send me a test email'}
                 </LemonButton>
             </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent bg-accent-highlight-secondary p-4">
+                <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="font-semibold">Next: send your first email</span>
+                    <span className="text-sm text-secondary">
+                        A welcome email when someone signs up, from the Welcome email sequence template.
+                    </span>
+                </div>
+                <LemonButton
+                    type="primary"
+                    onClick={actions.createFirstWorkflow}
+                    loading={state.firstWorkflowState === 'creating'}
+                    disabledReason={state.firstWorkflowState === 'creating' ? 'Creating…' : undefined}
+                >
+                    {state.firstWorkflowState === 'created'
+                        ? 'Open the welcome workflow'
+                        : 'Create the welcome email workflow'}
+                </LemonButton>
+            </div>
         </div>
     )
 }

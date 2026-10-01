@@ -7,7 +7,7 @@ import { LemonButton } from '@posthog/lemon-ui'
 import { HedgehogMailbox } from '../shared/hoggies'
 import { SetupPhase, SetupSimulation } from '../simulation'
 import { DomainSection, RecordsSection, SenderSection, VerificationSection } from './sections'
-import { TrustRail } from './TrustRail'
+import { SettingsRail } from './SettingsRail'
 
 const PHASE_INDEX: Record<SetupPhase, number> = { domain: 1, records: 2, verifying: 3, verified: 4 }
 
@@ -156,7 +156,7 @@ export function BoardVariant({ sim }: { sim: SetupSimulation }): JSX.Element {
                     </SectionCard>
                 </div>
                 <aside className="w-full @3xl:w-80 @3xl:shrink-0 @3xl:sticky @3xl:top-4">
-                    <TrustRail sim={sim} />
+                    <SettingsRail sim={sim} />
                 </aside>
             </div>
         </div>

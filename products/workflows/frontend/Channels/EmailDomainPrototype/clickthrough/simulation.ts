@@ -19,20 +19,10 @@ export type HostKey = 'cloudflare' | 'route53' | 'namecheap' | 'unknown'
 export type OutcomeKey = 'success' | 'stuck'
 export type SpeedKey = 1 | 4
 
-export type TrustKey = 'inline' | 'step4' | 'later' | 'checklist'
-
 export interface SetupScenario {
     host: HostKey
     outcome: OutcomeKey
     speed: SpeedKey
-    trust: TrustKey
-}
-
-export const TRUST_LABELS: Record<TrustKey, string> = {
-    inline: 'Trust: next action under the ladder',
-    step4: 'Trust: own step 4',
-    later: 'Trust: later, on the domain page',
-    checklist: 'Trust: checklist, no ladder',
 }
 
 export const HOSTS: Record<HostKey, DnsHost | null> = {
@@ -124,9 +114,7 @@ export interface SetupState {
     senderName: string
     senderLocalPart: string
     testEmailState: 'idle' | 'sending' | 'sent'
-    reportAddress: string
-    dmarcPolicy: 'none' | 'quarantine'
-    oneClickUnsubscribe: boolean
+    firstWorkflowState: 'idle' | 'creating' | 'created'
 }
 
 const RECORD_COUNT = 7
@@ -153,9 +141,7 @@ const initialState = (): SetupState => ({
     senderName: '',
     senderLocalPart: 'hello',
     testEmailState: 'idle',
-    reportAddress: '',
-    dmarcPolicy: 'none',
-    oneClickUnsubscribe: false,
+    firstWorkflowState: 'idle',
 })
 
 export interface SetupDerived {
@@ -169,7 +155,6 @@ export interface SetupDerived {
     customDomainProblem: DomainProblem
     customDomainNormalized: string
     steps: SetupStep[]
-    ladderLevel: 0 | 1 | 2 | 3 | 4 | 5
     hostKey: HostKey
 }
 
@@ -193,9 +178,7 @@ export interface SetupActions {
     setSenderName: (value: string) => void
     setSenderLocalPart: (value: string) => void
     sendTestEmail: () => void
-    setReportAddress: (value: string) => void
-    setDmarcPolicy: (value: 'none' | 'quarantine') => void
-    setOneClickUnsubscribe: (value: boolean) => void
+    createFirstWorkflow: () => void
     reset: () => void
 }
 
@@ -223,19 +206,6 @@ const detectProblem = (domain: string): DomainProblem => {
 }
 
 const recordStateToStatus = (state: RecordState): PrototypeDnsRecord['status'] => state
-
-const ladderLevelFor = (state: SetupState): SetupDerived['ladderLevel'] => {
-    if (state.phase !== 'verified') {
-        return 0
-    }
-    if (!state.reportAddress) {
-        return 2
-    }
-    if (state.dmarcPolicy === 'none') {
-        return 3
-    }
-    return state.oneClickUnsubscribe ? 5 : 4
-}
 
 export function useSetupSimulation(scenario: SetupScenario): SetupSimulation {
     const [state, setState] = useState<SetupState>(initialState)
@@ -302,7 +272,6 @@ export function useSetupSimulation(scenario: SetupScenario): SetupSimulation {
             customDomainProblem,
             customDomainNormalized,
             steps,
-            ladderLevel: ladderLevelFor(state),
             hostKey: scenario.host,
         }
     }, [state, scenario.host])
@@ -361,6 +330,14 @@ export function useSetupSimulation(scenario: SetupScenario): SetupSimulation {
     }, [state.phase, state.hostDetected, scenario.host, ms])
 
     useEffect(() => {
+        if (state.firstWorkflowState !== 'creating') {
+            return
+        }
+        const timer = setTimeout(() => setState((prev) => ({ ...prev, firstWorkflowState: 'created' })), ms(1000))
+        return () => clearTimeout(timer)
+    }, [state.firstWorkflowState, ms])
+
+    useEffect(() => {
         if (state.testEmailState !== 'sending') {
             return
         }
@@ -415,9 +392,7 @@ export function useSetupSimulation(scenario: SetupScenario): SetupSimulation {
             setSenderName: (value) => setState((prev) => ({ ...prev, senderName: value })),
             setSenderLocalPart: (value) => setState((prev) => ({ ...prev, senderLocalPart: value })),
             sendTestEmail: () => setState((prev) => ({ ...prev, testEmailState: 'sending' })),
-            setReportAddress: (value) => setState((prev) => ({ ...prev, reportAddress: value })),
-            setDmarcPolicy: (value) => setState((prev) => ({ ...prev, dmarcPolicy: value })),
-            setOneClickUnsubscribe: (value) => setState((prev) => ({ ...prev, oneClickUnsubscribe: value })),
+            createFirstWorkflow: () => setState((prev) => ({ ...prev, firstWorkflowState: 'creating' })),
             reset: () => setState(initialState()),
         }),
         []
