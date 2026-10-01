@@ -175,10 +175,11 @@ export const newCategoryLogic = kea<newCategoryLogicType>([
             actions.resetCategoryForm()
         },
         // The key follows the name until someone types a key of their own. An existing topic keeps its key.
-        setCategoryFormValue: ({ name: field, value }) => {
+        setCategoryFormValue: ({ name: fieldPath, value }) => {
             if (props.category) {
                 return
             }
+            const field = Array.isArray(fieldPath) ? fieldPath.join('.') : fieldPath
             if (field === 'name' && !values.keyEdited) {
                 actions.setCategoryFormValue('key', slugify(String(value)))
             } else if (field === 'key' && value !== slugify(values.categoryForm.name)) {
