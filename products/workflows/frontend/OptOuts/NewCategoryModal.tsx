@@ -28,7 +28,7 @@ export function NewCategoryModal({ isOpen, onClose, category }: NewCategoryModal
         <LemonModal
             isOpen={isOpen}
             onClose={handleClose}
-            title={category ? 'Edit message category' : 'New message category'}
+            title={category ? 'Edit topic' : 'New topic'}
             footer={
                 <div className="flex gap-2 justify-end">
                     <LemonButton type="secondary" onClick={handleClose}>
@@ -50,9 +50,13 @@ export function NewCategoryModal({ isOpen, onClose, category }: NewCategoryModal
                     <LemonInput placeholder="e.g., Product updates" />
                 </LemonField>
 
-                <LemonField name="key" label="Key" info="This is the unique identifier for the category">
+                <LemonField
+                    name="key"
+                    label="Key"
+                    info="Your app sends preferences by this key. It follows the name until you change it."
+                >
                     <LemonInput
-                        placeholder="e.g., product_updates"
+                        placeholder="e.g., product-updates"
                         disabledReason={category ? 'Key cannot be changed after creation' : undefined}
                     />
                 </LemonField>

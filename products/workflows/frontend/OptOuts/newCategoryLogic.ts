@@ -1,9 +1,10 @@
-import { MakeLogicType, actions, kea, key, listeners, path, props } from 'kea'
+import { MakeLogicType, actions, kea, key, listeners, path, props, reducers } from 'kea'
 import { forms } from 'kea-forms'
 import type { DeepPartial, DeepPartialMap, FieldName, ValidationErrorType } from 'kea-forms'
 
 import { ApiConfig } from 'lib/api'
 import { lemonToast } from 'lib/lemon-ui/LemonToast/LemonToast'
+import { slugify } from 'lib/utils/strings'
 
 import { messagingCategoriesCreate, messagingCategoriesPartialUpdate } from 'products/messaging/frontend/generated/api'
 import type { MessageCategoryTypeEnumApi } from 'products/messaging/frontend/generated/api.schemas'
@@ -44,6 +45,7 @@ export interface newCategoryLogicValues {
     categoryFormValidationErrors: DeepPartialMap<CategoryForm, ValidationErrorType>
     isCategoryFormSubmitting: boolean
     isCategoryFormValid: boolean
+    keyEdited: boolean
     showCategoryFormErrors: boolean
 }
 
@@ -67,6 +69,9 @@ export interface newCategoryLogicActions {
     }
     setCategoryFormValues: (values: DeepPartial<CategoryForm>) => {
         values: DeepPartial<CategoryForm>
+    }
+    setKeyEdited: (keyEdited: boolean) => {
+        keyEdited: boolean
     }
     submitCategoryForm: () => {
         value: boolean
@@ -112,6 +117,11 @@ export const newCategoryLogic = kea<newCategoryLogicType>([
     actions({
         submitForm: true,
         resetForm: true,
+        setKeyEdited: (keyEdited: boolean) => ({ keyEdited }),
+    }),
+
+    reducers({
+        keyEdited: [false, { setKeyEdited: (_, { keyEdited }) => keyEdited, resetCategoryForm: () => false }],
     }),
 
     forms(({ actions, props }) => ({
@@ -160,9 +170,20 @@ export const newCategoryLogic = kea<newCategoryLogicType>([
         },
     })),
 
-    listeners(({ actions }) => ({
+    listeners(({ actions, values, props }) => ({
         resetForm: () => {
             actions.resetCategoryForm()
+        },
+        // The key follows the name until someone types a key of their own. An existing topic keeps its key.
+        setCategoryFormValue: ({ name: field, value }) => {
+            if (props.category) {
+                return
+            }
+            if (field === 'name' && !values.keyEdited) {
+                actions.setCategoryFormValue('key', slugify(String(value)))
+            } else if (field === 'key' && value !== slugify(values.categoryForm.name)) {
+                actions.setKeyEdited(true)
+            }
         },
     })),
 ])

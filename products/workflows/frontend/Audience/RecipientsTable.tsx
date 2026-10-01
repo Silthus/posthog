@@ -1,41 +1,26 @@
 import { useActions, useValues } from 'kea'
 
 import { IconWarning } from '@posthog/icons'
-import {
-    LemonButton,
-    LemonInput,
-    LemonSegmentedButton,
-    LemonSelect,
-    LemonTable,
-    LemonTableColumns,
-    LemonTag,
-    Link,
-} from '@posthog/lemon-ui'
+import { LemonButton, LemonTable, LemonTableColumns, LemonTag, Link } from '@posthog/lemon-ui'
 
 import { TZLabel } from 'lib/components/TZLabel'
+import { humanFriendlyNumber } from 'lib/utils/numbers'
 import { urls } from 'scenes/urls'
 
+import { serializeFacetQuery } from '../Workflows/WorkflowsListV2/FacetSearchBar/facetQuery'
+import { FacetSearchBar } from '../Workflows/WorkflowsListV2/FacetSearchBar/FacetSearchBar'
 import { ALL_MARKETING_TOPIC_ID } from './audienceFixtures'
-import type { AudienceRecipient, AudienceTopicStatus } from './audienceFixtures'
+import type { AudienceRecipient } from './audienceFixtures'
 import { audienceLogic } from './audienceLogic'
+import { matchesRecipientText } from './audienceRecipientFacets'
 import { TopicStatusTag } from './TopicStatusTag'
 
-const STATUS_OPTIONS: { value: AudienceTopicStatus; label: string }[] = [
-    { value: 'subscribed', label: 'Subscribed' },
-    { value: 'unsubscribed', label: 'Unsubscribed' },
-    { value: 'no_preference', label: 'No preference' },
-]
-
 export function RecipientsTable(): JSX.Element {
-    const { filteredRecipients, recipients, audienceLoading, searchTerm, topicFilter, showFilter, topics } =
+    const { filteredRecipients, recipients, audienceLoading, searchValue, facets, topics, personsWithoutEmail } =
         useValues(audienceLogic)
-    const { setSearchTerm, setTopicFilter, setShowFilter } = useActions(audienceLogic)
+    const { setSearchValue, clearSearch } = useActions(audienceLogic)
 
     const marketingTopics = topics.filter((topic) => topic.category_type === 'marketing')
-    const topicOptions = [
-        { value: ALL_MARKETING_TOPIC_ID, label: 'All marketing' },
-        ...marketingTopics.map((topic) => ({ value: topic.id, label: topic.name })),
-    ]
 
     const columns: LemonTableColumns<AudienceRecipient> = [
         {
@@ -113,85 +98,55 @@ export function RecipientsTable(): JSX.Element {
         },
     ]
 
-    const filtersActive = !!searchTerm || !!topicFilter || showFilter !== 'all'
+    const filtersActive = searchValue.filters.length > 0 || searchValue.text.trim() !== ''
 
     return (
-        <div className="flex flex-col gap-3" data-attr="audience-recipients">
-            <div className="flex flex-wrap items-center gap-2">
-                <LemonInput
-                    type="search"
-                    size="small"
-                    placeholder="Search by email or name"
-                    value={searchTerm}
-                    onChange={setSearchTerm}
-                    className="w-64"
-                    data-attr="audience-search"
-                />
-                <LemonSelect
-                    size="small"
-                    placeholder="Topic"
-                    value={topicFilter?.topicId ?? null}
-                    onChange={(topicId) =>
-                        setTopicFilter(topicId ? { topicId, status: topicFilter?.status ?? 'subscribed' } : null)
-                    }
-                    options={topicOptions}
-                    allowClear
-                    data-attr="audience-filter-topic"
-                />
-                {topicFilter && (
-                    <LemonSelect
-                        size="small"
-                        value={topicFilter.status}
-                        onChange={(status) => status && setTopicFilter({ ...topicFilter, status })}
-                        options={STATUS_OPTIONS}
-                        data-attr="audience-filter-status"
-                    />
-                )}
-                <LemonSegmentedButton
-                    size="small"
-                    value={showFilter}
-                    onChange={setShowFilter}
-                    options={[
-                        { value: 'all', label: 'All' },
-                        { value: 'suppressed', label: 'Suppressed' },
-                        { value: 'no_preference', label: 'No preference' },
-                        { value: 'unsubscribed_all', label: 'Unsubscribed from all' },
-                    ]}
-                    data-attr="audience-filter-show"
-                />
-                {filtersActive && (
-                    <LemonButton
-                        size="small"
-                        type="tertiary"
-                        onClick={() => {
-                            setSearchTerm('')
-                            setTopicFilter(null)
-                            setShowFilter('all')
-                        }}
-                    >
-                        Clear
-                    </LemonButton>
-                )}
-                <span className="text-muted text-xs ml-auto">
+        <div className="flex flex-col gap-3 min-w-0" data-attr="audience-recipients">
+            <FacetSearchBar
+                facets={facets}
+                items={recipients}
+                value={searchValue}
+                onChange={setSearchValue}
+                matchesText={matchesRecipientText}
+                placeholder="Search by email or name, or filter with subscribed:, unsubscribed:, suppressed: and more"
+                dataAttr="audience-search"
+            />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                <span>
                     {filtersActive
                         ? `${filteredRecipients.length} of ${recipients.length} recipients`
                         : `${recipients.length} recipients`}
                 </span>
+                {personsWithoutEmail !== null && personsWithoutEmail > 0 && (
+                    <span>
+                        <Link to={urls.persons()} data-attr="audience-unreachable-persons">
+                            {humanFriendlyNumber(personsWithoutEmail)} persons can't be reached
+                        </Link>{' '}
+                        because they have no email property.
+                    </span>
+                )}
             </div>
-            <LemonTable
-                columns={columns}
-                dataSource={filteredRecipients}
-                rowKey="email"
-                loading={audienceLoading}
-                loadingSkeletonRows={8}
-                pagination={{ pageSize: 50 }}
-                emptyState={
-                    filtersActive
-                        ? 'No recipient matches these filters. Clear them to see everyone.'
-                        : 'No recipients yet. The first one appears as soon as a preference arrives from your app.'
-                }
-                data-attr="audience-recipients-table"
-            />
+            {!audienceLoading && recipients.length > 0 && filteredRecipients.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 border rounded p-8 text-center">
+                    <span>No recipient matches these filters</span>
+                    <LemonButton type="secondary" size="small" onClick={clearSearch} data-attr="audience-clear-filters">
+                        Clear filters
+                    </LemonButton>
+                </div>
+            ) : (
+                <LemonTable
+                    key={`${serializeFacetQuery(searchValue.filters)}\n${searchValue.text}`}
+                    columns={columns}
+                    dataSource={filteredRecipients}
+                    rowKey="email"
+                    loading={audienceLoading}
+                    loadingSkeletonRows={8}
+                    pagination={{ pageSize: 50, useUrl: false }}
+                    nouns={['recipient', 'recipients']}
+                    emptyState="No recipients yet. The first one appears as soon as a preference arrives from your app."
+                    data-attr="audience-recipients-table"
+                />
+            )}
         </div>
     )
 }

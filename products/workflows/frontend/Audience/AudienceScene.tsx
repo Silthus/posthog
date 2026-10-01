@@ -1,6 +1,6 @@
-import { useActions, useValues } from 'kea'
+import { useValues } from 'kea'
 
-import { IconGear, IconPlusSmall } from '@posthog/icons'
+import { IconGear } from '@posthog/icons'
 import { LemonButton, LemonSkeleton, LemonTabs } from '@posthog/lemon-ui'
 
 import { SceneExport } from 'scenes/sceneTypes'
@@ -11,14 +11,12 @@ import { SceneTitleSection } from '~/layout/scenes/components/SceneTitleSection'
 import { ProductKey } from '~/queries/schema/schema-general'
 
 import { EmailSuspensionBanner } from '../EmailSuspensionBanner'
-import { optOutCategoriesLogic } from '../OptOuts/optOutCategoriesLogic'
 import { SuppressionScene } from '../Suppression/SuppressionScene'
 import { AudienceEngagement } from './AudienceEngagement'
 import { audienceLogic } from './audienceLogic'
 import { audienceSceneLogic } from './audienceSceneLogic'
 import { AudienceSetup } from './AudienceSetup'
 import { AudienceTopics } from './AudienceTopics'
-import { CoverageGaps } from './CoverageGaps'
 import { RecipientDetail } from './RecipientDetail'
 import { RecipientsTable } from './RecipientsTable'
 
@@ -30,39 +28,21 @@ export const scene: SceneExport = {
 
 function AudienceActions({ setupShown }: { setupShown: boolean }): JSX.Element | null {
     const { currentTab, selectedEmail } = useValues(audienceSceneLogic)
-    const { openNewCategoryModal } = useActions(optOutCategoriesLogic)
 
-    if (setupShown) {
+    if (setupShown || currentTab !== 'recipients' || selectedEmail) {
         return null
     }
-
-    if (currentTab === 'topics') {
-        return (
-            <LemonButton
-                data-attr="audience-new-topic"
-                icon={<IconPlusSmall />}
-                size="small"
-                type="primary"
-                onClick={() => openNewCategoryModal()}
-            >
-                New topic
-            </LemonButton>
-        )
-    }
-    if (currentTab === 'recipients' && !selectedEmail) {
-        return (
-            <LemonButton
-                data-attr="audience-open-setup"
-                icon={<IconGear />}
-                size="small"
-                type="secondary"
-                to={urls.audience('setup')}
-            >
-                Set up
-            </LemonButton>
-        )
-    }
-    return null
+    return (
+        <LemonButton
+            data-attr="audience-open-setup"
+            icon={<IconGear />}
+            size="small"
+            type="secondary"
+            to={urls.audience('setup')}
+        >
+            Set up
+        </LemonButton>
+    )
 }
 
 export function AudienceScene(): JSX.Element {
@@ -102,14 +82,7 @@ export function AudienceScene(): JSX.Element {
                             key: 'recipients',
                             label: 'Recipients',
                             link: urls.audience(),
-                            content: selectedEmail ? (
-                                <RecipientDetail />
-                            ) : (
-                                <div className="flex flex-col gap-4">
-                                    <CoverageGaps />
-                                    <RecipientsTable />
-                                </div>
-                            ),
+                            content: selectedEmail ? <RecipientDetail /> : <RecipientsTable />,
                         },
                         {
                             key: 'engagement',

@@ -42,14 +42,20 @@ export function OptOutCategories(): JSX.Element {
                 key: category.id,
                 header: (
                     <div className="flex justify-between w-full gap-2">
-                        <div className="flex items-center gap-2">
-                            <div>
-                                <div className="font-medium">{category.name}</div>
+                        <div className="flex items-center gap-2 min-w-0">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <span className="font-medium">{category.name}</span>
+                                    <code className="text-xs text-muted font-normal truncate">{category.key}</code>
+                                    <LemonTag
+                                        type={category.category_type === 'marketing' ? 'success' : 'completion'}
+                                        size="small"
+                                    >
+                                        {category.category_type === 'marketing' ? 'Marketing' : 'Transactional'}
+                                    </LemonTag>
+                                </div>
                                 <div className="text-xs text-muted">{category.description}</div>
                             </div>
-                            <LemonTag type={category.category_type === 'marketing' ? 'success' : 'completion'}>
-                                {(category.category_type ?? '').toUpperCase()}
-                            </LemonTag>
                         </div>
                         <More
                             onClick={(e) => e.stopPropagation()}
@@ -97,14 +103,11 @@ export function OptOutCategories(): JSX.Element {
                 ),
                 content: (
                     <div>
-                        <div className="mb-3">
-                            <div className="text-sm text-muted mb-1">Key: {category.key}</div>
-                            {category.public_description && (
-                                <div className="text-sm text-muted">
-                                    Public description: {category.public_description}
-                                </div>
-                            )}
-                        </div>
+                        {category.public_description && (
+                            <div className="text-sm text-muted mb-3">
+                                Public description: {category.public_description}
+                            </div>
+                        )}
                         <div>
                             <h4 className="font-medium mb-4">Opt-out list</h4>
                             {category.category_type === 'marketing' ? (
