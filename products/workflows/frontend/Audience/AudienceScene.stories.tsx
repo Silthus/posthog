@@ -5,10 +5,12 @@ import { router } from 'kea-router'
 import { useEffect } from 'react'
 
 import { FEATURE_FLAGS } from 'lib/constants'
+import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
 
 import { mswDecorator, useStorybookMocks } from '~/mocks/browser'
 import { toPaginatedResponse } from '~/mocks/handlers'
+import type { TeamType } from '~/types'
 
 import { AUDIENCE_TOPICS, buildAudienceFixtures } from './audienceFixtures'
 import { AudienceScene } from './AudienceScene'
@@ -113,7 +115,9 @@ const funnelResult = {
 }
 
 const queryMock = async ({ request }: { request: Request }): Promise<[number, unknown] | undefined> => {
-    const body = (await request.json()) as { query: { kind: string; source?: { kind: string; interval?: string } } }
+    const body = (await request.json()) as {
+        query: { kind: string; interval?: string; source?: { kind: string; interval?: string } }
+    }
     const source = body.query.source ?? body.query
     if (source.kind === 'FunnelsQuery') {
         return [200, funnelResult]
@@ -169,6 +173,7 @@ function sceneStory(url: string, captureOn: boolean = false): Story {
                 get: { '/api/environments/:team_id/': teamWith(captureOn) },
             })
             useEffect(() => {
+                teamLogic.actions.loadCurrentTeamSuccess(teamWith(captureOn) as unknown as TeamType)
                 router.actions.push(url)
             }, [])
             return <AudienceScene />

@@ -1,3 +1,4 @@
+import clsx from 'clsx'
 import { useActions, useValues } from 'kea'
 
 import { IconDashboard, IconTrends } from '@posthog/icons'
@@ -97,7 +98,10 @@ export function AudienceEngagement(): JSX.Element {
                     <LemonCard
                         key={tile.key}
                         hoverEffect={false}
-                        className="flex flex-col gap-2 p-0 overflow-hidden"
+                        className={clsx(
+                            'flex flex-col gap-2 p-0 overflow-hidden',
+                            tile.wide && '@min-[64rem]/main-content:col-span-2'
+                        )}
                         data-attr={`audience-engagement-tile-${tile.key}`}
                     >
                         <div className="flex flex-wrap items-start justify-between gap-2 px-4 pt-3">
@@ -115,8 +119,22 @@ export function AudienceEngagement(): JSX.Element {
                                 Open as insight
                             </LemonButton>
                         </div>
-                        <div className="h-80 px-2 pb-2">
-                            <Query query={tile.query} readOnly embedded />
+                        <div className="h-100 min-h-0 flex flex-col px-2 pb-2">
+                            <div className="min-h-0 flex-1">
+                                <Query
+                                    query={tile.query}
+                                    readOnly
+                                    inSharedMode
+                                    context={{
+                                        insightProps: {
+                                            dashboardItemId: `new-AdHoc.audience-engagement-${tile.key}`,
+                                            dataNodeCollectionId: `audience-engagement-${tile.key}`,
+                                            query: tile.query,
+                                        },
+                                        suppressSlowQuerySuggestions: true,
+                                    }}
+                                />
+                            </div>
                         </div>
                     </LemonCard>
                 ))}

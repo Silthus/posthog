@@ -66,6 +66,8 @@ export interface AudienceEngagementTile {
     name: string
     description: string
     query: InsightVizNode
+    /** A funnel needs the full row to show all four steps without scrolling. */
+    wide?: boolean
 }
 
 export const AUDIENCE_ENGAGEMENT_TILES: AudienceEngagementTile[] = [
@@ -76,16 +78,17 @@ export const AUDIENCE_ENGAGEMENT_TILES: AudienceEngagementTile[] = [
         query: emailsSentPerDayQuery,
     },
     {
-        key: 'funnel',
-        name: 'Sent to delivered to opened to clicked',
-        description: 'Each step counts recipients by the address the email went to.',
-        query: engagementFunnelQuery,
-    },
-    {
         key: 'unsubscribes-and-bounces',
         name: 'Unsubscribes, bounces and spam reports',
         description: 'Per week. A rising bar here is the earliest sign of a reputation problem.',
         query: unsubscribesAndBouncesQuery,
+    },
+    {
+        key: 'funnel',
+        name: 'Sent to delivered to opened to clicked',
+        description: 'Each step counts recipients by the address the email went to.',
+        query: engagementFunnelQuery,
+        wide: true,
     },
 ]
 
@@ -102,7 +105,9 @@ export function audienceEngagementDashboardTemplate(): Record<string, unknown> {
             description: tile.description,
             query: tile.query,
             layouts: {
-                sm: { h: 5, w: 6, x: (index % 2) * 6, y: Math.floor(index / 2) * 5, minH: 5, minW: 3 },
+                sm: tile.wide
+                    ? { h: 5, w: 12, x: 0, y: 5, minH: 5, minW: 3 }
+                    : { h: 5, w: 6, x: index * 6, y: 0, minH: 5, minW: 3 },
                 xs: { h: 5, w: 1, x: 0, y: index * 5, minH: 5, minW: 3 },
             },
         })),

@@ -28,9 +28,13 @@ export const scene: SceneExport = {
     productKey: ProductKey.WORKFLOWS,
 }
 
-function AudienceActions(): JSX.Element | null {
+function AudienceActions({ setupShown }: { setupShown: boolean }): JSX.Element | null {
     const { currentTab, selectedEmail } = useValues(audienceSceneLogic)
     const { openNewCategoryModal } = useActions(optOutCategoriesLogic)
+
+    if (setupShown) {
+        return null
+    }
 
     if (currentTab === 'topics') {
         return (
@@ -65,7 +69,7 @@ export function AudienceScene(): JSX.Element {
     const { currentTab, selectedEmail } = useValues(audienceSceneLogic)
     const { isSetupNeeded } = useValues(audienceLogic)
 
-    const showSetupOnly = currentTab === 'setup' || (isSetupNeeded && currentTab === 'recipients')
+    const showSetupOnly = currentTab === 'setup' || (!!isSetupNeeded && currentTab === 'recipients')
 
     return (
         <SceneContent>
@@ -73,7 +77,7 @@ export function AudienceScene(): JSX.Element {
                 name="Audience"
                 description="The email addresses you can send to, their topic preferences, and how they engage"
                 resourceType={{ type: 'workflows' }}
-                actions={<AudienceActions />}
+                actions={<AudienceActions setupShown={showSetupOnly} />}
             />
             <EmailSuspensionBanner />
             {isSetupNeeded === null ? (
