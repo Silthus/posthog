@@ -1,0 +1,971 @@
+[
+    {
+        "repo": "shadcn-ui/taxonomy",
+        "app_root": "",
+        "api_calls": 9,
+        "tree_entries": 249,
+        "files_read": [
+            "package.json",
+            "public/site.webmanifest",
+            "tailwind.config.js",
+            "app/layout.tsx",
+            "app/(auth)/layout.tsx",
+            "app/(docs)/layout.tsx",
+            "styles/globals.css"
+        ],
+        "proposal": {
+            "name": ["Taxonomy", "public/site.webmanifest"],
+            "primary": ["#0f172a", "tailwind.config.js", "theme object hsl(var(--primary))"],
+            "primary_is_neutral": true,
+            "accent": null,
+            "text": ["#0f172a", "styles/globals.css"],
+            "background": ["#ffffff", "styles/globals.css"],
+            "font": ["Inter", "app/layout.tsx", "next/font/google"],
+            "logo": { "path": "public/android-chrome-192x192.png", "format": "png", "bytes": 2359, "score": 4.8 }
+        },
+        "logo_candidates": [
+            { "path": "public/android-chrome-192x192.png", "format": "png", "bytes": 2359, "score": 4.8 },
+            { "path": "public/android-chrome-512x512.png", "format": "png", "bytes": 8538, "score": 4.8 },
+            { "path": "public/apple-touch-icon.png", "format": "png", "bytes": 1992, "score": 4.8 },
+            { "path": "public/favicon-16x16.png", "format": "png", "bytes": 331, "score": 4.8 },
+            { "path": "public/favicon-32x32.png", "format": "png", "bytes": 404, "score": 4.8 }
+        ]
+    },
+    {
+        "repo": "calcom/cal.com",
+        "app_root": "apps/web/",
+        "api_calls": 17,
+        "tree_entries": 10279,
+        "files_read": [
+            "package.json",
+            "apps/web/package.json",
+            "apps/web/public/site.webmanifest",
+            ".snaplet/manifest.json",
+            "apps/web/app/layout.tsx",
+            "apps/web/pages/_app.tsx",
+            "apps/web/pages/_document.tsx",
+            "apps/web/styles/globals.css",
+            "packages/config/theme/tokens.css",
+            "vitest-mocks/tailwind.generated.css",
+            "packages/ui/styles/shared-globals.css",
+            "packages/ui/components/editor/stylesEditor.css",
+            "packages/ui/components/form/date-range-picker/styles.css",
+            "apps/web/public/cal-logo-word-black.svg",
+            "apps/web/public/cal-logo-word-dark.svg"
+        ],
+        "proposal": {
+            "name": ["Cal.diy", "apps/web/public/site.webmanifest"],
+            "primary": ["#111827", "packages/config/theme/tokens.css", "--color-brand: var(--cal-brand)"],
+            "primary_is_neutral": true,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": ["Inter", "apps/web/app/layout.tsx", "next/font/google"],
+            "logo": { "path": "apps/web/public/cal-logo-word.svg", "format": "svg", "bytes": 4821, "score": 11.4 }
+        },
+        "logo_candidates": [
+            { "path": "apps/web/public/cal-logo-word.svg", "format": "svg", "bytes": 4821, "score": 11.4 },
+            { "path": "apps/web/public/cal-logo-word-black.svg", "format": "svg", "bytes": 4821, "score": 7.4 },
+            { "path": "apps/web/public/cal-logo-word-dark.svg", "format": "svg", "bytes": 4821, "score": 7.4 },
+            { "path": "apps/web/public/calcom-logo-white-word.svg", "format": "svg", "bytes": 4821, "score": 7.4 },
+            { "path": "apps/web/public/cal-com-icon.svg", "format": "svg", "bytes": 776, "score": 5.4 }
+        ]
+    },
+    {
+        "repo": "dubinc/dub",
+        "app_root": "apps/web/",
+        "api_calls": 13,
+        "tree_entries": 5969,
+        "files_read": [
+            "package.json",
+            "apps/web/package.json",
+            "apps/web/tailwind.config.ts",
+            "packages/tailwind-config/tailwind.config.ts",
+            "apps/web/app/layout.tsx",
+            "apps/web/app/[domain]/layout.tsx",
+            "apps/web/app/app.dub.co/layout.tsx",
+            "apps/web/styles/globals.css",
+            "packages/ui/src/styles.css",
+            "packages/tailwind-config/themes.css",
+            "apps/web/ui/colors.ts"
+        ],
+        "proposal": {
+            "name": ["dub", "package.json"],
+            "primary": null,
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": null,
+            "logo": { "path": "apps/web/public/favicon.ico", "format": "ico", "bytes": 15086, "score": 2.4 }
+        },
+        "logo_candidates": [{ "path": "apps/web/public/favicon.ico", "format": "ico", "bytes": 15086, "score": 2.4 }]
+    },
+    {
+        "repo": "documenso/documenso",
+        "app_root": "apps/remix/",
+        "api_calls": 11,
+        "tree_entries": 3521,
+        "files_read": [
+            "package.json",
+            "apps/remix/package.json",
+            "apps/remix/public/site.webmanifest",
+            "apps/remix/tailwind.config.ts",
+            "packages/ui/tailwind.config.cjs",
+            "apps/remix/app/root.tsx",
+            "apps/remix/app/app.css",
+            "packages/ui/styles/theme.css",
+            "apps/remix/app/routes/api+/theme.tsx"
+        ],
+        "proposal": {
+            "name": ["Documenso", "apps/remix/public/site.webmanifest"],
+            "primary": ["#a2e771", "apps/remix/public/site.webmanifest", "manifest theme_color"],
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": ["Inter", "apps/remix/app/app.css", "--font-sans"],
+            "logo": { "path": "apps/remix/public/static/logo.png", "format": "png", "bytes": 4119, "score": 10.2 }
+        },
+        "logo_candidates": [
+            { "path": "apps/remix/public/static/logo.png", "format": "png", "bytes": 4119, "score": 10.2 },
+            { "path": "apps/remix/public/android-chrome-192x192.png", "format": "png", "bytes": 16131, "score": 4.4 },
+            { "path": "apps/remix/public/android-chrome-512x512.png", "format": "png", "bytes": 49685, "score": 4.4 },
+            { "path": "apps/remix/public/apple-touch-icon.png", "format": "png", "bytes": 14365, "score": 4.4 },
+            { "path": "apps/remix/public/favicon-16x16.png", "format": "png", "bytes": 529, "score": 4.4 }
+        ]
+    },
+    {
+        "repo": "formbricks/formbricks",
+        "app_root": "apps/web/",
+        "api_calls": 13,
+        "tree_entries": 7030,
+        "files_read": [
+            "package.json",
+            "apps/web/package.json",
+            "apps/web/public/favicon/site.webmanifest",
+            "apps/web/app/layout.tsx",
+            "apps/web/app/(app)/layout.tsx",
+            "apps/web/app/(auth)/layout.tsx",
+            "apps/web/modules/ui/globals.css",
+            "apps/web/modules/ui/components/code-block/style.css",
+            "apps/web/modules/ui/components/editor/styles-editor.css",
+            "apps/web/modules/ui/components/editor/styles-editor-frontend.css",
+            "apps/web/lib/utils/colors.ts"
+        ],
+        "proposal": {
+            "name": ["formbricks", "package.json"],
+            "primary": ["#00e6ca", "apps/web/modules/ui/globals.css", "--color-brand: #00e6ca"],
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": null,
+            "logo": { "path": "apps/web/public/logo-transparent.png", "format": "png", "bytes": 36415, "score": 10.4 }
+        },
+        "logo_candidates": [
+            { "path": "apps/web/public/logo-transparent.png", "format": "png", "bytes": 36415, "score": 10.4 },
+            { "path": "apps/web/images/googleSheetsLogo.png", "format": "png", "bytes": 22556, "score": 6.4 },
+            { "path": "apps/web/images/jslogo.png", "format": "png", "bytes": 1775, "score": 6.4 },
+            { "path": "apps/web/images/npmlogo.png", "format": "png", "bytes": 518, "score": 6.4 },
+            { "path": "apps/web/images/slacklogo.png", "format": "png", "bytes": 2486, "score": 6.4 }
+        ]
+    },
+    {
+        "repo": "midday-ai/midday",
+        "app_root": "apps/dashboard/",
+        "api_calls": 12,
+        "tree_entries": 3066,
+        "files_read": [
+            "package.json",
+            "apps/dashboard/package.json",
+            "apps/dashboard/tailwind.config.ts",
+            "packages/ui/tailwind.config.ts",
+            "apps/dashboard/src/app/[locale]/layout.tsx",
+            "apps/dashboard/src/app/[locale]/(app)/layout.tsx",
+            "apps/dashboard/src/app/[locale]/(app)/(sidebar)/layout.tsx",
+            "apps/dashboard/src/styles/globals.css",
+            "packages/ui/src/globals.css",
+            "packages/ui/src/components/editor/styles.css"
+        ],
+        "proposal": {
+            "name": ["Midday", "apps/dashboard/src/app/[locale]/layout.tsx"],
+            "primary": ["#18181b", "packages/ui/tailwind.config.ts", "theme object hsl(var(--primary))"],
+            "primary_is_neutral": true,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": ["Hedvig Letters Sans", "apps/dashboard/src/app/[locale]/layout.tsx", "next/font/google"],
+            "logo": { "path": "apps/dashboard/public/appicon.png", "format": "png", "bytes": 191964, "score": 4.4 }
+        },
+        "logo_candidates": [
+            { "path": "apps/dashboard/public/appicon.png", "format": "png", "bytes": 191964, "score": 4.4 },
+            { "path": "apps/dashboard/src/app/favicon.ico", "format": "ico", "bytes": 15406, "score": -0.8 }
+        ]
+    },
+    {
+        "repo": "unkeyed/unkey",
+        "app_root": "web/",
+        "api_calls": 13,
+        "tree_entries": 9504,
+        "files_read": [
+            "web/package.json",
+            "web/internal/resend/tailwind.config.ts",
+            "web/apps/dashboard/app/layout.tsx",
+            "web/apps/dashboard/app/(app)/layout.tsx",
+            "web/apps/dashboard/app/auth/layout.tsx",
+            "web/apps/design/theme.css",
+            "web/internal/ui/theme.css",
+            "web/internal/workos-widgets/styles.css",
+            "web/apps/dashboard/styles/tailwind.css",
+            "web/apps/portal/src/styles/tailwind.css",
+            "web/apps/design/public/unkey-logo.svg"
+        ],
+        "proposal": {
+            "name": ["app.unkey.com", "web/apps/dashboard/app/layout.tsx"],
+            "primary": ["#1c1917", "web/apps/portal/src/styles/tailwind.css", "--color-primary: hsl(var(--primary))"],
+            "primary_is_neutral": true,
+            "accent": null,
+            "text": ["#09090b", "web/apps/portal/src/styles/tailwind.css"],
+            "background": ["#fcfcfc", "web/internal/ui/theme.css"],
+            "font": ["Inter", "web/apps/portal/src/styles/tailwind.css", "--font-sans"],
+            "logo": { "path": "web/apps/design/public/unkey-logo.svg", "format": "svg", "bytes": 284, "score": 11.2 }
+        },
+        "logo_candidates": [
+            { "path": "web/apps/design/public/unkey-logo.svg", "format": "svg", "bytes": 284, "score": 11.2 },
+            {
+                "path": "web/apps/dashboard/public/apple-touch-icon-precomposed.png",
+                "format": "png",
+                "bytes": 1467,
+                "score": 4.2
+            },
+            { "path": "web/apps/dashboard/public/apple-touch-icon.png", "format": "png", "bytes": 1467, "score": 4.2 },
+            { "path": "web/apps/dashboard/public/favicon/favicon.ico", "format": "ico", "bytes": 1010, "score": 0.0 },
+            {
+                "path": "web/apps/dashboard/public/favicon/favicon-dark.svg",
+                "format": "svg",
+                "bytes": 279,
+                "score": -3.0
+            }
+        ]
+    },
+    {
+        "repo": "mfts/papermark",
+        "app_root": "",
+        "api_calls": 14,
+        "tree_entries": 2381,
+        "files_read": [
+            "package.json",
+            "tailwind.config.js",
+            "app/layout.tsx",
+            "pages/_app.tsx",
+            "pages/_document.tsx",
+            "styles/globals.css",
+            "styles/custom-notion-styles.css",
+            "styles/custom-viewer-styles.css",
+            "pages/settings/tokens.tsx",
+            "pages/api/teams/[teamId]/tokens/index.ts",
+            ".github/images/papermark-logo.svg",
+            "public/_static/papermark-logo-light.svg"
+        ],
+        "proposal": {
+            "name": ["Papermark", "app/layout.tsx"],
+            "primary": ["#3b82f6", "tailwind.config.js", "theme object #3b82f6"],
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": ["#030712", "styles/globals.css"],
+            "background": ["#ffffff", "styles/globals.css"],
+            "font": ["Inter", "app/layout.tsx", "next/font/google"],
+            "logo": { "path": ".github/images/papermark-logo.svg", "format": "svg", "bytes": 9146, "score": 11.6 }
+        },
+        "logo_candidates": [
+            { "path": ".github/images/papermark-logo.svg", "format": "svg", "bytes": 9146, "score": 11.6 },
+            { "path": "public/_static/papermark-logo.svg", "format": "svg", "bytes": 9153, "score": 11.6 },
+            { "path": "public/_static/papermark-logo-light.svg", "format": "svg", "bytes": 9153, "score": 7.6 },
+            { "path": "public/_example/papermark-example-page.png", "format": "png", "bytes": 113678, "score": 6.6 },
+            { "path": "public/_static/papermark-banner.png", "format": "png", "bytes": 107895, "score": 6.6 }
+        ]
+    },
+    {
+        "repo": "elie222/inbox-zero",
+        "app_root": "apps/web/",
+        "api_calls": 10,
+        "tree_entries": 5712,
+        "files_read": [
+            "package.json",
+            "apps/web/package.json",
+            "apps/web/tailwind.config.js",
+            "apps/web/app/layout.tsx",
+            "apps/web/app/(app)/layout.tsx",
+            "apps/web/app/(landing)/layout.tsx",
+            "apps/web/styles/globals.css",
+            "apps/web/utils/colors.ts"
+        ],
+        "proposal": {
+            "name": ["inbox-zero", "package.json"],
+            "primary": ["#0f172a", "apps/web/tailwind.config.js", "theme object hsl(var(--primary))"],
+            "primary_is_neutral": true,
+            "accent": null,
+            "text": ["#0f172a", "apps/web/styles/globals.css"],
+            "background": ["#ffffff", "apps/web/styles/globals.css"],
+            "font": ["Geist", "apps/web/app/layout.tsx", "next/font/google"],
+            "logo": { "path": "apps/web/public/logo-wordmark.png", "format": "png", "bytes": 6123, "score": 10.4 }
+        },
+        "logo_candidates": [
+            { "path": "apps/web/public/logo-wordmark.png", "format": "png", "bytes": 6123, "score": 10.4 },
+            { "path": "apps/web/public/splash_screens/icon.png", "format": "png", "bytes": 2605, "score": 4.2 },
+            { "path": "apps/web/public/icons/icon-192x192.png", "format": "png", "bytes": 19427, "score": 2.2 },
+            { "path": "apps/web/public/icons/icon-512x512.png", "format": "png", "bytes": 90583, "score": 2.2 },
+            { "path": "apps/web/app/icon.png", "format": "png", "bytes": 90583, "score": 1.4 }
+        ]
+    },
+    {
+        "repo": "openstatusHQ/openstatus",
+        "app_root": "apps/web/",
+        "api_calls": 13,
+        "tree_entries": 5333,
+        "files_read": [
+            "package.json",
+            "apps/web/package.json",
+            "apps/web/src/app/layout.tsx",
+            "apps/web/src/content/layout.tsx",
+            "apps/web/src/app/(docs)/layout.tsx",
+            "apps/web/src/styles/globals.css",
+            "packages/ui/src/globals.css",
+            "apps/web/src/content/mdx-components/demo/themes.tsx",
+            "packages/ui/src/lib/data-table-filters/colors.ts",
+            "apps/web/public/assets/landing/openstatus-logo.svg",
+            "apps/web/public/assets/logos/OpenStatus-Logo.svg"
+        ],
+        "proposal": {
+            "name": ["openstatus", "package.json"],
+            "primary": ["#171717", "packages/ui/src/globals.css", "--color-primary: var(--primary)"],
+            "primary_is_neutral": true,
+            "accent": null,
+            "text": ["#0a0a0a", "packages/ui/src/globals.css"],
+            "background": ["#ffffff", "packages/ui/src/globals.css"],
+            "font": ["Inter", "apps/web/src/app/layout.tsx", "next/font/google"],
+            "logo": {
+                "path": "apps/web/public/assets/landing/openstatus-logo.svg",
+                "format": "svg",
+                "bytes": 709,
+                "score": 11.0
+            }
+        },
+        "logo_candidates": [
+            {
+                "path": "apps/web/public/assets/landing/openstatus-logo.svg",
+                "format": "svg",
+                "bytes": 709,
+                "score": 11.0
+            },
+            {
+                "path": "apps/web/public/assets/logos/OpenStatus-Logo.svg",
+                "format": "svg",
+                "bytes": 709,
+                "score": 11.0
+            },
+            {
+                "path": "apps/web/public/assets/posts/status-page-markdown-for-agents/status-page-markdown-for-agents.png",
+                "format": "png",
+                "bytes": 61922,
+                "score": 3.8
+            },
+            { "path": "apps/web/src/app/icon.png", "format": "png", "bytes": 5939, "score": 1.2 },
+            { "path": "apps/web/src/app/apple-icon.ico", "format": "ico", "bytes": 4158, "score": -0.8 }
+        ]
+    },
+    {
+        "repo": "baptisteArno/typebot.io",
+        "app_root": "apps/builder/",
+        "api_calls": 12,
+        "tree_entries": 5382,
+        "files_read": [
+            "package.json",
+            "apps/builder/package.json",
+            "apps/builder/src/app/layout.tsx",
+            "apps/builder/src/pages/_app.tsx",
+            "apps/builder/src/pages/_document.tsx",
+            "apps/builder/src/assets/styles/globals.css",
+            "packages/ui/src/theme.css",
+            "packages/ui/src/colors.css",
+            "apps/builder/src/pages/typebots/[typebotId]/theme.tsx",
+            "packages/ui/src/colors.ts"
+        ],
+        "proposal": {
+            "name": ["builder", "apps/builder/package.json"],
+            "primary": ["#ff5925", "packages/ui/src/theme.css", "--primary: var(--color-orange-500)"],
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": ["Untitled Sans", "packages/ui/src/theme.css", "--font-sans"],
+            "logo": { "path": "apps/builder/public/images/logo.png", "format": "png", "bytes": 8965, "score": 10.2 }
+        },
+        "logo_candidates": [
+            { "path": "apps/builder/public/images/logo.png", "format": "png", "bytes": 8965, "score": 10.2 },
+            { "path": "apps/builder/public/favicon.svg", "format": "svg", "bytes": 1105, "score": 3.4 }
+        ]
+    },
+    {
+        "repo": "devias-io/material-kit-react",
+        "app_root": "",
+        "api_calls": 11,
+        "tree_entries": 162,
+        "files_read": [
+            "package.json",
+            "src/app/layout.tsx",
+            "src/app/dashboard/layout.tsx",
+            "src/components/auth/layout.tsx",
+            "src/styles/global.css",
+            "src/styles/theme/colors.ts",
+            "src/styles/theme/create-theme.ts",
+            "public/assets/logo--dark.svg",
+            "public/assets/logo-emblem--dark.svg"
+        ],
+        "proposal": {
+            "name": ["material-kit-react", "package.json"],
+            "primary": null,
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": null,
+            "logo": { "path": "public/assets/logo-dropbox.png", "format": "png", "bytes": 6275, "score": 10.6 }
+        },
+        "logo_candidates": [
+            { "path": "public/assets/logo-dropbox.png", "format": "png", "bytes": 6275, "score": 10.6 },
+            { "path": "public/assets/logo-github.png", "format": "png", "bytes": 6427, "score": 10.6 },
+            { "path": "public/assets/logo-lyft.png", "format": "png", "bytes": 4899, "score": 10.6 },
+            { "path": "public/assets/logo-medium.png", "format": "png", "bytes": 3464, "score": 10.6 },
+            { "path": "public/assets/logo-slack.png", "format": "png", "bytes": 9930, "score": 10.6 }
+        ]
+    },
+    {
+        "repo": "twentyhq/twenty",
+        "app_root": "",
+        "api_calls": 18,
+        "tree_entries": 43968,
+        "files_read": [
+            "package.json",
+            "packages/twenty-front/public/manifest.json",
+            "packages/twenty-companion/index.html",
+            "packages/twenty-front/index.html",
+            "packages/twenty-website/src/app/[locale]/layout.tsx",
+            "packages/twenty-front/src/index.css",
+            "packages/twenty-ui/src/theme/theme-dark.css",
+            "packages/twenty-ui/src/theme/theme-light.css",
+            "packages/twenty-companion/src/renderer/style.css",
+            "packages/twenty-ui/src/icon/components/IllustrationIconWrapper.module.scss",
+            "packages/twenty-ui/src/components/input/MainButton/MainButton.module.scss",
+            "packages/twenty-ui/src/theme/ThemeOverrides.ts",
+            "packages/twenty-ui/src/theme/index.ts",
+            "packages/twenty-website/src/tokens/index.ts",
+            "packages/twenty-docs/logo.svg",
+            "packages/twenty-agent-skills/assets/twenty-logo.svg"
+        ],
+        "proposal": {
+            "name": ["Twenty", "packages/twenty-front/public/manifest.json"],
+            "primary": ["#000000", "packages/twenty-front/public/manifest.json", "manifest theme_color"],
+            "primary_is_neutral": true,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": ["Inter", "packages/twenty-front/src/index.css", "body font-family"],
+            "logo": {
+                "path": "packages/twenty-agent-skills/assets/twenty-logo.png",
+                "format": "png",
+                "bytes": 5288,
+                "score": 12.4
+            }
+        },
+        "logo_candidates": [
+            {
+                "path": "packages/twenty-agent-skills/assets/twenty-logo.png",
+                "format": "png",
+                "bytes": 5288,
+                "score": 12.4
+            },
+            {
+                "path": "packages/twenty-agent-skills/assets/twenty-logo.svg",
+                "format": "svg",
+                "bytes": 1325,
+                "score": 11.4
+            },
+            {
+                "path": "packages/twenty-companion/src/renderer/assets/twenty-logo.svg",
+                "format": "svg",
+                "bytes": 5520,
+                "score": 11.0
+            },
+            {
+                "path": "packages/twenty-website/public/images/shared/halftone/twenty-logo.svg",
+                "format": "svg",
+                "bytes": 970,
+                "score": 10.8
+            },
+            { "path": "packages/twenty-docs/images/core/logo-mini.png", "format": "png", "bytes": 570, "score": 10.2 }
+        ]
+    },
+    {
+        "repo": "plausible/analytics",
+        "app_root": "",
+        "api_calls": 6,
+        "tree_entries": 2434,
+        "files_read": [
+            "assets/css/app.css",
+            "assets/css/flatpickr-colors.css",
+            "priv/static/images/ce/logo_dark.svg",
+            "priv/static/images/ce/logo_light.svg"
+        ],
+        "proposal": {
+            "name": ["analytics", "repo name"],
+            "primary": ["#4b38d8", "priv/static/images/ce/logo_dark.svg", "3 colored fills"],
+            "primary_is_neutral": false,
+            "accent": ["#1f2961", "priv/static/images/ce/logo_light.svg"],
+            "text": null,
+            "background": null,
+            "font": null,
+            "logo": {
+                "path": "priv/static/images/icon/google_analytics_logo.svg",
+                "format": "svg",
+                "bytes": 4282,
+                "score": 11.2
+            }
+        },
+        "logo_candidates": [
+            {
+                "path": "priv/static/images/icon/google_analytics_logo.svg",
+                "format": "svg",
+                "bytes": 4282,
+                "score": 11.2
+            },
+            { "path": "priv/static/images/ce/logo_dark.svg", "format": "svg", "bytes": 23904, "score": 5.2 },
+            { "path": "priv/static/images/ce/logo_light.svg", "format": "svg", "bytes": 24086, "score": 5.2 },
+            { "path": "priv/static/images/ee/logo_dark.svg", "format": "svg", "bytes": 11147, "score": 5.2 },
+            { "path": "priv/static/images/ee/logo_light.svg", "format": "svg", "bytes": 11173, "score": 5.2 }
+        ]
+    },
+    {
+        "repo": "chatwoot/chatwoot",
+        "app_root": "",
+        "api_calls": 16,
+        "tree_entries": 11239,
+        "files_read": [
+            "package.json",
+            "public/manifest.json",
+            "tailwind.config.js",
+            "swagger/index.html",
+            "app/views/layouts/super_admin/application.html.erb",
+            "app/javascript/portal/application.scss",
+            "app/assets/stylesheets/administrate/application.scss",
+            "app/assets/stylesheets/administrate/custom_styles.scss",
+            "app/javascript/dashboard/assets/scss/app.scss",
+            "app/javascript/dashboard/assets/scss/_base.scss",
+            "app/javascript/dashboard/assets/scss/_next-colors.scss",
+            "theme/colors.js",
+            "public/brand-assets/logo.svg",
+            "public/brand-assets/logo_dark.svg"
+        ],
+        "proposal": {
+            "name": ["Chatwoot", "public/manifest.json"],
+            "primary": ["#2781f6", "theme/colors.js", "theme object '#2781F6'"],
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": ["Helvetica Neue", "swagger/index.html", "body font-family"],
+            "logo": {
+                "path": "app/javascript/design-system/images/logo.png",
+                "format": "png",
+                "bytes": 14605,
+                "score": 10.2
+            }
+        },
+        "logo_candidates": [
+            { "path": "app/javascript/design-system/images/logo.png", "format": "png", "bytes": 14605, "score": 10.2 },
+            { "path": "public/brand-assets/logo.svg", "format": "svg", "bytes": 8398, "score": 9.6 },
+            { "path": "public/brand-assets/logo_thumbnail.svg", "format": "svg", "bytes": 709, "score": 9.6 },
+            {
+                "path": "app/javascript/design-system/images/logo-thumbnail.svg",
+                "format": "svg",
+                "bytes": 916,
+                "score": 9.2
+            },
+            { "path": "app/javascript/widget/assets/images/logo.svg", "format": "svg", "bytes": 916, "score": 9.0 }
+        ]
+    },
+    {
+        "repo": "maybe-finance/maybe",
+        "app_root": "",
+        "api_calls": 9,
+        "tree_entries": 1966,
+        "files_read": [
+            "package.json",
+            "public/site.webmanifest",
+            "app/views/layouts/application.html.erb",
+            "app/views/layouts/doorkeeper/application.html.erb",
+            "app/assets/tailwind/application.css",
+            "app/assets/images/logo-squircle.svg",
+            "app/assets/images/logo.svg"
+        ],
+        "proposal": {
+            "name": ["maybe", "package.json"],
+            "primary": ["#6927da", "app/assets/images/logo-squircle.svg", "20 colored fills"],
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": null,
+            "logo": { "path": "app/assets/images/maybe-plus-logo.png", "format": "png", "bytes": 93309, "score": 12.4 }
+        },
+        "logo_candidates": [
+            { "path": "app/assets/images/maybe-plus-logo.png", "format": "png", "bytes": 93309, "score": 12.4 },
+            { "path": "public/logo-pwa.png", "format": "png", "bytes": 225225, "score": 10.8 },
+            { "path": "app/assets/images/logo-color.png", "format": "png", "bytes": 9326, "score": 10.4 },
+            { "path": "app/assets/images/logo-squircle.svg", "format": "svg", "bytes": 19233, "score": 9.4 },
+            { "path": "app/assets/images/logo.svg", "format": "svg", "bytes": 4393, "score": 9.4 }
+        ]
+    },
+    {
+        "repo": "mastodon/mastodon",
+        "app_root": "",
+        "api_calls": 12,
+        "tree_entries": 10861,
+        "files_read": [
+            "package.json",
+            ".storybook/styles.css",
+            "app/javascript/styles/application.scss",
+            "app/javascript/styles/mastodon/_variables.scss",
+            "app/javascript/styles/mastodon/tokens/index.scss",
+            "app/javascript/mastodon/components/carousel/styles.scss",
+            "app/javascript/mastodon/components/tags/style.module.css",
+            "app/javascript/mastodon/utils/theme.ts",
+            ".storybook/static/logo.svg",
+            "app/javascript/images/logo-symbol-icon.svg"
+        ],
+        "proposal": {
+            "name": ["mastodon", "package.json"],
+            "primary": ["#6364ff", ".storybook/static/logo.svg", "2 colored fills"],
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": null,
+            "logo": { "path": "app/javascript/images/mailer/logo.png", "format": "png", "bytes": 1150, "score": 10.2 }
+        },
+        "logo_candidates": [
+            { "path": "app/javascript/images/mailer/logo.png", "format": "png", "bytes": 1150, "score": 10.2 },
+            { "path": "app/javascript/images/mailer/wordmark.png", "format": "png", "bytes": 6753, "score": 10.2 },
+            {
+                "path": "app/javascript/images/mailer-new/common/logo-footer.png",
+                "format": "png",
+                "bytes": 2418,
+                "score": 10.0
+            },
+            {
+                "path": "app/javascript/images/mailer-new/common/logo-header.png",
+                "format": "png",
+                "bytes": 10846,
+                "score": 10.0
+            },
+            { "path": ".storybook/static/logo.svg", "format": "svg", "bytes": 7496, "score": 9.6 }
+        ]
+    },
+    {
+        "repo": "healthchecks/healthchecks",
+        "app_root": "",
+        "api_calls": 8,
+        "tree_entries": 1475,
+        "files_read": [
+            "static/css/base.css",
+            "static/css/variables.css",
+            "static/css/appearance.css",
+            "stuff/bootstrap/theme.less",
+            "stuff/bootstrap/variables.less",
+            "static/css/bootstrap-colors.css"
+        ],
+        "proposal": {
+            "name": ["healthchecks", "repo name"],
+            "primary": ["#0091ea", "static/css/variables.css", "--link-color: #0091EA"],
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": ["#333333", "static/css/variables.css"],
+            "background": ["#ffffff", "static/css/variables.css"],
+            "font": null,
+            "logo": { "path": "static/img/logo.png", "format": "png", "bytes": 1159, "score": 10.6 }
+        },
+        "logo_candidates": [
+            { "path": "static/img/logo.png", "format": "png", "bytes": 1159, "score": 10.6 },
+            { "path": "static/img/favicon.svg", "format": "svg", "bytes": 484, "score": 3.6 },
+            { "path": "static/img/favicon_down.svg", "format": "svg", "bytes": 745, "score": 3.6 },
+            { "path": "static/img/favicon.ico", "format": "ico", "bytes": 5430, "score": 2.6 },
+            { "path": "stuff/favicon.svg", "format": "svg", "bytes": 4333, "score": 0.8 }
+        ]
+    },
+    {
+        "repo": "paperless-ngx/paperless-ngx",
+        "app_root": "",
+        "api_calls": 10,
+        "tree_entries": 1929,
+        "files_read": [
+            "src-ui/src/manifest.webmanifest",
+            "src-ui/src/index.html",
+            "src-ui/src/theme.scss",
+            "src-ui/src/styles.scss",
+            "src/documents/static/base.css",
+            "src-ui/src/app/app.component.scss",
+            "src-ui/src/app/components/app-frame/app-frame.component.scss",
+            "src-ui/src/app/components/app-frame/global-search/global-search.component.scss"
+        ],
+        "proposal": {
+            "name": ["Paperless-ngx", "src-ui/src/manifest.webmanifest"],
+            "primary": ["#17541f", "src-ui/src/index.html", "<meta theme-color>"],
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": null,
+            "background": ["#161618", "src-ui/src/theme.scss"],
+            "font": null,
+            "logo": {
+                "path": "src/paperless/static/paperless/img/favicon.ico",
+                "format": "ico",
+                "bytes": 16540,
+                "score": 2.0
+            }
+        },
+        "logo_candidates": [
+            { "path": "src/paperless/static/paperless/img/favicon.ico", "format": "ico", "bytes": 16540, "score": 2.0 },
+            { "path": "src-ui/src/apple-touch-icon.png", "format": "png", "bytes": 7779, "score": 1.6 },
+            { "path": "src-ui/src/icon-192.png", "format": "png", "bytes": 7798, "score": 1.6 },
+            { "path": "src-ui/src/icon-512-maskable.png", "format": "png", "bytes": 22504, "score": 1.6 },
+            { "path": "src-ui/src/icon-512.png", "format": "png", "bytes": 8421, "score": 1.6 }
+        ]
+    },
+    {
+        "repo": "excalidraw/excalidraw",
+        "app_root": "",
+        "api_calls": 12,
+        "tree_entries": 1450,
+        "files_read": [
+            "package.json",
+            "excalidraw-app/index.html",
+            "excalidraw-app/index.scss",
+            "excalidraw-app/components/AppSidebar.scss",
+            "packages/excalidraw/css/app.scss",
+            "packages/excalidraw/css/theme.scss",
+            "dev-docs/src/pages/index.module.css",
+            "packages/excalidraw/css/styles.scss",
+            "packages/common/src/colors.ts",
+            "dev-docs/static/img/logo.svg"
+        ],
+        "proposal": {
+            "name": ["Excalidraw Whiteboard", "excalidraw-app/index.html"],
+            "primary": ["#6965db", "packages/excalidraw/css/theme.scss", "--color-primary: #6965db"],
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": null,
+            "logo": { "path": "dev-docs/static/img/logo.svg", "format": "svg", "bytes": 4937, "score": 9.4 }
+        },
+        "logo_candidates": [
+            { "path": "dev-docs/static/img/logo.svg", "format": "svg", "bytes": 4937, "score": 9.4 },
+            { "path": "public/android-chrome-192x192.png", "format": "png", "bytes": 5091, "score": 4.8 },
+            { "path": "public/android-chrome-512x512.png", "format": "png", "bytes": 14099, "score": 4.8 },
+            { "path": "public/apple-touch-icon.png", "format": "png", "bytes": 4182, "score": 4.8 },
+            { "path": "public/favicon-16x16.png", "format": "png", "bytes": 973, "score": 4.8 }
+        ]
+    },
+    {
+        "repo": "umami-software/umami",
+        "app_root": "",
+        "api_calls": 11,
+        "tree_entries": 2388,
+        "files_read": [
+            "package.json",
+            "public/site.webmanifest",
+            "src/app/layout.tsx",
+            "src/app/(main)/layout.tsx",
+            "src/app/(main)/admin/layout.tsx",
+            "src/app/global.css",
+            "src/lib/colors.ts",
+            "src/assets/logo-white.svg",
+            "src/assets/logo.svg"
+        ],
+        "proposal": {
+            "name": ["umami", "package.json"],
+            "primary": ["#2f2f2f", "src/app/layout.tsx", "<meta theme-color>"],
+            "primary_is_neutral": true,
+            "accent": null,
+            "text": null,
+            "background": null,
+            "font": ["Inter", "src/app/layout.tsx", "next/font/google"],
+            "logo": { "path": "src/assets/logo.svg", "format": "svg", "bytes": 433, "score": 9.6 }
+        },
+        "logo_candidates": [
+            { "path": "src/assets/logo.svg", "format": "svg", "bytes": 433, "score": 9.6 },
+            { "path": "src/assets/logo-white.svg", "format": "svg", "bytes": 394, "score": 5.6 },
+            { "path": "public/android-chrome-192x192.png", "format": "png", "bytes": 7707, "score": 4.8 },
+            { "path": "public/android-chrome-512x512.png", "format": "png", "bytes": 21989, "score": 4.8 },
+            { "path": "public/apple-touch-icon.png", "format": "png", "bytes": 1992, "score": 4.8 }
+        ]
+    },
+    {
+        "repo": "hoppscotch/hoppscotch",
+        "app_root": "",
+        "api_calls": 16,
+        "tree_entries": 3025,
+        "files_read": [
+            "package.json",
+            "tailwind.config.ts",
+            "packages/hoppscotch-agent/tailwind.config.js",
+            "packages/hoppscotch-agent/index.html",
+            "packages/hoppscotch-desktop/index.html",
+            "packages/hoppscotch-selfhost-web/index.html",
+            "packages/hoppscotch-agent/src/index.css",
+            "packages/hoppscotch-common/assets/scss/styles.scss",
+            "packages/hoppscotch-common/assets/scss/tailwind.scss",
+            "packages/hoppscotch-common/assets/themes/themes.scss",
+            "packages/hoppscotch-sh-admin/assets/scss/styles.scss",
+            "packages/hoppscotch-sh-admin/assets/scss/tailwind.scss",
+            "packages/hoppscotch-common/public/logo.svg",
+            "packages/hoppscotch-desktop/public/logo.svg"
+        ],
+        "proposal": {
+            "name": ["Hoppscotch Agent", "packages/hoppscotch-agent/index.html"],
+            "primary": ["#00d196", "packages/hoppscotch-common/public/logo.svg", "10 colored fills"],
+            "primary_is_neutral": false,
+            "accent": ["#10b981", "packages/hoppscotch-sh-admin/assets/scss/styles.scss"],
+            "text": null,
+            "background": null,
+            "font": ["Inter Variable", "packages/hoppscotch-sh-admin/assets/scss/styles.scss", "--font-sans"],
+            "logo": {
+                "path": "packages/hoppscotch-common/public/logo.png",
+                "format": "png",
+                "bytes": 182648,
+                "score": 10.4
+            }
+        },
+        "logo_candidates": [
+            { "path": "packages/hoppscotch-common/public/logo.png", "format": "png", "bytes": 182648, "score": 10.4 },
+            { "path": "packages/hoppscotch-common/public/logo.svg", "format": "svg", "bytes": 6084, "score": 9.4 },
+            { "path": "packages/hoppscotch-desktop/public/logo.svg", "format": "svg", "bytes": 6084, "score": 9.4 },
+            { "path": "packages/hoppscotch-sh-admin/public/logo.svg", "format": "svg", "bytes": 6084, "score": 9.4 },
+            { "path": "packages/hoppscotch-common/assets/icons/logo.svg", "format": "svg", "bytes": 2703, "score": 9.2 }
+        ]
+    },
+    {
+        "repo": "Infisical/infisical",
+        "app_root": "frontend/",
+        "api_calls": 9,
+        "tree_entries": 17342,
+        "files_read": [
+            "package.json",
+            "frontend/package.json",
+            "frontend/index.html",
+            "frontend/src/pages/root.tsx",
+            "frontend/src/pages/admin/layout.tsx",
+            "frontend/src/index.css",
+            "company/style.css"
+        ],
+        "proposal": {
+            "name": ["Infisical", "frontend/index.html"],
+            "primary": null,
+            "primary_is_neutral": false,
+            "accent": null,
+            "text": ["#ebebeb", "frontend/src/index.css"],
+            "background": ["#19191c", "frontend/src/index.css"],
+            "font": ["IBM Plex Sans", "frontend/src/index.css", "--font-sans"],
+            "logo": { "path": "frontend/public/images/biglogo.png", "format": "png", "bytes": 85230, "score": 6.4 }
+        },
+        "logo_candidates": [
+            { "path": "frontend/public/images/biglogo.png", "format": "png", "bytes": 85230, "score": 6.4 },
+            { "path": "frontend/public/images/logotransparent.png", "format": "png", "bytes": 84945, "score": 6.4 },
+            {
+                "path": "frontend/public/images/logotransparent_trimmed.png",
+                "format": "png",
+                "bytes": 35972,
+                "score": 6.4
+            },
+            { "path": "frontend/public/images/gradientLogo.svg", "format": "svg", "bytes": 3274, "score": 5.4 }
+        ]
+    },
+    {
+        "repo": "saleor/saleor-dashboard",
+        "app_root": "",
+        "api_calls": 15,
+        "tree_entries": 7448,
+        "files_read": [
+            "package.json",
+            "src/index.html",
+            "src/index.css",
+            "src/components/ChannelsAvailabilityDialogWrapper/ChannelsAvailabilityDialogWrapper.module.css",
+            "src/components/AppLayout/TopNav/TopNavWrapper.module.css",
+            "src/components/ConditionalFilter/UI/RangeInputWrapper.module.css",
+            "src/extensions/components/AppWidgetCard/AppWidgetCard.module.css",
+            "src/extensions/components/AppWidgets/AppWidgetExtensionItem.module.css",
+            "src/colors.ts",
+            "src/themeOverrides.ts",
+            "src/components/Modal/tokens.ts",
+            "assets/images/logo-dark-small.svg",
+            "assets/images/logo-sidebar-dark.svg"
+        ],
+        "proposal": {
+            "name": ["Sign in to the Saleor Dashboard", "src/index.html"],
+            "primary": ["#19c3be", "assets/images/logo-dark-small.svg", "1 colored fills"],
+            "primary_is_neutral": false,
+            "accent": ["#8ac4eb", "assets/images/logo-sidebar-dark.svg"],
+            "text": null,
+            "background": null,
+            "font": null,
+            "logo": { "path": "assets/images/sidebar-default-logo.png", "format": "png", "bytes": 955, "score": 6.6 }
+        },
+        "logo_candidates": [
+            { "path": "assets/images/sidebar-default-logo.png", "format": "png", "bytes": 955, "score": 6.6 },
+            { "path": "assets/images/dribbble-logo.svg", "format": "svg", "bytes": 7561, "score": 5.6 },
+            { "path": "assets/images/facebook-logo.svg", "format": "svg", "bytes": 811, "score": 5.6 },
+            { "path": "assets/images/github-logo.svg", "format": "svg", "bytes": 1303, "score": 5.6 },
+            { "path": "assets/images/google-logo.svg", "format": "svg", "bytes": 1413, "score": 5.6 }
+        ]
+    },
+    {
+        "repo": "zulip/zulip",
+        "app_root": "",
+        "api_calls": 12,
+        "tree_entries": 9836,
+        "files_read": [
+            "package.json",
+            "web/styles/dark_theme.css",
+            "web/styles/app_variables.css",
+            "web/styles/app_components.css",
+            "starlight_help/src/styles/main.css",
+            "web/styles/portico/portico_variables.css",
+            "web/styles/portico/legacy_portico_styles_bundle.css",
+            "web/src/theme.ts",
+            "web/images/zulip-logo.svg",
+            "static/images/logo/zulip-org-logo.svg"
+        ],
+        "proposal": {
+            "name": ["zulip", "repo name"],
+            "primary": ["#50adff", "static/images/logo/zulip-org-logo.svg", "4 colored fills"],
+            "primary_is_neutral": false,
+            "accent": ["#066bd0", "web/styles/portico/portico_variables.css"],
+            "text": null,
+            "background": null,
+            "font": null,
+            "logo": { "path": "web/images/zulip-logo.svg", "format": "svg", "bytes": 613, "score": 11.6 }
+        },
+        "logo_candidates": [
+            { "path": "web/images/zulip-logo.svg", "format": "svg", "bytes": 613, "score": 11.6 },
+            { "path": "static/images/logo/zulip-org-logo.svg", "format": "svg", "bytes": 1670, "score": 11.4 },
+            {
+                "path": "web/images/logo/white-zulip-logo-without-text.svg",
+                "format": "svg",
+                "bytes": 991,
+                "score": 7.4
+            },
+            { "path": "static/images/logo/zulip-icon-128x128.png", "format": "png", "bytes": 3237, "score": 6.4 },
+            { "path": "static/images/logo/zulip-icon-512x512.png", "format": "png", "bytes": 13462, "score": 6.4 }
+        ]
+    }
+]
