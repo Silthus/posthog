@@ -293,6 +293,22 @@ const createMockContext = (
 
 describe('Tool Filtering - API Scopes', () => {
     it.each([
+        { scopes: ['task:write'], rollout: true, visible: false },
+        { scopes: ['query:read'], rollout: true, visible: false },
+        { scopes: ['task:write', 'query:read'], rollout: true, visible: true },
+        { scopes: ['task:write', 'query:write'], rollout: true, visible: true },
+        { scopes: ['task:write', 'query:read'], rollout: false, visible: false },
+        { scopes: ['task:write', 'query:read'], rollout: undefined, visible: false },
+    ])('metric replacement requires query access and rollout: %j', async ({ scopes, rollout, visible }) => {
+        const featureFlags: EvaluatedFlags = {}
+        if (rollout !== undefined) {
+            featureFlags['signals-report-checks-replace'] = rollout
+        }
+        const tools = await getToolsFromContext(createMockContext(scopes), { featureFlags })
+        expect(tools.some((tool) => tool.name === 'inbox-report-checks-replace')).toBe(visible)
+    })
+
+    it.each([
         { scopes: ['billing:read'], visible: true },
         { scopes: [], visible: false },
     ])('billing read tools require a scope but no rollout flag: $visible', async ({ scopes, visible }) => {
@@ -343,12 +359,13 @@ describe('Tool Filtering - API Scopes', () => {
     })
 
     it('should only return read tools when user has read scope', async () => {
-        const context = createMockContext(['insight:read', 'query:read'])
+        const context = createMockContext(['query:read'])
         const tools = await getToolsFromContext(context)
         const toolNames = tools.map((t) => t.name)
 
         // insight-query is in the hand-written TOOL_MAP and requires query:read
         expect(toolNames).toContain('insight-query')
+        expect(toolNames).toContain('execute-sql')
 
         expect(toolNames).not.toContain('dashboard-create')
     })
@@ -1000,6 +1017,7 @@ describe('Tool Filtering - Feature Flags', () => {
         const branchFlags = [
             'self-optimising-workflows',
             'business-knowledge-github-repos',
+            'signals-report-checks-replace',
             'workflows-email-domain-agent-setup',
         ]
         expect(allFlags).toEqual(expect.arrayContaining(branchFlags))
