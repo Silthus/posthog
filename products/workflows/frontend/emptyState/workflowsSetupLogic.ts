@@ -4,6 +4,7 @@ import { projectLogic } from 'scenes/projectLogic'
 import { ProductKey } from '~/queries/schema/schema-general'
 
 import { hogFlowsList } from '../generated/api'
+import { isFirstRunPrototype } from '../prototype/first-run/firstRunScenario'
 
 /**
  * Setup detection for the workflows empty state. Workflows are a creation-first
@@ -15,6 +16,9 @@ export const workflowsSetupLogic = createSetupDetectionLogic({
     cacheHasData: true,
     revalidateCachedHasData: true,
     detect: async () => {
+        if (isFirstRunPrototype()) {
+            return 'has-data'
+        }
         const projectId = String(projectLogic.findMounted()?.values.currentProjectId)
         const response = await hogFlowsList(projectId, { limit: 1 })
         return response.count > 0 ? 'has-data' : 'needs-setup'

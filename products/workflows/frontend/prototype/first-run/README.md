@@ -2,15 +2,16 @@
 
 Answers [silthus/posthog#212](https://github.com/Silthus/posthog/issues/212): what should a paying team's first ten minutes in Workflows feel like, from the empty scene to a first delivered message?
 
-Three structurally different variants on a simulated backend, switchable with `?variant=A|B|C` or the floating bar (arrow keys work too).
+Round 2 runs inside the real app (`<App />` in Storybook) on mocked APIs, behind the `workflows-first-run-prototype` flag. One flow, value first:
 
-- **A, Send yourself one first.** The first screen is a composer. One click sends a template to the signed-in user from the sandbox sender. Domain, people and workflow-versus-broadcast come after the first delivery.
-- **B, Setup checklist.** Five rows in sending order: sender, people, when to send, message, test and go live. Each row shows its state from the project data and expands in place. The canvas never appears.
-- **C, Recipes from your data.** A gallery of starter recipes graded against the project's events and people. A recipe opens as a filled-in canvas next to a "before this can send" panel with fixes.
+1. **Workflows tab.** Instead of the empty state, the tab says why a welcome email matters and shows what the project already captures: the signup event, how many people have an email, and the logo and colors picked up from the website (the in-flight Email brand detector).
+2. **Send me an example.** One click sends the branded welcome email to the signed-in user only.
+3. **The inbox.** A simulated inbox shows the email as it lands. Its footer links back into Workflows.
+4. **The workflow.** The link opens the real editor on a "Welcome new signups" draft with the email step selected, so the team can edit it.
+5. **Enable.** The workflow sends from a shared PostHog address with the team's name until the team adds its own domain. A banner says so and leads to the domain. When the domain verifies, the banner offers a one-click switch.
+6. **Quick start.** The existing Quick start popover opens with a Workflows list the team can work through in any order: own domain, brand, re-engagement, a broadcast, templates.
 
-Scenario knobs in the floating bar: DNS verifies instantly or stays pending, how many people have an `email`, which events the project sends. The State button shows the simulated backend.
-
-Assumed: a sandbox sender that emails only the signed-in user ([#225](https://github.com/Silthus/posthog/issues/225)). The email domain wizard, Audience and Email brand are in flight elsewhere; dashed "In flight" boxes mark where they plug in.
+The floating bar switches project data (signups and emails, few emails, nothing captured yet) and the own domain state (none, verifying, verified). "Start over" reloads.
 
 ## Run
 
@@ -18,6 +19,6 @@ Assumed: a sandbox sender that emails only the signed-in user ([#225](https://gi
 pnpm --filter=@posthog/storybook prototype:first-run
 ```
 
-Then open `http://127.0.0.1:6212/iframe.html?id=products-workflows-prototype-first-run--first-run&viewMode=story&variant=A`.
+Then open `http://127.0.0.1:6212/iframe.html?id=products-workflows-prototype-first-run--signups-and-emails&viewMode=story`.
 
 Nothing here is production code. Do not merge this branch.

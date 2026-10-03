@@ -4,6 +4,9 @@ import { AvailableSetupTaskIdsEnumApi as SetupTaskId } from '~/generated/core/ap
 import { ProductKey } from '~/queries/schema/schema-general'
 import { OnboardingStepKey, ReplayTabs } from '~/types'
 
+import { isFirstRunPrototype } from 'products/workflows/frontend/prototype/first-run/firstRunScenario'
+import { FIRST_RUN_SETUP_CONFIG } from 'products/workflows/frontend/prototype/first-run/firstRunSetupTasks'
+
 import type { ProductSetupConfig, SetupTask } from './types'
 
 // ============================================================================
@@ -707,6 +710,9 @@ export const PRODUCT_SETUP_REGISTRY: Partial<Record<ProductKey, ProductSetupConf
 
 /** Get the setup config for a product, or null if not configured */
 export function getProductSetupConfig(productKey: ProductKey): ProductSetupConfig | null {
+    if (productKey === ProductKey.WORKFLOWS && isFirstRunPrototype()) {
+        return FIRST_RUN_SETUP_CONFIG
+    }
     return PRODUCT_SETUP_REGISTRY[productKey] ?? null
 }
 

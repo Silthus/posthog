@@ -21,6 +21,8 @@ import { EmailSuspensionBanner } from './EmailSuspensionBanner'
 import { workflowsEmptyState } from './emptyState/workflowsEmptyState'
 import { MessagingTabActions } from './MessagingTabActions'
 import { messagingNavTabs } from './messagingTabs'
+import { isFirstRunPrototype } from './prototype/first-run/firstRunScenario'
+import { FirstRunWorkflowsTab } from './prototype/first-run/FirstRunWorkflowsTab'
 import { newWorkflowLogic } from './Workflows/newWorkflowLogic'
 import { NewWorkflowModal } from './Workflows/NewWorkflowModal'
 import { WorkflowsTable } from './Workflows/WorkflowsTable'
@@ -129,7 +131,7 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
         {
             label: 'Workflows',
             key: 'workflows',
-            content: <WorkflowsTable />,
+            content: isFirstRunPrototype() ? <FirstRunWorkflowsTab /> : <WorkflowsTable />,
             link: urls.workflows(),
         },
         ...messagingNavTabs((tab) => urls.workflows(tab)),
