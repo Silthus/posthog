@@ -35,8 +35,7 @@ function FirstRunApp({ variant }: { variant: HomeVariant }): JSX.Element {
     )
 }
 
-export const VariantAPitchAndPreview: StoryFn = () => <FirstRunApp variant="A" />
-export const VariantBRecentSignups: StoryFn = () => <FirstRunApp variant="B" />
-export const VariantCOneButton: StoryFn = () => <FirstRunApp variant="C" />
-export const VariantDFirstWeek: StoryFn = () => <FirstRunApp variant="D" />
-export const VariantEAiDraft: StoryFn = () => <FirstRunApp variant="E" />
+export const VariantFExampleFirst: StoryFn = () => <FirstRunApp variant="F" />
+export const VariantGTailoredGallery: StoryFn = () => <FirstRunApp variant="G" />
+export const VariantHAiWalkthrough: StoryFn = () => <FirstRunApp variant="H" />
+export const VariantIBrandFirst: StoryFn = () => <FirstRunApp variant="I" />

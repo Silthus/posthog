@@ -8,7 +8,7 @@ import type { HogFunctionTemplateType } from '~/types'
 
 import { firstRunPrototypeLogic, WorkflowStatus } from './firstRunPrototypeLogic'
 import { OWN_SENDER, SHARED_SENDER, TEAM_BRAND } from './firstRunScenario'
-import { welcomeWorkflow } from './welcomeWorkflow'
+import { STARTERS, starterWorkflow } from './starterEmails'
 
 const EMAIL_TEMPLATE: HogFunctionTemplateType = {
     id: 'template-email',
@@ -41,9 +41,15 @@ function state(): typeof firstRunPrototypeLogic.values {
     return firstRunPrototypeLogic.values
 }
 
-function currentWelcomeWorkflow(): ReturnType<typeof welcomeWorkflow> {
-    const { workflowStatus, senderIntegrationId, signupEvent } = state()
-    return welcomeWorkflow({ status: workflowStatus, senderIntegrationId, signupEvent })
+function currentWorkflow(): ReturnType<typeof starterWorkflow> {
+    const { workflowStatus, senderIntegrationId, starter, draft } = state()
+    const chosen = starter ?? STARTERS[0]
+    return starterWorkflow({
+        starter: chosen,
+        draft: draft ?? chosen.draft,
+        status: workflowStatus,
+        senderIntegrationId,
+    })
 }
 
 function emailIntegration(sender: typeof SHARED_SENDER, domain: string, verified: boolean): Record<string, unknown> {
@@ -75,7 +81,7 @@ export const firstRunMswDecorator = mswDecorator({
         ],
         // nosemgrep: no-environments-api-urls-frontend -- prototype mocks answer both route prefixes.
         '/api/environments/:team_id/hog_flows/': () => {
-            const results = state().workflowCreated ? [currentWelcomeWorkflow()] : []
+            const results = state().workflowCreated ? [currentWorkflow()] : []
             return [200, { ...EMPTY_PAGE, count: results.length, results }]
         },
         // nosemgrep: no-environments-api-urls-frontend -- prototype mocks answer both route prefixes.
@@ -89,7 +95,7 @@ export const firstRunMswDecorator = mswDecorator({
                           email_sending_suspension_reason: '',
                       },
                   ]
-                : [200, currentWelcomeWorkflow()],
+                : [200, currentWorkflow()],
         // nosemgrep: no-environments-api-urls-frontend -- prototype mocks answer both route prefixes.
         '/api/environments/:team_id/hog_flows/:id/batch_jobs/': EMPTY_PAGE,
         // nosemgrep: no-environments-api-urls-frontend -- prototype mocks answer both route prefixes.
@@ -115,7 +121,7 @@ export const firstRunMswDecorator = mswDecorator({
             if (body.status) {
                 firstRunPrototypeLogic.actions.setWorkflowStatus(body.status)
             }
-            return [200, { ...currentWelcomeWorkflow(), updated_at: new Date().toISOString() }]
+            return [200, { ...currentWorkflow(), updated_at: new Date().toISOString() }]
         },
         '/api/projects/:team_id/': async ({ request }) => {
             const body = (await request.json()) as { onboarding_tasks?: Record<string, string> }

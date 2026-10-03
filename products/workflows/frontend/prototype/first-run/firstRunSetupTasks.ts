@@ -4,7 +4,7 @@ import { urls } from 'scenes/urls'
 
 import { ProductKey } from '~/queries/schema/schema-general'
 
-import { SETUP_TASK, welcomeWorkflowUrl } from './firstRunScenario'
+import { SETUP_TASK, firstWorkflowUrl } from './firstRunScenario'
 
 const task = (id: string, rest: Omit<SetupTask, 'id'>): SetupTask => ({ id: id as SetupTaskId, ...rest })
 
@@ -13,16 +13,16 @@ export const FIRST_RUN_SETUP_CONFIG: ProductSetupConfig = {
     title: 'Get started with Workflows',
     tasks: [
         task(SETUP_TASK.sendExample, {
-            title: 'Send yourself an example welcome email',
-            description: 'See how a welcome from you lands in an inbox. It only goes to you.',
+            title: 'Send yourself a test email',
+            description: 'Pick an email that fits your app, make it yours, and see it in your inbox.',
             taskType: 'onboarding',
             getUrl: () => urls.workflows(),
         }),
         task(SETUP_TASK.turnOnWelcome, {
-            title: 'Turn on your welcome email',
-            description: 'Every new signup gets it automatically. You can edit the email first.',
+            title: 'Turn on your first email',
+            description: 'It goes out on its own from a shared PostHog address until you add your domain.',
             taskType: 'onboarding',
-            getUrl: () => welcomeWorkflowUrl(),
+            getUrl: () => firstWorkflowUrl(),
             targetSelector: '[data-attr="workflow-launch"]',
         }),
         task(SETUP_TASK.ownDomain, {

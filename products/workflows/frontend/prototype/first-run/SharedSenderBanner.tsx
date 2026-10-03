@@ -24,7 +24,7 @@ export function SharedSenderBanner(): JSX.Element | null {
                 className="mb-2"
                 action={{ children: `Send from ${OWN_SENDER.address}`, onClick: switchToOwnSender }}
             >
-                {TEAM_BRAND.domain} is verified. Switch your welcome email to your own address.
+                {TEAM_BRAND.domain} is verified. Switch this email to your own address.
             </LemonBanner>
         )
     }
@@ -32,7 +32,7 @@ export function SharedSenderBanner(): JSX.Element | null {
     if (ownDomain === 'verifying') {
         return (
             <LemonBanner type="info" className="mb-2">
-                {TEAM_BRAND.domain} is verifying, which can take up to 48 hours. Your welcome email keeps sending from{' '}
+                {TEAM_BRAND.domain} is verifying, which can take up to 48 hours. This email keeps sending from{' '}
                 {SHARED_SENDER.address} until then.
             </LemonBanner>
         )
@@ -41,8 +41,8 @@ export function SharedSenderBanner(): JSX.Element | null {
     const useOwnDomain = { children: 'Use my own domain', to: urls.workflows('channels') }
     return workflowStatus === 'active' ? (
         <LemonBanner type="warning" className="mb-2" action={useOwnDomain}>
-            Your welcome email is live from {SHARED_SENDER.address}, a shared PostHog address. Send from your own domain
-            so replies reach you and your emails build your own reputation.
+            This email is live from {SHARED_SENDER.address}, a shared PostHog address. Send from your own domain so
+            replies reach you and your emails build your own reputation.
         </LemonBanner>
     ) : (
         <LemonBanner type="info" className="mb-2" action={useOwnDomain}>

@@ -2,24 +2,22 @@
 
 Answers [silthus/posthog#212](https://github.com/Silthus/posthog/issues/212): what should a paying team's first ten minutes in Workflows feel like, from the empty scene to a first delivered message?
 
-Round 2 runs inside the real app (`<App />` in Storybook) on mocked APIs, behind the `workflows-first-run-prototype` flag. One flow, value first:
+Runs inside the real app (`<App />` in Storybook) on mocked APIs, behind the `workflows-first-run-prototype` flag.
 
-1. **Workflows tab.** Instead of the empty state, the tab says why a welcome email matters and shows what the project already captures: the signup event, how many people have an email, and the logo and colors picked up from the website (the in-flight Email brand detector).
-2. **Send me an example.** One click sends the branded welcome email to the signed-in user only.
-3. **The inbox.** A simulated inbox shows the email as it lands. Its footer links back into Workflows.
-4. **The workflow.** The link opens the real editor on a "Welcome new signups" draft with the email step selected, so the team can edit it.
-5. **Enable.** The workflow sends from a shared PostHog address with the team's name until the team adds its own domain. A banner says so and leads to the domain. When the domain verifies, the banner offers a one-click switch.
-6. **Quick start.** The existing Quick start popover opens with a Workflows list the team can work through in any order: own domain, brand, re-engagement, a broadcast, templates.
+Round 4 starts from an example instead of a pitch, and every variant leads through the same three steps:
 
-Round 3 adds five homepage variants for step 1. Everything after "send it to me" is shared.
+1. **Make it yours.** The email is already in the team's brand (logo and colors from its website, standing in for the in-flight Email brand detector). PostHog AI changes it on request, and the text stays editable.
+2. **Send yourself a test.** It lands in a simulated inbox, exactly as users will get it.
+3. **Turn it on.** It goes out from `onboarding@trial.posthog.com` with the team's name on it. The workflow opens live in the real editor, a banner leads to the team's own domain, and Quick start lists what to try next.
 
-- **A, Pitch and preview.** Round 2: the reason, the project's data, the email, one button.
-- **B, Your recent signups.** A list of the people who just signed up, each marked "Nothing yet" or "Can't be reached", next to the email they would have got.
-- **C, One button.** A hedgehog, one sentence and "Email it to me". The delivered email appears in place and is the pitch.
-- **D, A new user's first week.** Today (signs up, hears nothing, goes quiet) against a welcome sequence. Day 0 is the one thing to try now.
-- **E, PostHog AI drafted it.** A short chat: what PostHog AI found in the project, the draft it wrote in your brand, and "Send it to me".
+The examples come from the real template library, filtered to what the project's events support.
 
-The floating bar switches the variant (arrow keys work too), the project data (signups and emails, few emails, nothing captured yet) and the own domain state (none, verifying, verified). `?variant=A` to `E` in the URL picks a variant. "Start over" reloads.
+- **F, Example first.** The best fit is already open. Other picks and the full library are one click away.
+- **G, Tailored gallery.** Three templates picked for your data, previewed in your brand. One opens a focused workspace for the three steps.
+- **H, PostHog AI walks you through.** A chat says what it found, offers the fitting emails, takes changes, sends the test and turns it on. The email stays in view.
+- **I, Your brand first.** A generic email next to the same email in your brand, then pick one and go through the steps.
+
+The floating bar switches the variant (arrow keys work too), the project data (signups and emails, few emails, nothing captured yet) and the own domain state (none, verifying, verified). `?variant=F` to `I` in the URL picks a variant. "Start over" reloads.
 
 ## Run
 
@@ -27,6 +25,6 @@ The floating bar switches the variant (arrow keys work too), the project data (s
 pnpm --filter=@posthog/storybook prototype:first-run
 ```
 
-Then open `http://127.0.0.1:6212/iframe.html?id=products-workflows-prototype-first-run--variant-a-pitch-and-preview&viewMode=story`.
+Then open `http://127.0.0.1:6212/iframe.html?id=products-workflows-prototype-first-run--variant-f-example-first&viewMode=story`.
 
 Nothing here is production code. Do not merge this branch.

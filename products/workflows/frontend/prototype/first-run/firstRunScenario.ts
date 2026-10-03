@@ -41,8 +41,8 @@ export const OWN_SENDER = {
     label: `${TEAM_BRAND.name} <hello@${TEAM_BRAND.domain}>`,
 }
 
-export const WELCOME_WORKFLOW_ID = 'first-run-welcome'
-export const WELCOME_EMAIL_NODE_ID = 'welcome-email'
+export const WORKFLOW_ID = 'first-run-workflow'
+export const EMAIL_NODE_ID = 'email'
 
 export const SETUP_TASK = {
     sendExample: 'workflows_send_example_welcome',
@@ -54,6 +54,14 @@ export const SETUP_TASK = {
     templates: 'workflows_browse_templates',
 } as const
 
-export function welcomeWorkflowUrl(): string {
-    return `${urls.workflow(WELCOME_WORKFLOW_ID, 'workflow')}?view=graph&node=${WELCOME_EMAIL_NODE_ID}`
+export function firstWorkflowUrl(): string {
+    return `${urls.workflow(WORKFLOW_ID, 'workflow')}?view=graph&node=${EMAIL_NODE_ID}`
 }
+
+export const RECENT_SIGNUPS: { name: string; email: string; signedUp: string }[] = [
+    { name: 'Noor Haddad', email: 'noor@example.org', signedUp: '12 minutes ago' },
+    { name: 'Tomás Rivera', email: 'tomas@example.net', signedUp: '1 hour ago' },
+    { name: 'Mei Lin', email: 'mei.lin@example.org', signedUp: '3 hours ago' },
+    { name: 'Jonas Becker', email: 'jonas@example.net', signedUp: '5 hours ago' },
+    { name: 'Amara Okafor', email: 'amara@example.org', signedUp: 'Yesterday' },
+]

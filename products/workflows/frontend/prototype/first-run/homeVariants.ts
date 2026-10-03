@@ -1,5 +1,5 @@
 // PROTOTYPE ONLY (silthus/posthog#212). The homepage variants the floating bar switches between.
-export type HomeVariant = 'A' | 'B' | 'C' | 'D' | 'E'
+export type HomeVariant = 'F' | 'G' | 'H' | 'I'
 
 export interface HomeVariantMeta {
     key: HomeVariant
@@ -8,11 +8,10 @@ export interface HomeVariantMeta {
 }
 
 export const HOME_VARIANTS: HomeVariantMeta[] = [
-    { key: 'A', name: 'Pitch and preview', oneLiner: 'Round 2: why, your data, the email, one button' },
-    { key: 'B', name: 'Your recent signups', oneLiner: 'Real people who signed up and heard nothing' },
-    { key: 'C', name: 'One button', oneLiner: 'Nothing but "email it to me", the inbox is the pitch' },
-    { key: 'D', name: "A new user's first week", oneLiner: 'Today versus with a welcome sequence' },
-    { key: 'E', name: 'PostHog AI drafted it', oneLiner: 'A short chat: what it found, the draft, send it' },
+    { key: 'F', name: 'Example first', oneLiner: 'The best pick is already open, then three steps' },
+    { key: 'G', name: 'Tailored gallery', oneLiner: 'Templates picked for your data, a workspace per email' },
+    { key: 'H', name: 'PostHog AI walks you through', oneLiner: 'A chat leads, the email stays in view' },
+    { key: 'I', name: 'Your brand first', oneLiner: 'Generic versus yours, then pick and send' },
 ]
 
 const requested = new URLSearchParams(window.location.search).get('variant')?.toUpperCase()

@@ -4,29 +4,29 @@ import { useValues } from 'kea'
 
 import { ExampleInboxModal } from './ExampleInboxModal'
 import { firstRunPrototypeLogic } from './firstRunPrototypeLogic'
-import { HomeAiDraft } from './homes/HomeAiDraft'
-import { HomeFirstWeek } from './homes/HomeFirstWeek'
-import { HomeOneButton } from './homes/HomeOneButton'
-import { HomePitchAndPreview } from './homes/HomePitchAndPreview'
-import { HomeRecentSignups } from './homes/HomeRecentSignups'
+import { HomeAiWalkthrough } from './homes/HomeAiWalkthrough'
+import { HomeBrandFirst } from './homes/HomeBrandFirst'
+import { HomeExampleFirst } from './homes/HomeExampleFirst'
+import { HomeTailoredGallery } from './homes/HomeTailoredGallery'
 import { HomeVariant } from './homeVariants'
+import { MissingDataHelp } from './shared/MissingDataHelp'
 
 const HOMES: Record<HomeVariant, () => JSX.Element> = {
-    A: HomePitchAndPreview,
-    B: HomeRecentSignups,
-    C: HomeOneButton,
-    D: HomeFirstWeek,
-    E: HomeAiDraft,
+    F: HomeExampleFirst,
+    G: HomeTailoredGallery,
+    H: HomeAiWalkthrough,
+    I: HomeBrandFirst,
 }
 
 export function FirstRunHome(): JSX.Element {
-    const { homeVariant } = useValues(firstRunPrototypeLogic)
+    const { homeVariant, facts } = useValues(firstRunPrototypeLogic)
     const Home = HOMES[homeVariant]
 
     return (
-        <>
+        <div className="flex flex-col gap-4">
+            <MissingDataHelp facts={facts} />
             <Home key={homeVariant} />
             <ExampleInboxModal />
-        </>
+        </div>
     )
 }
