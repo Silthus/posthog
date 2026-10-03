@@ -57,6 +57,15 @@ def _inputs_schema(action: dict) -> list[dict]:
     return function_template.inputs_schema or []
 
 
+def _person_property_filters(node: Any) -> list[dict]:
+    if isinstance(node, dict):
+        own = [node] if node.get("type") == "person" and "key" in node else []
+        return own + [found for value in node.values() for found in _person_property_filters(value)]
+    if isinstance(node, list):
+        return [found for item in node for found in _person_property_filters(item)]
+    return []
+
+
 class TestGlobalWorkflowTemplatesGoLive(APIBaseTest):
     def setUp(self) -> None:
         super().setUp()
@@ -95,11 +104,7 @@ class TestGlobalWorkflowTemplatesGoLive(APIBaseTest):
         assert template is not None, f"{file_name} did not pass template validation"
 
         trigger = next(action for action in template["actions"] if action["type"] == "trigger")
-        person_filters = [
-            prop
-            for prop in (trigger["config"].get("filters") or {}).get("properties") or []
-            if prop.get("type") == "person"
-        ]
+        person_filters = _person_property_filters(trigger["config"])
         assert not person_filters, f"the trigger targets specific people: {person_filters}"
 
         for action in _function_actions(template):

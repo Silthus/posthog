@@ -52,6 +52,13 @@ const WELCOME_TEMPLATE: HogFlowTemplate = {
     exit_condition: 'exit_only_at_end',
 }
 
+function grantWorkflowEditorAccess(): void {
+    window.POSTHOG_APP_CONTEXT = {
+        ...window.POSTHOG_APP_CONTEXT,
+        resource_access_control: { [AccessControlResourceType.Workflow]: AccessControlLevel.Editor },
+    } as AppContext
+}
+
 describe('NewWorkflowEmptyStateAction', () => {
     beforeEach(() => {
         useMocks({
@@ -67,11 +74,7 @@ describe('NewWorkflowEmptyStateAction', () => {
             },
         })
         initKeaTests()
-        // The button fails closed without an access level in the app context, which would swallow the click.
-        window.POSTHOG_APP_CONTEXT = {
-            ...window.POSTHOG_APP_CONTEXT,
-            resource_access_control: { [AccessControlResourceType.Workflow]: AccessControlLevel.Editor },
-        } as AppContext
+        grantWorkflowEditorAccess()
         router.actions.push('/workflows', {}, {})
     })
 
