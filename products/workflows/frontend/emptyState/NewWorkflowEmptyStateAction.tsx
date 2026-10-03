@@ -11,8 +11,7 @@ import { AccessControlLevel, AccessControlResourceType } from '~/types'
 import { newWorkflowLogic } from '../Workflows/newWorkflowLogic'
 import { NewWorkflowModal } from '../Workflows/NewWorkflowModal'
 
-/** The first-run "New workflow" button: the same template chooser or AI composer the list page's button opens. */
-export function NewWorkflowEmptyStateAction(): JSX.Element {
+export function NewWorkflowEmptyStateAction({ onClick }: { onClick: () => void }): JSX.Element {
     const { startNewWorkflow } = useActions(newWorkflowLogic)
 
     return (
@@ -23,8 +22,10 @@ export function NewWorkflowEmptyStateAction(): JSX.Element {
             >
                 <LemonButton
                     type="primary"
+                    className="self-start"
                     data-attr="new-workflow"
                     onClick={() => {
+                        onClick()
                         void addProductIntent({
                             product_type: ProductKey.WORKFLOWS,
                             intent_context: ProductIntentContext.WORKFLOW_CREATED,

@@ -67,8 +67,7 @@
                 "template_id": "template-webhook",
                 "inputs": {
                     "url": {
-                        "templating": "hog",
-                        "value": "https://your-system.com/webhook"
+                        "templating": "hog"
                     },
                     "method": {
                         "value": "POST",

@@ -28,6 +28,7 @@ WORKFLOW_FIELDS_NOT_IN_A_TEMPLATE = (
     "image_url",
 )
 TEAM_SPECIFIC_INPUT_TYPES = ("integration", "integration_multi", "integration_field")
+DESTINATION_INPUT_KEYS = ("url",)
 
 
 def _update_person_properties_template() -> dict:
@@ -77,7 +78,7 @@ class TestGlobalWorkflowTemplatesGoLive(APIBaseTest):
 
         workflow = self._workflow_from(template)
         self._fill_in_the_persons_event(workflow)
-        self._fill_in_the_persons_channels(workflow)
+        self._fill_in_the_persons_destinations(workflow)
 
         created = self.client.post(f"/api/projects/{self.team.id}/hog_flows", workflow)
         assert created.status_code == 201, created.json()
@@ -87,17 +88,27 @@ class TestGlobalWorkflowTemplatesGoLive(APIBaseTest):
         assert enabled.status_code == 200, enabled.json()
 
     @parameterized.expand([(Path(file_name).stem, file_name) for file_name in TEMPLATE_FILES])
-    def test_template_carries_no_other_teams_senders_or_workspaces(self, _name: str, file_name: str) -> None:
+    def test_template_carries_no_one_elses_senders_workspaces_endpoints_or_people(
+        self, _name: str, file_name: str
+    ) -> None:
         template = get_global_template_by_id(_template_id(file_name))
         assert template is not None, f"{file_name} did not pass template validation"
+
+        trigger = next(action for action in template["actions"] if action["type"] == "trigger")
+        person_filters = [
+            prop
+            for prop in (trigger["config"].get("filters") or {}).get("properties") or []
+            if prop.get("type") == "person"
+        ]
+        assert not person_filters, f"the trigger targets specific people: {person_filters}"
 
         for action in _function_actions(template):
             inputs = action["config"]["inputs"]
             for schema in _inputs_schema(action):
-                if schema["type"] in TEAM_SPECIFIC_INPUT_TYPES:
+                if schema["type"] in TEAM_SPECIFIC_INPUT_TYPES or schema["key"] in DESTINATION_INPUT_KEYS:
                     assert not inputs.get(schema["key"], {}).get("value"), f"{action['name']} picks a {schema['key']}"
             sender = (inputs.get("email", {}).get("value") or {}).get("from") or {}
-            assert not sender.get("integrationId") and not sender.get("integrationIds"), (
+            assert not any(sender.get(field) for field in ("integrationId", "integrationIds", "email", "name")), (
                 f"{action['name']} picks a sender"
             )
 
@@ -116,7 +127,7 @@ class TestGlobalWorkflowTemplatesGoLive(APIBaseTest):
             }
             workflow["trigger"] = trigger["config"]
 
-    def _fill_in_the_persons_channels(self, workflow: dict) -> None:
+    def _fill_in_the_persons_destinations(self, workflow: dict) -> None:
         for action in _function_actions(workflow):
             inputs = action["config"]["inputs"]
             for schema in _inputs_schema(action):
@@ -124,6 +135,8 @@ class TestGlobalWorkflowTemplatesGoLive(APIBaseTest):
                     inputs[schema["key"]] = {"value": self.slack_workspace.id}
                 elif schema["type"] == "integration_field":
                     inputs[schema["key"]] = {"value": "C0123"}
+                elif schema["key"] in DESTINATION_INPUT_KEYS:
+                    inputs[schema["key"]] = {"value": "https://example.com/webhook"}
             email = inputs.get("email", {}).get("value")
             if isinstance(email, dict) and not (email.get("from") or {}).get("integrationId"):
                 email["from"] = {**(email.get("from") or {}), "integrationId": self.email_sender.id}

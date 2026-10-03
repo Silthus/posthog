@@ -3,10 +3,14 @@ import '@testing-library/jest-dom'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Provider } from 'kea'
 import { router } from 'kea-router'
+import { expectLogic } from 'kea-test-utils'
 
+import { ProductEmptyState } from 'lib/components/ProductEmptyState/ProductEmptyState'
+import { productSetupStatusLogic } from 'lib/components/ProductEmptyState/productSetupStatusLogic'
 import { removeProjectIdIfPresent } from 'lib/utils/kea-router'
 
 import { useMocks } from '~/mocks/jest'
+import { ProductKey } from '~/queries/schema/schema-general'
 import { initKeaTests } from '~/test/init'
 import { AccessControlLevel, AccessControlResourceType, type AppContext } from '~/types'
 
@@ -48,12 +52,13 @@ const WELCOME_TEMPLATE: HogFlowTemplate = {
     exit_condition: 'exit_only_at_end',
 }
 
-const PrimaryAction = workflowsEmptyState.config.PrimaryAction as React.ComponentType
-
 describe('NewWorkflowEmptyStateAction', () => {
     beforeEach(() => {
         useMocks({
             get: {
+                '/_preflight/': { cloud: false },
+                '/api/environments/@current/': {},
+                '/api/users/@me/': {},
                 '/api/projects/:team_id/hog_flow_templates/': { count: 1, results: [WELCOME_TEMPLATE] },
             },
             patch: {
@@ -74,15 +79,22 @@ describe('NewWorkflowEmptyStateAction', () => {
         cleanup()
     })
 
-    // The first-run button used to deep link into a blank editor, skipping the templates the list page's button offers.
-    it('opens the template chooser on the first run instead of a blank editor', async () => {
+    it('opens the template chooser on the first run and counts the click as the primary action', async () => {
+        const setupStatus = productSetupStatusLogic({ productKey: ProductKey.WORKFLOWS })
+        setupStatus.mount()
         render(
             <Provider>
-                <PrimaryAction />
+                <ProductEmptyState config={workflowsEmptyState.config} mode="needs-setup" />
             </Provider>
         )
 
-        fireEvent.click(screen.getByText('New workflow'))
+        await expectLogic(setupStatus, () => {
+            fireEvent.click(screen.getByText('New workflow'))
+        }).toDispatchActions([
+            (action) =>
+                action.type === setupStatus.actionTypes.reportSetupInteraction &&
+                action.payload.action === 'primary action clicked',
+        ])
 
         expect(await screen.findByText('Welcome email sequence')).toBeInTheDocument()
         expect(screen.getByText('Blank workflow')).toBeInTheDocument()
