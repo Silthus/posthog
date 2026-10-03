@@ -5,6 +5,7 @@
         "build:workers": "cd ../.. && node frontend/bin/watch-workers.mjs --outdir common/storybook/.workers",
         "build": "pnpm build:products && pnpm build:workers && DEBUG=0 NODE_OPTIONS=--max-old-space-size=8192 storybook build -o dist",
         "start": "pnpm build:products && pnpm build:workers && DEBUG=0 NODE_OPTIONS=--max-old-space-size=8192 storybook dev -p 6006 --no-open",
+        "prototype:first-run": "pnpm build:products && mkdir -p .workers && DEBUG=0 NODE_OPTIONS=--max-old-space-size=8192 storybook dev -c .storybook-prototype -p 6212 --no-open",
         "test:visual:ci:update": "test-storybook -u --junit --no-index-json --maxWorkers=2",
         "test:visual:ci:verify": "test-storybook --ci --junit --no-index-json --maxWorkers=2",
         "test:visual:debug": "pnpm build:products && PWDEBUG=1 NODE_OPTIONS=--max-old-space-size=16384 test-storybook --browsers chromium webkit --no-index-json",
