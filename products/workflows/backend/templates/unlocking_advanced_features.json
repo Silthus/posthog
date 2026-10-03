@@ -18,21 +18,7 @@
     "updated_at": "2026-03-06T11:07:44.973320Z",
     "trigger": {
         "type": "event",
-        "filters": {
-            "events": [
-                {
-                    "id": "$pageview",
-                    "name": "Pageview",
-                    "type": "events",
-                    "uuid": "efb83783-118b-4e0b-a72d-eb3a00875ac8",
-                    "order": 0
-                }
-            ],
-            "source": "events",
-            "actions": [],
-            "bytecode": ["_H", 1, 32, "$pageview", 32, "event", 1, 1, 11],
-            "filter_test_accounts": false
-        }
+        "filters": {}
     },
     "trigger_masking": null,
     "conversion": {
@@ -81,21 +67,7 @@
             "type": "trigger",
             "config": {
                 "type": "event",
-                "filters": {
-                    "events": [
-                        {
-                            "id": "$pageview",
-                            "name": "Pageview",
-                            "type": "events",
-                            "uuid": "efb83783-118b-4e0b-a72d-eb3a00875ac8",
-                            "order": 0
-                        }
-                    ],
-                    "source": "events",
-                    "actions": [],
-                    "bytecode": ["_H", 1, 32, "$pageview", 32, "event", 1, 1, 11],
-                    "filter_test_accounts": false
-                }
+                "filters": {}
             },
             "output_variable": null
         },
@@ -113,8 +85,7 @@
                     {
                         "filters": {
                             "source": "events",
-                            "bytecode": [],
-                            "properties": [{}]
+                            "bytecode": ["_H", 1, 29]
                         }
                     }
                 ]
