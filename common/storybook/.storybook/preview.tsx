@@ -28,6 +28,8 @@ const setupMsw = (): void => {
     // Make sure the msw worker is started
     worker.start({
         quiet: true,
+        // PROTOTYPE BRANCH ONLY: resolve against the page so a build served under a sub-path finds its worker.
+        serviceWorker: { url: new URL('mockServiceWorker.js', document.baseURI).pathname },
         onUnhandledRequest(request, print) {
             // MSW warns on all unhandled requests, but we don't necessarily care
             const pathAllowList = ['/images/']

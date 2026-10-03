@@ -8,6 +8,8 @@ import { LemonButton, LemonSegmentedButton } from '@posthog/lemon-ui'
 import { firstRunPrototypeLogic } from './firstRunPrototypeLogic'
 import { OwnDomain, ProjectData } from './firstRunScenario'
 
+const STORY_URL = window.location.href
+
 export function PrototypeBar(): JSX.Element {
     const [open, setOpen] = useState(true)
     const { projectData, ownDomain } = useValues(firstRunPrototypeLogic)
@@ -50,7 +52,7 @@ export function PrototypeBar(): JSX.Element {
                             ]}
                         />
                     </span>
-                    <LemonButton size="xsmall" type="secondary" onClick={() => window.location.reload()}>
+                    <LemonButton size="xsmall" type="secondary" onClick={() => window.location.assign(STORY_URL)}>
                         Start over
                     </LemonButton>
                 </>
