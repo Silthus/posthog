@@ -1,13 +1,13 @@
 import type { Meta, StoryFn } from '@storybook/react'
-import { useActions, useMountedLogic } from 'kea'
-import { useEffect } from 'react'
+import { useMountedLogic } from 'kea'
 
 import { App } from 'scenes/App'
 import { urls } from 'scenes/urls'
 
 import { firstRunMswDecorator } from './firstRunMocks'
-import { firstRunPrototypeLogic, setInitialProjectData } from './firstRunPrototypeLogic'
-import { FIRST_RUN_PROTOTYPE_FLAG, ProjectData } from './firstRunScenario'
+import { firstRunPrototypeLogic, setInitialHomeVariant } from './firstRunPrototypeLogic'
+import { FIRST_RUN_PROTOTYPE_FLAG } from './firstRunScenario'
+import { HomeVariant, VARIANT_FROM_URL } from './homeVariants'
 import { PrototypeBar } from './PrototypeBar'
 
 const meta: Meta = {
@@ -23,11 +23,9 @@ const meta: Meta = {
 }
 export default meta
 
-function FirstRunApp({ projectData }: { projectData: ProjectData }): JSX.Element {
-    setInitialProjectData(projectData)
+function FirstRunApp({ variant }: { variant: HomeVariant }): JSX.Element {
+    setInitialHomeVariant(VARIANT_FROM_URL ?? variant)
     useMountedLogic(firstRunPrototypeLogic)
-    const { setProjectData } = useActions(firstRunPrototypeLogic)
-    useEffect(() => setProjectData(projectData), [projectData, setProjectData])
 
     return (
         <>
@@ -37,6 +35,8 @@ function FirstRunApp({ projectData }: { projectData: ProjectData }): JSX.Element
     )
 }
 
-export const SignupsAndEmails: StoryFn = () => <FirstRunApp projectData="signups-and-emails" />
-export const FewEmails: StoryFn = () => <FirstRunApp projectData="few-emails" />
-export const NothingCapturedYet: StoryFn = () => <FirstRunApp projectData="nothing-yet" />
+export const VariantAPitchAndPreview: StoryFn = () => <FirstRunApp variant="A" />
+export const VariantBRecentSignups: StoryFn = () => <FirstRunApp variant="B" />
+export const VariantCOneButton: StoryFn = () => <FirstRunApp variant="C" />
+export const VariantDFirstWeek: StoryFn = () => <FirstRunApp variant="D" />
+export const VariantEAiDraft: StoryFn = () => <FirstRunApp variant="E" />

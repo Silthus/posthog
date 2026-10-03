@@ -21,14 +21,15 @@ import {
     WELCOME_WORKFLOW_ID,
     welcomeWorkflowUrl,
 } from './firstRunScenario'
+import { HomeVariant } from './homeVariants'
 
 export type BrandStatus = 'detecting' | 'found'
 export type WorkflowStatus = 'draft' | 'active'
 
-let initialProjectData: ProjectData = 'signups-and-emails'
+let initialHomeVariant: HomeVariant = 'A'
 
-export function setInitialProjectData(projectData: ProjectData): void {
-    initialProjectData = projectData
+export function setInitialHomeVariant(variant: HomeVariant): void {
+    initialHomeVariant = variant
 }
 
 function completeSetupTask(taskId: string): void {
@@ -37,6 +38,7 @@ function completeSetupTask(taskId: string): void {
 
 interface Values {
     projectData: ProjectData
+    homeVariant: HomeVariant
     ownDomain: OwnDomain
     brandStatus: BrandStatus
     exampleSent: boolean
@@ -50,6 +52,7 @@ interface Values {
 
 interface Actions {
     setProjectData: (projectData: ProjectData) => { projectData: ProjectData }
+    setHomeVariant: (homeVariant: HomeVariant) => { homeVariant: HomeVariant }
     setOwnDomain: (ownDomain: OwnDomain) => { ownDomain: OwnDomain }
     brandFound: () => { value: true }
     sendExample: () => { value: true }
@@ -66,6 +69,7 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
     path(['products', 'workflows', 'prototype', 'firstRunPrototypeLogic']),
     actions({
         setProjectData: (projectData: ProjectData) => ({ projectData }),
+        setHomeVariant: (homeVariant: HomeVariant) => ({ homeVariant }),
         setOwnDomain: (ownDomain: OwnDomain) => ({ ownDomain }),
         brandFound: true,
         sendExample: true,
@@ -76,7 +80,7 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
         switchToOwnSender: true,
     }),
     reducers(() => ({
-        projectData: [initialProjectData as ProjectData, { setProjectData: (_, { projectData }) => projectData }],
+        projectData: ['signups-and-emails' as ProjectData, { setProjectData: (_, { projectData }) => projectData }],
         ownDomain: [
             'none' as OwnDomain,
             {
@@ -84,9 +88,18 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
                 switchToOwnSender: () => 'verified',
             },
         ],
+        homeVariant: [initialHomeVariant as HomeVariant, { setHomeVariant: (_, { homeVariant }) => homeVariant }],
         brandStatus: ['detecting' as BrandStatus, { brandFound: () => 'found' }],
-        exampleSent: [false, { sendExample: () => true }],
-        inboxOpen: [false, { openInbox: () => true, closeInbox: () => false, openWelcomeWorkflow: () => false }],
+        exampleSent: [false, { sendExample: () => true, setHomeVariant: () => false }],
+        inboxOpen: [
+            false,
+            {
+                openInbox: () => true,
+                closeInbox: () => false,
+                openWelcomeWorkflow: () => false,
+                setHomeVariant: () => false,
+            },
+        ],
         workflowCreated: [false, { openWelcomeWorkflow: () => true }],
         workflowStatus: ['draft' as WorkflowStatus, { setWorkflowStatus: (_, { status }) => status }],
         senderIntegrationId: [

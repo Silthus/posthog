@@ -11,7 +11,15 @@ Round 2 runs inside the real app (`<App />` in Storybook) on mocked APIs, behind
 5. **Enable.** The workflow sends from a shared PostHog address with the team's name until the team adds its own domain. A banner says so and leads to the domain. When the domain verifies, the banner offers a one-click switch.
 6. **Quick start.** The existing Quick start popover opens with a Workflows list the team can work through in any order: own domain, brand, re-engagement, a broadcast, templates.
 
-The floating bar switches project data (signups and emails, few emails, nothing captured yet) and the own domain state (none, verifying, verified). "Start over" reloads.
+Round 3 adds five homepage variants for step 1. Everything after "send it to me" is shared.
+
+- **A, Pitch and preview.** Round 2: the reason, the project's data, the email, one button.
+- **B, Your recent signups.** A list of the people who just signed up, each marked "Nothing yet" or "Can't be reached", next to the email they would have got.
+- **C, One button.** A hedgehog, one sentence and "Email it to me". The delivered email appears in place and is the pitch.
+- **D, A new user's first week.** Today (signs up, hears nothing, goes quiet) against a welcome sequence. Day 0 is the one thing to try now.
+- **E, PostHog AI drafted it.** A short chat: what PostHog AI found in the project, the draft it wrote in your brand, and "Send it to me".
+
+The floating bar switches the variant (arrow keys work too), the project data (signups and emails, few emails, nothing captured yet) and the own domain state (none, verifying, verified). `?variant=A` to `E` in the URL picks a variant. "Start over" reloads.
 
 ## Run
 
@@ -19,6 +27,6 @@ The floating bar switches project data (signups and emails, few emails, nothing 
 pnpm --filter=@posthog/storybook prototype:first-run
 ```
 
-Then open `http://127.0.0.1:6212/iframe.html?id=products-workflows-prototype-first-run--signups-and-emails&viewMode=story`.
+Then open `http://127.0.0.1:6212/iframe.html?id=products-workflows-prototype-first-run--variant-a-pitch-and-preview&viewMode=story`.
 
 Nothing here is production code. Do not merge this branch.
