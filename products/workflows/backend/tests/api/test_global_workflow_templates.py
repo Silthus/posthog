@@ -57,7 +57,7 @@ def _inputs_schema(action: dict) -> list[dict]:
     return function_template.inputs_schema or []
 
 
-def _person_property_filters(node: Any) -> list[dict]:
+def _person_property_filters(node: object) -> list[dict[str, object]]:
     if isinstance(node, dict):
         own = [node] if node.get("type") == "person" and "key" in node else []
         return own + [found for value in node.values() for found in _person_property_filters(value)]

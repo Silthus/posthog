@@ -1,13 +1,16 @@
 import '@testing-library/jest-dom'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Provider } from 'kea'
 import { router } from 'kea-router'
 import { expectLogic } from 'kea-test-utils'
 
 import { ProductEmptyState } from 'lib/components/ProductEmptyState/ProductEmptyState'
 import { productSetupStatusLogic } from 'lib/components/ProductEmptyState/productSetupStatusLogic'
+import { FEATURE_FLAGS } from 'lib/constants'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { removeProjectIdIfPresent } from 'lib/utils/kea-router'
+import { maxMocks } from 'scenes/max/testUtils'
 
 import { useMocks } from '~/mocks/jest'
 import { ProductKey } from '~/queries/schema/schema-general'
@@ -52,6 +55,12 @@ const WELCOME_TEMPLATE: HogFlowTemplate = {
     exit_condition: 'exit_only_at_end',
 }
 
+const AI_FIRST_FLAGS = [
+    FEATURE_FLAGS.WORKFLOWS_AI_FIRST_NEW,
+    FEATURE_FLAGS.PHAI_SCENE_AUTO_OPEN,
+    FEATURE_FLAGS.PHAI_SANDBOX_MODE,
+]
+
 function grantWorkflowEditorAccess(): void {
     window.POSTHOG_APP_CONTEXT = {
         ...window.POSTHOG_APP_CONTEXT,
@@ -62,7 +71,9 @@ function grantWorkflowEditorAccess(): void {
 describe('NewWorkflowEmptyStateAction', () => {
     beforeEach(() => {
         useMocks({
+            ...maxMocks,
             get: {
+                ...maxMocks.get,
                 '/_preflight/': { cloud: false },
                 '/api/environments/@current/': {},
                 '/api/users/@me/': {},
@@ -82,25 +93,46 @@ describe('NewWorkflowEmptyStateAction', () => {
         cleanup()
     })
 
-    it('opens the template chooser on the first run and counts the click as the primary action', async () => {
-        const setupStatus = productSetupStatusLogic({ productKey: ProductKey.WORKFLOWS })
-        setupStatus.mount()
-        render(
-            <Provider>
-                <ProductEmptyState config={workflowsEmptyState.config} mode="needs-setup" />
-            </Provider>
-        )
+    it.each([
+        {
+            variant: 'outside the AI-first experiment',
+            flags: [],
+            opens: 'the template chooser',
+            showsTemplates: true,
+            path: '/workflows',
+            searchParams: {},
+        },
+        {
+            variant: 'in the AI-first experiment',
+            flags: AI_FIRST_FLAGS,
+            opens: 'the AI composer',
+            showsTemplates: false,
+            path: '/workflows/new/workflow',
+            searchParams: { mode: 'ai' },
+        },
+    ])(
+        'opens $opens on the first run $variant and counts the click',
+        async ({ flags, showsTemplates, path, searchParams }) => {
+            featureFlagLogic.actions.setFeatureFlags(flags, Object.fromEntries(flags.map((flag) => [flag, true])))
+            const setupStatus = productSetupStatusLogic({ productKey: ProductKey.WORKFLOWS })
+            setupStatus.mount()
+            render(
+                <Provider>
+                    <ProductEmptyState config={workflowsEmptyState.config} mode="needs-setup" />
+                </Provider>
+            )
 
-        await expectLogic(setupStatus, () => {
-            fireEvent.click(screen.getByText('New workflow'))
-        }).toDispatchActions([
-            (action) =>
-                action.type === setupStatus.actionTypes.reportSetupInteraction &&
-                action.payload.action === 'primary action clicked',
-        ])
+            await expectLogic(setupStatus, () => {
+                fireEvent.click(screen.getByText('New workflow'))
+            }).toDispatchActions([
+                (action) =>
+                    action.type === setupStatus.actionTypes.reportSetupInteraction &&
+                    action.payload.action === 'primary action clicked',
+            ])
 
-        expect(await screen.findByText('Welcome email sequence')).toBeInTheDocument()
-        expect(screen.getByText('Blank workflow')).toBeInTheDocument()
-        expect(removeProjectIdIfPresent(router.values.location.pathname)).toBe('/workflows')
-    })
+            await waitFor(() => expect(screen.queryByText('Welcome email sequence') !== null).toBe(showsTemplates))
+            expect(removeProjectIdIfPresent(router.values.location.pathname)).toBe(path)
+            expect(router.values.searchParams).toEqual(searchParams)
+        }
+    )
 })
