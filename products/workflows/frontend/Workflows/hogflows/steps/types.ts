@@ -222,6 +222,30 @@ export const HogFlowActionSchema = z.discriminatedUnion('type', [
         type: z.literal('trigger'),
         config: HogFlowTriggerSchema,
     }),
+    // PROTOTYPE (#245): throwaway decision step, never ships from this branch
+    z.object({
+        ..._commonActionFields,
+        type: z.literal('decision'),
+        config: z.object({
+            shape: z.enum(['branch', 'variable', 'content']),
+            question: z.string(),
+            answer_type: z.enum(['yes_no', 'pick_one']),
+            options: z.array(
+                z.object({
+                    name: z.string(),
+                    description: z.string().optional(),
+                    email_template: z.string().optional(),
+                })
+            ),
+            context: z.array(z.object({ key: z.string(), value: z.string() })),
+            yes_threshold: z.number().optional(),
+            unsure_enabled: z.boolean().optional(),
+            unsure_threshold: z.number().optional(),
+            answer_variable: z.string().optional(),
+            fallback_email_template: z.string().optional(),
+        }),
+    }),
+
     // Branching
     z.object({
         ..._commonActionFields,

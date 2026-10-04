@@ -15,6 +15,7 @@ import {
     IconNotification,
     IconPeople,
     IconPercentage,
+    IconSparkles,
     IconTarget,
     IconWebhooks,
 } from '@posthog/icons'
@@ -28,6 +29,7 @@ import { HogFunctionTemplateType } from '~/types'
 import { workflowLogic } from '../../workflowLogic'
 import { HogFlowAction } from '../types'
 import { StepConditionalBranchConfiguration } from './StepConditionalBranch'
+import { StepDecisionPrototypeConfiguration } from './StepDecisionPrototype'
 import { StepDelayConfiguration } from './StepDelay'
 import { getDelayDescription } from './stepDelayLogic'
 import { StepExitConfiguration } from './StepExit'
@@ -131,6 +133,27 @@ const HogFlowStepConfigs: Partial<{
             return [{ label: `${count} ${count === 1 ? 'condition' : 'conditions'}` }]
         },
         renderConfiguration: (node) => <StepConditionalBranchConfiguration key={node.id} node={node} />,
+    },
+    decision: {
+        type: 'decision',
+        icon: () => <IconSparkles />,
+        color: (_, isDarkModeOn) => (isDarkModeOn ? '#A28BFF' : '#5B3FD9'),
+        getPreviews: (action) => {
+            const config = action.config
+            if (config.shape === 'variable') {
+                return [{ label: `Saves to ${config.answer_variable || 'decision'}` }]
+            }
+            if (config.shape === 'content') {
+                return [{ label: `Sends 1 of ${config.options.length} emails` }]
+            }
+            if (config.answer_type === 'yes_no') {
+                return [{ label: `Yes or no · yes at ${config.yes_threshold ?? 50}%` }]
+            }
+            return [
+                { label: `Pick 1 of ${config.options.length}${config.unsure_enabled ? ' · Unsure path' : ''}` },
+            ]
+        },
+        renderConfiguration: (node) => <StepDecisionPrototypeConfiguration key={node.id} node={node} />,
     },
     delay: {
         type: 'delay',

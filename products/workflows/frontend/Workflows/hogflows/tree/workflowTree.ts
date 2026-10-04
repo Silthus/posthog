@@ -1,6 +1,7 @@
 import type { HogFlow, HogFlowAction, HogFlowEdge } from '../types'
+import { getDecisionBranchNames } from '../steps/decisionPrototypeBranches'
 
-export const BRANCHING_ACTION_TYPES = ['conditional_branch', 'random_cohort_branch', 'wait_until_condition'] as const
+export const BRANCHING_ACTION_TYPES = ['conditional_branch', 'random_cohort_branch', 'wait_until_condition', 'decision'] as const
 
 export interface WorkflowTreeSequence {
     nodes: WorkflowTreeNode[]
@@ -83,6 +84,9 @@ export function getWorkflowBranchLabel(action: HogFlowAction | undefined, edge: 
     if (edge.type === 'continue') {
         // A random cohort split scales its weights to their total and always picks a cohort, so this
         // edge carries the leftover of an unusable split rather than a share of the traffic.
+        if (action?.type === 'decision') {
+            return 'If the decision fails'
+        }
         return action?.type === 'random_cohort_branch' ? 'Fallback if no cohort has traffic' : 'No match'
     }
 
@@ -93,6 +97,8 @@ export function getWorkflowBranchLabel(action: HogFlowAction | undefined, edge: 
     switch (action.type) {
         case 'random_cohort_branch':
             return action.config.cohorts?.[edge.index ?? 0]?.name || `If cohort #${(edge.index ?? 0) + 1} matches`
+        case 'decision':
+            return getDecisionBranchNames(action.config)[edge.index ?? 0] ?? 'Answer'
         case 'conditional_branch':
             return action.config.conditions?.[edge.index ?? 0]?.name || `If condition #${(edge.index ?? 0) + 1} matches`
         default:

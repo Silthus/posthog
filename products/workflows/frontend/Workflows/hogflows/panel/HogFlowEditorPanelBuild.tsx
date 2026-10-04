@@ -124,6 +124,23 @@ export const DELAY_NODES_TO_SHOW: CreateActionType[] = [
 
 export const LOGIC_NODES_TO_SHOW: CreateActionType[] = [
     {
+        type: 'decision',
+        name: 'AI decision',
+        description: 'Ask a question about the person and send each answer down its own path.',
+        branchEdges: 2,
+        config: {
+            shape: 'branch',
+            question: '',
+            answer_type: 'yes_no',
+            options: [
+                { name: '', description: '' },
+                { name: '', description: '' },
+            ],
+            context: [{ key: 'event', value: '{event.event}' }],
+            yes_threshold: 50,
+        },
+    },
+    {
         type: 'conditional_branch',
         name: 'Conditional branch',
         description: 'Branch using conditions on event or person properties.',

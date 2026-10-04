@@ -28,6 +28,7 @@ import { urls } from 'scenes/urls'
 import type { HogFunctionTemplateType, UserBasicType } from '../../../../../frontend/src/types'
 import { optOutCategoriesLogic } from '../../OptOuts/optOutCategoriesLogic'
 import type { MessageCategory } from '../../OptOuts/optOutCategoriesLogic'
+import { getDecisionBranchNames } from './steps/decisionPrototypeBranches'
 import { EXIT_NODE_ID, TRIGGER_NODE_ID, WorkflowLogicProps, workflowLogic } from '../workflowLogic'
 import { getFormattedNodes } from './react_flow_utils/autolayout'
 import { BOTTOM_HANDLE_POSITION, NODE_HEIGHT, NODE_WIDTH, TOP_HANDLE_POSITION } from './react_flow_utils/constants'
@@ -90,6 +91,9 @@ const getBranchLabel = (action: HogFlowAction | undefined, edge: HogFlow['edges'
             const cohortAction = action as Extract<HogFlowAction, { type: 'random_cohort_branch' }>
             const cohort = cohortAction.config.cohorts?.[edge.index || 0]
             return cohort?.name || `If cohort #${(edge.index || 0) + 1} matches`
+        }
+        case 'decision': {
+            return getDecisionBranchNames(action.config)[edge.index || 0] ?? 'Answer'
         }
         case 'conditional_branch': {
             const branchAction = action as Extract<HogFlowAction, { type: 'conditional_branch' }>
@@ -2394,7 +2398,7 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                     return false
                 }
 
-                const branchingTypes = ['conditional_branch', 'random_cohort_branch', 'wait_until_condition']
+                const branchingTypes = ['conditional_branch', 'random_cohort_branch', 'wait_until_condition', 'decision']
                 return !branchingTypes.includes(selectedNode?.data.type ?? '')
             },
         ],
@@ -2497,7 +2501,9 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                                 label: isOnlyEdgeForNode
                                     ? undefined
                                     : edge.type === 'continue'
-                                      ? `No match`
+                                      ? edgeSourceAction?.type === 'decision'
+                                          ? 'If the decision fails'
+                                          : `No match`
                                       : getBranchLabel(edgeSourceAction, edge),
                             },
                             labelShowBg: false,

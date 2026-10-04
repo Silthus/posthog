@@ -72,7 +72,7 @@ export function HogFlowEditorPanelBuildDetail(): JSX.Element | null {
     // known result fields instead of a live test call.
     const isAiTaskAction = action.type === 'function' && action.config.template_id === 'template-posthog-create-task'
 
-    const isBranchingStep = ['conditional_branch', 'wait_until_condition', 'random_cohort_branch'].includes(action.type)
+    const isBranchingStep = ['conditional_branch', 'wait_until_condition', 'random_cohort_branch', 'decision'].includes(action.type)
     const actionFilters = action.filters ?? {}
     const numberOfActionFilters =
         (actionFilters.events?.length ?? 0) +
