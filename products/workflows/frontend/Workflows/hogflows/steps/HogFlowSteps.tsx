@@ -149,9 +149,7 @@ const HogFlowStepConfigs: Partial<{
             if (config.answer_type === 'yes_no') {
                 return [{ label: `Yes or no · yes at ${config.yes_threshold ?? 50}%` }]
             }
-            return [
-                { label: `Pick 1 of ${config.options.length}${config.unsure_enabled ? ' · Unsure path' : ''}` },
-            ]
+            return [{ label: `Pick 1 of ${config.options.length}${config.unsure_enabled ? ' · Unsure path' : ''}` }]
         },
         renderConfiguration: (node) => <StepDecisionPrototypeConfiguration key={node.id} node={node} />,
     },

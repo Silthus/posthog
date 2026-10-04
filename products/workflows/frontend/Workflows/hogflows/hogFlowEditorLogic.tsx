@@ -28,11 +28,11 @@ import { urls } from 'scenes/urls'
 import type { HogFunctionTemplateType, UserBasicType } from '../../../../../frontend/src/types'
 import { optOutCategoriesLogic } from '../../OptOuts/optOutCategoriesLogic'
 import type { MessageCategory } from '../../OptOuts/optOutCategoriesLogic'
-import { getDecisionBranchNames } from './steps/decisionPrototypeBranches'
 import { EXIT_NODE_ID, TRIGGER_NODE_ID, WorkflowLogicProps, workflowLogic } from '../workflowLogic'
 import { getFormattedNodes } from './react_flow_utils/autolayout'
 import { BOTTOM_HANDLE_POSITION, NODE_HEIGHT, NODE_WIDTH, TOP_HANDLE_POSITION } from './react_flow_utils/constants'
 import { getSmartStepPath } from './react_flow_utils/SmartEdge'
+import { getDecisionBranchNames } from './steps/decisionPrototypeBranches'
 import { getHogFlowStep } from './steps/HogFlowSteps'
 import { CyclotronInputType, StepViewNodeHandle } from './steps/types'
 import { isWorkflowTreeComplete } from './tree/workflowTree'
@@ -2398,7 +2398,12 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                     return false
                 }
 
-                const branchingTypes = ['conditional_branch', 'random_cohort_branch', 'wait_until_condition', 'decision']
+                const branchingTypes = [
+                    'conditional_branch',
+                    'random_cohort_branch',
+                    'wait_until_condition',
+                    'decision',
+                ]
                 return !branchingTypes.includes(selectedNode?.data.type ?? '')
             },
         ],

@@ -154,8 +154,7 @@ export function StepDecisionPrototypeConfiguration({ node }: { node: Node<Decisi
     const updateConfig = (patch: Partial<DecisionConfig>): void => {
         const nextConfig = { ...config, ...patch }
         setWorkflowAction(action.id, { ...action, config: nextConfig })
-        const branchCountChanged =
-            getDecisionBranchNames(nextConfig).length !== getDecisionBranchNames(config).length
+        const branchCountChanged = getDecisionBranchNames(nextConfig).length !== getDecisionBranchNames(config).length
         if (branchCountChanged) {
             syncBranchEdges(nextConfig)
         }
@@ -260,7 +259,8 @@ function OptionsField({ actionId, config, onChange }: FieldProps & { actionId: s
 
     const help = {
         branch: 'Each option becomes a path out of this step. The model reads the descriptions, so say what sets each option apart.',
-        variable: 'The model reads the descriptions, so say what sets each option apart. The option name is saved as the answer.',
+        variable:
+            'The model reads the descriptions, so say what sets each option apart. The option name is saved as the answer.',
         content: 'Pick the email template each option sends. The model reads the descriptions, not the emails.',
     }[config.shape]
 
@@ -319,7 +319,9 @@ function OptionsField({ actionId, config, onChange }: FieldProps & { actionId: s
                                 fullWidth
                                 placeholder="Choose an email template"
                                 value={option.email_template}
-                                onChange={(email_template) => setOption(index, { email_template: email_template ?? undefined })}
+                                onChange={(email_template) =>
+                                    setOption(index, { email_template: email_template ?? undefined })
+                                }
                                 options={PROTOTYPE_EMAIL_TEMPLATES}
                             />
                         )}
@@ -372,7 +374,8 @@ function ConfidenceField({ config, onChange }: FieldProps): JSX.Element {
     }
 
     const threshold = config.unsure_threshold ?? 60
-    const unsureLabel = config.shape === 'content' ? 'Send the fallback email when the model is unsure' : 'Add an Unsure path'
+    const unsureLabel =
+        config.shape === 'content' ? 'Send the fallback email when the model is unsure' : 'Add an Unsure path'
     return (
         <Section title="When the model is unsure">
             <LemonSwitch
@@ -590,9 +593,7 @@ function describeOutcome(config: DecisionConfig, outcome: TestOutcome, answers: 
     }
     if (config.shape === 'content') {
         const templateValue =
-            answer === null
-                ? config.fallback_email_template
-                : config.options[outcome.answerIndex ?? 0]?.email_template
+            answer === null ? config.fallback_email_template : config.options[outcome.answerIndex ?? 0]?.email_template
         const template = PROTOTYPE_EMAIL_TEMPLATES.find((t) => t.value === templateValue)?.label ?? 'no template'
         return answer === null
             ? `No option reached ${config.unsure_threshold ?? 60}%. ${firstName} gets the fallback email, ${template}.`

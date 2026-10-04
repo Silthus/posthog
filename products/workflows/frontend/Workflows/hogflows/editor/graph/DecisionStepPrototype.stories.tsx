@@ -57,7 +57,11 @@ const TRIGGER: HogFlowAction = {
     description: 'Starts when someone creates an account.',
     config: {
         type: 'event',
-        filters: { events: [{ id: 'user signed up', name: 'user signed up', type: 'events' }], properties: [], actions: [] },
+        filters: {
+            events: [{ id: 'user signed up', name: 'user signed up', type: 'events' }],
+            properties: [],
+            actions: [],
+        },
     },
 } as HogFlowAction
 

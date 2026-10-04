@@ -1,7 +1,12 @@
-import type { HogFlow, HogFlowAction, HogFlowEdge } from '../types'
 import { getDecisionBranchNames } from '../steps/decisionPrototypeBranches'
+import type { HogFlow, HogFlowAction, HogFlowEdge } from '../types'
 
-export const BRANCHING_ACTION_TYPES = ['conditional_branch', 'random_cohort_branch', 'wait_until_condition', 'decision'] as const
+export const BRANCHING_ACTION_TYPES = [
+    'conditional_branch',
+    'random_cohort_branch',
+    'wait_until_condition',
+    'decision',
+] as const
 
 export interface WorkflowTreeSequence {
     nodes: WorkflowTreeNode[]
