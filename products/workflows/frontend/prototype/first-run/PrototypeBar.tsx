@@ -16,7 +16,7 @@ export function PrototypeBar(): JSX.Element {
     const { setProjectData, setOwnDomain } = useActions(firstRunPrototypeLogic)
 
     return (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[1000] flex flex-wrap items-center gap-3 rounded-lg border-2 border-dashed border-warning bg-surface-primary px-3 py-2 shadow-xl text-xs">
+        <div className="fixed bottom-4 left-4 z-[1000] flex flex-wrap items-center gap-3 rounded-lg border-2 border-dashed border-warning bg-surface-primary px-3 py-2 shadow-xl text-xs">
             <LemonButton
                 size="xsmall"
                 icon={open ? <IconChevronDown /> : <IconChevronRight />}

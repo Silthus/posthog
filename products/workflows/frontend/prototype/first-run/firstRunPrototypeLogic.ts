@@ -8,11 +8,11 @@ import type { SetupTaskId } from 'lib/components/ProductSetup'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { emailTemplaterLogic } from 'scenes/hog-functions/email-templater/emailTemplaterLogic'
 
-import { ProductKey } from '~/queries/schema/schema-general'
+import { sidePanelStateLogic } from '~/layout/navigation-3000/sidepanel/sidePanelStateLogic'
+import { SidePanelTab } from '~/types'
 
 import type { HogFlowTemplate } from '../../Workflows/hogflows/types'
 import { workflowLogic } from '../../Workflows/workflowLogic'
-import { AI_EDITS, AiEdit, applyAiEdit } from './aiEdits'
 import { BrandField, DETECTED_BRAND, EmailBrand, FILES_READ, applyBrand, rebrand } from './emailBrand'
 import {
     OWN_SENDER,
@@ -30,13 +30,7 @@ import { TemplateFit, emailActions, firstEmailValue, templateById, templateFits 
 
 export type BrandStatus = 'detecting' | 'found'
 export type WorkflowStatus = 'draft' | 'active'
-export type FlowStep = 'customize' | 'test' | 'turn-on'
 export type EmailValue = Record<string, any>
-
-export interface ChatMessage {
-    from: 'user' | 'ai'
-    text: string
-}
 
 function completeSetupTask(taskId: string): void {
     globalSetupLogic.findMounted()?.actions.markTaskAsCompleted(taskId as SetupTaskId)
@@ -51,7 +45,13 @@ function exportFromEditor(): Promise<{ html: string; design: Record<string, any>
     if (!editor) {
         return Promise.resolve(null)
     }
-    return new Promise((resolve) => editor.exportHtml((data: any) => resolve(data)))
+    return new Promise((resolve) => {
+        const timeout = window.setTimeout(() => resolve(null), 3000)
+        editor.exportHtml((data: any) => {
+            window.clearTimeout(timeout)
+            resolve(data)
+        })
+    })
 }
 
 function renderForRecipient(html: string): string {
@@ -78,12 +78,10 @@ interface Values {
     filesRead: number
     brand: EmailBrand
     editedFields: BrandField[]
-    brandModalOpen: boolean
     templateId: string | null
     email: EmailValue | null
-    flowStep: FlowStep
-    chat: ChatMessage[]
     testHtml: string | null
+    inboxOpen: boolean
     workflowCreated: boolean
     workflowStatus: WorkflowStatus
     senderIntegrationId: number
@@ -100,16 +98,16 @@ interface Actions {
     brandFound: () => { value: true }
     setBrandValue: <F extends BrandField>(field: F, value: EmailBrand[F]) => { field: F; value: EmailBrand[F] }
     revertToDetected: (field: BrandField) => { field: BrandField }
-    setBrandModalOpen: (open: boolean) => { open: boolean }
     selectTemplate: (templateId: string) => { templateId: string }
     closeTemplate: () => { value: true }
     setEmail: (email: EmailValue) => { email: EmailValue }
-    askAi: (prompt: string, edit: AiEdit) => { prompt: string; edit: AiEdit }
-    setFlowStep: (flowStep: FlowStep) => { flowStep: FlowStep }
+    askPostHogAi: () => { value: true }
     sendTest: () => { value: true }
     setTestHtml: (html: string) => { html: string }
-    turnOn: () => { value: true }
-    openInEditor: () => { value: true }
+    openInbox: () => { value: true }
+    closeInbox: () => { value: true }
+    openWorkflow: () => { value: true }
+    workflowReady: () => { value: true }
     setWorkflowStatus: (status: WorkflowStatus) => { status: WorkflowStatus }
     switchToOwnSender: () => { value: true }
 }
@@ -126,16 +124,16 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
         brandFound: true,
         setBrandValue: (field: BrandField, value: unknown) => ({ field, value }) as any,
         revertToDetected: (field: BrandField) => ({ field }),
-        setBrandModalOpen: (open: boolean) => ({ open }),
         selectTemplate: (templateId: string) => ({ templateId }),
         closeTemplate: true,
         setEmail: (email: EmailValue) => ({ email }),
-        askAi: (prompt: string, edit: AiEdit) => ({ prompt, edit }),
-        setFlowStep: (flowStep: FlowStep) => ({ flowStep }),
+        askPostHogAi: true,
         sendTest: true,
         setTestHtml: (html: string) => ({ html }),
-        turnOn: true,
-        openInEditor: true,
+        openInbox: true,
+        closeInbox: true,
+        openWorkflow: true,
+        workflowReady: true,
         setWorkflowStatus: (status: WorkflowStatus) => ({ status }),
         switchToOwnSender: true,
     }),
@@ -161,7 +159,6 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
                 revertToDetected: (fields, { field }) => fields.filter((edited) => edited !== field),
             },
         ],
-        brandModalOpen: [false, { setBrandModalOpen: (_, { open }) => open }],
         templateId: [
             null as string | null,
             {
@@ -171,27 +168,9 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
             },
         ],
         email: [null as EmailValue | null, { setEmail: (_, { email }) => email }],
-        flowStep: [
-            'customize' as FlowStep,
-            {
-                setFlowStep: (_, { flowStep }) => flowStep,
-                selectTemplate: () => 'customize',
-                setTestHtml: () => 'test',
-            },
-        ],
-        chat: [
-            [] as ChatMessage[],
-            {
-                selectTemplate: () => [],
-                askAi: (chat, { prompt, edit }) => [
-                    ...chat,
-                    { from: 'user' as const, text: prompt },
-                    { from: 'ai' as const, text: AI_EDITS.find((option) => option.key === edit)?.reply ?? 'Done.' },
-                ],
-            },
-        ],
         testHtml: [null as string | null, { setTestHtml: (_, { html }) => html, selectTemplate: () => null }],
-        workflowCreated: [false, { turnOn: () => true, openInEditor: () => true }],
+        inboxOpen: [false, { openInbox: () => true, closeInbox: () => false, workflowReady: () => false }],
+        workflowCreated: [false, { workflowReady: () => true }],
         workflowStatus: ['draft' as WorkflowStatus, { setWorkflowStatus: (_, { status }) => status }],
         senderIntegrationId: [
             SHARED_SENDER.integrationId,
@@ -237,10 +216,13 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
                 actions.setEmail({ ...values.email, design: rebrand(values.email.design, previous, values.brand) })
             }
         },
-        askAi: ({ edit }) => {
-            if (values.email?.design) {
-                actions.setEmail({ ...values.email, design: applyAiEdit(values.email.design, edit) })
-            }
+        askPostHogAi: () => {
+            sidePanelStateLogic
+                .findMounted()
+                ?.actions.openSidePanel(
+                    SidePanelTab.Max,
+                    `Change the "${values.template?.name ?? 'email'}" email I'm editing: `
+                )
         },
         sendTest: async () => {
             const exported = await exportFromEditor()
@@ -250,25 +232,19 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
             actions.setTestHtml(renderForRecipient(exported?.html ?? values.email?.html ?? ''))
             completeSetupTask(SETUP_TASK.sendExample)
         },
-        turnOn: () => {
-            actions.setWorkflowStatus('active')
+        openWorkflow: async () => {
+            const exported = await exportFromEditor()
+            if (exported && values.email) {
+                actions.setEmail({ ...values.email, html: exported.html, design: exported.design })
+            }
+            actions.workflowReady()
             router.actions.push(firstWorkflowUrl(values.template ? emailActions(values.template)[0].id : undefined))
         },
-        openInEditor: () =>
-            router.actions.push(firstWorkflowUrl(values.template ? emailActions(values.template)[0].id : undefined)),
         setWorkflowStatus: ({ status }) => {
             if (status !== 'active') {
                 return
             }
             completeSetupTask(SETUP_TASK.turnOnWelcome)
-            cache.disposables.add(() => {
-                const timer = window.setTimeout(() => {
-                    const setup = globalSetupLogic.findMounted()
-                    setup?.actions.setSelectedProduct(ProductKey.WORKFLOWS)
-                    setup?.actions.openGlobalSetup()
-                }, 1500)
-                return () => window.clearTimeout(timer)
-            }, 'openQuickStart')
         },
         setOwnDomain: () => integrationsLogic.findMounted()?.actions.loadIntegrations(),
         switchToOwnSender: () => {

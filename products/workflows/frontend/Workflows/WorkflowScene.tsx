@@ -23,7 +23,7 @@ import { ProductKey } from '~/queries/schema/schema-general'
 import { ActivityScope } from '~/types'
 
 import { isFirstRunPrototype } from '../prototype/first-run/firstRunScenario'
-import { SharedSenderBanner } from '../prototype/first-run/SharedSenderBanner'
+import { WorkflowNextStep } from '../prototype/first-run/WorkflowNextStep'
 import { batchWorkflowJobsLogic } from './batchWorkflowJobsLogic'
 import { NewWorkflowAgent } from './NewWorkflowAgent'
 import { newWorkflowLogic } from './newWorkflowLogic'
@@ -221,7 +221,7 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
             <BindLogic logic={workflowLogic} props={workflowProps}>
                 <WorkflowSceneHeader {...props} />
                 <WorkflowEmailPauseBanner />
-                {isFirstRunPrototype() && <SharedSenderBanner />}
+                {isFirstRunPrototype() && <WorkflowNextStep inEditor />}
                 {selfOptimisingEnabled && isSavedWorkflow && <WorkflowSuggestionsNotice id={props.id!} />}
                 {/* Only show Logs and Metrics tabs if the workflow has already been created */}
                 {!props.id || props.id === 'new' ? (

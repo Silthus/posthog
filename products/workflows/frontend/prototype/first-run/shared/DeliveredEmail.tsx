@@ -25,7 +25,7 @@ export function DeliveredEmail(): JSX.Element | null {
             </div>
             <iframe
                 title="Delivered test email"
-                className="w-full h-[calc(100vh-18rem)] border-0 rounded bg-white"
+                className="w-full h-[70vh] border-0 rounded bg-white"
                 sandbox=""
                 srcDoc={testHtml}
             />

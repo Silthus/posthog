@@ -85,6 +85,62 @@ function currentWorkflow(): HogFlow {
     }
 }
 
+const METRIC_TOTALS: Record<string, number> = {
+    triggered: 4,
+    succeeded: 4,
+    email_sent: 4,
+    email_delivered: 4,
+    email_opened: 2,
+    email_link_clicked: 1,
+}
+
+function lastSevenDays(): string[] {
+    return Array.from({ length: 7 }, (_, index) => {
+        const day = new Date()
+        day.setUTCHours(0, 0, 0, 0)
+        day.setUTCDate(day.getUTCDate() - (6 - index))
+        return day.toISOString()
+    })
+}
+
+function requestedMetrics(sql: string): string[] {
+    const all = Object.keys(METRIC_TOTALS)
+    if (!sql.includes('metric_name IN')) {
+        return all
+    }
+    return all.filter((name) => sql.includes(`'${name}'`))
+}
+
+function isPreviousPeriod(sql: string): boolean {
+    const periodEnd = sql.match(/toDateTime\('([^']+)', tz\) AS to_local/)?.[1]
+    return Boolean(periodEnd) && Date.now() - new Date(periodEnd!).getTime() > 2 * 24 * 60 * 60 * 1000
+}
+
+function metricsResults(sql: string): unknown[][] {
+    const { workflowStatus, template } = state()
+    if (workflowStatus !== 'active' || !sql.includes('app_metrics')) {
+        return []
+    }
+    const emailId = emailActions(template ?? EMAIL_TEMPLATES[0])[0].id
+    const names = requestedMetrics(sql)
+    if (sql.includes('calendar')) {
+        const days = lastSevenDays()
+        const previous = isPreviousPeriod(sql)
+        return names.map((name) => [
+            days,
+            name,
+            days.map((_, index) => (index === 6 && !previous ? METRIC_TOTALS[name] : 0)),
+        ])
+    }
+    if (sql.includes('instance_id, metric_name')) {
+        return names.map((name) => [METRIC_TOTALS[name], emailId, name])
+    }
+    if (/GROUP BY\s+instance_id\b/.test(sql)) {
+        return [[METRIC_TOTALS.email_link_clicked, emailId]]
+    }
+    return names.map((name) => [METRIC_TOTALS[name], name])
+}
+
 function emailIntegration(sender: typeof SHARED_SENDER, domain: string, verified: boolean): Record<string, unknown> {
     return {
         id: sender.integrationId,
@@ -149,6 +205,13 @@ export const firstRunMswDecorator = mswDecorator({
         '/api/projects/:team_id/hog_function_templates/': {
             count: _hogFunctionTemplatesDestinations.results.length + 1,
             results: [...(_hogFunctionTemplatesDestinations.results as unknown[]), EMAIL_TEMPLATE],
+        },
+    },
+    post: {
+        // nosemgrep: no-environments-api-urls-frontend -- prototype mocks answer both route prefixes.
+        '/api/environments/:team_id/query/:kind/': async ({ request }) => {
+            const body = (await request.json()) as { query?: { query?: string } }
+            return [200, { results: metricsResults(body.query?.query ?? '') }]
         },
     },
     patch: {

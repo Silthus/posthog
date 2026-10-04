@@ -1,20 +1,19 @@
 // PROTOTYPE ONLY (silthus/posthog#212). The first screen: the real template library, filtered to what the
-// project's data can drive, in the same cards as the library, spread across the full width.
+// project's data can drive, in the library's own cards, spread across the full width, with a blank one last.
 import { useActions, useValues } from 'kea'
+import { router } from 'kea-router'
 import { useState } from 'react'
 
-import { IconCheckCircle, IconWarning } from '@posthog/icons'
+import { IconBolt, IconWarning } from '@posthog/icons'
 import { LemonSegmentedButton, Link } from '@posthog/lemon-ui'
 
 import { urls } from 'scenes/urls'
 
+import { WorkflowTemplateBlankPreview } from '../../Workflows/templates/WorkflowTemplateBlankPreview'
 import { WorkflowTemplateCard } from '../../Workflows/templates/WorkflowTemplateCard'
-import { WorkflowTemplateMeta } from '../../Workflows/templates/WorkflowTemplateMeta'
 import { WorkflowTemplateSteps } from '../../Workflows/templates/WorkflowTemplateSteps'
 import { firstRunPrototypeLogic } from './firstRunPrototypeLogic'
 import { TemplateFit } from './realTemplates'
-import { BrandSummary } from './shared/BrandSummary'
-import { EmailWorkspace } from './shared/EmailWorkspace'
 import { SignupsLine } from './shared/SignupsLine'
 
 export function TemplateGallery(): JSX.Element {
@@ -29,7 +28,6 @@ export function TemplateGallery(): JSX.Element {
                 <h2 className="text-2xl font-semibold mb-0">Emails that fit your app</h2>
                 <SignupsLine />
             </div>
-            <BrandSummary />
             <div className="flex items-center justify-between gap-3 flex-wrap">
                 <LemonSegmentedButton
                     size="small"
@@ -48,9 +46,25 @@ export function TemplateGallery(): JSX.Element {
                 {shown.map((fit) => (
                     <TemplateTile key={fit.template.id} fit={fit} />
                 ))}
+                <WorkflowTemplateCard
+                    name="Start playing"
+                    description="A blank workflow. Pick any trigger and add your own steps on the canvas."
+                    preview={<WorkflowTemplateBlankPreview />}
+                    footer={<Trigger text="You decide when it starts and who it reaches" />}
+                    onClick={() => router.actions.push(urls.workflowNew())}
+                    data-attr="first-run-blank"
+                />
             </div>
-            <EmailWorkspace />
         </div>
+    )
+}
+
+function Trigger({ text }: { text: string }): JSX.Element {
+    return (
+        <span className="flex items-start gap-1 text-xs text-accent">
+            <IconBolt className="shrink-0 mt-0.5" />
+            {text}
+        </span>
     )
 }
 
@@ -72,15 +86,13 @@ function TemplateTile({ fit }: { fit: TemplateFit }): JSX.Element {
             }
             footer={
                 <div className="flex flex-col gap-1">
-                    <WorkflowTemplateMeta template={template} />
-                    <span className="flex items-center gap-1 text-xs">
-                        {fit.ready ? (
-                            <IconCheckCircle className="text-success" />
-                        ) : (
-                            <IconWarning className="text-warning" />
-                        )}
-                        {fit.reason}
-                    </span>
+                    <Trigger text={fit.sends} />
+                    {!fit.ready && (
+                        <span className="flex items-center gap-1 text-xs text-warning">
+                            <IconWarning />
+                            {fit.reason}
+                        </span>
+                    )}
                 </div>
             }
             onClick={() => selectTemplate(template.id)}

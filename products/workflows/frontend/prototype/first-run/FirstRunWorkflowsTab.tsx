@@ -1,22 +1,23 @@
-// PROTOTYPE ONLY (silthus/posthog#212). Fills the Workflows tab: the first-run home until the welcome
-// workflow exists, then the real list with the shared-sender banner above it.
+// PROTOTYPE ONLY (silthus/posthog#212). Fills the Workflows tab: the gallery, the workspace for a picked
+// template, then the real list once the workflow exists.
 import { useValues } from 'kea'
 
 import { WorkflowsTable } from '../../Workflows/WorkflowsTable'
+import { EmailWorkspace } from './EmailWorkspace'
 import { FirstRunHome } from './FirstRunHome'
 import { firstRunPrototypeLogic } from './firstRunPrototypeLogic'
-import { SharedSenderBanner } from './SharedSenderBanner'
+import { WorkflowNextStep } from './WorkflowNextStep'
 
 export function FirstRunWorkflowsTab(): JSX.Element {
-    const { workflowCreated } = useValues(firstRunPrototypeLogic)
+    const { workflowCreated, template } = useValues(firstRunPrototypeLogic)
 
-    if (!workflowCreated) {
-        return <FirstRunHome />
+    if (workflowCreated) {
+        return (
+            <>
+                <WorkflowNextStep />
+                <WorkflowsTable />
+            </>
+        )
     }
-    return (
-        <>
-            <SharedSenderBanner />
-            <WorkflowsTable />
-        </>
-    )
+    return template ? <EmailWorkspace /> : <FirstRunHome />
 }
