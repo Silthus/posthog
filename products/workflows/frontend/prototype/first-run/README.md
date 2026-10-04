@@ -4,20 +4,15 @@ Answers [silthus/posthog#212](https://github.com/Silthus/posthog/issues/212): wh
 
 Runs inside the real app (`<App />` in Storybook) on mocked APIs, behind the `workflows-first-run-prototype` flag.
 
-Round 4 starts from an example instead of a pitch, and every variant leads through the same three steps:
+Round 5 builds on the tailored gallery (variant G of round 4):
 
-1. **Make it yours.** The email is already in the team's brand (logo and colors from its website, standing in for the in-flight Email brand detector). PostHog AI changes it on request, and the text stays editable.
-2. **Send yourself a test.** It lands in a simulated inbox, exactly as users will get it.
-3. **Turn it on.** It goes out from `onboarding@trial.posthog.com` with the team's name on it. The workflow opens live in the real editor, a banner leads to the team's own domain, and Quick start lists what to try next.
+1. **Gallery.** The real global templates from `products/workflows/backend/templates/`, in the library's own card (cover image, steps, trigger), spread across the full width. "Picked for your data" shows the ones the project's events can drive, "All email templates" shows every email template with what each still needs.
+2. **Your email brand.** A bar above the gallery shows what was read from the team's GitHub repo while it reads it, file by file. "Review brand" lists every value with the file it came from, a control to change it, "Edited by you · Use detected" and "Detect again". It stands in for the in-flight Email brand flow (silthus/posthog#198), which owns connecting GitHub and picking the repo.
+3. **Make it yours.** A template opens in the real Unlayer editor (`EmailTemplater`, inline layout) with the brand applied: logo, button colors, font, text and background. Click any text to edit it. Brand changes and PostHog AI edits push into the live canvas.
+4. **Send yourself a test.** The HTML is exported from the editor, so the test shows exactly what is on the canvas, with the recipient's name filled in.
+5. **Turn it on.** The real template's workflow goes live from `onboarding@trial.posthog.com` with the team's name, opens in the real workflow editor, and Quick start lists what to try next.
 
-The examples come from the real template library, filtered to what the project's events support.
-
-- **F, Example first.** The best fit is already open. Other picks and the full library are one click away.
-- **G, Tailored gallery.** Three templates picked for your data, previewed in your brand. One opens a focused workspace for the three steps.
-- **H, PostHog AI walks you through.** A chat says what it found, offers the fitting emails, takes changes, sends the test and turns it on. The email stays in view.
-- **I, Your brand first.** A generic email next to the same email in your brand, then pick one and go through the steps.
-
-The floating bar switches the variant (arrow keys work too), the project data (signups and emails, few emails, nothing captured yet) and the own domain state (none, verifying, verified). `?variant=F` to `I` in the URL picks a variant. "Start over" reloads.
+The floating bar switches the project data (signups and emails, few emails, nothing captured yet) and the own domain state (none, verifying, verified). "Start over" reloads. The Unlayer editor loads from Unlayer's CDN, so the browser needs internet access.
 
 ## Run
 
@@ -25,6 +20,6 @@ The floating bar switches the variant (arrow keys work too), the project data (s
 pnpm --filter=@posthog/storybook prototype:first-run
 ```
 
-Then open `http://127.0.0.1:6212/iframe.html?id=products-workflows-prototype-first-run--variant-f-example-first&viewMode=story`.
+Then open `http://127.0.0.1:6212/iframe.html?id=products-workflows-prototype-first-run--tailored-gallery&viewMode=story`.
 
 Nothing here is production code. Do not merge this branch.

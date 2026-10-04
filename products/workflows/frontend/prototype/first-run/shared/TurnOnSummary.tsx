@@ -3,13 +3,14 @@ import { useActions, useValues } from 'kea'
 
 import { LemonButton } from '@posthog/lemon-ui'
 
+import { getTemplateTrigger } from '../../../Workflows/templates/workflowTemplateDisplay'
 import { firstRunPrototypeLogic } from '../firstRunPrototypeLogic'
 import { SHARED_SENDER, SIGNED_IN_USER } from '../firstRunScenario'
 
 export function TurnOnSummary(): JSX.Element | null {
-    const { starter, facts } = useValues(firstRunPrototypeLogic)
+    const { template, facts } = useValues(firstRunPrototypeLogic)
     const { turnOn, openInEditor } = useActions(firstRunPrototypeLogic)
-    if (!starter) {
+    if (!template) {
         return null
     }
     const reachable = facts.people
@@ -28,7 +29,7 @@ export function TurnOnSummary(): JSX.Element | null {
                     </span>
                 </span>
                 <span className="text-secondary">When</span>
-                <span>{starter.triggerLabel}</span>
+                <span>{getTemplateTrigger(template)?.label ?? 'When the trigger fires'}</span>
                 <span className="text-secondary">Who</span>
                 <span>{reachable}</span>
             </div>

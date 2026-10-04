@@ -42,7 +42,6 @@ export const OWN_SENDER = {
 }
 
 export const WORKFLOW_ID = 'first-run-workflow'
-export const EMAIL_NODE_ID = 'email'
 
 export const SETUP_TASK = {
     sendExample: 'workflows_send_example_welcome',
@@ -54,8 +53,9 @@ export const SETUP_TASK = {
     templates: 'workflows_browse_templates',
 } as const
 
-export function firstWorkflowUrl(): string {
-    return `${urls.workflow(WORKFLOW_ID, 'workflow')}?view=graph&node=${EMAIL_NODE_ID}`
+export function firstWorkflowUrl(nodeId?: string): string {
+    const base = `${urls.workflow(WORKFLOW_ID, 'workflow')}?view=graph`
+    return nodeId ? `${base}&node=${nodeId}` : base
 }
 
 export const RECENT_SIGNUPS: { name: string; email: string; signedUp: string }[] = [

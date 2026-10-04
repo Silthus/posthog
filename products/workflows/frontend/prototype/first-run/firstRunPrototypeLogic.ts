@@ -6,10 +6,14 @@ import { router } from 'kea-router'
 import { globalSetupLogic } from 'lib/components/ProductSetup'
 import type { SetupTaskId } from 'lib/components/ProductSetup'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
+import { emailTemplaterLogic } from 'scenes/hog-functions/email-templater/emailTemplaterLogic'
 
 import { ProductKey } from '~/queries/schema/schema-general'
 
+import type { HogFlowTemplate } from '../../Workflows/hogflows/types'
 import { workflowLogic } from '../../Workflows/workflowLogic'
+import { AI_EDITS, AiEdit, applyAiEdit } from './aiEdits'
+import { BrandField, DETECTED_BRAND, EmailBrand, FILES_READ, applyBrand, rebrand } from './emailBrand'
 import {
     OWN_SENDER,
     OwnDomain,
@@ -18,35 +22,20 @@ import {
     ProjectFacts,
     SETUP_TASK,
     SHARED_SENDER,
+    SIGNED_IN_USER,
     WORKFLOW_ID,
     firstWorkflowUrl,
 } from './firstRunScenario'
-import { HOME_VARIANTS, HomeVariant } from './homeVariants'
-import {
-    AI_EDITS,
-    AiEdit,
-    EmailDraft,
-    Starter,
-    StarterId,
-    StarterPick,
-    applyAiEdit,
-    pickStarters,
-    starterById,
-} from './starterEmails'
+import { TemplateFit, emailActions, firstEmailValue, templateById, templateFits } from './realTemplates'
 
 export type BrandStatus = 'detecting' | 'found'
 export type WorkflowStatus = 'draft' | 'active'
 export type FlowStep = 'customize' | 'test' | 'turn-on'
+export type EmailValue = Record<string, any>
 
 export interface ChatMessage {
     from: 'user' | 'ai'
     text: string
-}
-
-let initialHomeVariant: HomeVariant = HOME_VARIANTS[0].key
-
-export function setInitialHomeVariant(variant: HomeVariant): void {
-    initialHomeVariant = variant
 }
 
 function completeSetupTask(taskId: string): void {
@@ -57,40 +46,68 @@ function reloadWorkflow(): void {
     workflowLogic.findMounted({ id: WORKFLOW_ID })?.actions.loadWorkflow()
 }
 
+function exportFromEditor(): Promise<{ html: string; design: Record<string, any> } | null> {
+    const editor = emailTemplaterLogic.findMounted()?.values.emailEditorRef?.editor
+    if (!editor) {
+        return Promise.resolve(null)
+    }
+    return new Promise((resolve) => editor.exportHtml((data: any) => resolve(data)))
+}
+
+function renderForRecipient(html: string): string {
+    return html
+        .replace(/\{\{\s*person\.properties\.first_name\s*\}\}/g, SIGNED_IN_USER.name)
+        .replace(/\{\{\s*person\.properties\.name\s*\}\}/g, SIGNED_IN_USER.name)
+        .replace(/\{\{\s*person\.properties\.email\s*\}\}/g, SIGNED_IN_USER.email)
+        .replace(/\{\{[^}]*\}\}/g, '')
+}
+
+function brandedEmail(template: HogFlowTemplate, brand: EmailBrand): EmailValue {
+    const value = firstEmailValue(template)
+    return {
+        ...value,
+        from: { integrationId: SHARED_SENDER.integrationId },
+        design: value.design ? applyBrand(value.design, brand) : value.design,
+    }
+}
+
 interface Values {
     projectData: ProjectData
-    homeVariant: HomeVariant
     ownDomain: OwnDomain
     brandStatus: BrandStatus
-    brandApplied: boolean
-    starterId: StarterId | null
-    draft: EmailDraft | null
+    filesRead: number
+    brand: EmailBrand
+    editedFields: BrandField[]
+    brandModalOpen: boolean
+    templateId: string | null
+    email: EmailValue | null
     flowStep: FlowStep
     chat: ChatMessage[]
-    testSent: boolean
-    inboxOpen: boolean
+    testHtml: string | null
     workflowCreated: boolean
     workflowStatus: WorkflowStatus
     senderIntegrationId: number
     facts: ProjectFacts
-    picks: StarterPick[]
-    starter: Starter | null
+    fits: TemplateFit[]
+    template: HogFlowTemplate | null
 }
 
 interface Actions {
     setProjectData: (projectData: ProjectData) => { projectData: ProjectData }
-    setHomeVariant: (homeVariant: HomeVariant) => { homeVariant: HomeVariant }
     setOwnDomain: (ownDomain: OwnDomain) => { ownDomain: OwnDomain }
+    detectBrand: () => { value: true }
+    fileRead: () => { value: true }
     brandFound: () => { value: true }
-    setBrandApplied: (brandApplied: boolean) => { brandApplied: boolean }
-    selectStarter: (starterId: StarterId) => { starterId: StarterId }
-    closeStarter: () => { value: true }
-    updateDraft: (changes: Partial<EmailDraft>) => { changes: Partial<EmailDraft> }
+    setBrandValue: <F extends BrandField>(field: F, value: EmailBrand[F]) => { field: F; value: EmailBrand[F] }
+    revertToDetected: (field: BrandField) => { field: BrandField }
+    setBrandModalOpen: (open: boolean) => { open: boolean }
+    selectTemplate: (templateId: string) => { templateId: string }
+    closeTemplate: () => { value: true }
+    setEmail: (email: EmailValue) => { email: EmailValue }
     askAi: (prompt: string, edit: AiEdit) => { prompt: string; edit: AiEdit }
     setFlowStep: (flowStep: FlowStep) => { flowStep: FlowStep }
     sendTest: () => { value: true }
-    openInbox: () => { value: true }
-    closeInbox: () => { value: true }
+    setTestHtml: (html: string) => { html: string }
     turnOn: () => { value: true }
     openInEditor: () => { value: true }
     setWorkflowStatus: (status: WorkflowStatus) => { status: WorkflowStatus }
@@ -103,18 +120,20 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
     path(['products', 'workflows', 'prototype', 'firstRunPrototypeLogic']),
     actions({
         setProjectData: (projectData: ProjectData) => ({ projectData }),
-        setHomeVariant: (homeVariant: HomeVariant) => ({ homeVariant }),
         setOwnDomain: (ownDomain: OwnDomain) => ({ ownDomain }),
+        detectBrand: true,
+        fileRead: true,
         brandFound: true,
-        setBrandApplied: (brandApplied: boolean) => ({ brandApplied }),
-        selectStarter: (starterId: StarterId) => ({ starterId }),
-        closeStarter: true,
-        updateDraft: (changes: Partial<EmailDraft>) => ({ changes }),
+        setBrandValue: (field: BrandField, value: unknown) => ({ field, value }) as any,
+        revertToDetected: (field: BrandField) => ({ field }),
+        setBrandModalOpen: (open: boolean) => ({ open }),
+        selectTemplate: (templateId: string) => ({ templateId }),
+        closeTemplate: true,
+        setEmail: (email: EmailValue) => ({ email }),
         askAi: (prompt: string, edit: AiEdit) => ({ prompt, edit }),
         setFlowStep: (flowStep: FlowStep) => ({ flowStep }),
         sendTest: true,
-        openInbox: true,
-        closeInbox: true,
+        setTestHtml: (html: string) => ({ html }),
         turnOn: true,
         openInEditor: true,
         setWorkflowStatus: (status: WorkflowStatus) => ({ status }),
@@ -122,42 +141,48 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
     }),
     reducers(() => ({
         projectData: ['signups-and-emails' as ProjectData, { setProjectData: (_, { projectData }) => projectData }],
-        homeVariant: [initialHomeVariant as HomeVariant, { setHomeVariant: (_, { homeVariant }) => homeVariant }],
         ownDomain: [
             'none' as OwnDomain,
             { setOwnDomain: (_, { ownDomain }) => ownDomain, switchToOwnSender: () => 'verified' },
         ],
-        brandStatus: ['detecting' as BrandStatus, { brandFound: () => 'found' }],
-        brandApplied: [true, { setBrandApplied: (_, { brandApplied }) => brandApplied }],
-        starterId: [
-            null as StarterId | null,
+        brandStatus: ['detecting' as BrandStatus, { detectBrand: () => 'detecting', brandFound: () => 'found' }],
+        filesRead: [0, { detectBrand: () => 0, fileRead: (count) => count + 1 }],
+        brand: [
+            DETECTED_BRAND,
             {
-                selectStarter: (_, { starterId }) => starterId,
-                closeStarter: () => null,
-                setHomeVariant: () => null,
+                setBrandValue: (brand, { field, value }) => ({ ...brand, [field]: value }),
+                revertToDetected: (brand, { field }) => ({ ...brand, [field]: DETECTED_BRAND[field] }),
+            },
+        ],
+        editedFields: [
+            [] as BrandField[],
+            {
+                setBrandValue: (fields, { field }) => (fields.includes(field) ? fields : [...fields, field]),
+                revertToDetected: (fields, { field }) => fields.filter((edited) => edited !== field),
+            },
+        ],
+        brandModalOpen: [false, { setBrandModalOpen: (_, { open }) => open }],
+        templateId: [
+            null as string | null,
+            {
+                selectTemplate: (_, { templateId }) => templateId,
+                closeTemplate: () => null,
                 setProjectData: () => null,
             },
         ],
-        draft: [
-            null as EmailDraft | null,
-            {
-                selectStarter: (_, { starterId }) => starterById(starterId).draft,
-                updateDraft: (draft, { changes }) => (draft ? { ...draft, ...changes } : draft),
-                askAi: (draft, { edit }) => (draft ? applyAiEdit(draft, edit) : draft),
-            },
-        ],
+        email: [null as EmailValue | null, { setEmail: (_, { email }) => email }],
         flowStep: [
             'customize' as FlowStep,
             {
                 setFlowStep: (_, { flowStep }) => flowStep,
-                selectStarter: () => 'customize',
-                sendTest: () => 'test',
+                selectTemplate: () => 'customize',
+                setTestHtml: () => 'test',
             },
         ],
         chat: [
             [] as ChatMessage[],
             {
-                selectStarter: () => [],
+                selectTemplate: () => [],
                 askAi: (chat, { prompt, edit }) => [
                     ...chat,
                     { from: 'user' as const, text: prompt },
@@ -165,8 +190,7 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
                 ],
             },
         ],
-        testSent: [false, { sendTest: () => true, selectStarter: () => false, setHomeVariant: () => false }],
-        inboxOpen: [false, { openInbox: () => true, closeInbox: () => false, turnOn: () => false }],
+        testHtml: [null as string | null, { setTestHtml: (_, { html }) => html, selectTemplate: () => null }],
         workflowCreated: [false, { turnOn: () => true, openInEditor: () => true }],
         workflowStatus: ['draft' as WorkflowStatus, { setWorkflowStatus: (_, { status }) => status }],
         senderIntegrationId: [
@@ -180,19 +204,58 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
     })),
     selectors({
         facts: [(s) => [s.projectData], (projectData: ProjectData): ProjectFacts => PROJECT_FACTS[projectData]],
-        picks: [(s) => [s.facts], (facts: ProjectFacts): StarterPick[] => pickStarters(facts)],
-        starter: [
-            (s) => [s.starterId],
-            (starterId: StarterId | null): Starter | null => (starterId ? starterById(starterId) : null),
+        fits: [(s) => [s.facts], (facts: ProjectFacts): TemplateFit[] => templateFits(facts)],
+        template: [
+            (s) => [s.templateId],
+            (templateId: string | null): HogFlowTemplate | null => (templateId ? templateById(templateId) : null),
         ],
     }),
-    listeners(({ actions, values, cache }) => ({
-        sendTest: () => completeSetupTask(SETUP_TASK.sendExample),
+    listeners(({ actions, values, cache, selectors }) => ({
+        detectBrand: () => {
+            cache.disposables.add(() => {
+                const timer = window.setInterval(() => {
+                    if (values.filesRead >= FILES_READ.length) {
+                        window.clearInterval(timer)
+                        actions.brandFound()
+                    } else {
+                        actions.fileRead()
+                    }
+                }, 450)
+                return () => window.clearInterval(timer)
+            }, 'brandDetection')
+        },
+        selectTemplate: ({ templateId }) => actions.setEmail(brandedEmail(templateById(templateId), values.brand)),
+        setBrandValue: (_, __, ___, previousState) => {
+            const previous = selectors.brand(previousState)
+            if (values.email?.design) {
+                actions.setEmail({ ...values.email, design: rebrand(values.email.design, previous, values.brand) })
+            }
+        },
+        revertToDetected: (_, __, ___, previousState) => {
+            const previous = selectors.brand(previousState)
+            if (values.email?.design) {
+                actions.setEmail({ ...values.email, design: rebrand(values.email.design, previous, values.brand) })
+            }
+        },
+        askAi: ({ edit }) => {
+            if (values.email?.design) {
+                actions.setEmail({ ...values.email, design: applyAiEdit(values.email.design, edit) })
+            }
+        },
+        sendTest: async () => {
+            const exported = await exportFromEditor()
+            if (exported && values.email) {
+                actions.setEmail({ ...values.email, html: exported.html, design: exported.design })
+            }
+            actions.setTestHtml(renderForRecipient(exported?.html ?? values.email?.html ?? ''))
+            completeSetupTask(SETUP_TASK.sendExample)
+        },
         turnOn: () => {
             actions.setWorkflowStatus('active')
-            router.actions.push(firstWorkflowUrl())
+            router.actions.push(firstWorkflowUrl(values.template ? emailActions(values.template)[0].id : undefined))
         },
-        openInEditor: () => router.actions.push(firstWorkflowUrl()),
+        openInEditor: () =>
+            router.actions.push(firstWorkflowUrl(values.template ? emailActions(values.template)[0].id : undefined)),
         setWorkflowStatus: ({ status }) => {
             if (status !== 'active') {
                 return
@@ -218,10 +281,5 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
             }
         },
     })),
-    afterMount(({ actions, cache }) => {
-        cache.disposables.add(() => {
-            const timer = window.setTimeout(() => actions.brandFound(), 2500)
-            return () => window.clearTimeout(timer)
-        }, 'brandDetection')
-    }),
+    afterMount(({ actions }) => actions.detectBrand()),
 ])

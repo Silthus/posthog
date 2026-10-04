@@ -1,13 +1,13 @@
-// PROTOTYPE ONLY (silthus/posthog#212). The test email as it lands in the team's inbox.
+// PROTOTYPE ONLY (silthus/posthog#212). The test email as it lands in the team's inbox, exported from the
+// editor at the moment the test was sent.
 import { useValues } from 'kea'
 
 import { firstRunPrototypeLogic } from '../firstRunPrototypeLogic'
 import { SHARED_SENDER, SIGNED_IN_USER, TEAM_BRAND } from '../firstRunScenario'
-import { emailHtml } from '../starterEmails'
 
-export function DeliveredEmail({ heightClass = 'h-[24rem]' }: { heightClass?: string }): JSX.Element | null {
-    const { draft, brandApplied, brandStatus } = useValues(firstRunPrototypeLogic)
-    if (!draft) {
+export function DeliveredEmail(): JSX.Element | null {
+    const { testHtml, email } = useValues(firstRunPrototypeLogic)
+    if (!testHtml || !email) {
         return null
     }
     return (
@@ -17,7 +17,7 @@ export function DeliveredEmail({ heightClass = 'h-[24rem]' }: { heightClass?: st
                     {TEAM_BRAND.name[0]}
                 </div>
                 <div className="flex flex-col min-w-0">
-                    <span className="font-semibold truncate">{draft.subject}</span>
+                    <span className="font-semibold truncate">{email.subject}</span>
                     <span className="text-xs text-secondary truncate">
                         {SHARED_SENDER.label} to {SIGNED_IN_USER.email}, just now
                     </span>
@@ -25,13 +25,9 @@ export function DeliveredEmail({ heightClass = 'h-[24rem]' }: { heightClass?: st
             </div>
             <iframe
                 title="Delivered test email"
-                className={`w-full ${heightClass} border-0 rounded bg-white`}
+                className="w-full h-[calc(100vh-18rem)] border-0 rounded bg-white"
                 sandbox=""
-                srcDoc={emailHtml({
-                    draft,
-                    branded: brandStatus === 'found' && brandApplied,
-                    recipientName: SIGNED_IN_USER.name,
-                })}
+                srcDoc={testHtml}
             />
         </div>
     )

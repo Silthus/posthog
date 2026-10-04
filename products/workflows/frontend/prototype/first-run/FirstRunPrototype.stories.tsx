@@ -5,9 +5,8 @@ import { App } from 'scenes/App'
 import { urls } from 'scenes/urls'
 
 import { firstRunMswDecorator } from './firstRunMocks'
-import { firstRunPrototypeLogic, setInitialHomeVariant } from './firstRunPrototypeLogic'
+import { firstRunPrototypeLogic } from './firstRunPrototypeLogic'
 import { FIRST_RUN_PROTOTYPE_FLAG } from './firstRunScenario'
-import { HomeVariant, VARIANT_FROM_URL } from './homeVariants'
 import { PrototypeBar } from './PrototypeBar'
 
 const meta: Meta = {
@@ -23,10 +22,8 @@ const meta: Meta = {
 }
 export default meta
 
-function FirstRunApp({ variant }: { variant: HomeVariant }): JSX.Element {
-    setInitialHomeVariant(VARIANT_FROM_URL ?? variant)
+export const TailoredGallery: StoryFn = () => {
     useMountedLogic(firstRunPrototypeLogic)
-
     return (
         <>
             <App />
@@ -34,8 +31,3 @@ function FirstRunApp({ variant }: { variant: HomeVariant }): JSX.Element {
         </>
     )
 }
-
-export const VariantFExampleFirst: StoryFn = () => <FirstRunApp variant="F" />
-export const VariantGTailoredGallery: StoryFn = () => <FirstRunApp variant="G" />
-export const VariantHAiWalkthrough: StoryFn = () => <FirstRunApp variant="H" />
-export const VariantIBrandFirst: StoryFn = () => <FirstRunApp variant="I" />

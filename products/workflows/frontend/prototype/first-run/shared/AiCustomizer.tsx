@@ -6,8 +6,8 @@ import { useState } from 'react'
 import { IconSparkles } from '@posthog/icons'
 import { LemonButton, LemonInput } from '@posthog/lemon-ui'
 
+import { AI_EDITS, aiEditFor } from '../aiEdits'
 import { firstRunPrototypeLogic } from '../firstRunPrototypeLogic'
-import { AI_EDITS, aiEditFor } from '../starterEmails'
 
 export function AiCustomizer({ showLog = true }: { showLog?: boolean }): JSX.Element {
     const { chat } = useValues(firstRunPrototypeLogic)

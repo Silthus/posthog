@@ -6,9 +6,12 @@ import { mswDecorator } from '~/mocks/browser'
 import _hogFunctionTemplatesDestinations from '~/mocks/fixtures/_hogFunctionTemplatesDestinations.json'
 import type { HogFunctionTemplateType } from '~/types'
 
+import type { HogFlow } from '../../Workflows/hogflows/types'
+import { applyBrand } from './emailBrand'
 import { firstRunPrototypeLogic, WorkflowStatus } from './firstRunPrototypeLogic'
 import { OWN_SENDER, SHARED_SENDER, TEAM_BRAND } from './firstRunScenario'
-import { STARTERS, starterWorkflow } from './starterEmails'
+import { WORKFLOW_ID } from './firstRunScenario'
+import { EMAIL_TEMPLATES, emailActions } from './realTemplates'
 
 const EMAIL_TEMPLATE: HogFunctionTemplateType = {
     id: 'template-email',
@@ -41,15 +44,45 @@ function state(): typeof firstRunPrototypeLogic.values {
     return firstRunPrototypeLogic.values
 }
 
-function currentWorkflow(): ReturnType<typeof starterWorkflow> {
-    const { workflowStatus, senderIntegrationId, starter, draft } = state()
-    const chosen = starter ?? STARTERS[0]
-    return starterWorkflow({
-        starter: chosen,
-        draft: draft ?? chosen.draft,
-        status: workflowStatus,
-        senderIntegrationId,
+function withEmail(action: Record<string, any>, value: Record<string, any>): Record<string, any> {
+    return {
+        ...action,
+        config: {
+            ...action.config,
+            inputs: { ...action.config.inputs, email: { ...action.config.inputs.email, value } },
+        },
+    }
+}
+
+function currentWorkflow(): HogFlow {
+    const { workflowStatus, senderIntegrationId, template, email, brand } = state()
+    const chosen = template ?? EMAIL_TEMPLATES[0]
+    const firstEmailId = emailActions(chosen)[0].id
+    const from = { integrationId: senderIntegrationId }
+    const actions = chosen.actions.map((action) => {
+        if (action.type !== 'function_email') {
+            return action
+        }
+        const original = (action.config.inputs as Record<string, any>).email.value
+        if (action.id === firstEmailId && email) {
+            return withEmail(action, { ...email, from })
+        }
+        return withEmail(action, {
+            ...original,
+            from,
+            design: original.design ? applyBrand(original.design, brand) : original.design,
+        })
     })
+    return {
+        ...(chosen as unknown as HogFlow),
+        id: WORKFLOW_ID,
+        team_id: 1,
+        version: 1,
+        status: workflowStatus,
+        actions: actions as HogFlow['actions'],
+        created_at: '2026-10-04T09:00:00.000Z',
+        updated_at: '2026-10-04T09:00:00.000Z',
+    }
 }
 
 function emailIntegration(sender: typeof SHARED_SENDER, domain: string, verified: boolean): Record<string, unknown> {
@@ -99,7 +132,11 @@ export const firstRunMswDecorator = mswDecorator({
         // nosemgrep: no-environments-api-urls-frontend -- prototype mocks answer both route prefixes.
         '/api/environments/:team_id/hog_flows/:id/batch_jobs/': EMPTY_PAGE,
         // nosemgrep: no-environments-api-urls-frontend -- prototype mocks answer both route prefixes.
-        '/api/environments/:team_id/hog_flow_templates/': EMPTY_PAGE,
+        '/api/environments/:team_id/hog_flow_templates/': {
+            ...EMPTY_PAGE,
+            count: EMAIL_TEMPLATES.length,
+            results: EMAIL_TEMPLATES,
+        },
         // nosemgrep: no-environments-api-urls-frontend -- prototype mocks answer both route prefixes.
         '/api/environments/:team_id/integrations/': () => [
             200,
