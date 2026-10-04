@@ -28,6 +28,8 @@ const setupMsw = (): void => {
     // Make sure the msw worker is started
     worker.start({
         quiet: true,
+        // PROTOTYPE (#245): relative so the static build also works under a preview subpath
+        serviceWorker: { url: './mockServiceWorker.js' },
         onUnhandledRequest(request, print) {
             // MSW warns on all unhandled requests, but we don't necessarily care
             const pathAllowList = ['/images/']
