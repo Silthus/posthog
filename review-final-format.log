@@ -1,0 +1,8 @@
+
+> @posthog/frontend@0.0.0 format:check /home/coder/.t3/worktrees/posthog/fr-261/frontend
+> cd .. && oxfmt --check "./{products,frontend/src,docs}/**/*.{js,mjs,ts,tsx,json,yaml,yml,css,scss}"
+
+Checking formatting...
+
+All matched files use the correct format.
+Finished in 1501ms on 13702 files using 16 threads.

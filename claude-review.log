@@ -1,0 +1,74 @@
+The review found **no blocking defect**, but there are four medium findings in the implemented panel and context behavior and some lower-risk ones. Your scope gap is real and is listed separately at the end.
+
+I ran the review read-only: I edited no files and launched no agents. I read the PR description, ticket #261, spec #256 with its amendments, the diff `origin/feat/workflows-first-run-make-it-yours...HEAD`, and the posthog_ai and side panel code it depends on. I ran nothing except one script that measured the email design sizes in the built-in templates.
+
+## Defects in the implemented behavior
+
+**M1. Removing the email chip removes the context for the whole page session, and "Change with PostHog AI" never brings it back.**
+- **Where:** `firstRunEmailAgentContext.ts:6` (`DISMISS_GROUP` is one fixed string) and `firstRunEmailAgentLogic.ts:144-148` (`openEmailAgent`).
+- **Scenario:** The user closes the "Email 1 of 2" chip in the composer. `attachedContextLogic.dismissContext` records the group in `dismissedGroups`, and that store is global, in-memory and only cleared by `undismissContext`. After that, nothing the user does attaches the email again until a reload:
+  - switching emails,
+  - editing the email,
+  - leaving and returning to Make it yours, including on a different template,
+  - clicking "Change with PostHog AI".
+
+  This breaks "switching to another email updates the context". The button also opens AI with no email attached.
+- **Fix:** In `openEmailAgent`, call `attachedContextLogic.actions.undismissContext(<text item key>, DISMISS_GROUP)` before opening the panel. Also scope the group per template, for example `workflows-first-run-email:${templateId}`. Add one test for the order: dismiss the chip, click the button, the context is back.
+
+**M2. In plain-text mode the context sends the old visual design as if it were the email.**
+- **Where:** `firstRunEmailAgentContext.ts:21`, the `...(design ? { design } : { html })` line.
+- **Scenario:** The user switches the editor to the plain-text tab and edits. `emailTemplaterLogic.setEmailTemplateValue` (`emailTemplaterLogic.tsx:~824`) sets `html: ''` but keeps `design`. The context still sends that design next to the new `text`. AI sees a body that will not be sent, and its suggestions target that stale design.
+- **Fix:** Send `design` only when `html` is non-empty. Otherwise send `text` alone and add a field such as `body_mode: 'plaintext'`.
+
+**M3. The fallback for oversized emails can drop the email body entirely, and the trigger is fragile.**
+- **Where:** `firstRunEmailAgentContext.ts:25-34`.
+- **What I measured:** All built-in templates are well under budget today: design plus metadata is 3k to 12k characters, and `text` is 130 to 670.
+- **Scenario:** A user who builds up the design with images and blocks can exceed 64k. The fallback then drops `design` and `html` and keeps only `text`. In visual mode, `text` is Unlayer's plain-text export. For a template whose original `text` field is empty, AI has no body to work with.
+  - The fallback also skips `html`, which is an intermediate option.
+  - The result after the fallback is never measured again.
+  - `template_name` is not capped.
+- **Fix:** Try three steps in order: full design, then `html` without design, then truncated `text` with `omitted_content`. Check the length after the last step.
+
+**M4. AI availability does not update when preflight loads, so self-hosted instances without a model key can auto-open a broken panel.**
+- **Where:** `firstRunEmailAgentLogic.ts:119-121` and `:135-143`.
+- **Scenario:** `isMaxAvailable` is `true` while `preflight` is `null`. On a self-hosted instance without `ANTHROPIC_API_KEY`, the first sync attaches the context and auto-opens the panel. When preflight loads, `isMaxAvailable` turns `false` and the button disables, but no listener runs. The context stays registered and the panel stays open on a surface that cannot answer.
+- **Fix:** Add `preflightLogic.actionTypes.loadPreflightSuccess` to the listeners that call `syncEmailContext`. Also hold the auto-open decision until preflight has loaded.
+
+**L1. Some non-user closes count as a dismissal.**
+- **Where:** `firstRunEmailAgentLogic.ts:149-153`.
+- **Scenario:** `selectedTab` is persisted, so it can be `max` while the panel is closed. Calls such as `closeSidePanel()` from `userLogic` or `organizationLogic` (when switching project or organization), or from `insightLogic`, then set the session flag even though the panel was not open. The "Open as main focus" link in `Max.tsx:298` also closes the panel and counts as a dismissal, though the user moved AI rather than rejecting it.
+- **Fix:** Also require `values.sidePanelOpen`. Do this in a `beforeAction`-style check, or record the open state in `cache` on `setSidePanelOpen`, because the reducer has already set it to `false` when the listener runs.
+
+**L2. Canvas edits reach the context up to 500 ms late, and sending a message does not wait for them.**
+- **Where:** `emailTemplaterLogic.designUpdated` waits 500 ms before calling `onChange`.
+- **Scenario:** The user edits the canvas and sends a chat message at once. The send uses the previous design, and the instruction "the latest attached state wins" then points AI at the wrong state.
+- **Fix:** Accept this and document it in the PR, or have the provider expose a pending marker. `waitForPendingCanvasEdit` is already there to reuse.
+
+**L3. Auto-open replaces whatever side panel tab the user has open.**
+- **Where:** `firstRunEmailAgentLogic.ts:136-141`.
+- **Scenario:** If Support or Notebooks is open, entering Make it yours switches the panel to Max.
+- **Fix:** Auto-open only when the panel is closed or already on Max.
+
+**L4. The disabled reason is misleading on legacy, and the feature has no tracking of its own.**
+- **Where:** The copy is at `firstRunEmailAgentLogic.ts:120`, the button at `MakeItYoursActions.tsx`.
+- **Copy:** "PostHog AI is not available here yet" is wrong for a legacy-runtime user, because AI is available to them. Something like "Switch to the new PostHog AI to change this email" says why and what to do.
+- **Tracking:** The repo's tracking rule asks for events from entry to outcome. Only the generic `sidebar opened` fires, and it cannot tell auto-open from the button or from a dismissal.
+- **Fix:** Rewrite the copy as above, and capture events for auto-open, button-open and dismissal.
+
+I found no defects in these areas:
+- **No automatic prompt:** `openSidePanel` is called with no options, and the test asserts that `selectedTabOptions` is empty.
+- **Email position:** The label and `position` / `total` follow `openEmailPosition`, through both `setOpenEmailId` and `editEmail`.
+- **Cleanup on leaving:** The disposable deregisters the provider on unmount, and the key is per template.
+- **Runtime switching:** Switching new to legacy registers `[]`. Switching back to new syncs again.
+- **Flag and panel arriving late:** Both have listeners, and both have tests.
+- **Trusted text:** The instructions are fixed text, and the email data goes only into the untrusted block.
+
+## Scope gap
+
+The ticket's main criterion is still not met: the ticket and spec ask that "typing a change updates that email in the editor" through a frontend-applied tool. This draft has no tool, writes nothing back to the editor, and has no backend MaxTool test. The `create_message_template` MaxTool exists only in the frozen LangGraph runtime, and no sandbox MCP tool can change an unsaved email.
+
+Two acceptance criteria stay unmet:
+- **"Button opens… with a prompt naming the email":** the "Open from the start" decision of 2026-10-05 says no prompt is sent for the user. The draft follows that, but it also adds no placeholder or suggestion. You need to confirm whether the context chip's label is enough.
+- **"Asking for a change… changes the email in the open editor":** not implemented; AI only suggests changes for the user to apply.
+
+The ticket also asks to "record the gap and the reason on this ticket". The PR description covers it, but I didn't see a comment on #261 itself.

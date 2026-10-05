@@ -1,0 +1,7 @@
+
+> @posthog/frontend@0.0.0 lint /home/coder/.t3/worktrees/posthog/fr-261/frontend
+> cd .. && oxlint --quiet
+
+
+Found 3740 warnings and 0 errors.
+Finished in 3.0s on 13746 files using 16 threads.
