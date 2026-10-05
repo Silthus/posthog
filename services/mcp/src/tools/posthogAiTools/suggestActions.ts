@@ -6,6 +6,7 @@ import {
     type ChatActionKind,
     chatActionKey,
     chatActionSlots,
+    chatActionTemplate,
     parseChatActionKey,
     renderChatActionTemplate,
 } from '@/tools/chatActions'
@@ -81,7 +82,7 @@ function resolveAction(
     if (action.kind === 'run' && !(action.tool && availableToolNames?.has(action.tool))) {
         return { reason: 'run_target_unavailable' }
     }
-    const template = action.message ?? action.label
+    const template = chatActionTemplate(action)
     const values = new Map<string, string>()
     for (const slot of chatActionSlots(template)) {
         const raw = pick.args?.[slot]
@@ -110,7 +111,13 @@ export function createSuggestActionsTool(
         schema,
         handler: async (_context: Context, params: SuggestActionsParams): Promise<SuggestActionsResult> => {
             const result: SuggestActionsResult = { actions: [], errors: [] }
+            const pickedKeys = new Set<string>()
             for (const pick of params.actions) {
+                if (pickedKeys.has(pick.key)) {
+                    result.errors.push({ key: pick.key, reason: 'duplicate_action' })
+                    continue
+                }
+                pickedKeys.add(pick.key)
                 const resolved = resolveAction(pick, availableToolNames)
                 if ('reason' in resolved) {
                     result.errors.push({ key: pick.key, reason: resolved.reason })
@@ -150,7 +157,7 @@ export function buildChatActionCatalog(visibleToolNames: Iterable<string>): Chat
  */
 export function renderChatActionHint(tool: string, actions: ChatAction[]): string {
     const picks = actions.map((action) => {
-        const slots = chatActionSlots(action.message ?? action.label)
+        const slots = chatActionSlots(chatActionTemplate(action))
         const args = slots.length ? { args: Object.fromEntries(slots.map((slot) => [slot, `<${slot}>`])) } : {}
         return { key: chatActionKey(tool, action.key), ...args }
     })

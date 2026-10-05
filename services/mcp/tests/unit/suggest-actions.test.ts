@@ -225,6 +225,15 @@ describe('suggest-actions', () => {
             expect(result).toEqual({ actions: [], errors: [{ key, reason }] })
         })
 
+        it('keeps the first of two picks with the same key, so every button names one action', async () => {
+            const result = await call([
+                { key: 'workflows-create.enable', args: { id: 'wf_1' } },
+                { key: 'workflows-create.enable', args: { id: 'wf_2' } },
+            ])
+            expect(result.actions.map((action) => action.message)).toEqual(['Enable workflow wf_1.'])
+            expect(result.errors).toEqual([{ key: 'workflows-create.enable', reason: 'duplicate_action' }])
+        })
+
         it('drops a run action whose target is not in the caller catalog', async () => {
             const without = new Set(['workflows-create', 'suggest-actions'])
             const result = await call([{ key: 'workflows-create.enable', args: { id: 'wf_1' } }], without)

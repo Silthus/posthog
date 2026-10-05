@@ -46,6 +46,11 @@ export const ChatActionListSchema = z.array(ChatActionSchema).superRefine((actio
 
 const SLOT_RE = /\{([a-zA-Z0-9_]+)\}/g
 
+/** The text a click inserts or sends, before its slots are filled. */
+export function chatActionTemplate(action: ChatAction): string {
+    return action.message ?? action.label
+}
+
 /** Slot names in declaration order, deduplicated. */
 export function chatActionSlots(template: string): string[] {
     return [...new Set([...template.matchAll(SLOT_RE)].map((match) => match[1]!))]

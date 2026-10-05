@@ -1,4 +1,4 @@
-import { type ChatAction, chatActionKey, chatActionSlots } from '@/tools/chatActions'
+import { type ChatAction, chatActionKey, chatActionSlots, chatActionTemplate } from '@/tools/chatActions'
 import type { CachedOrg, CachedProject } from '@/tools/types'
 
 /** Bounds the onboarded-products line for intent-heavy teams; the environment
@@ -453,11 +453,10 @@ export class ChatActionCatalog {
     constructor(private readonly entries: ChatActionCatalogEntry[]) {}
 
     toMarkdown(): string {
-        const entries = this.entries.filter((entry) => entry.actions.length > 0)
-        if (entries.length === 0) {
+        if (this.entries.length === 0) {
             return ''
         }
-        const groups = entries.map(
+        const groups = this.entries.map(
             (entry) =>
                 `After \`${entry.tool}\`:\n` +
                 entry.actions.map((action) => ChatActionCatalog.renderAction(entry.tool, action)).join('\n')
@@ -466,7 +465,7 @@ export class ChatActionCatalog {
     }
 
     private static renderAction(tool: string, action: ChatAction): string {
-        const slots = chatActionSlots(action.message ?? action.label)
+        const slots = chatActionSlots(chatActionTemplate(action))
         const qualifiers = [action.kind, ...(slots.length > 0 ? [`slots: ${slots.join(', ')}`] : [])]
         return `- \`${chatActionKey(tool, action.key)}\` (${qualifiers.join(', ')}): ${action.label}`
     }
