@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>unlayer probe</title>
+<style>html,body{margin:0;height:100%}#editor{height:100vh}</style>
+<script src="https://editor.unlayer.com/embed.js?2"></script></head>
+<body><div id="editor"></div>
+<script>
+window.editorReady = false;
+const pid = new URLSearchParams(location.search).get('pid');
+const opts = { id: 'editor', displayMode: 'email', features: { preview: true, ai: false, stockImages: false } };
+if (pid) opts.projectId = Number(pid);
+window.editor = unlayer.createEditor(opts);
+editor.addEventListener('editor:ready', () => { window.editorReady = true; });
+window.loadDesign = (d) => new Promise(r => { editor.loadDesign(d); setTimeout(r, 1500); });
+window.saveDesign = () => new Promise(r => editor.saveDesign(r));
+window.exportHtml = () => new Promise(r => editor.exportHtml(r));
+</script></body></html>

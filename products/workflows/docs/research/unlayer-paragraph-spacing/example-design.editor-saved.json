@@ -1,0 +1,291 @@
+{
+    "counters": {
+        "u_row": 1,
+        "u_column": 1,
+        "u_content_heading": 1,
+        "u_content_text": 2,
+        "u_content_button": 1,
+        "u_content_divider": 1
+    },
+    "body": {
+        "id": "welcome-body",
+        "rows": [
+            {
+                "id": "row-main",
+                "cells": [1],
+                "columns": [
+                    {
+                        "id": "col-main",
+                        "contents": [
+                            {
+                                "id": "heading-welcome",
+                                "type": "heading",
+                                "values": {
+                                    "containerPadding": "32px 24px 8px",
+                                    "anchor": "",
+                                    "headingType": "h1",
+                                    "fontSize": "26px",
+                                    "textAlign": "left",
+                                    "lineHeight": "130%",
+                                    "linkStyle": {
+                                        "inherit": true,
+                                        "linkColor": "#0000ee",
+                                        "linkHoverColor": "#0000ee",
+                                        "linkUnderline": true,
+                                        "linkHoverUnderline": true
+                                    },
+                                    "hideDesktop": false,
+                                    "displayCondition": null,
+                                    "_styleGuide": null,
+                                    "_meta": {
+                                        "htmlID": "u_content_heading_1",
+                                        "htmlClassNames": "u_content_heading"
+                                    },
+                                    "selectable": true,
+                                    "draggable": true,
+                                    "duplicatable": true,
+                                    "deletable": true,
+                                    "hideable": true,
+                                    "locked": false,
+                                    "text": "Welcome, {{ person.properties.first_name | default: 'there' }}"
+                                }
+                            },
+                            {
+                                "id": "text-intro",
+                                "type": "text",
+                                "values": {
+                                    "containerPadding": "8px 24px",
+                                    "anchor": "",
+                                    "fontSize": "16px",
+                                    "textAlign": "left",
+                                    "lineHeight": "150%",
+                                    "linkStyle": {
+                                        "inherit": true,
+                                        "linkColor": "#0000ee",
+                                        "linkHoverColor": "#0000ee",
+                                        "linkUnderline": true,
+                                        "linkHoverUnderline": true
+                                    },
+                                    "hideDesktop": false,
+                                    "displayCondition": null,
+                                    "_styleGuide": null,
+                                    "_meta": {
+                                        "htmlID": "u_content_text_1",
+                                        "htmlClassNames": "u_content_text"
+                                    },
+                                    "selectable": true,
+                                    "draggable": true,
+                                    "duplicatable": true,
+                                    "deletable": true,
+                                    "hideable": true,
+                                    "locked": false,
+                                    "text": "<p>Thanks for signing up. Over the next week we will send you a few short emails that help you get set up.</p>"
+                                }
+                            },
+                            {
+                                "id": "text-next-step",
+                                "type": "text",
+                                "values": {
+                                    "containerPadding": "8px 24px",
+                                    "anchor": "",
+                                    "fontSize": "16px",
+                                    "textAlign": "left",
+                                    "lineHeight": "150%",
+                                    "linkStyle": {
+                                        "inherit": true,
+                                        "linkColor": "#0000ee",
+                                        "linkHoverColor": "#0000ee",
+                                        "linkUnderline": true,
+                                        "linkHoverUnderline": true
+                                    },
+                                    "hideDesktop": false,
+                                    "displayCondition": null,
+                                    "_styleGuide": null,
+                                    "_meta": {
+                                        "htmlID": "u_content_text_2",
+                                        "htmlClassNames": "u_content_text"
+                                    },
+                                    "selectable": true,
+                                    "draggable": true,
+                                    "duplicatable": true,
+                                    "deletable": true,
+                                    "hideable": true,
+                                    "locked": false,
+                                    "text": "<p>Start by connecting your first data source. It takes about five minutes, and everything else builds on it.</p>"
+                                }
+                            },
+                            {
+                                "id": "button-setup",
+                                "type": "button",
+                                "values": {
+                                    "href": {
+                                        "name": "web",
+                                        "values": {
+                                            "href": "https://example.com/setup",
+                                            "target": "_blank"
+                                        }
+                                    },
+                                    "buttonColors": {
+                                        "color": "#FFFFFF",
+                                        "backgroundColor": "#1d4aff",
+                                        "hoverColor": "#FFFFFF",
+                                        "hoverBackgroundColor": "#1d4aff"
+                                    },
+                                    "size": {
+                                        "autoWidth": true,
+                                        "width": "100%"
+                                    },
+                                    "fontSize": "16px",
+                                    "lineHeight": "120%",
+                                    "textAlign": "left",
+                                    "padding": "12px 24px",
+                                    "border": {},
+                                    "borderRadius": "6px",
+                                    "hideDesktop": false,
+                                    "displayCondition": null,
+                                    "_styleGuide": null,
+                                    "containerPadding": "16px 24px",
+                                    "anchor": "",
+                                    "_meta": {
+                                        "htmlID": "u_content_button_1",
+                                        "htmlClassNames": "u_content_button"
+                                    },
+                                    "selectable": true,
+                                    "draggable": true,
+                                    "duplicatable": true,
+                                    "deletable": true,
+                                    "hideable": true,
+                                    "locked": false,
+                                    "text": "Connect a data source"
+                                }
+                            },
+                            {
+                                "id": "divider-footer",
+                                "type": "divider",
+                                "values": {
+                                    "width": "100%",
+                                    "border": {
+                                        "borderTopWidth": "1px",
+                                        "borderTopStyle": "solid",
+                                        "borderTopColor": "#E5E7EB"
+                                    },
+                                    "textAlign": "center",
+                                    "containerPadding": "16px 24px",
+                                    "anchor": "",
+                                    "hideDesktop": false,
+                                    "displayCondition": null,
+                                    "_styleGuide": null,
+                                    "_meta": {
+                                        "htmlID": "u_content_divider_1",
+                                        "htmlClassNames": "u_content_divider"
+                                    },
+                                    "selectable": true,
+                                    "draggable": true,
+                                    "duplicatable": true,
+                                    "deletable": true,
+                                    "hideable": true,
+                                    "locked": false
+                                }
+                            }
+                        ],
+                        "values": {
+                            "_meta": {
+                                "htmlID": "u_column_1",
+                                "htmlClassNames": "u_column"
+                            },
+                            "deletable": true
+                        }
+                    }
+                ],
+                "values": {
+                    "displayCondition": null,
+                    "columns": false,
+                    "_styleGuide": null,
+                    "backgroundColor": "",
+                    "columnsBackgroundColor": "",
+                    "backgroundImage": {
+                        "url": "",
+                        "fullWidth": true,
+                        "repeat": "no-repeat",
+                        "size": "custom",
+                        "position": "center"
+                    },
+                    "padding": "0px",
+                    "anchor": "",
+                    "hideDesktop": false,
+                    "_meta": {
+                        "htmlID": "u_row_1",
+                        "htmlClassNames": "u_row"
+                    },
+                    "selectable": true,
+                    "draggable": true,
+                    "duplicatable": true,
+                    "deletable": true,
+                    "hideable": true,
+                    "locked": false
+                }
+            }
+        ],
+        "headers": [],
+        "footers": [],
+        "values": {
+            "_styleGuide": null,
+            "popupPosition": "center",
+            "popupDisplayDelay": 0,
+            "popupWidth": "600px",
+            "popupHeight": "auto",
+            "borderRadius": "10px",
+            "contentAlign": "center",
+            "contentVerticalAlign": "middle",
+            "contentWidth": "600px",
+            "fontFamily": {
+                "label": "Arial",
+                "value": "arial,helvetica,sans-serif"
+            },
+            "textColor": "#1d1f27",
+            "popupBackgroundColor": "#FFFFFF",
+            "popupBackgroundImage": {
+                "url": "",
+                "fullWidth": true,
+                "repeat": "no-repeat",
+                "size": "cover",
+                "position": "center"
+            },
+            "popupOverlay_backgroundColor": "rgba(0, 0, 0, 0.1)",
+            "popupCloseButton_position": "top-right",
+            "popupCloseButton_backgroundColor": "#DDDDDD",
+            "popupCloseButton_iconColor": "#000000",
+            "popupCloseButton_borderRadius": "0px",
+            "popupCloseButton_margin": "0px",
+            "popupCloseButton_action": {
+                "name": "close_popup",
+                "attrs": {
+                    "onClick": "document.querySelector('.u-popup-container').style.display = 'none';"
+                }
+            },
+            "language": {},
+            "backgroundColor": "#ffffff",
+            "preheaderText": "",
+            "linkStyle": {
+                "body": true,
+                "linkColor": "#0000ee",
+                "linkHoverColor": "#0000ee",
+                "linkUnderline": true,
+                "linkHoverUnderline": true
+            },
+            "backgroundImage": {
+                "url": "",
+                "fullWidth": true,
+                "repeat": "no-repeat",
+                "size": "custom",
+                "position": "center"
+            },
+            "accessibilityTitle": "",
+            "_meta": {
+                "htmlID": "u_body",
+                "htmlClassNames": "u_body"
+            }
+        }
+    },
+    "schemaVersion": 27
+}

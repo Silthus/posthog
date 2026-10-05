@@ -1,0 +1,112 @@
+{
+    "counters": {
+        "u_row": 1,
+        "u_column": 1,
+        "u_content_heading": 1,
+        "u_content_text": 2,
+        "u_content_button": 1,
+        "u_content_divider": 1
+    },
+    "schemaVersion": 16,
+    "body": {
+        "id": "welcome-body",
+        "headers": [],
+        "footers": [],
+        "values": {
+            "backgroundColor": "#ffffff",
+            "contentWidth": "600px",
+            "textColor": "#1d1f27",
+            "fontFamily": { "label": "Arial", "value": "arial,helvetica,sans-serif" }
+        },
+        "rows": [
+            {
+                "id": "row-main",
+                "cells": [1],
+                "values": { "padding": "0px", "_meta": { "htmlID": "u_row_1", "htmlClassNames": "u_row" } },
+                "columns": [
+                    {
+                        "id": "col-main",
+                        "values": { "_meta": { "htmlID": "u_column_1", "htmlClassNames": "u_column" } },
+                        "contents": [
+                            {
+                                "id": "heading-welcome",
+                                "type": "heading",
+                                "values": {
+                                    "headingType": "h1",
+                                    "text": "Welcome, {{ person.properties.first_name | default: 'there' }}",
+                                    "fontSize": "26px",
+                                    "lineHeight": "130%",
+                                    "textAlign": "left",
+                                    "containerPadding": "32px 24px 8px",
+                                    "_meta": { "htmlID": "u_content_heading_1", "htmlClassNames": "u_content_heading" }
+                                }
+                            },
+                            {
+                                "id": "text-intro",
+                                "type": "text",
+                                "values": {
+                                    "text": "<p>Thanks for signing up. Over the next week we will send you a few short emails that help you get set up.</p>",
+                                    "fontSize": "16px",
+                                    "lineHeight": "150%",
+                                    "textAlign": "left",
+                                    "containerPadding": "8px 24px",
+                                    "_meta": { "htmlID": "u_content_text_1", "htmlClassNames": "u_content_text" }
+                                }
+                            },
+                            {
+                                "id": "text-next-step",
+                                "type": "text",
+                                "values": {
+                                    "text": "<p>Start by connecting your first data source. It takes about five minutes, and everything else builds on it.</p>",
+                                    "fontSize": "16px",
+                                    "lineHeight": "150%",
+                                    "textAlign": "left",
+                                    "containerPadding": "8px 24px",
+                                    "_meta": { "htmlID": "u_content_text_2", "htmlClassNames": "u_content_text" }
+                                }
+                            },
+                            {
+                                "id": "button-setup",
+                                "type": "button",
+                                "values": {
+                                    "text": "Connect a data source",
+                                    "href": {
+                                        "name": "web",
+                                        "values": { "href": "https://example.com/setup", "target": "_blank" }
+                                    },
+                                    "buttonColors": {
+                                        "color": "#FFFFFF",
+                                        "backgroundColor": "#1d4aff",
+                                        "hoverColor": "#FFFFFF",
+                                        "hoverBackgroundColor": "#1d4aff"
+                                    },
+                                    "fontSize": "16px",
+                                    "padding": "12px 24px",
+                                    "borderRadius": "6px",
+                                    "textAlign": "left",
+                                    "containerPadding": "16px 24px",
+                                    "_meta": { "htmlID": "u_content_button_1", "htmlClassNames": "u_content_button" }
+                                }
+                            },
+                            {
+                                "id": "divider-footer",
+                                "type": "divider",
+                                "values": {
+                                    "width": "100%",
+                                    "border": {
+                                        "borderTopWidth": "1px",
+                                        "borderTopStyle": "solid",
+                                        "borderTopColor": "#E5E7EB"
+                                    },
+                                    "textAlign": "center",
+                                    "containerPadding": "16px 24px",
+                                    "_meta": { "htmlID": "u_content_divider_1", "htmlClassNames": "u_content_divider" }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
