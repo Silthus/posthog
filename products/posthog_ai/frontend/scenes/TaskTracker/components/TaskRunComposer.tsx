@@ -44,11 +44,14 @@ export function TaskRunComposer({
     textAreaRef,
     autoFocus,
     flushDraftRef,
+    focusRequest = 0,
 }: {
     logicProps: RunInteractionLogicProps
     textAreaRef: RefObject<HTMLTextAreaElement>
     autoFocus?: boolean
     flushDraftRef: MutableRefObject<() => void>
+    /** Each increase focuses the input with the caret after its text, e.g. after a suggested action filled it. */
+    focusRequest?: number
 }): JSX.Element {
     const {
         composerForm,
@@ -105,6 +108,14 @@ export function TaskRunComposer({
     useEffect(() => {
         flushDraftRef.current = draft.flush
     }, [flushDraftRef, draft.flush])
+
+    useEffect(() => {
+        const textArea = textAreaRef.current
+        if (focusRequest > 0 && textArea) {
+            textArea.focus()
+            textArea.setSelectionRange(textArea.value.length, textArea.value.length)
+        }
+    }, [focusRequest, textAreaRef])
 
     // Matches the key `runInteractionLogic` connects the attachments logic under, so the files this
     // composer stages are the ones its send uploads.

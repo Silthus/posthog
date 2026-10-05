@@ -156,7 +156,10 @@ function SuggestActionsThread({
     }, [turnComplete, enableBlocked])
     return (
         <div className={`${narrow ? 'w-130' : 'w-180'} max-w-full h-100 border rounded`}>
-            <RunChatActionComposerProvider logicProps={{ taskId: 'story-task', runId: 'story-run' }}>
+            <RunChatActionComposerProvider
+                logicProps={{ taskId: 'story-task', runId: 'story-run' }}
+                focusComposer={() => {}}
+            >
                 <BindLogic logic={runStreamLogic} props={{ streamKey: STREAM_KEY }}>
                     <ThreadView skin={skin} />
                 </BindLogic>

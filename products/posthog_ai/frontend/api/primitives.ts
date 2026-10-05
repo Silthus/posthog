@@ -51,10 +51,9 @@ export { DEFAULT_SUGGESTIONS_DATA } from '../components/suggestions/suggestionsD
 // atoms); `ThreadView` is the prepackaged virtualized presenter (also `Thread.Root`).
 export { Thread } from '../components/Thread'
 // The composer seam the suggested-action buttons drive; a host that renders a thread above its own
-// composer provides one (the runner ships `RunChatActionComposerProvider` for `runInteractionLogic`).
-export { ChatActionComposerProvider } from '../components/ChatActionComposerContext'
+// composer provides one, as the runner and the Max panel do.
+export { ChatActionComposerProvider, useChatActionComposer } from '../components/ChatActionComposerContext'
 export type { ChatActionComposer } from '../components/ChatActionComposerContext'
-export { RunChatActionComposerProvider } from '../components/RunChatActionComposerProvider'
 export { ThreadView } from '../components/ThreadView'
 export type { ThreadSkin } from '../components/quill/quillThreadContext'
 export { useThreadSkin } from '../hooks/useThreadSkin'

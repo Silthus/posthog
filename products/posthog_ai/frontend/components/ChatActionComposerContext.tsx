@@ -20,7 +20,8 @@ export function ChatActionComposerProvider({
     value,
     children,
 }: {
-    value: ChatActionComposer
+    /** Null where the thread is read-only: the buttons then render disabled. */
+    value: ChatActionComposer | null
     children: ReactNode
 }): JSX.Element {
     return <ChatActionComposerContext.Provider value={value}>{children}</ChatActionComposerContext.Provider>

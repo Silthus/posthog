@@ -1,5 +1,5 @@
 import { BindLogic, useActions, useValues } from 'kea'
-import { type MutableRefObject, useEffect, useRef } from 'react'
+import { type MutableRefObject, useCallback, useEffect, useRef, useState } from 'react'
 
 import { cn } from 'lib/utils/css-classes'
 import { userLogic } from 'scenes/userLogic'
@@ -64,6 +64,8 @@ export function TaskRunChat({
     const { selectedRun, task } = useValues(taskDetailSceneLogic({ taskId }))
     const { user } = useValues(userLogic)
     const flushDraftRef = useRef<() => void>(() => {})
+    const [composerFocusRequest, setComposerFocusRequest] = useState(0)
+    const focusComposer = useCallback(() => setComposerFocusRequest((request) => request + 1), [])
     // Staff can view tasks they don't own (support/debugging); those are read-only — hide the composer so
     // they can't try to drive a run they can't control (the backend rejects the write anyway).
     const readOnly = !!user?.is_staff && !!task?.created_by && task.created_by.id !== user.id
@@ -120,16 +122,14 @@ export function TaskRunChat({
             escapeScope={escapeScope}
             autoFocus={autoFocus}
             flushDraftRef={flushDraftRef}
+            composerFocusRequest={composerFocusRequest}
         />
     )
-    // A read-only viewer has no composer, so the suggested-action buttons get none either and render disabled.
     return (
         <BindLogic logic={runInteractionLogic} props={logicProps}>
-            {readOnly ? (
-                content
-            ) : (
-                <RunChatActionComposerProvider logicProps={logicProps}>{content}</RunChatActionComposerProvider>
-            )}
+            <RunChatActionComposerProvider logicProps={logicProps} focusComposer={focusComposer} readOnly={readOnly}>
+                {content}
+            </RunChatActionComposerProvider>
         </BindLogic>
     )
 }
@@ -140,12 +140,14 @@ function TaskRunChatContent({
     escapeScope,
     autoFocus,
     flushDraftRef,
+    composerFocusRequest,
 }: {
     logicProps: RunInteractionLogicProps
     readOnly: boolean
     escapeScope: RunEscapeBoundaryProps['scope']
     autoFocus?: boolean
     flushDraftRef: MutableRefObject<() => void>
+    composerFocusRequest: number
 }): JSX.Element {
     const textAreaRef = useRef<HTMLTextAreaElement>(null)
     const skin = useThreadSkin()
@@ -196,6 +198,7 @@ function TaskRunChatContent({
                             textAreaRef={textAreaRef}
                             autoFocus={autoFocus}
                             flushDraftRef={flushDraftRef}
+                            focusRequest={composerFocusRequest}
                         />
                     </RunSurface.Composer>
                 )}

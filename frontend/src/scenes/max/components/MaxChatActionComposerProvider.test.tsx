@@ -5,7 +5,7 @@ import { expectLogic } from 'kea-test-utils'
 
 import { initKeaTests } from '~/test/init'
 
-import { useChatActionComposer } from 'products/posthog_ai/frontend/components/ChatActionComposerContext'
+import { useChatActionComposer } from 'products/posthog_ai/frontend/api/primitives'
 
 import { maxLogic } from '../maxLogic'
 import { maxThreadLogic } from '../maxThreadLogic'
@@ -31,6 +31,7 @@ jest.mock('../maxThreadLogic', () => {
                 askMax: (prompt: string | null) => ({ prompt }),
                 setQuestion: (question: string) => ({ question }),
                 setStubContextDisabledReason: (reason: string | undefined) => ({ reason }),
+                setStubShared: (shared: boolean) => ({ shared }),
             }),
             reducers({
                 question: ['', { setQuestion: (_: string, { question }: { question: string }) => question }],
@@ -42,17 +43,25 @@ jest.mock('../maxThreadLogic', () => {
                     },
                 ],
                 queueDisabledReason: [undefined as string | undefined, {}],
+                isSharedThread: [false, { setStubShared: (_: boolean, { shared }: { shared: boolean }) => shared }],
             }),
         ]),
     }
 })
 
-/** The stub's test-only action, absent from the real logic's type. */
-const stubActions = (): { setStubContextDisabledReason: (reason: string | undefined) => void } =>
-    maxThreadLogic.actions as unknown as { setStubContextDisabledReason: (reason: string | undefined) => void }
+interface StubActions {
+    setStubContextDisabledReason: (reason: string | undefined) => void
+    setStubShared: (shared: boolean) => void
+}
+
+/** The stub's test-only actions, absent from the real logic's type. */
+const stubActions = (): StubActions => maxThreadLogic.actions as unknown as StubActions
 
 function Probe(): JSX.Element {
-    const composer = useChatActionComposer()!
+    const composer = useChatActionComposer()
+    if (!composer) {
+        return <span>no composer</span>
+    }
     return (
         <>
             <button onClick={() => composer.insert('Send a test email of this workflow to ')}>insert</button>
@@ -93,10 +102,21 @@ describe('MaxChatActionComposerProvider', () => {
 
     it.each([
         ['a question in progress', () => maxThreadLogic.actions.setQuestion('wip'), 'Send or clear your draft first'],
-        ['a busy thread', () => stubActions().setStubContextDisabledReason('Max is thinking'), 'Max is thinking'],
+        [
+            'an impersonated session',
+            () =>
+                stubActions().setStubContextDisabledReason('You should create new conversations during impersonation.'),
+            'You should create new conversations during impersonation.',
+        ],
     ])('reports why send is blocked during %s', async (_case, arrange, reason) => {
         expect(screen.getByText('none')).toBeInTheDocument()
         arrange()
         expect(await screen.findByText(reason)).toBeInTheDocument()
+    })
+
+    // Another user's conversation has no input, so its buttons must not write into one.
+    it('gives a shared thread no composer', async () => {
+        stubActions().setStubShared(true)
+        expect(await screen.findByText('no composer')).toBeInTheDocument()
     })
 })

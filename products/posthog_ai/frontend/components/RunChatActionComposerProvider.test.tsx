@@ -77,7 +77,10 @@ const stubActions = (logic: ReturnType<typeof runInteractionLogic>): StubActions
 
 /** Exposes the provided composer as buttons, standing in for the suggested-action widget. */
 function Probe(): JSX.Element {
-    const composer = useChatActionComposer()!
+    const composer = useChatActionComposer()
+    if (!composer) {
+        return <span>no composer</span>
+    }
     return (
         <>
             <button onClick={() => composer.insert('Send a test email of this workflow to ')}>insert</button>
@@ -89,28 +92,39 @@ function Probe(): JSX.Element {
 
 describe('RunChatActionComposerProvider', () => {
     let logic: ReturnType<typeof runInteractionLogic>
+    let focusComposer: jest.Mock
 
-    beforeEach(() => {
-        pendingDraft = null
-        initKeaTests()
-        logic = runInteractionLogic(LOGIC_PROPS)
-        logic.mount()
+    const renderProvider = (readOnly = false): void => {
         render(
-            <RunChatActionComposerProvider logicProps={LOGIC_PROPS}>
+            <RunChatActionComposerProvider logicProps={LOGIC_PROPS} focusComposer={focusComposer} readOnly={readOnly}>
                 <Probe />
             </RunChatActionComposerProvider>
         )
+    }
+
+    beforeEach(() => {
+        pendingDraft = null
+        focusComposer = jest.fn()
+        initKeaTests()
+        logic = runInteractionLogic(LOGIC_PROPS)
+        logic.mount()
     })
     afterEach(cleanup)
 
     it('insert fills an empty composer and focuses it without sending', async () => {
+        renderProvider()
         fireEvent.click(screen.getByText('insert'))
         await expectLogic(logic)
             .toDispatchActions([
                 logic.actionCreators.setComposerFormValues({ draft: 'Send a test email of this workflow to ' }),
-                logic.actionCreators.setComposerFocused(true),
             ])
             .toNotHaveDispatchedActions(['submitComposerForm'])
+        expect(focusComposer).toHaveBeenCalledTimes(1)
+    })
+
+    it('gives a read-only view no composer', () => {
+        renderProvider(true)
+        expect(screen.getByText('no composer')).toBeInTheDocument()
     })
 
     // A click must not destroy what the user was typing, including keystrokes the composer has not
@@ -119,6 +133,7 @@ describe('RunChatActionComposerProvider', () => {
         ['already in the logic', () => logic.actions.setComposerFormValues({ draft: 'Also rename it ' })],
         ['still pending in the composer', () => (pendingDraft = 'Also rename it ')],
     ])('insert keeps a draft %s above the message', async (_case, arrange) => {
+        renderProvider()
         arrange()
         fireEvent.click(screen.getByText('insert'))
         await expectLogic(logic).toMatchValues({
@@ -127,11 +142,21 @@ describe('RunChatActionComposerProvider', () => {
     })
 
     it('send replaces the draft with the message and submits', async () => {
+        renderProvider()
         fireEvent.click(screen.getByText('send'))
         await expectLogic(logic).toDispatchActions([
             logic.actionCreators.setComposerFormValues({ draft: 'Enable workflow wf_1.' }),
             'submitComposerForm',
         ])
+    })
+
+    it('send leaves keystrokes the composer has not pushed yet alone and submits nothing', async () => {
+        renderProvider()
+        pendingDraft = 'wip'
+        fireEvent.click(screen.getByText('send'))
+        await expectLogic(logic)
+            .toMatchValues({ composerForm: { draft: 'wip' } })
+            .toNotHaveDispatchedActions(['submitComposerForm'])
     })
 
     it.each([
@@ -152,6 +177,7 @@ describe('RunChatActionComposerProvider', () => {
         ],
         ['a message being sent', () => stubActions(logic).setStubSubmitting(true), 'Wait for your message to send'],
     ])('reports why send is blocked during %s', async (_case, arrange, reason) => {
+        renderProvider()
         expect(screen.getByText('none')).toBeInTheDocument()
         arrange()
         expect(await screen.findByText(reason)).toBeInTheDocument()
