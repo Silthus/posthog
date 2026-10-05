@@ -326,7 +326,7 @@ Product teams own their definitions and control which operations are exposed as 
        actions: # follow-ups the PostHog AI chat offers as buttons after this tool ran
          - key: enable # the agent addresses it as `<tool>.<key>`
            label: Enable the thing # button label
-           kind: run # insert (fills the composer) | send (sends the message) | run (sends a message that names `tool`)
+           kind: run # insert (fills the composer) | send (sends the message) | run (sends the message; `tool` must be visible). Write the message so it names the intent and its ids
            tool: things-enable # required for `run`, forbidden otherwise; must be visible to the caller
            message: Enable thing {id}. # `{slot}` markers are filled from the agent's args (identifiers only); defaults to the label
    ```

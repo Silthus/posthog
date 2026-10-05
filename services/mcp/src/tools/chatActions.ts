@@ -14,7 +14,7 @@ export const ChatActionSchema = z
         key: z.string().regex(/^[a-z0-9-]+$/),
         /** Button label. */
         label: z.string().min(1),
-        /** `insert` fills the composer, `send` submits the message, `run` submits a message that names a tool. */
+        /** `insert` fills the composer; `send` and `run` submit the message, and `run` also needs `tool` visible. */
         kind: z.enum(CHAT_ACTION_KINDS),
         /** The tool a `run` action makes the agent call. Required for `run`, forbidden otherwise. */
         tool: z.string().optional(),

@@ -184,9 +184,10 @@ describe('suggest-actions', () => {
             names = catalog
         ): Promise<SuggestActionsResult> => createSuggestActionsTool(names).handler(context, { actions })
 
-        it('renders the picked actions in input order and never leaks tool or args', async () => {
+        it('renders the valid picks in input order, drops the rest, and never leaks tool or args', async () => {
             const result = await call([
                 { key: 'workflows-create.test-send' },
+                { key: 'workflows-create.nope' },
                 { key: 'workflows-create.enable', args: { id: 'wf_123' } },
             ])
             expect(result).toEqual({
@@ -204,7 +205,7 @@ describe('suggest-actions', () => {
                         message: 'Enable workflow wf_123.',
                     },
                 ],
-                errors: [],
+                errors: [{ key: 'workflows-create.nope', reason: 'unknown_action' }],
             })
         })
 
