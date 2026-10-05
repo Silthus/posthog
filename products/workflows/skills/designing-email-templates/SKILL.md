@@ -103,7 +103,7 @@ A `function_email` step carries its own email snapshot (`config.inputs.email.val
 Edit it with `workflows-patch-action-email`: the same design operations as `workflows-patch-email-template`, plus an `email_patch` merge for subject, preheader, text, and recipients.
 
 1. `workflows-get` — the step's current design (and its block ids) is in `config.inputs.email.value.design`.
-2. `workflows-patch-action-email` with the workflow id, the step's `action_id`, and your operations and/or `email_patch`.
+2. `workflows-patch-action-email` with the workflow id, the step's `action_id`, and your operations and/or `email_patch`. When the operations change the copy, set `text` in the same call's `email_patch`, so the plain-text part matches.
 3. The HTML is re-rendered server-side from the patched design, so it never goes stale.
 4. On an active workflow the edit stages a draft — test with `workflows-test-run` (`use_draft=true`) and apply it with `workflows-publish`.
 

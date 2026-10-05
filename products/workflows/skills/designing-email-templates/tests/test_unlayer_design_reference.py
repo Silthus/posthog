@@ -1,28 +1,30 @@
 import re
 import json
 from pathlib import Path
+from typing import Any
 
 from products.messaging.backend.api.design_operations import apply_design_operations
 from products.messaging.backend.api.design_validation import validate_design
 
 REFERENCE = Path(__file__).resolve().parent.parent / "references" / "unlayer-design-json.md"
 JSON_FENCE = re.compile(r"```json\n(.*?)\n```", re.DOTALL)
+READABLE_PARAGRAPH_SPACING = ("8px 24px", "16px", "150%")
 
 
-def _json_examples() -> list[dict]:
+def _json_examples() -> list[dict[str, Any]]:
     return [json.loads(block) for block in JSON_FENCE.findall(REFERENCE.read_text(encoding="utf-8"))]
 
 
-def _example_design() -> dict:
+def _example_design() -> dict[str, Any]:
     (design,) = [example for example in _json_examples() if "body" in example]
     return design
 
 
-def _example_operations() -> list[dict]:
+def _example_operations() -> list[dict[str, Any]]:
     return [example for example in _json_examples() if "op" in example]
 
 
-def _blocks(design: dict, block_type: str) -> list[dict]:
+def _blocks(design: dict[str, Any], block_type: str) -> list[dict[str, Any]]:
     return [
         content
         for row in design["body"]["rows"]
@@ -32,7 +34,7 @@ def _blocks(design: dict, block_type: str) -> list[dict]:
     ]
 
 
-def _spacing(block: dict) -> tuple[str, str, str]:
+def _spacing(block: dict[str, Any]) -> tuple[str, str, str]:
     values = block["values"]
     return values["containerPadding"], values["fontSize"], values["lineHeight"]
 
@@ -59,4 +61,5 @@ class TestUnlayerDesignReference:
         assert new_link != button["values"]["href"]["values"]["href"]
         paragraphs = _blocks(patched, "text")
         assert len(paragraphs) > len(_blocks(design, "text"))
-        assert len({_spacing(paragraph) for paragraph in paragraphs}) == 1
+        assert {_spacing(paragraph) for paragraph in paragraphs} == {READABLE_PARAGRAPH_SPACING}
+        assert all(paragraph["values"]["text"].count("<p") == 1 for paragraph in paragraphs)

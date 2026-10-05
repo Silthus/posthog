@@ -122,8 +122,9 @@ const DRAFT_FIRST_CONTEXT_ITEM: AttachedContextItem = {
         `paragraph, and a button (block shapes and spacing are in the ${DESIGNING_EMAIL_TEMPLATES_SKILL} skill). ` +
         'Never write email html: workflows-patch-action-email renders it from the design. Do not ask clarifying ' +
         'questions first. ' +
-        'The editor opens the draft the moment it exists, so fill in details afterwards with workflows-patch-graph, ' +
-        'and email content with workflows-patch-action-email block operations, then test. Never enable it.',
+        'The editor opens the draft the moment it exists, so fill in details afterwards with workflows-patch-graph. ' +
+        'Fill each email with one workflows-patch-action-email call: block operations for the content, plus an ' +
+        'email_patch that sets the real subject and a text that matches the new content. Then test. Never enable it.',
 }
 
 /** Skill pointer plus the draft-first instruction, no editor state. Not dismissible: the page only advances once the draft exists. */
