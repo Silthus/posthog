@@ -10,6 +10,7 @@ Use this skill when creating or editing email templates for PostHog workflows â€
 ## How authoring works
 
 You author the **design JSON** (`content.email.design`) and save it with `workflows-create-email-template`. The server renders the sent email from your design with the same renderer PostHog's visual editor uses, so the template opens as editable blocks for humans and sends exactly what the design describes. Schema and a working example in [references/unlayer-design-json.md](references/unlayer-design-json.md).
+Compose the design from native blocks: a `heading`, one `text` block per paragraph, and a `button` for the call to action, spaced with each block's `containerPadding` as the reference shows.
 
 When talking to the user, call it the template's **design** â€” the design document format is an internal implementation detail. Always share the template's `_posthogUrl` edit link in your reply after creating or updating, so the user can open it in PostHog directly.
 

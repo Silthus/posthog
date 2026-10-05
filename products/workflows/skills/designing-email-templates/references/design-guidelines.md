@@ -32,7 +32,7 @@ Before writing markup, decide:
 
 ## Visual details that survive email clients
 
-- **Bulletproof CTA buttons**: a padded `<td>` with `bgcolor`, border-radius, and an inline-styled `<a>` — not an image, not a CSS-only button.
+- **CTA buttons**: a native `button` block with a solid background color, padding, and border-radius (shape in [unlayer-design-json.md](unlayer-design-json.md)). Not an image, and not hand-written button markup in an `html` block, because people can only edit that as raw markup.
 - Solid `bgcolor` sections, border accents (a 4px top border in the accent color is cheap and distinctive), and spacer rows are the reliable atmosphere tools. Gradients, background images, and shadows are enhancement-only — the design must work without them.
 - A real text preheader (hidden with inline styles) controls the inbox preview line — write it like ad copy, don't let the client scrape your header nav.
 
