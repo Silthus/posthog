@@ -35,9 +35,11 @@ function frame(update: Record<string, unknown>): Parameters<typeof runStreamLogi
 function SuggestActionsThread({
     narrow = false,
     turnComplete = true,
+    skin = 'lemon',
 }: {
     narrow?: boolean
     turnComplete?: boolean
+    skin?: 'lemon' | 'quill'
 }): JSX.Element {
     useEffect(() => {
         const logic = runStreamLogic({ streamKey: STREAM_KEY })
@@ -86,7 +88,7 @@ function SuggestActionsThread({
         <div className={`${narrow ? 'w-130' : 'w-180'} max-w-full h-100 border rounded`}>
             <RunChatActionComposerProvider logicProps={{ taskId: 'story-task', runId: 'story-run' }}>
                 <BindLogic logic={runStreamLogic} props={{ streamKey: STREAM_KEY }}>
-                    <ThreadView />
+                    <ThreadView skin={skin} />
                 </BindLogic>
             </RunChatActionComposerProvider>
         </div>
@@ -115,3 +117,4 @@ type Story = StoryObj<typeof SuggestActionsThread>
 export const TurnComplete: Story = {}
 export const TurnRunning: Story = { args: { turnComplete: false } }
 export const Narrow: Story = { args: { narrow: true } }
+export const QuillSkin: Story = { args: { skin: 'quill' } }

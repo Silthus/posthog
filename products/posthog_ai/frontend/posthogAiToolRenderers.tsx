@@ -114,6 +114,6 @@ export const posthogAiToolRenderers: ToolRegistryEntry[] = [
         icon: <IconBolt />,
         Renderer: SuggestActionsRenderer,
         requiresPostHogOrigin: true,
-        keepVisible: true,
+        pinned: true,
     },
 ]
