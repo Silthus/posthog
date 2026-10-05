@@ -26,7 +26,15 @@ import {
     WORKFLOW_ID,
     firstWorkflowUrl,
 } from './firstRunScenario'
-import { TemplateFit, emailActions, firstEmailValue, templateById, templateFits } from './realTemplates'
+import {
+    Recommendation,
+    TemplateFit,
+    emailActions,
+    firstEmailValue,
+    recommendStarter,
+    templateById,
+    templateFits,
+} from './realTemplates'
 
 export type BrandStatus = 'detecting' | 'found'
 export type WorkflowStatus = 'draft' | 'active'
@@ -87,6 +95,7 @@ interface Values {
     senderIntegrationId: number
     facts: ProjectFacts
     fits: TemplateFit[]
+    recommendation: Recommendation | null
     template: HogFlowTemplate | null
 }
 
@@ -184,6 +193,10 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
     selectors({
         facts: [(s) => [s.projectData], (projectData: ProjectData): ProjectFacts => PROJECT_FACTS[projectData]],
         fits: [(s) => [s.facts], (facts: ProjectFacts): TemplateFit[] => templateFits(facts)],
+        recommendation: [
+            (s) => [s.fits, s.facts],
+            (fits: TemplateFit[], facts: ProjectFacts): Recommendation | null => recommendStarter(fits, facts),
+        ],
         template: [
             (s) => [s.templateId],
             (templateId: string | null): HogFlowTemplate | null => (templateId ? templateById(templateId) : null),
