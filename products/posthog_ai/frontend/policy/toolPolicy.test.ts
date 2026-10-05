@@ -4,9 +4,9 @@ import type { AgentQuestion } from './questionUtils'
 import {
     defaultPermissionDecision,
     findAllowOptionId,
-    isDestructiveChatActionTool,
     isPostHogExecTool,
     type PermissionDecision,
+    requiresChatActionApproval,
 } from './toolPolicy'
 
 function makeRecord(
@@ -136,17 +136,10 @@ describe('toolPolicy', () => {
             ['workflows-publish', 'call workflows-publish {"id":"w1"}', true, 'prompt'],
             ['workflows-enable with the flag off', 'call workflows-enable {"id":"w1"}', false, 'auto_allow'],
             ['a non-destructive workflow tool', 'call workflows-create {"name":"x"}', true, 'auto_allow'],
-            // The server strips every flag in EXEC_CALL_FLAGS before the sub-tool, so the gate must too.
-            ['workflows-enable behind --no-skills', 'call --no-skills workflows-enable {"id":"w1"}', true, 'prompt'],
-            [
-                'workflows-enable behind two flags',
-                'call --json --no-skills workflows-enable {"id":"w1"}',
-                true,
-                'prompt',
-            ],
+            ['workflows-enable behind two flags', 'call --json --confirm workflows-enable {"id":"w1"}', true, 'prompt'],
             [
                 'workflows-enable behind two flags with the flag off',
-                'call --json --no-skills workflows-enable {"id":"w1"}',
+                'call --json --confirm workflows-enable {"id":"w1"}',
                 false,
                 'auto_allow',
             ],
@@ -162,14 +155,16 @@ describe('toolPolicy', () => {
         })
     })
 
-    describe('isDestructiveChatActionTool', () => {
+    describe('requiresChatActionApproval', () => {
         it.each([
             ['call workflows-publish {"id":"w1"}', true],
             ['call --confirm WORKFLOWS-ENABLE {"id":"w1"}', true],
+            ['call --later workflows-enable {"id":"w1"}', true],
+            ['call --json', true],
             ['call workflows-create {}', false],
-            ['call --json', false],
+            ['search workflows', false],
         ])('%s → %s', (command, expected) => {
-            expect(isDestructiveChatActionTool(makeRecord({ input: { command } }))).toBe(expected)
+            expect(requiresChatActionApproval(makeRecord({ input: { command } }))).toBe(expected)
         })
     })
 

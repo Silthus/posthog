@@ -6018,9 +6018,12 @@ describe('runStreamLogic', () => {
         })
 
         describe('full-auto mode', () => {
-            // Full auto skips the policy entirely, so the destructive chat-action set has to be
-            // checked before that short-circuit or a bypassPermissions run enables the workflow silently.
-            it('still shows a card for a destructive workflow tool when chat actions are on', async () => {
+            // Full auto skips the policy entirely, so the chat-action approval has to be checked before
+            // that short-circuit or a bypassPermissions run enables the workflow silently.
+            it.each([
+                ['a destructive workflow tool', 'call workflows-enable {"id":"wf_1"}'],
+                ['a call whose sub-tool cannot be read', 'call --later workflows-enable {"id":"wf_1"}'],
+            ])('still shows a card for %s when chat actions are on', async (_case, command) => {
                 featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.POSTHOG_AI_CHAT_ACTIONS], {
                     [FEATURE_FLAGS.POSTHOG_AI_CHAT_ACTIONS]: true,
                 })
@@ -6039,7 +6042,7 @@ describe('runStreamLogic', () => {
                         serverName: 'posthog',
                         toolName: 'exec',
                         _meta: { claudeCode: { toolName: 'mcp__posthog__exec' } },
-                        rawInput: { command: 'call workflows-enable {"id":"wf_1"}' },
+                        rawInput: { command },
                     },
                 })
 

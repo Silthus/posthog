@@ -29,8 +29,8 @@ import {
     defaultPermissionDecision,
     findAllowOptionId,
     isConnectedProjectTool,
-    isDestructiveChatActionTool,
     isFullAutoMode,
+    requiresChatActionApproval,
 } from '../policy/toolPolicy'
 import type {
     ContextUsage,
@@ -4205,7 +4205,7 @@ export const runStreamLogic = kea<runStreamLogicType>([
                     !record.questions?.length &&
                     !isPlanPermissionRequest(record) &&
                     !isConnectedProjectTool(record) &&
-                    !(chatActionsEnabled && isDestructiveChatActionTool(record))
+                    !(chatActionsEnabled && requiresChatActionApproval(record))
                 const decision = fullAuto ? 'auto_allow' : defaultPermissionDecision(record, { chatActionsEnabled })
                 if (!replayedFromHistory && decision === 'auto_allow') {
                     const optionId = findAllowOptionId(record)

@@ -1,6 +1,6 @@
 import { isPostHogExecTool, parseExecCommand } from '../components/tool/posthogExecDisplay'
 import type { PermissionRequestRecord } from '../types/streamTypes'
-import { resolveToolCall } from '../utils/toolResolver'
+import { resolveToolCall, UNPARSED_EXEC_KEY } from '../utils/toolResolver'
 
 // Re-exported so existing importers (and tests) keep resolving the exec-tool check from here.
 export { isPostHogExecTool } from '../components/tool/posthogExecDisplay'
@@ -20,7 +20,7 @@ export function isFullAutoMode(mode: string | null | undefined): boolean {
 
 export type PermissionDecision = 'auto_allow' | 'prompt'
 
-export interface PermissionDecisionOptions {
+interface PermissionDecisionOptions {
     /**
      * `FEATURE_FLAGS.POSTHOG_AI_CHAT_ACTIONS`. With chat actions on, a click can ask for a destructive
      * workflow tool, so those calls get the approval card a typed request also gets.
@@ -31,19 +31,23 @@ export interface PermissionDecisionOptions {
 const CONNECTED_PROJECT_SUB_TOOLS = new Set(['posthog-connection-call', 'posthog-connection-forward'])
 
 /** PostHog sub-tools that act on real people; the exec server never asks for confirmation itself. */
-export const DESTRUCTIVE_CHAT_ACTION_SUB_TOOLS = new Set(['workflows-enable', 'workflows-publish'])
-
-/** `resolveToolKey` returns this for a `call` whose sub-tool it could not read. */
-const UNPARSED_EXEC_KEY = '__posthog_exec_unknown__'
+const DESTRUCTIVE_CHAT_ACTION_SUB_TOOLS = new Set(['workflows-enable', 'workflows-publish'])
 
 function isConnectedProjectSubTool(subTool: string): boolean {
     return CONNECTED_PROJECT_SUB_TOOLS.has(subTool.toLowerCase())
 }
 
-/** Whether an exec permission request names one of the destructive chat-action sub-tools. */
-export function isDestructiveChatActionTool(record: PermissionRequestRecord): boolean {
-    const { innerToolName } = resolveToolCall(record.rawToolCall)
-    return innerToolName != null && DESTRUCTIVE_CHAT_ACTION_SUB_TOOLS.has(innerToolName.toLowerCase())
+/**
+ * Whether a request needs the approval card while chat actions are on: it names a destructive
+ * workflow tool, or it is a `call` whose sub-tool cannot be read and may name one behind a flag
+ * this parser does not know. Full-auto checks this too, so both paths fail closed the same way.
+ */
+export function requiresChatActionApproval(record: PermissionRequestRecord): boolean {
+    const { resolvedKey, innerToolName } = resolveToolCall(record.rawToolCall)
+    if (innerToolName != null) {
+        return DESTRUCTIVE_CHAT_ACTION_SUB_TOOLS.has(innerToolName.toLowerCase())
+    }
+    return resolvedKey === UNPARSED_EXEC_KEY && isExecCallVerb(record)
 }
 
 export function isConnectedProjectTool(record: PermissionRequestRecord): boolean {
@@ -77,17 +81,7 @@ export function defaultPermissionDecision(
         if (innerToolName != null && isConnectedProjectSubTool(innerToolName)) {
             return 'prompt'
         }
-        if (options.chatActionsEnabled) {
-            if (innerToolName != null && DESTRUCTIVE_CHAT_ACTION_SUB_TOOLS.has(innerToolName.toLowerCase())) {
-                return 'prompt'
-            }
-            // A `call` whose sub-tool could not be read may name a destructive tool behind a flag this
-            // parser does not know, so it gets the card rather than a silent allow.
-            if (resolvedKey === UNPARSED_EXEC_KEY && isExecCallVerb(record)) {
-                return 'prompt'
-            }
-        }
-        return 'auto_allow'
+        return options.chatActionsEnabled && requiresChatActionApproval(record) ? 'prompt' : 'auto_allow'
     }
 
     if (toolName.startsWith('mcp__')) {
