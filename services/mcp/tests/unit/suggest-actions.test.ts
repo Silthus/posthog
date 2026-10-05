@@ -35,6 +35,7 @@ describe('suggest-actions', () => {
             ['run without a tool', { key: 'enable', label: 'Enable', kind: 'run' }, false],
             ['insert with a tool', { key: 'x', label: 'X', kind: 'insert', tool: 'workflows-enable' }, false],
             ['insert without a message', { key: 'x', label: 'X', kind: 'insert' }, true],
+            ['insert with a blank message', { key: 'x', label: 'X', kind: 'insert', message: ' ' }, false],
             ['unknown kind', { key: 'x', label: 'X', kind: 'open' }, false],
             ['key with a dot', { key: 'a.b', label: 'X', kind: 'send' }, false],
         ])('%s → valid: %s', (_case, action, valid) => {
@@ -83,7 +84,7 @@ describe('suggest-actions', () => {
             expect(rendered).toContain('drop any next-step line an offered action covers')
             expect(rendered).toContain('After `workflows-create`:')
             expect(rendered).toContain('- `workflows-create.enable` (run, slots: id): Enable the workflow')
-            expect(rendered).toContain('- `workflows-create.test-send` (insert): Send yourself a test email')
+            expect(rendered).toContain('- `workflows-create.test-send` (insert, slots: id): Send yourself a test email')
         })
 
         it.each([
@@ -99,7 +100,7 @@ describe('suggest-actions', () => {
         // that suggest-actions then refuses.
         it('leaves out a run action whose target the caller cannot see', () => {
             const rendered = reference(['workflows-create', 'suggest-actions'])
-            expect(rendered).toContain('- `workflows-create.test-send` (insert)')
+            expect(rendered).toContain('- `workflows-create.test-send` (insert, slots: id)')
             expect(rendered).not.toContain('workflows-create.enable')
         })
     })
@@ -132,7 +133,7 @@ describe('suggest-actions', () => {
             expect(JSON.parse(result.content[0]!.text)).toEqual({ id: 'wf_1' })
             expect(result.content[1]!.text).toBe(
                 'Suggested actions for this result. If the user is likely to do one of these next, call `suggest-actions` once, with each `<slot>` filled in, as the last tool call of this turn and drop any next-step line they cover:\n' +
-                    'call suggest-actions {"actions":[{"key":"workflows-create.enable","args":{"id":"<id>"}},{"key":"workflows-create.test-send"}]}'
+                    'call suggest-actions {"actions":[{"key":"workflows-create.enable","args":{"id":"<id>"}},{"key":"workflows-create.test-send","args":{"id":"<id>"}}]}'
             )
         })
 
@@ -186,7 +187,7 @@ describe('suggest-actions', () => {
 
         it('renders the valid picks in input order, drops the rest, and never leaks tool or args', async () => {
             const result = await call([
-                { key: 'workflows-create.test-send' },
+                { key: 'workflows-create.test-send', args: { id: 'wf_123' } },
                 { key: 'workflows-create.nope' },
                 { key: 'workflows-create.enable', args: { id: 'wf_123' } },
             ])
@@ -196,7 +197,7 @@ describe('suggest-actions', () => {
                         key: 'workflows-create.test-send',
                         label: 'Send yourself a test email',
                         kind: 'insert',
-                        message: 'Send a test email of this workflow to ',
+                        message: 'Send a test email of workflow wf_123 to ',
                     },
                     {
                         key: 'workflows-create.enable',

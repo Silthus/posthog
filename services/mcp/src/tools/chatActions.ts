@@ -19,7 +19,7 @@ export const ChatActionSchema = z
         /** The tool a `run` action makes the agent call. Required for `run`, forbidden otherwise. */
         tool: z.string().optional(),
         /** Message template with `{slot}` markers the agent fills with `args`. Defaults to the label. */
-        message: z.string().optional(),
+        message: z.string().regex(/\S/, 'message must not be blank').optional(),
     })
     .strict()
     .superRefine((action, ctx) => {

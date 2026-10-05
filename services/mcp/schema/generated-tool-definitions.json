@@ -14189,7 +14189,7 @@
                 "key": "test-send",
                 "label": "Send yourself a test email",
                 "kind": "insert",
-                "message": "Send a test email of this workflow to "
+                "message": "Send a test email of workflow {id} to "
             }
         ]
     },
