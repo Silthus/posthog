@@ -14,9 +14,9 @@ import { SuggestActionsWidget } from './SuggestActionsWidget'
 const ACTIONS = [
     {
         key: 'workflows-create.test-send',
-        label: 'Fire a real send to your address',
+        label: 'Send yourself a test email',
         kind: 'insert',
-        message: 'Send a real test of this workflow to ',
+        message: 'Send a test email of this workflow to ',
     },
     { key: 'workflows-create.enable', label: 'Enable the workflow', kind: 'run', message: 'Enable workflow wf_1.' },
 ]
@@ -72,7 +72,7 @@ describe('SuggestActionsWidget', () => {
         renderWidget(toolMessage(structured(ACTIONS, [{ key: 'workflows-create.nope', reason: 'unknown_action' }])), {
             composer: makeComposer(),
         })
-        expect(screen.getByText('Fire a real send to your address')).toBeInTheDocument()
+        expect(screen.getByText('Send yourself a test email')).toBeInTheDocument()
         expect(screen.getByText('Enable the workflow')).toBeInTheDocument()
         expect(screen.queryByText(/unknown_action|nope/)).toBeNull()
     })
@@ -80,8 +80,8 @@ describe('SuggestActionsWidget', () => {
     it('insert hands the message to the composer while the turn is still running', () => {
         const composer = makeComposer()
         renderWidget(toolMessage(structured(ACTIONS)), { turnComplete: false, composer })
-        fireEvent.click(screen.getByText('Fire a real send to your address'))
-        expect(composer.insert).toHaveBeenCalledWith('Send a real test of this workflow to ')
+        fireEvent.click(screen.getByText('Send yourself a test email'))
+        expect(composer.insert).toHaveBeenCalledWith('Send a test email of this workflow to ')
         expect(composer.send).not.toHaveBeenCalled()
     })
 
@@ -105,7 +105,7 @@ describe('SuggestActionsWidget', () => {
         renderWidget(toolMessage(structured(ACTIONS)), { composer })
         fireEvent.click(screen.getByText('Enable the workflow'))
         expect(composer.send).not.toHaveBeenCalled()
-        fireEvent.click(screen.getByText('Fire a real send to your address'))
+        fireEvent.click(screen.getByText('Send yourself a test email'))
         expect(composer.insert).toHaveBeenCalled()
     })
 
@@ -113,7 +113,7 @@ describe('SuggestActionsWidget', () => {
         renderWidget(toolMessage(structured(ACTIONS)), { composer: null })
         // LemonButton keeps a disabled-with-reason button focusable and marks it aria-disabled.
         expect(screen.getByText('Enable the workflow').closest('button')).toHaveAttribute('aria-disabled', 'true')
-        expect(screen.getByText('Fire a real send to your address').closest('button')).toHaveAttribute(
+        expect(screen.getByText('Send yourself a test email').closest('button')).toHaveAttribute(
             'aria-disabled',
             'true'
         )

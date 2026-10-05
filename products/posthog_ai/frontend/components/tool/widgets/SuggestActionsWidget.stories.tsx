@@ -16,9 +16,9 @@ const SUGGESTED = {
     actions: [
         {
             key: 'workflows-create.test-send',
-            label: 'Fire a real send to your address',
+            label: 'Send yourself a test email',
             kind: 'insert',
-            message: 'Send a real test of this workflow to ',
+            message: 'Send a test email of this workflow to ',
         },
         { key: 'workflows-create.enable', label: 'Enable the workflow', kind: 'run', message: 'Enable workflow wf_1.' },
     ],

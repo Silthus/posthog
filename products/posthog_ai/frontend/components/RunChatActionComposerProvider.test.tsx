@@ -80,7 +80,7 @@ function Probe(): JSX.Element {
     const composer = useChatActionComposer()!
     return (
         <>
-            <button onClick={() => composer.insert('Send a real test of this workflow to ')}>insert</button>
+            <button onClick={() => composer.insert('Send a test email of this workflow to ')}>insert</button>
             <button onClick={() => composer.send('Enable workflow wf_1.')}>send</button>
             <span data-attr="reason">{composer.sendDisabledReason ?? 'none'}</span>
         </>
@@ -107,7 +107,7 @@ describe('RunChatActionComposerProvider', () => {
         fireEvent.click(screen.getByText('insert'))
         await expectLogic(logic)
             .toDispatchActions([
-                logic.actionCreators.setComposerFormValues({ draft: 'Send a real test of this workflow to ' }),
+                logic.actionCreators.setComposerFormValues({ draft: 'Send a test email of this workflow to ' }),
                 logic.actionCreators.setComposerFocused(true),
             ])
             .toNotHaveDispatchedActions(['submitComposerForm'])
@@ -122,7 +122,7 @@ describe('RunChatActionComposerProvider', () => {
         arrange()
         fireEvent.click(screen.getByText('insert'))
         await expectLogic(logic).toMatchValues({
-            composerForm: { draft: 'Also rename it\nSend a real test of this workflow to ' },
+            composerForm: { draft: 'Also rename it\nSend a test email of this workflow to ' },
         })
     })
 

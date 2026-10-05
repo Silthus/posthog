@@ -55,7 +55,7 @@ function Probe(): JSX.Element {
     const composer = useChatActionComposer()!
     return (
         <>
-            <button onClick={() => composer.insert('Send a real test of this workflow to ')}>insert</button>
+            <button onClick={() => composer.insert('Send a test email of this workflow to ')}>insert</button>
             <button onClick={() => composer.send('Enable workflow wf_1.')}>send</button>
             <span>{composer.sendDisabledReason ?? 'none'}</span>
         </>
@@ -86,7 +86,7 @@ describe('MaxChatActionComposerProvider', () => {
         maxThreadLogic.actions.setQuestion('Also rename it')
         fireEvent.click(screen.getByText('insert'))
         await expectLogic(maxThreadLogic).toMatchValues({
-            question: 'Also rename it\nSend a real test of this workflow to ',
+            question: 'Also rename it\nSend a test email of this workflow to ',
         })
         await expectLogic(maxLogic).toMatchValues({ focusCounter: 1 })
     })
