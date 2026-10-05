@@ -1,0 +1,6 @@
+PASS src/lib/components/NavPanelAdvertisement/MaybeProductPushWelcome.test.tsx
+
+Test Suites: 1 passed, 1 total
+Tests:       1 passed, 1 total
+Snapshots:   0 total
+Time:        1.793 s, estimated 3 s

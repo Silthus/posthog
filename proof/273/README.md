@@ -2,10 +2,12 @@
 
 Ticket: https://github.com/Silthus/posthog/issues/273
 
-Implementation head: e8982ffc0758dce7af92b4aafaa8a7cd6f1e2473.
+Implementation head: 4e143b0fd52bcff72b7dd9d578966a2f00336271.
 Parent gallery head: 6fefaffd3e1ded001a0022e910ae2990328d3a00.
 
 The gallery test fails on the parent because requesting the welcome opens it over the gallery. The inherited hold implementation also fails when the modal opens before the welcoming surface mounts. `red-gallery.log` and `red-shared.log` record those failures. `green-gallery.log` records the same tests passing after the fix. `affected-jest-final.log` records the affected suites passing on the implementation head.
+
+`red-consumer.log` records the rendered consumer test failing with `welcomeHeld` omitted from the opening effect dependencies. `green-consumer.log` records that same test passing with the correct dependency restored. This catches a pending welcome stranded after hold release without another explicit open request. `qa-report.md` carries the review handoff.
 
 Final local gate:
 
@@ -14,6 +16,7 @@ Final local gate:
 - `.codex/with-flox env DEBUG=0 pnpm --filter=@posthog/frontend exec jest --runInBand --silent src/lib/components/NavPanelAdvertisement ../products/workflows/frontend/firstRun`: `affected-jest-final.log`.
 - `.codex/with-flox hogli ci:preflight --strict --against upstream/master`: `preflight-final.log`.
 - The actual first push, with pre-push hooks enabled: `pre-push.log`.
+- The actual final code push, with pre-push hooks enabled: `pre-push-final.log`.
 
 The feature layer adds no API or backend changes. Preflight also sees the inherited template/gallery commits. Their backend typecheck and OpenAPI proof is linked from https://github.com/Silthus/posthog/issues/257#issuecomment-5991156441. Preflight's freshness advisory checks the fork's older master; the implementation head contains the fetched upstream master, with no commits behind it.
 

@@ -1,0 +1,39 @@
+FAIL src/lib/components/NavPanelAdvertisement/MaybeProductPushWelcome.test.tsx
+  ● MaybeProductPushWelcome › opens the pending welcome automatically when the scene releases its hold
+
+    expect(received).toBeInTheDocument()
+
+    received value must be an HTMLElement or an SVGElement.
+    Received has value: null
+
+    Ignored nodes: comments, script, style
+    [36m<html>[39m
+      [36m<head />[39m
+      [36m<body>[39m
+        [36m<div />[39m
+      [36m</body>[39m
+    [36m</html>[39m
+
+      43 |
+      44 |         await waitFor(() =>
+    > 45 |             expect(document.querySelector('[data-attr="product-push-welcome"]')).toBeInTheDocument()
+         |                                                                                  ^
+      46 |         )
+      47 |     })
+      48 | })
+
+      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:325:30)
+      at Object.throwingMatcher [as toBeInTheDocument] (../node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:326:15)
+      at src/lib/components/NavPanelAdvertisement/MaybeProductPushWelcome.test.tsx:45:82
+      at runWithExpensiveErrorDiagnosticsDisabled (../node_modules/.pnpm/@testing-library+dom@9.3.4/node_modules/@testing-library/dom/dist/config.js:47:12)
+      at checkCallback (../node_modules/.pnpm/@testing-library+dom@9.3.4/node_modules/@testing-library/dom/dist/wait-for.js:124:77)
+      at checkRealTimersCallback (../node_modules/.pnpm/@testing-library+dom@9.3.4/node_modules/@testing-library/dom/dist/wait-for.js:118:16)
+      at Timeout.task [as _onTimeout] (../node_modules/.pnpm/jsdom@20.0.3/node_modules/jsdom/lib/jsdom/browser/Window.js:520:19)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 total
+Snapshots:   0 total
+Time:        2.689 s
+undefined
+/home/coder/.t3/worktrees/posthog/fr-273/frontend:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: jest --runInBand --silent src/lib/components/NavPanelAdvertisement/MaybeProductPushWelcome.test.tsx

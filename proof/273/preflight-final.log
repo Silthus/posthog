@@ -1,14 +1,14 @@
 
-  ci:preflight — 38 changed file(s) vs upstream/master
+  ci:preflight — 39 changed file(s) vs upstream/master
 
    → [staleness] branch freshness vs master
        last synced 7d ago — merge master in: git merge origin/master
    ✓ [ruff-lint] Python lint (ruff check)
        2 file(s) · ok
    ⚠ [complexity] cyclomatic complexity (warn >10, >15 in tests)
-       19 file(s) · products/workflows/backend/presentation/views/hog_flow_template.py:97:9: warning: `validate` has cyclomatic complexity 13 (warn >10)
+       20 file(s) · products/workflows/backend/presentation/views/hog_flow_template.py:97:9: warning: `validate` has cyclomatic complexity 13 (warn >10)
    ✓ [size] file size (warn >1000 lines)
-       19 file(s) · ok
+       20 file(s) · ok
    ✓ [ruff-format] Python format (ruff format)
        2 file(s) · ok
    → [type-check] Python type checking (mypy)
@@ -18,5 +18,5 @@
    → [openapi] OpenAPI sources changed (generated types may need a regen)
        1 file(s) · if you have not run `hogli build:openapi` since changing them, run it and commit
 
-  summary {"changed_files": 38, "triggered": ["ruff-lint", "complexity", "size", "ruff-format", "type-check", "feature-flags", "openapi"], "failures": 0, "mode": "strict"}
+  summary {"changed_files": 39, "triggered": ["ruff-lint", "complexity", "size", "ruff-format", "type-check", "feature-flags", "openapi"], "failures": 0, "mode": "strict"}
 

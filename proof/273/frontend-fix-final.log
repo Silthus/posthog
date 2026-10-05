@@ -8,9 +8,9 @@
 
 
 Found 3748 warnings and 0 errors.
-Finished in 2.0s on 13728 files using 16 threads.
+Finished in 1.6s on 13729 files using 16 threads.
 
 > @posthog/frontend@0.0.0 format /home/coder/.t3/worktrees/posthog/fr-273/frontend
 > cd .. && oxfmt "./{products,frontend/src,docs}/**/*.{js,mjs,ts,tsx,json,yaml,yml,css,scss}"
 
-Finished in 887ms on 13684 files using 16 threads.
+Finished in 774ms on 13685 files using 16 threads.
