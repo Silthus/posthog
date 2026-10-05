@@ -4,7 +4,7 @@ These guidelines adapt strong frontend design practice to the email medium — t
 
 ## Commit to a direction first
 
-Before writing markup, decide:
+Before composing, decide:
 
 - **Purpose and audience** — transactional receipt, product announcement, win-back campaign, and onboarding emails each warrant different energy.
 - **Tone** — pick one and execute it precisely: brutally minimal, editorial/magazine, luxury/refined, playful, industrial/utilitarian. Intentionality beats intensity.
@@ -42,7 +42,7 @@ Centered white card on gray, purple gradient header, Arial everywhere at uniform
 
 ## Quality pass before saving
 
-1. Read the design top to bottom: every text-block element styled inline, palette values consistent, alt text on images.
+1. Read the design top to bottom: font size, line height, and padding set in each block's values (no inline `<p>` margins), palette values consistent, alt text on images.
 2. Squint test on the rendered preview: clear hierarchy — eye lands on headline → key message → CTA.
 3. Confirm Liquid variables have `| default:` fallbacks so no reader sees a blank.
 4. Confirm the plain-text version carries the full message, not a stub.

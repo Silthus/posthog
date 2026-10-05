@@ -119,7 +119,8 @@ const DRAFT_FIRST_CONTEXT_ITEM: AttachedContextItem = {
         'The user is starting a new workflow from a description. Make workflows-create your first tool call and ' +
         'keep it minimal: the trigger plus the steps as placeholders. Give each email step a placeholder subject, ' +
         'a plain-text fallback in text, and a small design of native blocks: a heading, one text block per ' +
-        `paragraph, and a button (block shapes and spacing are in the ${DESIGNING_EMAIL_TEMPLATES_SKILL} skill). ` +
+        `paragraph, and a button. Load the ${DESIGNING_EMAIL_TEMPLATES_SKILL} skill before workflows-create and ` +
+        'copy the block shapes and spacing from its reference. ' +
         'Never write email html: workflows-patch-action-email renders it from the design. Do not ask clarifying ' +
         'questions first. ' +
         'The editor opens the draft the moment it exists, so fill in details afterwards with workflows-patch-graph. ' +
