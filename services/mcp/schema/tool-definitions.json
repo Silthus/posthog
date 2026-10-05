@@ -692,7 +692,7 @@
         }
     },
     "suggest-actions": {
-        "description": "Offer the user clickable follow-up actions under your answer. Call it once, at the end of a turn, with the keys of the declared actions that fit what you just did (see \"Suggested actions\" in the command reference) and the args their message slots need. Each action renders as a button in the PostHog AI chat: `insert` fills the composer, `send` and `run` send the message as the user's next turn. Do not repeat the offered actions in prose. Never call it mid-turn.",
+        "description": "Offer the user clickable follow-up actions under your answer. Call it once, at the end of a turn, with the keys of the declared actions that fit what you just did (see \"Suggested actions\" in the command reference) and the args their message slots need. Each action renders as a button in the PostHog AI chat: `insert` fills the composer, `send` and `run` send the message as the user's next turn. Drop any next-step line an offered action covers, and keep the other next steps. Never call it mid-turn.",
         "category": "PostHog AI",
         "feature": "posthog_ai",
         "summary": "Offer clickable follow-up actions",

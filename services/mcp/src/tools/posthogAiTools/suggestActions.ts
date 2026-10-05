@@ -151,7 +151,7 @@ export function renderChatActionHint(tool: string, actions: ChatAction[]): strin
         return { key: chatActionKey(tool, action.key), ...args }
     })
     return (
-        'Suggested actions for this result. If the user is likely to do one of these next, call `suggest-actions` once as the last tool call of this turn and do not list them in prose:\n' +
+        'Suggested actions for this result. If the user is likely to do one of these next, call `suggest-actions` once as the last tool call of this turn and drop any next-step line they cover:\n' +
         `call ${SUGGEST_ACTIONS_TOOL_NAME} ${JSON.stringify({ actions: picks })}`
     )
 }

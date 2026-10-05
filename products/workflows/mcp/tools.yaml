@@ -214,9 +214,9 @@ tools:
               tool: workflows-enable
               message: Enable workflow {id}.
             - key: test-send
-              label: Fire a real send to your address
+              label: Send yourself a test email
               kind: insert
-              message: 'Send a real test of this workflow to '
+              message: 'Send a test email of this workflow to '
     workflows-discard-draft:
         operation: hog_flows_discard_draft_create
         enabled: true

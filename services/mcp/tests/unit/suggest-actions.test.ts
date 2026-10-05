@@ -71,9 +71,9 @@ describe('suggest-actions', () => {
                 },
                 {
                     key: 'test-send',
-                    label: 'Fire a real send to your address',
+                    label: 'Send yourself a test email',
                     kind: 'insert',
-                    message: 'Send a real test of this workflow to ',
+                    message: 'Send a test email of this workflow to ',
                 },
             ])
         })
@@ -98,10 +98,10 @@ describe('suggest-actions', () => {
             const rendered = reference(['workflows-create', 'workflows-enable', 'suggest-actions'])
             expect(rendered).toContain('### Suggested actions')
             expect(rendered).toContain('call `suggest-actions` once')
-            expect(rendered).toContain('do not repeat the offered actions in prose')
+            expect(rendered).toContain('drop any next-step line an offered action covers')
             expect(rendered).toContain('After `workflows-create`:')
             expect(rendered).toContain('- `workflows-create.enable` (run, slots: id): Enable the workflow')
-            expect(rendered).toContain('- `workflows-create.test-send` (insert): Fire a real send to your address')
+            expect(rendered).toContain('- `workflows-create.test-send` (insert): Send yourself a test email')
         })
 
         it.each([
@@ -150,7 +150,7 @@ describe('suggest-actions', () => {
             expect(result.content).toHaveLength(2)
             expect(JSON.parse(result.content[0].text)).toEqual({ id: 'wf_1' })
             expect(result.content[1].text).toBe(
-                'Suggested actions for this result. If the user is likely to do one of these next, call `suggest-actions` once as the last tool call of this turn and do not list them in prose:\n' +
+                'Suggested actions for this result. If the user is likely to do one of these next, call `suggest-actions` once as the last tool call of this turn and drop any next-step line they cover:\n' +
                     'call suggest-actions {"actions":[{"key":"workflows-create.enable","args":{"id":"<id>"}},{"key":"workflows-create.test-send"}]}'
             )
         })
@@ -213,9 +213,9 @@ describe('suggest-actions', () => {
                 actions: [
                     {
                         key: 'workflows-create.test-send',
-                        label: 'Fire a real send to your address',
+                        label: 'Send yourself a test email',
                         kind: 'insert',
-                        message: 'Send a real test of this workflow to ',
+                        message: 'Send a test email of this workflow to ',
                     },
                     {
                         key: 'workflows-create.enable',

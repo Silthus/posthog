@@ -474,7 +474,7 @@ export class ChatActionCatalog {
 
 const CHAT_ACTIONS_INSTRUCTION = `### Suggested actions
 
-When your turn ends with something the user is likely to do next and one of the actions below matches it, call \`suggest-actions\` once, as the last tool call of the turn, with the keys and the args for their slots: \`call suggest-actions {"actions":[{"key":"<tool>.<key>","args":{"<slot>":"<value>"}}]}\`. The chat renders each action as a button under your answer, so do not repeat the offered actions in prose. Skip the call when nothing fits, and never call it mid-turn.`
+When your turn ends with something the user is likely to do next and one of the actions below matches it, call \`suggest-actions\` once, as the last tool call of the turn, with the keys and the args for their slots: \`call suggest-actions {"actions":[{"key":"<tool>.<key>","args":{"<slot>":"<value>"}}]}\`. The chat renders each action as a button under your answer, so drop any next-step line an offered action covers and keep the other next steps. Skip the call when nothing fits, and never call it mid-turn.`
 
 export function buildChatActionsBlock(entries: ChatActionCatalogEntry[]): string {
     return new ChatActionCatalog(entries).toMarkdown()
