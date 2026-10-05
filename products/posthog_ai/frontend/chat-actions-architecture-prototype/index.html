@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PROTOTYPE · Chat actions that run the tool directly</title>
+<style>
+  :root { --accent: #1d4aff; --ink: #1f2328; --muted: #59636e; --line: #d1d9e0; --bg: #fff; --soft: #f6f8fa; }
+  * { box-sizing: border-box; }
+  body { font: 15px/1.55 system-ui, -apple-system, Segoe UI, sans-serif; color: var(--ink); background: var(--bg); margin: 0; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 20px 80px; }
+  .banner { background: #fff4d6; border: 1px solid #e8c25a; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
+  h1 { font-size: 26px; margin: 18px 0 4px; }
+  h2 { font-size: 20px; margin: 40px 0 8px; padding-top: 12px; border-top: 2px solid var(--accent); }
+  h3 { font-size: 16px; margin: 22px 0 6px; }
+  code, pre { font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  code { background: var(--soft); padding: 1px 4px; border-radius: 4px; }
+  pre { background: var(--soft); border: 1px solid var(--line); border-radius: 6px; padding: 12px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+  .label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+  ul { padding-left: 20px; } li { margin: 2px 0; }
+  .muted { color: var(--muted); font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  .card { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; padding: 12px 14px; margin: 12px 0; }
+  .card.locked { border-left-color: #8c959f; background: var(--soft); }
+  .status { float: right; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: var(--accent); color: #fff; }
+  .locked .status { background: #8c959f; }
+  .rec { background: #eef2ff; border-radius: 4px; padding: 6px 8px; margin-top: 8px; }
+  .mermaid { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin: 10px 0; }
+  .legend span { display: inline-block; padding: 1px 8px; border-radius: 4px; margin-right: 6px; font-size: 12px; border: 1px solid #999; }
+  nav a { margin-right: 10px; font-size: 13px; color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<div class="banner"><b>PROTOTYPE, throwaway.</b> Architecture brief for <a href="https://github.com/Silthus/posthog/issues/277">Prototype: chat actions that run the tool directly and render the result in place</a>, on map <a href="https://github.com/Silthus/posthog/issues/80">PostHog AI chat: clickable actions in the thread</a>. Branch <code>prototype/chat-actions-direct-call</code>. Not production code. Data is invented.</div>
+
+<h1>Chat actions that run the tool directly</h1>
+<nav><a href="#question">Question</a><a href="#map">Change map</a><a href="#contracts">Contracts</a><a href="#flows">Flows</a><a href="#data">Data</a><a href="#perf">Performance</a><a href="#cards">Decisions</a><a href="#v1">v1 survival</a><a href="#blast">Blast radius</a></nav>
+
+<h2 id="question">1. Question</h2>
+<p>In v1, a <code>run</code> button sends <code>Enable workflow &lt;id&gt;.</code> as the user's next turn, and the agent calls <code>workflows-enable</code> in that turn. The new destination is that the click <b>runs the tool itself</b>, with the user's own session and permissions, shows a confirmation and then the result <b>in place</b>, as if the user had clicked "Enable" in the product. No chat message sits in between. The agent learns the outcome before its next turn. The element is a primitive that products extend: a button now, then selects, dropdowns and forms. This brief designs that primitive across <code>services/mcp</code>, the PostHog AI thread, product frontends and Django, and lists every fork as a decision card.</p>
+
+<h3>The finding that shapes the design</h3>
+<ul>
+  <li><code>workflows-enable</code> is only <code>PATCH /api/projects/:id/hog_flows/:id/ {status: 'active'}</code> (<code>services/mcp/src/tools/workflows/lifecycle.ts:14-34</code>).</li>
+  <li>The browser already has that call, typed and session-authed: <code>hogFlowsPartialUpdate</code> (<code>products/workflows/frontend/generated/api.ts:326</code>), with a zod body schema (<code>api.zod.ts:1281</code>).</li>
+  <li>Session requests skip token scopes but keep team membership and RBAC access control (<code>posthog/permissions.py:834</code>). This is exactly the "Enable in the product" path.</li>
+  <li>Products already register per-tool UI in one manifest, keyed by MCP tool name (<code>frontend/src/posthogAiToolRenderers.ts</code>, <code>ToolRegistryEntry</code> in <code>products/posthog_ai/frontend/components/tool/toolRegistry.tsx:47</code>).</li>
+</ul>
+<p>So the recommended design adds a <b>browser adapter</b> for a tool to that same registry entry. The tool then has two adapters at one seam ("run tool X with args"): the MCP server, used by the agent, and the browser, used by a click. Both render through the same product <code>Renderer</code>.</p>
+
+<h2 id="map">2. Change map</h2>
+<div class="legend"><span style="background:#c8f7c5">new</span><span style="background:#ffe9a8">changed</span><span style="background:#cfe3ff">extended</span><span style="background:#eee">untouched</span></div>
+<pre class="mermaid">
+flowchart TB
+  subgraph MCP["services/mcp"]
+    YAML["tools.yaml actions<br/>run: tool + args"]:::changed
+    SUG["suggest-actions<br/>returns tool + bound args"]:::changed
+    BIND["slot bindings (#111941)"]:::untouched
+    TOOL["workflows-enable<br/>(agent path)"]:::untouched
+  end
+  subgraph FE["PostHog AI thread (browser)"]
+    WIDGET["SuggestActionsWidget"]:::changed
+    RUN["ChatActionRun<br/>confirm, run, result"]:::new
+    REG["ToolRegistryEntry<br/>+ browserRun adapter"]:::extended
+    STREAM["runStreamLogic<br/>projects outcomes"]:::extended
+    SEND["attachedContextLogic provider<br/>hidden outcome context"]:::extended
+    CARD["ToolCallCard + product Renderer"]:::untouched
+    POLICY["toolPolicy gate (agent calls)"]:::untouched
+  end
+  subgraph PROD["products/workflows/frontend"]
+    ADAPT["posthogAiToolRenderers<br/>workflows-enable browserRun"]:::new
+  end
+  subgraph DJ["Django"]
+    OUT["POST tasks/:task/runs/:run/chat_action_outcome"]:::new
+    LOG["TaskRun.append_log (run JSONL)"]:::untouched
+    REST["hog_flows PATCH (session auth, RBAC)"]:::untouched
+  end
+  AGENT["Sandbox agent"]:::untouched
+  YAML --> SUG --> BIND
+  SUG -- tool result --> WIDGET --> RUN
+  RUN --> REG --> ADAPT --> REST
+  RUN --> CARD
+  RUN --> OUT --> LOG --> STREAM --> WIDGET
+  SEND -- next user message --> AGENT
+  STREAM --> SEND
+  AGENT --> TOOL --> REST
+  classDef new fill:#c8f7c5,stroke:#2b8a3e
+  classDef changed fill:#ffe9a8,stroke:#b08800
+  classDef extended fill:#cfe3ff,stroke:#1d4aff
+  classDef untouched fill:#eee,stroke:#999
+</pre>
+
+<h2 id="contracts">3. Contracts</h2>
+
+<h3>3.1 The declaration in <code>tools.yaml</code> (services/mcp)</h3>
+<div class="two">
+<div><div class="label">Before (v1, #111860)</div>
+<pre><code>actions:
+  - key: enable
+    label: Enable the workflow
+    kind: run
+    tool: workflows-enable
+    message: Enable workflow {id}.</code></pre></div>
+<div><div class="label">After</div>
+<pre><code>actions:
+  - key: enable
+    label: Enable the workflow
+    kind: run
+    tool: workflows-enable
+    args:
+      id: '{id}'        # slot, bound from this tool's result
+    # control: button   # default; select/form later (card 4)</code></pre></div>
+</div>
+<ul>
+  <li><b>Invariant:</b> a <code>run</code> action has <code>tool</code> and <code>args</code>, and no <code>message</code>. <code>insert</code> and <code>send</code> keep <code>message</code> and do not change.</li>
+  <li><b>Invariant:</b> every <code>{slot}</code> in <code>args</code> is bound through the existing slot provenance check. An unbound slot drops the action into <code>errors</code>, as in v1.</li>
+  <li><b>Codegen check:</b> every <code>run</code> target tool needs a browser adapter in the frontend registry (card 1). A Jest test asserts this against the generated tool definitions, in the same way as <code>test_generated_files_are_registered.py</code>.</li>
+</ul>
+
+<h3>3.2 <code>suggest-actions</code> output</h3>
+<div class="two">
+<div><div class="label">Before</div>
+<pre><code>{ actions: [{ key, label, kind, message }],
+  errors:  [{ key, reason }] }</code></pre></div>
+<div><div class="label">After</div>
+<pre><code>type SuggestedAction =
+  | { key; label; kind: 'insert' | 'send'; message: string }
+  | { key; label; kind: 'run';
+      tool: string;                      // 'workflows-enable'
+      args: Record&lt;string, Json&gt;;        // { id: 'wf_8f2c' }
+      destructive: boolean }             // from the target tool's annotation
+
+{ actions: SuggestedAction[], errors: [{ key, reason }] }</code></pre></div>
+</div>
+<ul>
+  <li><b>Action identity</b> is <code>&lt;suggest-actions toolCallId&gt;:&lt;key&gt;</code>. It is stable across reloads, so an outcome attaches to its button.</li>
+  <li><b>Error mode:</b> the target tool is not visible to the caller (flag or scope), so the action goes to <code>errors</code>, as in v1.</li>
+</ul>
+
+<h3>3.3 The browser adapter (new, on <code>ToolRegistryEntry</code>)</h3>
+<pre><code>// products/posthog_ai/frontend/components/tool/toolRegistry.tsx
+export interface BrowserRunContext { projectId: string }
+
+export interface BrowserRun&lt;Args extends z.ZodTypeAny = z.ZodTypeAny&gt; {
+    /** Validated before any request. Prefer the generated api.zod.ts schema. */
+    args: Args
+    /** Runs the tool's effect with the user's session, through the product's generated API client. */
+    execute: (args: z.infer&lt;Args&gt;, context: BrowserRunContext) =&gt; Promise&lt;unknown&gt;
+}
+
+export interface ToolRegistryEntry {
+    key: string
+    Renderer?: ToolRendererComponent
+    PermissionPreview?: ...      // reused as the confirm body (card 3)
+    browserRun?: () =&gt; Promise&lt;BrowserRun&gt;   // NEW, lazy like Renderer
+    ...
+}
+
+// products/workflows/frontend/posthogAiToolRenderers.tsx (new file)
+export const posthogAiToolRenderers: ToolRegistryEntry[] = [{
+    key: 'workflows-enable',
+    displayName: 'Enable workflow',
+    icon: &lt;IconPlay /&gt;,
+    requiresPostHogOrigin: true,
+    browserRun: () =&gt; import('./posthogAi/enableWorkflow').then((m) =&gt; m.enableWorkflow),
+}]
+
+// products/workflows/frontend/posthogAi/enableWorkflow.ts (new file)
+export const enableWorkflow: BrowserRun = {
+    args: z.object({ id: z.string() }),
+    execute: ({ id }, { projectId }) =&gt; hogFlowsPartialUpdate(projectId, id, { status: 'active' }),
+}</code></pre>
+<p class="muted">Declaration modules use type-only imports from <code>api/tools</code> and load behaviour lazily (frontend guide §2), so the adapter sits behind a dynamic import like a <code>Renderer</code>.</p>
+<ul>
+  <li><b>Invariant:</b> the adapter has the same effect as the MCP tool. It may skip MCP-only presentation, such as <code>_posthogUrl</code> enrichment. The renderer must accept both result shapes, or the adapter adds the URL itself.</li>
+  <li><b>Error modes:</b> zod failure (no request, button shows the error), 403 (RBAC), 404, 400 (validation), network. Each becomes a <code>failed</code> outcome with the API's own message.</li>
+  <li><b>Performance:</b> one product API request per click. No new server.</li>
+</ul>
+
+<h3>3.4 The outcome record (new Django endpoint, run log entry)</h3>
+<pre><code>POST /api/projects/:project_id/tasks/:task_id/runs/:run_id/chat_action_outcome/
+{ action_id: "toolu_01AbC:enable",
+  tool: "workflows-enable",
+  args: { id: "wf_8f2c" },
+  status: "succeeded" | "failed",
+  summary: "Workflow Weekly digest is now active",   // ≤ 500 chars, shown to the agent
+  result?: Json,                                      // ≤ 16 KB, for the in-place card on reload
+  error?: string }
+
+// appended to the current run's JSONL log:
+{ notification: { method: "_posthog/chat_action_outcome", params: { ...body, user_id, ran_at } } }</code></pre>
+<ul>
+  <li><b>Trust:</b> the browser reports its own result. The record is user-asserted. It never authorizes anything. The agent receives it only as untrusted context (3.5).</li>
+  <li><b>Invariant:</b> the endpoint checks that the user can access the task run and that <code>action_id</code> names a <code>suggest-actions</code> call in the run's resume chain.</li>
+  <li><b>Why the tasks run API:</b> the surface couples to task runs by design and must not import the conversations API (<code>products/posthog_ai/frontend/CLAUDE.md</code> §2).</li>
+  <li><b>Replay:</b> <code>runStreamLogic</code> folds outcomes onto their button by <code>action_id</code>, latest wins. The current projection ignores unknown <code>_posthog/*</code> methods, so older clients are not affected.</li>
+</ul>
+
+<h3>3.5 Agent sync (hidden context on the next user message)</h3>
+<pre><code>// a provider on attachedContextLogic, fed from runStreamLogic's folded outcomes
+registerContext('chat-action-outcomes', outcomes.map((o) =&gt; ({
+    type: 'chat_action_outcome',
+    key: o.action_id,
+    label: `${o.tool} ${o.status}`,
+    value: JSON.stringify({ tool: o.tool, args: o.args, status: o.status, summary: o.summary }),
+    hidden: true,
+})))</code></pre>
+<ul>
+  <li>This reuses the live attached-context contract (<code>products/posthog_ai/frontend/types/contextTypes.ts:6</code>). <code>wrapWithPosthogContext</code> renders it into the untrusted block. Replay already strips that block.</li>
+  <li><b>Invariant:</b> an outcome reaches the agent exactly once, with the first user message after it. The existing dedupe does this for free: <code>seenContextLinesByTask</code> prunes any keyed item already sent anywhere in the resume chain, and it survives reloads.</li>
+  <li><b>Gap:</b> if the agent is mid-turn when the click lands, it learns the outcome only on the next turn. Today buttons render only after the turn ends.</li>
+</ul>
+
+<h3>3.6 Element schema, later controls (sketch for card 4)</h3>
+<pre><code>type ArgSource =
+  | string                                  // literal or '{slot}', agent-filled and provenance-checked
+  | { input: 'select'; options: '{slot}' }  // the user picks from a list the agent bound
+  | { input: 'text' | 'email' | 'number' } // the user types it
+
+type ChatActionControl = 'button' | 'select' | 'form'
+// button: every arg is bound. select: one arg is { input: 'select' }. form: any arg is { input }.
+// Field types come from the browser adapter's zod schema, so the form validates what execute() takes.</code></pre>
+
+<h2 id="flows">4. Flows</h2>
+<h3>4.1 Main path: click, confirm, run, result</h3>
+<pre class="mermaid">
+sequenceDiagram
+  actor U as User
+  participant W as SuggestActionsWidget
+  participant R as ChatActionRun
+  participant A as workflows browserRun
+  participant API as hog_flows API (session)
+  participant D as Django outcome endpoint
+  participant L as Run log
+  U->>W: click "Enable the workflow"
+  W->>R: action {tool, args, destructive}
+  R->>U: inline confirm, product PermissionPreview body
+  U->>R: Confirm
+  R->>A: args.parse({id})
+  A->>API: PATCH status=active
+  API-->>A: 200 HogFlow
+  A-->>R: result
+  R->>U: button becomes the product result card, "Enabled"
+  R->>D: outcome succeeded + summary
+  D->>L: append _posthog/chat_action_outcome
+</pre>
+
+<h3>4.2 Agent sync and reload</h3>
+<pre class="mermaid">
+sequenceDiagram
+  actor U as User
+  participant S as runStreamLogic
+  participant I as runInteractionLogic + context
+  participant G as Sandbox agent
+  U->>S: reload thread
+  S->>S: fold outcomes onto buttons by action_id
+  S-->>U: "Enabled" card in place, button not clickable
+  U->>I: "Now send it to the beta cohort"
+  I->>S: outcome context items, already-sent ones pruned
+  I->>G: user_message + hidden chat_action_outcome context
+  G-->>U: reply that knows the workflow is active
+</pre>
+
+<h3>4.3 Failure path</h3>
+<pre class="mermaid">
+sequenceDiagram
+  actor U as User
+  participant R as ChatActionRun
+  participant API as hog_flows API
+  participant D as Django outcome endpoint
+  U->>R: Confirm
+  R->>API: PATCH status=active
+  API-->>R: 403 "You don't have edit access to this workflow"
+  R-->>U: error in place, "Try again" stays available
+  R->>D: outcome failed + error
+  Note over U,D: The agent hears about the failure on the next turn and can explain it.
+</pre>
+
+<h2 id="data">5. Data</h2>
+<ul>
+  <li>No schema change and no migration. The outcome is a new <code>_posthog/chat_action_outcome</code> method in the run JSONL log, which already holds <code>_posthog/user_message</code> and <code>_posthog/permission_*</code> entries.</li>
+  <li>The log of a terminal run still accepts appends through <code>TaskRun.append_log</code> (<code>products/tasks/backend/models.py:2862</code>). Thread history includes ancestor runs, so outcomes survive a successor run.</li>
+</ul>
+
+<h2 id="perf">6. Caching and performance</h2>
+<p>Nothing is cached. A click costs one product API request plus one log append. The hot path (stream replay) gains one fold over a method it already parses. No load concern.</p>
+
+<h2 id="cards">7. Decision cards</h2>
+
+<div class="card"><span class="status">OPEN</span>
+<h3>1. Execution path: how a click runs the tool</h3>
+<ul>
+  <li><b>A. Browser adapter on the tool's registry entry</b> (product calls its own generated API with the session). Pros: the real "Enable in the product" path. Session auth and RBAC with no new auth surface. Typed. The product owns it next to its renderer. Cons: one small adapter per runnable tool. Compound MCP tools need an equivalent written in the browser. The adapter can drift from the MCP tool, so a registration test guards it.</li>
+  <li><b>B. Django proxy into <code>services/mcp</code></b> with a token minted per click for the session user (<code>mint_oauth_access_token</code>, <code>posthog/models/oauth.py:657</code>): tool scopes only, one team, 60 s lifetime. Pros: generic, runs the exact MCP tool for any of about 1,000 tools, no product code. Cons: a session endpoint that mints tokens is a security danger area. It needs a new Django to MCP call path, which does not exist today. Scope translation can over-grant.</li>
+  <li><b>C. Sandbox command</b> (new verb on the run command relay). Cons: needs a live sandbox, and it runs with the run's token, not the clicking user's permissions. Reject.</li>
+  <li><b>D. Reimplement in Python behind <code>mcp_tools</code></b>. Cons: duplicates generated handlers. Reject.</li>
+</ul>
+<div class="rec"><b>Recommendation: A now.</b> It matches the wording exactly ("as if they clicked Enable in the product") and stays small. B is the later fallback for tools without an adapter. It is a third adapter at the same seam, so A does not block it.</div>
+</div>
+
+<div class="card"><span class="status">OPEN</span>
+<h3>2. Agent sync: how the agent learns the outcome</h3>
+<ul>
+  <li><b>A. Outcome in the run log, plus a hidden context item on the next user message</b> (3.4, 3.5). Pros: reuses the attached-context contract and the log. Pending state comes from the log. No agent release. Cons: the agent learns it on the next turn, not at once. The record is user-asserted, so it goes in the untrusted block.</li>
+  <li><b>B. Synthetic tool call and result inside the live ACP session.</b> Pros: the agent sees it as its own tool call. Cons: needs a new agent-server contract and a <code>@posthog/agent</code> release. Session hydration needs matching ids.</li>
+  <li><b>C. No sync. The agent re-reads state when it needs to.</b> Pros: nothing to build. Cons: the agent does not know to re-read, and it may offer "Enable" again.</li>
+</ul>
+<div class="rec"><b>Recommendation: A.</b> Buttons render only between turns, so "next turn" is the only time the outcome matters.</div>
+</div>
+
+<div class="card"><span class="status">OPEN</span>
+<h3>3. Confirmation UX before and after a destructive call</h3>
+<ul>
+  <li><b>A. Inline confirm in place.</b> The button expands into a small card. The body is the product's <code>PermissionPreview</code> when one exists, otherwise the label plus args. It has Confirm and Cancel. Then the card shows a spinner, then the result card or the error. It appears only when the target tool is <code>destructive</code>. Pros: in place, one click for safe tools, the same preview as the permission card. Cons: a second preview surface to keep consistent.</li>
+  <li><b>B. Reuse the permission card</b> in the composer area. Cons: <code>PermissionInput</code> belongs to an agent-owned request (<code>requestId</code>, <code>toolCallId</code>, reply to the sandbox). It is not in place, and it needs a live run.</li>
+  <li><b>C. Modal dialog</b> (<code>LemonDialog</code>). Pros: familiar product pattern. Cons: leaves the thread context. It is not "in place".</li>
+</ul>
+<div class="rec"><b>Recommendation: A.</b> The permission card stays the gate for calls the agent makes (<code>toolPolicy.ts</code>). A click is the user's own act, so the inline confirm is its gate. This keeps the map rule "a button that writes goes through the same approval a typed request would" without coupling to the agent's request lifecycle. After success the button is spent. After a failure it offers "Try again".</div>
+</div>
+
+<div class="card"><span class="status">OPEN</span>
+<h3>4. Element schema and where args come from</h3>
+<ul>
+  <li><b>A. Button now, with every arg agent-filled and provenance-bound. Later controls declare user-filled args</b> (3.6). Field types come from the adapter's zod schema. Pros: smallest v1, and selects and forms extend it without a new contract. Cons: a form needs a renderer per input type later.</li>
+  <li><b>B. A json-render component catalog now</b> (Zod prop schemas per component, the agent composes them). Pros: the full Vercel pattern. Cons: generative UI, which the map rules out of scope. Large.</li>
+  <li><b>C. Form generated from the target tool's JSON schema</b> (the generative UI research recommendation), shown for every run action. Pros: general. Cons: every click becomes a form. Bad for "Enable".</li>
+</ul>
+<div class="rec"><b>Recommendation: A.</b> It keeps the research's typed form as the <code>form</code> control later, and the field types come from the same zod schema the adapter validates.</div>
+</div>
+
+<div class="card locked"><span class="status">LOCKED</span>
+<h3>5. <code>insert</code> and <code>send</code> stay as they are</h3>
+<p>Reason: the new direction only changes <code>run</code>. <code>insert</code> fills the composer and <code>send</code> sends a message. Neither runs a tool.</p></div>
+
+<div class="card locked"><span class="status">LOCKED</span>
+<h3>6. The agent still picks actions through <code>suggest-actions</code> from the <code>tools.yaml</code> catalog</h3>
+<p>Reason: selection is independent of execution. Only its output gains <code>tool</code>, <code>args</code> and <code>destructive</code> for <code>run</code>.</p></div>
+
+<div class="card locked"><span class="status">LOCKED</span>
+<h3>7. Slot provenance binding (#111941) is required for <code>run</code> args</h3>
+<p>Reason: a click now runs with no agent turn after it, so binding is the only guard against an id that a prompt injection put in the args. The user confirms the effect, not the id.</p></div>
+
+<div class="card locked"><span class="status">LOCKED</span>
+<h3>8. The agent gate in <code>toolPolicy.ts</code> stays</h3>
+<p>Reason: the agent can still call <code>workflows-enable</code> itself when the user types the request. That path keeps its permission card.</p></div>
+
+<h2 id="v1">8. What survives from v1</h2>
+<table>
+<tr><th>Piece</th><th>Fate</th><th>Where</th></tr>
+<tr><td><code>actions</code> field, key, label, kind, unique keys</td><td>Survives. <code>run</code> trades <code>message</code> for <code>args</code></td><td>#111860 <code>services/mcp/src/tools/chatActions.ts</code></td></tr>
+<tr><td><code>suggest-actions</code> selection, visibility checks, errors</td><td>Survives. Output grows for <code>run</code></td><td>#111860 <code>suggestActions.ts</code></td></tr>
+<tr><td>Slot binding (Redis, user and task scoped)</td><td>Survives. Now required (card 7)</td><td>#111941 <code>chatActionBindings.ts</code></td></tr>
+<tr><td><code>insert</code>, <code>send</code>, composer provider</td><td>Survives unchanged</td><td>#103689 <code>RunChatActionComposerProvider.tsx</code></td></tr>
+<tr><td>Renderer keyed <code>suggest-actions</code>, flag <code>posthog-ai-chat-actions</code></td><td>Survives. The widget gains the run lifecycle</td><td>#103689 <code>SuggestActionsWidget.tsx</code></td></tr>
+<tr><td>Destructive set in <code>toolPolicy.ts</code></td><td>Survives for agent calls (card 8)</td><td>#103689</td></tr>
+<tr><td><code>run</code> canned message, message templating for <code>run</code></td><td>Dies</td><td>#111860, #103689</td></tr>
+<tr><td>Composer-occupancy blocking and turn waiting for <code>run</code></td><td>Dies. <code>run</code> does not use the composer</td><td>#103689</td></tr>
+</table>
+
+<h2 id="blast">9. Blast radius</h2>
+<ul>
+  <li><b>What can break:</b> a wrong adapter writes the wrong thing with the user's session. The user can only do what they could already do in the product, and destructive tools confirm first.</li>
+  <li><b>Who notices:</b> the user, in place, and the activity log, which records the change under the user, the same as a product click.</li>
+  <li><b>Isolation:</b> everything sits behind <code>posthog-ai-chat-actions</code>. Older clients ignore the new log method. The agent runtime does not change.</li>
+  <li><b>Out of scope:</b> the generic proxy (card 1 B), generative UI, external MCP hosts (#272 renders there through MCP apps and <code>app.callServerTool</code>), and the legacy runtime.</li>
+</ul>
+</main>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' })
+</script>
+</body>
+</html>
