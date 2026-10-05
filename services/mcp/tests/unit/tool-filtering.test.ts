@@ -1074,9 +1074,10 @@ describe('Tool Filtering - Feature Flags', () => {
                 'warehouse-multi-destination',
                 'autoresearch',
                 'today-rail-nav',
+                'posthog-ai-chat-actions',
             ])
         )
-        expect(flags).toHaveLength(38)
+        expect(flags).toHaveLength(39)
     })
 
     it('every loops tool is gated on the loops flag', () => {
