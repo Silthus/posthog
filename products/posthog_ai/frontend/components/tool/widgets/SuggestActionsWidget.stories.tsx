@@ -18,7 +18,7 @@ const SUGGESTED = {
             key: 'workflows-create.test-send',
             label: 'Send yourself a test email',
             kind: 'insert',
-            message: 'Send a test email of this workflow to ',
+            message: 'Send a test email of workflow wf_1 to ',
         },
         { key: 'workflows-create.enable', label: 'Enable the workflow', kind: 'run', message: 'Enable workflow wf_1.' },
     ],
@@ -154,7 +154,7 @@ function SuggestActionsThread({
                 status: 'in_progress',
                 rawInput: {
                     command:
-                        'call suggest-actions {"actions":[{"key":"workflows-create.test-send"},{"key":"workflows-create.enable","args":{"id":"wf_1"}}]}',
+                        'call suggest-actions {"actions":[{"key":"workflows-create.test-send","args":{"id":"wf_1"}},{"key":"workflows-create.enable","args":{"id":"wf_1"}}]}',
                 },
                 _meta: { claudeCode: { toolName: 'mcp__posthog__exec' } },
             }),

@@ -42,12 +42,9 @@ jest.mock('../logics/runInteractionLogic', () => {
                     [] as unknown[],
                     { setStubAttachments: (_: unknown, { attachments }: { attachments: unknown[] }) => attachments },
                 ],
-                pendingPermissionRequest: [
-                    null as unknown,
-                    {
-                        setStubPendingRequest: (_: unknown, { pending }: { pending: boolean }) =>
-                            pending ? { requestId: 'req-1' } : null,
-                    },
+                composerActive: [
+                    true,
+                    { setStubPendingRequest: (_: boolean, { pending }: { pending: boolean }) => !pending },
                 ],
                 isSubmitting: [
                     false,

@@ -27,8 +27,7 @@ export function RunChatActionComposerProvider({
     children: ReactNode
 }): JSX.Element {
     const logic = runInteractionLogic(logicProps)
-    const { composerForm, cancellationState, stagedAttachments, isSubmitting, pendingPermissionRequest } =
-        useValues(logic)
+    const { composerForm, cancellationState, stagedAttachments, isSubmitting, composerActive } = useValues(logic)
     const { setComposerFormValues, submitComposerForm } = useActions(logic)
     const composerOccupied = composerForm.draft.trim().length > 0 || stagedAttachments.length > 0
     const value = useMemo<ChatActionComposer | null>(() => {
@@ -53,7 +52,7 @@ export function RunChatActionComposerProvider({
                 isSubmitting,
                 composerOccupied,
             }),
-            insertDisabledReason: pendingPermissionRequest ? PENDING_REQUEST_REASON : null,
+            insertDisabledReason: composerActive ? null : PENDING_REQUEST_REASON,
         }
     }, [
         readOnly,
@@ -63,7 +62,7 @@ export function RunChatActionComposerProvider({
         composerOccupied,
         cancellationState,
         isSubmitting,
-        pendingPermissionRequest,
+        composerActive,
         setComposerFormValues,
         submitComposerForm,
     ])
