@@ -7,6 +7,7 @@ import { globalSetupLogic } from 'lib/components/ProductSetup'
 import type { SetupTaskId } from 'lib/components/ProductSetup'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { emailTemplaterLogic } from 'scenes/hog-functions/email-templater/emailTemplaterLogic'
+import { teamLogic } from 'scenes/teamLogic'
 
 import { sidePanelStateLogic } from '~/layout/navigation-3000/sidepanel/sidePanelStateLogic'
 import { SidePanelTab } from '~/types'
@@ -93,6 +94,7 @@ interface Values {
     workflowCreated: boolean
     workflowStatus: WorkflowStatus
     enableOnOpen: boolean
+    captureEngagement: boolean
     senderIntegrationId: number
     facts: ProjectFacts
     fits: TemplateFit[]
@@ -117,6 +119,7 @@ interface Actions {
     openInbox: () => { value: true }
     closeInbox: () => { value: true }
     setEnableOnOpen: (enableOnOpen: boolean) => { enableOnOpen: boolean }
+    setCaptureEngagement: (captureEngagement: boolean) => { captureEngagement: boolean }
     openWorkflow: () => { value: true }
     workflowReady: () => { value: true }
     setWorkflowStatus: (status: WorkflowStatus) => { status: WorkflowStatus }
@@ -124,6 +127,13 @@ interface Actions {
 }
 
 export type firstRunPrototypeLogicType = MakeLogicType<Values, Actions>
+
+export function enableEngagementEvents(): void {
+    const team = teamLogic.findMounted()
+    team?.actions.updateCurrentTeam({
+        workflows_config: { ...team.values.currentTeam?.workflows_config, capture_workflows_engagement_events: true },
+    })
+}
 
 export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
     path(['products', 'workflows', 'prototype', 'firstRunPrototypeLogic']),
@@ -144,6 +154,7 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
         openInbox: true,
         closeInbox: true,
         setEnableOnOpen: (enableOnOpen: boolean) => ({ enableOnOpen }),
+        setCaptureEngagement: (captureEngagement: boolean) => ({ captureEngagement }),
         openWorkflow: true,
         workflowReady: true,
         setWorkflowStatus: (status: WorkflowStatus) => ({ status }),
@@ -185,6 +196,7 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
         workflowCreated: [false, { workflowReady: () => true }],
         workflowStatus: ['draft' as WorkflowStatus, { setWorkflowStatus: (_, { status }) => status }],
         enableOnOpen: [true, { setEnableOnOpen: (_, { enableOnOpen }) => enableOnOpen }],
+        captureEngagement: [true, { setCaptureEngagement: (_, { captureEngagement }) => captureEngagement }],
         senderIntegrationId: [
             SHARED_SENDER.integrationId,
             {
@@ -256,6 +268,9 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
             }
             if (values.enableOnOpen) {
                 actions.setWorkflowStatus('active')
+            }
+            if (values.captureEngagement) {
+                enableEngagementEvents()
             }
             actions.workflowReady()
             router.actions.push(firstWorkflowUrl(values.template ? emailActions(values.template)[0].id : undefined))

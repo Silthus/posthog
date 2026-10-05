@@ -38,7 +38,7 @@ const EMAIL_TEMPLATE: HogFunctionTemplateType = {
 
 const EMPTY_PAGE = { count: 0, next: null, previous: null, results: [] }
 
-let onboardingTasks: Record<string, string> = {}
+let teamChanges: Record<string, any> = {}
 
 function state(): typeof firstRunPrototypeLogic.values {
     return firstRunPrototypeLogic.values
@@ -224,9 +224,13 @@ export const firstRunMswDecorator = mswDecorator({
             return [200, { ...currentWorkflow(), updated_at: new Date().toISOString() }]
         },
         '/api/projects/:team_id/': async ({ request }) => {
-            const body = (await request.json()) as { onboarding_tasks?: Record<string, string> }
-            onboardingTasks = { ...onboardingTasks, ...body.onboarding_tasks }
-            return [200, { ...MOCK_DEFAULT_TEAM, ...body, onboarding_tasks: onboardingTasks }]
+            const body = (await request.json()) as Record<string, any>
+            teamChanges = {
+                ...teamChanges,
+                ...body,
+                onboarding_tasks: { ...teamChanges.onboarding_tasks, ...body.onboarding_tasks },
+            }
+            return [200, { ...MOCK_DEFAULT_TEAM, ...teamChanges }]
         },
     },
 })

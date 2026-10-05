@@ -4,12 +4,13 @@ import { useActions, useValues } from 'kea'
 import { router } from 'kea-router'
 import { useEffect, useState } from 'react'
 
-import { LemonBanner, Link } from '@posthog/lemon-ui'
+import { LemonBanner, LemonButton, Link } from '@posthog/lemon-ui'
 
 import { globalSetupLogic } from 'lib/components/ProductSetup'
+import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
 
-import { firstRunPrototypeLogic } from './firstRunPrototypeLogic'
+import { enableEngagementEvents, firstRunPrototypeLogic } from './firstRunPrototypeLogic'
 import { OWN_SENDER, SHARED_SENDER, TEAM_BRAND, WORKFLOW_ID } from './firstRunScenario'
 import { sendsFor } from './realTemplates'
 import { CurlyArrow } from './shared/CurlyArrow'
@@ -69,9 +70,26 @@ export function WorkflowNextStep({ inEditor }: { inEditor?: boolean }): JSX.Elem
             <div className="flex flex-col gap-1">
                 <strong>Your workflow is sending.</strong>
                 <span>It {sends}. See who got it, who opened it and who clicked.</span>
+                <EngagementLine />
                 <DomainLine />
             </div>
         </LemonBanner>
+    )
+}
+
+function EngagementLine(): JSX.Element | null {
+    const { currentTeam, currentTeamLoading } = useValues(teamLogic)
+    if (currentTeam?.workflows_config?.capture_workflows_engagement_events) {
+        return null
+    }
+    return (
+        <span className="flex items-center gap-2 flex-wrap text-xs">
+            Opens and clicks only show in these metrics. Capture them as PostHog events to use them in insights and
+            funnels.
+            <LemonButton type="primary" size="xsmall" loading={currentTeamLoading} onClick={enableEngagementEvents}>
+                Enable engagement events
+            </LemonButton>
+        </span>
     )
 }
 

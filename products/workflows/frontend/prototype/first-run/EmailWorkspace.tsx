@@ -50,8 +50,9 @@ export function EmailWorkspace(): JSX.Element | null {
 }
 
 function WorkspaceSidebar(): JSX.Element {
-    const { testHtml, enableOnOpen } = useValues(firstRunPrototypeLogic)
-    const { askPostHogAi, sendTest, openInbox, openWorkflow, setEnableOnOpen } = useActions(firstRunPrototypeLogic)
+    const { testHtml, enableOnOpen, captureEngagement } = useValues(firstRunPrototypeLogic)
+    const { askPostHogAi, sendTest, openInbox, openWorkflow, setEnableOnOpen, setCaptureEngagement } =
+        useActions(firstRunPrototypeLogic)
 
     return (
         <div className="flex flex-col gap-3">
@@ -91,6 +92,18 @@ function WorkspaceSidebar(): JSX.Element {
                     {enableOnOpen
                         ? `It starts sending emails right away, from ${SHARED_SENDER.address}.`
                         : 'It opens as a draft and sends no emails until you enable it.'}
+                </span>
+                <LemonSwitch
+                    checked={captureEngagement}
+                    onChange={setCaptureEngagement}
+                    label="Capture engagement events"
+                    bordered
+                    fullWidth
+                />
+                <span className="text-xs text-secondary">
+                    {captureEngagement
+                        ? 'Opens and clicks become PostHog events you can use in insights and funnels. They count toward your event usage.'
+                        : "Opens and clicks only show in this workflow's metrics."}
                 </span>
             </div>
         </div>
