@@ -3,12 +3,12 @@
 import { useActions, useValues } from 'kea'
 
 import { IconArrowLeft, IconSparkles } from '@posthog/icons'
-import { LemonBanner, LemonButton, LemonModal } from '@posthog/lemon-ui'
+import { LemonBanner, LemonButton, LemonModal, LemonSwitch } from '@posthog/lemon-ui'
 
 import { EmailTemplater } from 'scenes/hog-functions/email-templater/EmailTemplater'
 
 import { firstRunPrototypeLogic } from './firstRunPrototypeLogic'
-import { SIGNED_IN_USER } from './firstRunScenario'
+import { SHARED_SENDER, SIGNED_IN_USER } from './firstRunScenario'
 import { sendsFor } from './realTemplates'
 import { BrandPanel } from './shared/BrandPanel'
 import { DeliveredEmail } from './shared/DeliveredEmail'
@@ -50,8 +50,8 @@ export function EmailWorkspace(): JSX.Element | null {
 }
 
 function WorkspaceSidebar(): JSX.Element {
-    const { testHtml } = useValues(firstRunPrototypeLogic)
-    const { askPostHogAi, sendTest, openInbox, openWorkflow } = useActions(firstRunPrototypeLogic)
+    const { testHtml, enableOnOpen } = useValues(firstRunPrototypeLogic)
+    const { askPostHogAi, sendTest, openInbox, openWorkflow, setEnableOnOpen } = useActions(firstRunPrototypeLogic)
 
     return (
         <div className="flex flex-col gap-3">
@@ -78,8 +78,20 @@ function WorkspaceSidebar(): JSX.Element {
                     {testHtml ? 'Send another test' : 'Send me a test'}
                 </LemonButton>
                 <LemonButton type="primary" size="large" onClick={openWorkflow} center>
-                    Open workflow
+                    {enableOnOpen ? 'Enable and open workflow' : 'Open workflow'}
                 </LemonButton>
+                <LemonSwitch
+                    checked={enableOnOpen}
+                    onChange={setEnableOnOpen}
+                    label="Enable workflow"
+                    bordered
+                    fullWidth
+                />
+                <span className="text-xs text-secondary">
+                    {enableOnOpen
+                        ? `It starts sending emails right away, from ${SHARED_SENDER.address}.`
+                        : 'It opens as a draft and sends no emails until you enable it.'}
+                </span>
             </div>
         </div>
     )

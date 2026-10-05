@@ -92,6 +92,7 @@ interface Values {
     inboxOpen: boolean
     workflowCreated: boolean
     workflowStatus: WorkflowStatus
+    enableOnOpen: boolean
     senderIntegrationId: number
     facts: ProjectFacts
     fits: TemplateFit[]
@@ -115,6 +116,7 @@ interface Actions {
     setTestHtml: (html: string) => { html: string }
     openInbox: () => { value: true }
     closeInbox: () => { value: true }
+    setEnableOnOpen: (enableOnOpen: boolean) => { enableOnOpen: boolean }
     openWorkflow: () => { value: true }
     workflowReady: () => { value: true }
     setWorkflowStatus: (status: WorkflowStatus) => { status: WorkflowStatus }
@@ -141,6 +143,7 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
         setTestHtml: (html: string) => ({ html }),
         openInbox: true,
         closeInbox: true,
+        setEnableOnOpen: (enableOnOpen: boolean) => ({ enableOnOpen }),
         openWorkflow: true,
         workflowReady: true,
         setWorkflowStatus: (status: WorkflowStatus) => ({ status }),
@@ -181,6 +184,7 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
         inboxOpen: [false, { openInbox: () => true, closeInbox: () => false, workflowReady: () => false }],
         workflowCreated: [false, { workflowReady: () => true }],
         workflowStatus: ['draft' as WorkflowStatus, { setWorkflowStatus: (_, { status }) => status }],
+        enableOnOpen: [true, { setEnableOnOpen: (_, { enableOnOpen }) => enableOnOpen }],
         senderIntegrationId: [
             SHARED_SENDER.integrationId,
             {
@@ -249,6 +253,9 @@ export const firstRunPrototypeLogic = kea<firstRunPrototypeLogicType>([
             const exported = await exportFromEditor()
             if (exported && values.email) {
                 actions.setEmail({ ...values.email, html: exported.html, design: exported.design })
+            }
+            if (values.enableOnOpen) {
+                actions.setWorkflowStatus('active')
             }
             actions.workflowReady()
             router.actions.push(firstWorkflowUrl(values.template ? emailActions(values.template)[0].id : undefined))

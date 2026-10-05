@@ -47,7 +47,7 @@ export function WorkflowNextStep({ inEditor }: { inEditor?: boolean }): JSX.Elem
                         <DomainLine />
                     </div>
                     {inEditor && (
-                        <span ref={setArrowAnchor} className="shrink-0 self-start text-sm font-semibold mr-16">
+                        <span ref={setArrowAnchor} className="shrink-0 self-start text-sm font-semibold mr-48">
                             Enable it up here
                         </span>
                     )}
