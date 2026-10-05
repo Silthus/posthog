@@ -52,7 +52,8 @@ export function RunChatActionComposerProvider({
                 isSubmitting,
                 composerOccupied,
             }),
-            insertDisabledReason: composerActive ? null : PENDING_REQUEST_REASON,
+            // Mirrors the run surface: a pending request hides the composer unless the run is stopping.
+            insertDisabledReason: composerActive || cancellationState ? null : PENDING_REQUEST_REASON,
         }
     }, [
         readOnly,

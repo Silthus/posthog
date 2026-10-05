@@ -136,6 +136,15 @@ describe('RunChatActionComposerProvider', () => {
         expect(await screen.findByText('insert: Answer the request below first')).toBeInTheDocument()
     })
 
+    // Stopping hides the request card and shows the composer again, so insert must stay usable.
+    it('keeps insert live while a stopping run has a pending request', async () => {
+        renderProvider()
+        stubActions(logic).setStubPendingRequest(true)
+        expect(await screen.findByText('insert: Answer the request below first')).toBeInTheDocument()
+        stubActions(logic).setStubCancelling('cancelling')
+        expect(await screen.findByText('insert: live')).toBeInTheDocument()
+    })
+
     it('gives a read-only view no composer', () => {
         renderProvider(true)
         expect(screen.getByText('no composer')).toBeInTheDocument()
