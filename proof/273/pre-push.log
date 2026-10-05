@@ -1,0 +1,53 @@
+
+  ci:preflight — 9892 changed file(s) vs origin/master
+
+   → [staleness] branch freshness vs master
+       last synced 7d ago — merge master in: git merge origin/master
+   ✓ [shadow-drift] depot shadow drift (.depot mirrors of backend CI)
+       depot mirrors in sync
+   ✓ [lockfile] broken pnpm-lock.yaml (blocks ALL CI)
+       47 file(s) · root: ok · packages/agent: needs node (no install) · products/desktop: needs node (no install)
+   ✓ [uv-lock] uv.lock out of sync with pyproject.toml (blocks Python CI)
+       5 file(s) · ok
+   ✓ [ruff-lint] Python lint (ruff check)
+       4164 file(s) · ok
+   ⚠ [complexity] cyclomatic complexity (warn >10, >15 in tests)
+       7192 file(s) · ee/api/vercel/vercel_connect.py:286:9: warning: `complete` has cyclomatic complexity 15 (warn >10) · ee/billing/billing_manager.py:358:9: warning: `get_billing` has cyclomatic complexity 13 (warn >10) · ee/billing/billing_manager.py:673:9: warning: `update_org_details` has cyclomatic complexity 17 (warn >10)
+   ⚠ [size] file size (warn >1000 lines)
+       7192 file(s) · ee/api/vercel/test/test_vercel_connect.py:1:1: warning: now 1145 lines (up from 946), past 1000 (~13k tokens to read). Consider splitting it: /splitting-oversized-modules · frontend/src/lib/components/MarkdownNotebook/NotebookComponentShell.tsx:1:1: warning: now 1215 lines (up from 886), past 1000 (~14k tokens to read). Consider splitting it: /splitting-oversized-modules · frontend/src/lib/components/TaxonomicFilter/TaxonomicFilter.stories.tsx:1:1: warning: now 1033 lines (up from 977), past 1000 (~12k tokens to read). Consider splitting it: /splitting-oversized-modules
+   ✓ [ruff-format] Python format (ruff format)
+       4164 file(s) · ok
+   · [desktop-biome] desktop lint/format (Biome, what desktop-quality CI runs)
+       342 file(s) · needs desktop-node
+   · [agent-biome] agent workspace lint/format (Biome, what desktop-quality CI runs)
+       647 file(s) · needs agent-node
+   → [type-check] Python type checking (mypy)
+       4164 file(s) · a type error costs a full CI re-run — consider `uv run mypy --cache-fine-grained .` (what CI runs)
+   ✓ [django-template-format] Django template formatting (djlint)
+       6 file(s) · ok
+   ✓ [markdown-format] markdown formatting (oxfmt)
+       297 file(s) · ok
+   ✓ [feature-flags] FEATURE_FLAGS not alphabetically sorted
+       1 file(s) · ok
+   ✓ [api-ratchet] new lib/api.ts path method duplicating a generated client
+       34 file(s) · ok
+   ✓ [workflow-lint] workflow-convention failure in .github/workflows
+       47 file(s) · ok
+   → [openapi] OpenAPI sources changed (generated types may need a regen)
+       391 file(s) · if you have not run `hogli build:openapi` since changing them, run it and commit
+   ✓ [projections] generated projections out of sync with their Python sources
+       26 file(s) · ok
+   ✓ [migrations] migration conflict / orphaned migration
+       89 file(s) · ok
+
+  summary {"changed_files": 9892, "triggered": ["shadow-drift", "lockfile", "uv-lock", "ruff-lint", "complexity", "size", "ruff-format", "desktop-biome", "agent-biome", "type-check", "django-template-format", "markdown-format", "feature-flags", "api-ratchet", "workflow-lint", "openapi", "projections", "migrations"], "failures": 0, "mode": "strict"}
+
+remote: This repository moved. Please use the new location:        
+remote:   git@github.com:Silthus/posthog.git        
+remote: 
+remote: Create a pull request for 'feat/workflows-first-run-quiet-welcome-modal' on GitHub by visiting:        
+remote:      https://github.com/Silthus/posthog/pull/new/feat/workflows-first-run-quiet-welcome-modal        
+remote: 
+To github.com:silthus/posthog.git
+ * [new branch]                  feat/workflows-first-run-quiet-welcome-modal -> feat/workflows-first-run-quiet-welcome-modal
+branch 'feat/workflows-first-run-quiet-welcome-modal' set up to track 'origin/feat/workflows-first-run-quiet-welcome-modal'.

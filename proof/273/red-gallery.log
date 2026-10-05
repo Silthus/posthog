@@ -1,0 +1,25 @@
+FAIL ../products/workflows/frontend/firstRun/WorkflowsFirstRunTab.test.tsx
+  ● WorkflowsFirstRunTab › shows a project without workflows the workflows-first-run-gallery
+
+    expect(received).toEqual(expected) // deep equality
+
+    Expected: null
+    Received: {"campaignId": "campaign-1", "label": "Workflows", "productKey": "workflows", "text": "Message users when it matters."}
+
+      49 |         ).toHaveLength(1)
+      50 |         welcomeLogic.actions.openWelcome(WELCOME)
+    > 51 |         expect(welcomeLogic.values.openFor).toEqual(holdsWelcome ? null : WELCOME)
+         |                                             ^
+      52 |
+      53 |         unmount()
+      54 |         welcomeLogic.actions.openWelcome(WELCOME)
+
+      at ../products/workflows/frontend/firstRun/WorkflowsFirstRunTab.test.tsx:51:45
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 passed, 2 total
+Snapshots:   0 total
+Time:        4.454 s
+undefined
+/home/coder/.t3/worktrees/posthog/fr-273/frontend:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: jest --runInBand --silent ../products/workflows/frontend/firstRun/WorkflowsFirstRunTab.test.tsx

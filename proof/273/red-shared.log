@@ -1,0 +1,37 @@
+FAIL src/lib/components/NavPanelAdvertisement/navPanelProductPushWelcomeLogic.test.ts
+  ● navPanelProductPushWelcomeLogic › puts an open welcome back on hold when a welcoming surface mounts
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "openFor": null,
+    -   "pending": Object {
+    +   "openFor": Object {
+          "campaignId": "campaign-1",
+          "label": "Workflows",
+          "productKey": "workflows",
+          "text": "Message users when it matters.",
+        },
+    +   "pending": null,
+      }
+
+      51 |         logic.actions.holdWelcome('first-run')
+      52 |
+    > 53 |         expect(logic.values).toMatchObject({ openFor: null, pending: WELCOME })
+         |                              ^
+      54 |
+      55 |         logic.actions.releaseWelcome('first-run')
+      56 |         logic.actions.openWelcome(WELCOME)
+
+      at Object.<anonymous> (src/lib/components/NavPanelAdvertisement/navPanelProductPushWelcomeLogic.test.ts:53:30)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 passed, 2 total
+Snapshots:   0 total
+Time:        1.66 s, estimated 2 s
+undefined
+/home/coder/.t3/worktrees/posthog/fr-273/frontend:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: jest --runInBand --silent src/lib/components/NavPanelAdvertisement/navPanelProductPushWelcomeLogic.test.ts

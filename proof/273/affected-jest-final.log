@@ -1,0 +1,12 @@
+PASS ../products/workflows/frontend/firstRun/firstRunGalleryLogic.test.ts
+PASS ../products/workflows/frontend/firstRun/WorkflowsFirstRunTab.test.tsx
+PASS src/lib/components/NavPanelAdvertisement/navPanelProductPushAdLogic.test.ts
+PASS src/lib/components/NavPanelAdvertisement/navPanelProductPushLogic.test.ts
+PASS src/lib/components/NavPanelAdvertisement/navPanelProductPushWelcomeLogic.test.ts
+PASS src/lib/components/NavPanelAdvertisement/navPanelProductPushWelcomeVisibility.test.ts
+PASS src/lib/components/NavPanelAdvertisement/navPanelAdShared.test.ts
+
+Test Suites: 7 passed, 7 total
+Tests:       49 passed, 49 total
+Snapshots:   0 total
+Time:        9.007 s

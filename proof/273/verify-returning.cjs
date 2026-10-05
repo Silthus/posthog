@@ -1,0 +1,26 @@
+const { createRequire } = require('node:module')
+const { chromium } = createRequire(`${process.cwd()}/package.json`)('playwright')
+const assert = require('node:assert/strict')
+;(async () => {
+ const browser = await chromium.launch({headless:true})
+ for (const variant of ['temp-returning-from-nav-card','temp-flag-off-from-nav-card']) {
+  const page = await browser.newPage({viewport:{width:1440,height:1200},deviceScaleFactor:2})
+  const errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  await page.goto(`http://localhost:6373/iframe.html?id=products-workflows-first-run-gallery--${variant}&viewMode=story`,{waitUntil:'domcontentloaded',timeout:60000})
+  await page.locator('[data-attr="workflows-table"]').waitFor({state:'visible',timeout:60000})
+  await page.locator('[data-attr="product-push-welcome"]').waitFor({state:'visible',timeout:30000})
+  assert.equal(await page.locator('[data-attr="workflows-first-run-gallery"]').count(),0)
+  assert.equal(errors.length,0)
+  console.log(JSON.stringify({variant,table:1,welcome:1,gallery:0,errors}))
+  await page.close()
+ }
+ const page = await browser.newPage({viewport:{width:768,height:1200},deviceScaleFactor:2})
+ await page.goto('http://localhost:6373/iframe.html?id=products-workflows-first-run-gallery--temp-arriving-from-nav-card&viewMode=story',{waitUntil:'domcontentloaded',timeout:60000})
+ await page.locator('[data-attr="workflows-first-run-gallery"]').waitFor({state:'visible',timeout:60000})
+ await page.getByText('Start playing',{exact:true}).waitFor({state:'visible'})
+ assert.equal(await page.locator('[data-attr="product-push-welcome"]').count(),0)
+ await page.screenshot({path:'/tmp/fr-273-proof/gallery-narrow.png'})
+ console.log(JSON.stringify({variant:'narrow-scene',gallery:1,welcome:0}))
+ await browser.close()
+})().catch(e=>{console.error(e);process.exit(1)})

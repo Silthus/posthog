@@ -1,0 +1,7 @@
+PASS ../products/workflows/frontend/firstRun/WorkflowsFirstRunTab.test.tsx
+PASS src/lib/components/NavPanelAdvertisement/navPanelProductPushWelcomeLogic.test.ts
+
+Test Suites: 2 passed, 2 total
+Tests:       4 passed, 4 total
+Snapshots:   0 total
+Time:        3.962 s, estimated 6 s
