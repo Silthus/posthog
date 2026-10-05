@@ -4,6 +4,7 @@ import type { DeepPartial, DeepPartialMap, FieldName, ValidationErrorType } from
 import { loaders } from 'kea-loaders'
 
 import api, { ApiError } from 'lib/api'
+import { SetupTaskId, globalSetupLogic } from 'lib/components/ProductSetup'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { lemonToast } from 'lib/lemon-ui/LemonToast'
 
@@ -283,6 +284,7 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
         verifyDomainSuccess: ({ verification }) => {
             if (verification?.status === 'success') {
                 actions.loadIntegrations()
+                globalSetupLogic.findMounted()?.actions.markTaskAsCompleted(SetupTaskId.SendFromOwnEmailDomain)
             }
         },
     })),

@@ -2,6 +2,7 @@ import { router } from 'kea-router'
 import { expectLogic } from 'kea-test-utils'
 import posthog from 'posthog-js'
 
+import { SetupTaskId, globalSetupLogic } from 'lib/components/ProductSetup'
 import { removeProjectIdIfPresent } from 'lib/utils/kea-router'
 import { emailTemplaterLogic } from 'scenes/hog-functions/email-templater/emailTemplaterLogic'
 import type { EmailTemplate } from 'scenes/hog-functions/email-templater/types'
@@ -167,8 +168,10 @@ describe('firstRunMakeItYoursLogic', () => {
     let createResponse: [number, Record<string, unknown>]
     let invocations: Record<string, any>[]
     let invocationResponse: Record<string, unknown>
+    let completedSetupTasks: string[]
 
     beforeEach(() => {
+        completedSetupTasks = []
         integrations = [SENDER]
         createdWorkflows = []
         createResponse = [201, { id: 'wf-1', status: 'active' }]
@@ -200,8 +203,18 @@ describe('firstRunMakeItYoursLogic', () => {
                     return [200, invocationResponse]
                 },
             },
+            patch: {
+                '/api/projects/:team_id/': async ({ request }) => {
+                    const { onboarding_tasks } = (await request.json()) as { onboarding_tasks: Record<string, string> }
+                    completedSetupTasks = Object.keys(onboarding_tasks).filter(
+                        (taskId) => onboarding_tasks[taskId] === 'completed'
+                    )
+                    return [200, {}]
+                },
+            },
         })
         initKeaTests()
+        globalSetupLogic.mount()
         window.POSTHOG_APP_CONTEXT!.resource_access_control = { hog_flow: 'editor' } as any
     })
 
@@ -248,11 +261,12 @@ describe('firstRunMakeItYoursLogic', () => {
     })
 
     it.each([
-        { enabled: true, status: 'active' },
-        { enabled: false, status: 'draft' },
+        { enabled: true, status: 'active', completesLaunchTask: true },
+        { enabled: false, status: 'draft', completesLaunchTask: false },
     ])(
         'creates a $status workflow with every edited email, the sender and the matched event',
-        async ({ enabled, status }) => {
+        async ({ enabled, status, completesLaunchTask }) => {
+            createResponse = [201, { id: 'wf-1', status }]
             const capture = jest.spyOn(posthog, 'capture').mockImplementation()
             await open('onboarding-sequence')
             logic.actions.editEmail('email_first', editedEmail('Welcome!'))
@@ -287,6 +301,7 @@ describe('firstRunMakeItYoursLogic', () => {
                 template_id: 'onboarding-sequence',
                 enabled,
             })
+            expect(completedSetupTasks.includes(SetupTaskId.LaunchWorkflow)).toBe(completesLaunchTask)
         }
     )
 
@@ -313,6 +328,7 @@ describe('firstRunMakeItYoursLogic', () => {
         })
         expect(logic.values.testSendOutcome).toEqual({ kind: 'sent', recipient: 'john.doe@posthog.com' })
         expect(capture).toHaveBeenCalledWith('workflows first run test sent', { skipped: false })
+        expect(completedSetupTasks).toContain(SetupTaskId.SendWorkflowTestEmail)
     })
 
     it('shows why the worker skipped a test send', async () => {
@@ -330,6 +346,7 @@ describe('firstRunMakeItYoursLogic', () => {
 
         expect(logic.values.testSendOutcome).toEqual({ kind: 'skipped', reason })
         expect(capture).toHaveBeenCalledWith('workflows first run test sent', { skipped: true })
+        expect(completedSetupTasks).not.toContain(SetupTaskId.SendWorkflowTestEmail)
     })
 
     it('without a first-run sender disables test and enable with a reason, and still creates a draft', async () => {
