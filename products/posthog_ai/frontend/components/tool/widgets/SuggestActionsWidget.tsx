@@ -15,7 +15,7 @@ const ACTION_KINDS = ['insert', 'send', 'run'] as const
 type SuggestedActionKind = (typeof ACTION_KINDS)[number]
 
 /** One action as the `suggest-actions` tool returns it: final strings only, no template or args. */
-export interface SuggestedAction {
+interface SuggestedAction {
     key: string
     label: string
     kind: SuggestedActionKind
@@ -34,7 +34,7 @@ function isSuggestedAction(value: unknown): value is SuggestedAction {
 }
 
 /** The rendered actions from a completed `suggest-actions` call; null when the payload is not one. */
-export function extractSuggestedActions(message: ToolRendererProps['message']): SuggestedAction[] | null {
+function extractSuggestedActions(message: ToolRendererProps['message']): SuggestedAction[] | null {
     const output = getToolOutputRecord(message)
     const actions = output?.actions
     if (!Array.isArray(actions) || !actions.every(isSuggestedAction)) {

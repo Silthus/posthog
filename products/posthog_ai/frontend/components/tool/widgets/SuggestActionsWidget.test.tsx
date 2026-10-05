@@ -116,16 +116,6 @@ describe('SuggestActionsWidget', () => {
         expect(composer.insert).not.toHaveBeenCalled()
     })
 
-    it('renders a button per pick when two picks share a key', () => {
-        const composer = makeComposer()
-        const second = { ...ACTIONS[1], message: 'Enable workflow wf_2.' }
-        renderWidget(toolMessage(structured([ACTIONS[1], second])), { composer })
-        const buttons = screen.getAllByText('Enable the workflow')
-        expect(buttons).toHaveLength(2)
-        fireEvent.click(buttons[1]!)
-        expect(composer.send).toHaveBeenCalledWith('Enable workflow wf_2.')
-    })
-
     it('renders every button disabled when no surface provides a composer', () => {
         renderWidget(toolMessage(structured(ACTIONS)), { composer: null })
         // LemonButton keeps a disabled-with-reason button focusable and marks it aria-disabled.

@@ -33,9 +33,23 @@ const CONNECTED_PROJECT_SUB_TOOLS = new Set(['posthog-connection-call', 'posthog
 /** PostHog sub-tools that act on real people; the exec server never asks for confirmation itself. */
 const DESTRUCTIVE_CHAT_ACTION_SUB_TOOLS = new Set(['workflows-enable', 'workflows-publish'])
 
-/** A publish without `confirm: true` only previews its impact, so it needs no card; an unreadable body might not. */
-function isPublishPreview(innerToolName: string, innerInput: Record<string, unknown> | undefined): boolean {
-    return innerToolName === 'workflows-publish' && innerInput !== undefined && innerInput.confirm !== true
+const PUBLISH_PREVIEW_KEYS = new Set(['id', 'confirm', 'confirm_token'])
+
+/**
+ * A publish without `confirm: true` only previews its impact, so it needs no card. Only the exact
+ * preview shape counts: the server lifts a payload wrapped under one key, so any other body might
+ * carry a confirmed publish.
+ */
+function isPublishPreview(innerToolName: string, innerInput: unknown): boolean {
+    if (innerToolName !== 'workflows-publish' || !isPlainObject(innerInput)) {
+        return false
+    }
+    const keys = Object.keys(innerInput)
+    return keys.every((key) => PUBLISH_PREVIEW_KEYS.has(key)) && !innerInput.confirm
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isConnectedProjectSubTool(subTool: string): boolean {
