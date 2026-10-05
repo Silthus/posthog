@@ -17,14 +17,14 @@ export function RunChatActionComposerProvider({
     children: ReactNode
 }): JSX.Element {
     const logic = runInteractionLogic(logicProps)
-    const { composerForm, cancellationState } = useValues(logic)
+    const { composerForm, cancellationState, stagedAttachments, isSubmitting } = useValues(logic)
     const { setComposerFormValues, setComposerFocused, submitComposerForm } = useActions(logic)
     const draft: string = composerForm.draft
+    const composerOccupied = draft.trim().length > 0 || stagedAttachments.length > 0
     const value = useMemo<ChatActionComposer>(
         () => ({
             insert: (message) => {
-                // Read at click time: a keystroke that has not rendered yet must not be lost.
-                const current: string = logic.values.composerForm.draft
+                const current = currentDraft(logic, logicProps)
                 setComposerFormValues({ draft: current.trim() ? `${current.trimEnd()}\n${message}` : message })
                 setComposerFocused(true)
             },
@@ -32,13 +32,45 @@ export function RunChatActionComposerProvider({
                 setComposerFormValues({ draft: message })
                 submitComposerForm()
             },
-            sendDisabledReason: cancellationState
-                ? 'Wait for the run to stop'
-                : draft.trim()
-                  ? 'Send or clear your draft first'
-                  : null,
+            sendDisabledReason: sendBlockedReason({ cancelling: !!cancellationState, isSubmitting, composerOccupied }),
         }),
-        [logic, draft, cancellationState, setComposerFormValues, setComposerFocused, submitComposerForm]
+        [
+            logic,
+            logicProps,
+            composerOccupied,
+            cancellationState,
+            isSubmitting,
+            setComposerFormValues,
+            setComposerFocused,
+            submitComposerForm,
+        ]
     )
     return <ChatActionComposerProvider value={value}>{children}</ChatActionComposerProvider>
+}
+
+/** Read at click time, after the composer pushes its debounced keystrokes, so none of them is lost. */
+function currentDraft(logic: ReturnType<typeof runInteractionLogic>, logicProps: RunInteractionLogicProps): string {
+    logicProps.flushDraft?.()
+    return logic.values.composerForm.draft
+}
+
+function sendBlockedReason({
+    cancelling,
+    isSubmitting,
+    composerOccupied,
+}: {
+    cancelling: boolean
+    isSubmitting: boolean
+    composerOccupied: boolean
+}): string | null {
+    if (cancelling) {
+        return 'Wait for the run to stop'
+    }
+    if (isSubmitting) {
+        return 'Wait for your message to send'
+    }
+    if (composerOccupied) {
+        return 'Send or clear your draft first'
+    }
+    return null
 }
