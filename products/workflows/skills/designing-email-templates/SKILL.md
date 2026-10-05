@@ -9,8 +9,7 @@ Use this skill when creating or editing email templates for PostHog workflows �
 
 ## How authoring works
 
-You author the **design JSON** (`content.email.design`) and save it with `workflows-create-email-template`. The server renders the sent email from your design with the same renderer PostHog's visual editor uses, so the template opens as editable blocks for humans and sends exactly what the design describes. Schema and a working example in [references/unlayer-design-json.md](references/unlayer-design-json.md).
-Compose the design from native blocks: a `heading`, one `text` block per paragraph, and a `button` for the call to action, spaced with each block's `containerPadding` as the reference shows.
+You author the **design JSON** (`content.email.design`) and save it with `workflows-create-email-template`. The server renders the sent email from your design with the same renderer PostHog's visual editor uses, so the template opens as editable blocks for humans and sends exactly what the design describes. Schema, the native blocks and spacing rules every email follows, and a working example in [references/unlayer-design-json.md](references/unlayer-design-json.md).
 
 When talking to the user, call it the template's **design** — the design document format is an internal implementation detail. Always share the template's `_posthogUrl` edit link in your reply after creating or updating, so the user can open it in PostHog directly.
 
@@ -103,7 +102,7 @@ A `function_email` step carries its own email snapshot (`config.inputs.email.val
 Edit it with `workflows-patch-action-email`: the same design operations as `workflows-patch-email-template`, plus an `email_patch` merge for subject, preheader, text, and recipients.
 
 1. `workflows-get` — the step's current design (and its block ids) is in `config.inputs.email.value.design`.
-2. `workflows-patch-action-email` with the workflow id, the step's `action_id`, and your operations and/or `email_patch`. When the operations change the copy, set `text` in the same call's `email_patch`, so the plain-text part matches.
+2. `workflows-patch-action-email` with the workflow id, the step's `action_id`, and your operations and/or `email_patch`. When the operations change the copy, the same call's `email_patch` sets a matching `text`.
 3. The HTML is re-rendered server-side from the patched design, so it never goes stale.
 4. On an active workflow the edit stages a draft — test with `workflows-test-run` (`use_draft=true`) and apply it with `workflows-publish`.
 

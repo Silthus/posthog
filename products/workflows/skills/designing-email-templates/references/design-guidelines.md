@@ -32,7 +32,7 @@ Before composing, decide:
 
 ## Visual details that survive email clients
 
-- **CTA buttons**: a native `button` block with a solid background color, padding, and border-radius (shape in [unlayer-design-json.md](unlayer-design-json.md)). Not an image, and not hand-written button markup in an `html` block, because people can only edit that as raw markup.
+- **CTA buttons**: a native `button` block with a solid background color, padding, and border-radius, so people edit its text and link in the editor (shape in [unlayer-design-json.md](unlayer-design-json.md)).
 - Solid `bgcolor` sections, border accents (a 4px top border in the accent color is cheap and distinctive), and spacer rows are the reliable atmosphere tools. Gradients, background images, and shadows are enhancement-only — the design must work without them.
 - A real text preheader (hidden with inline styles) controls the inbox preview line — write it like ad copy, don't let the client scrape your header nav.
 
@@ -42,7 +42,7 @@ Centered white card on gray, purple gradient header, Arial everywhere at uniform
 
 ## Quality pass before saving
 
-1. Read the design top to bottom: font size, line height, and padding set in each block's values (no inline `<p>` margins), palette values consistent, alt text on images.
+1. Read the design top to bottom: every block carries its spacing values (see [unlayer-design-json.md](unlayer-design-json.md)), palette values consistent, alt text on images.
 2. Squint test on the rendered preview: clear hierarchy — eye lands on headline → key message → CTA.
 3. Confirm Liquid variables have `| default:` fallbacks so no reader sees a blank.
 4. Confirm the plain-text version carries the full message, not a stub.

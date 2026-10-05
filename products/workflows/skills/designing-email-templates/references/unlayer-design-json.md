@@ -138,18 +138,17 @@ interface ContentItem {
 
 The `html` content type is an escape hatch: a single raw-HTML block inside the design. Useful for fragments the block editor can't express, but humans can only edit it as a markup blob.
 
-Write `text`, not `paragraph`. The editor offers a Paragraph block, but a `paragraph` block without the editor's own `textJson` state loses its text when the design loads.
-
 ## Native blocks and spacing
 
-Build the email from native blocks: a `heading`, one `text` block per paragraph, a `button` for each call to action, and a `divider` between sections. People can then edit each block on its own in the visual editor, and each block has an id that a patch operation can address.
+Compose every email from native blocks: a `heading`, one `text` block per paragraph, a `button` per call to action, and a `divider` between sections. People edit each block on its own in the visual editor, and patch operations address it by id.
 
-- Space paragraphs with the block's `containerPadding`, not with markup. `"8px 24px"` on every paragraph gives a 16px gap between paragraphs.
-- Do not put two paragraphs in one `text` block, and do not add inline `<p>` margins. The editor canvas removes paragraph margins, so the email looks cramped there even when it arrives spaced.
-- Set `containerPadding` on every block, and `fontSize` and `lineHeight` on every `heading` and `text` block. A missing value falls back to the editor default (`10px` padding, `14px` text), so that paragraph sits closer and smaller than its neighbors.
-- A button link is an object, never a plain string: `"href": { "name": "web", "values": { "href": "https://example.com/setup", "target": "_blank" } }`. The editor shows the URL in the button's own link field.
+- **Paragraphs** are `text` blocks, one paragraph each. The editor's Paragraph block (`type: "paragraph"`) needs editor-only `textJson` state and loads empty without it.
+- **Spacing values** live on the block: `containerPadding` on every block, plus `fontSize` and `lineHeight` on `heading` and `text`. `"8px 24px"`, `"16px"`, and `"150%"` on every paragraph give a 16px gap.
+- **Markup spacing** shows only in the inbox: the editor canvas strips `<p>` margins, so spacing written as markup looks cramped in the editor. The spacing values are the one place spacing goes.
+- **Defaults** fill a missing spacing value (`10px` padding, `14px` text), so that block sits closer and smaller than its neighbors. Every block, including one added later by a patch operation, carries its own spacing values.
+- **Button links** are an object: `"href": { "name": "web", "values": { "href": "https://example.com/setup", "target": "_blank" } }`. The editor shows the URL in the button's own link field.
 
-The editor fills every other key (`anchor`, `linkStyle`, `hideDesktop`, `selectable`, and so on) with its default when it loads the design, so write only the values you need.
+Write only these values. The editor fills every other key (`anchor`, `linkStyle`, `hideDesktop`, `selectable`, and so on) with its default when it loads the design.
 
 ## Validation constants
 
@@ -284,7 +283,7 @@ A heading, two paragraphs, a button, and a divider, spaced as described above:
 }
 ```
 
-A paragraph added with `add_content` gets no spacing from its neighbors. Give it the same `fontSize`, `lineHeight`, and `containerPadding` as the other paragraphs:
+A paragraph added with `add_content` carries the same spacing values as the other paragraphs:
 
 ```json
 {
