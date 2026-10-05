@@ -292,8 +292,9 @@ sequenceDiagram
 <p>Nothing is cached. A click costs one product API request plus one log append. The hot path (stream replay) gains one fold over a method it already parses. No load concern.</p>
 
 <h2 id="cards">7. Decision cards</h2>
+<p class="muted">Round 1 on 2026-10-05: Michael locked cards 1 to 4 on the recommended option. No card is open.</p>
 
-<div class="card"><span class="status">OPEN</span>
+<div class="card locked"><span class="status">LOCKED 2026-10-05</span>
 <h3>1. Execution path: how a click runs the tool</h3>
 <ul>
   <li><b>A. Browser adapter on the tool's registry entry</b> (product calls its own generated API with the session). Pros: the real "Enable in the product" path. Session auth and RBAC with no new auth surface. Typed. The product owns it next to its renderer. Cons: one small adapter per runnable tool. Compound MCP tools need an equivalent written in the browser. The adapter can drift from the MCP tool, so a registration test guards it.</li>
@@ -301,37 +302,37 @@ sequenceDiagram
   <li><b>C. Sandbox command</b> (new verb on the run command relay). Cons: needs a live sandbox, and it runs with the run's token, not the clicking user's permissions. Reject.</li>
   <li><b>D. Reimplement in Python behind <code>mcp_tools</code></b>. Cons: duplicates generated handlers. Reject.</li>
 </ul>
-<div class="rec"><b>Recommendation: A now.</b> It matches the wording exactly ("as if they clicked Enable in the product") and stays small. B is the later fallback for tools without an adapter. It is a third adapter at the same seam, so A does not block it.</div>
+<div class="rec"><b>Locked by Michael: A.</b> The proxy (B) is not planned. It matches the wording exactly ("as if they clicked Enable in the product") and stays small. B is the later fallback for tools without an adapter. It is a third adapter at the same seam, so A does not block it.</div>
 </div>
 
-<div class="card"><span class="status">OPEN</span>
+<div class="card locked"><span class="status">LOCKED 2026-10-05</span>
 <h3>2. Agent sync: how the agent learns the outcome</h3>
 <ul>
   <li><b>A. Outcome in the run log, plus a hidden context item on the next user message</b> (3.4, 3.5). Pros: reuses the attached-context contract and the log. Pending state comes from the log. No agent release. Cons: the agent learns it on the next turn, not at once. The record is user-asserted, so it goes in the untrusted block.</li>
   <li><b>B. Synthetic tool call and result inside the live ACP session.</b> Pros: the agent sees it as its own tool call. Cons: needs a new agent-server contract and a <code>@posthog/agent</code> release. Session hydration needs matching ids.</li>
   <li><b>C. No sync. The agent re-reads state when it needs to.</b> Pros: nothing to build. Cons: the agent does not know to re-read, and it may offer "Enable" again.</li>
 </ul>
-<div class="rec"><b>Recommendation: A.</b> Buttons render only between turns, so "next turn" is the only time the outcome matters.</div>
+<div class="rec"><b>Locked by Michael: A.</b> Buttons render only between turns, so "next turn" is the only time the outcome matters.</div>
 </div>
 
-<div class="card"><span class="status">OPEN</span>
+<div class="card locked"><span class="status">LOCKED 2026-10-05</span>
 <h3>3. Confirmation UX before and after a destructive call</h3>
 <ul>
   <li><b>A. Inline confirm in place.</b> The button expands into a small card. The body is the product's <code>PermissionPreview</code> when one exists, otherwise the label plus args. It has Confirm and Cancel. Then the card shows a spinner, then the result card or the error. It appears only when the target tool is <code>destructive</code>. Pros: in place, one click for safe tools, the same preview as the permission card. Cons: a second preview surface to keep consistent.</li>
   <li><b>B. Reuse the permission card</b> in the composer area. Cons: <code>PermissionInput</code> belongs to an agent-owned request (<code>requestId</code>, <code>toolCallId</code>, reply to the sandbox). It is not in place, and it needs a live run.</li>
   <li><b>C. Modal dialog</b> (<code>LemonDialog</code>). Pros: familiar product pattern. Cons: leaves the thread context. It is not "in place".</li>
 </ul>
-<div class="rec"><b>Recommendation: A.</b> The permission card stays the gate for calls the agent makes (<code>toolPolicy.ts</code>). A click is the user's own act, so the inline confirm is its gate. This keeps the map rule "a button that writes goes through the same approval a typed request would" without coupling to the agent's request lifecycle. After success the button is spent. After a failure it offers "Try again".</div>
+<div class="rec"><b>Locked by Michael: A.</b> The permission card stays the gate for calls the agent makes (<code>toolPolicy.ts</code>). A click is the user's own act, so the inline confirm is its gate. This keeps the map rule "a button that writes goes through the same approval a typed request would" without coupling to the agent's request lifecycle. After success the button is spent. After a failure it offers "Try again".</div>
 </div>
 
-<div class="card"><span class="status">OPEN</span>
+<div class="card locked"><span class="status">LOCKED 2026-10-05</span>
 <h3>4. Element schema and where args come from</h3>
 <ul>
   <li><b>A. Button now, with every arg agent-filled and provenance-bound. Later controls declare user-filled args</b> (3.6). Field types come from the adapter's zod schema. Pros: smallest v1, and selects and forms extend it without a new contract. Cons: a form needs a renderer per input type later.</li>
   <li><b>B. A json-render component catalog now</b> (Zod prop schemas per component, the agent composes them). Pros: the full Vercel pattern. Cons: generative UI, which the map rules out of scope. Large.</li>
   <li><b>C. Form generated from the target tool's JSON schema</b> (the generative UI research recommendation), shown for every run action. Pros: general. Cons: every click becomes a form. Bad for "Enable".</li>
 </ul>
-<div class="rec"><b>Recommendation: A.</b> It keeps the research's typed form as the <code>form</code> control later, and the field types come from the same zod schema the adapter validates.</div>
+<div class="rec"><b>Locked by Michael: A.</b> It keeps the research's typed form as the <code>form</code> control later, and the field types come from the same zod schema the adapter validates.</div>
 </div>
 
 <div class="card locked"><span class="status">LOCKED</span>
@@ -368,7 +369,7 @@ sequenceDiagram
   <li><b>What can break:</b> a wrong adapter writes the wrong thing with the user's session. The user can only do what they could already do in the product, and destructive tools confirm first.</li>
   <li><b>Who notices:</b> the user, in place, and the activity log, which records the change under the user, the same as a product click.</li>
   <li><b>Isolation:</b> everything sits behind <code>posthog-ai-chat-actions</code>. Older clients ignore the new log method. The agent runtime does not change.</li>
-  <li><b>Out of scope:</b> the generic proxy (card 1 B), generative UI, external MCP hosts (#272 renders there through MCP apps and <code>app.callServerTool</code>), and the legacy runtime.</li>
+  <li><b>Out of scope:</b> the generic MCP proxy (card 1 B, not chosen), generative UI, external MCP hosts (#272 renders there through MCP apps and <code>app.callServerTool</code>), and the legacy runtime.</li>
 </ul>
 </main>
 <script type="module">
