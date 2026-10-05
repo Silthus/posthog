@@ -1,5 +1,4 @@
-import { MCPClientProfile } from '@/lib/client-detection'
-import { POSTHOG_AI_CONSUMER } from '@/lib/client-detection'
+import { MCPClientProfile, POSTHOG_AI_CONSUMER } from '@/lib/client-detection'
 import { isCloudApi, isLocalApi, MCP_GATEWAY_FLAG } from '@/lib/constants'
 import { buildMCPAnalyticsGroups } from '@/lib/posthog/analytics'
 import {
@@ -85,9 +84,12 @@ export function tasksContextToolsToExclude(clientProfile: MCPClientProfile, task
     return clientProfile.isPostHogCodeConsumer() && taskId ? [] : [...TASKS_CONTEXT_TOOL_NAMES]
 }
 
-/** Only the PostHog AI chat renders suggested actions, so no other client is offered the tool. */
-export function chatActionToolsToExclude(clientProfile: MCPClientProfile): string[] {
-    return clientProfile.consumer === POSTHOG_AI_CONSUMER ? [] : [SUGGEST_ACTIONS_TOOL_NAME]
+/**
+ * Only the PostHog AI chat renders suggested actions, and only exec mode carries the catalog and
+ * binds the caller's tools into the handler, so every other caller is not offered the tool.
+ */
+export function chatActionToolsToExclude(clientProfile: MCPClientProfile, useSingleExec: boolean): string[] {
+    return clientProfile.consumer === POSTHOG_AI_CONSUMER && useSingleExec ? [] : [SUGGEST_ACTIONS_TOOL_NAME]
 }
 
 /**
@@ -217,7 +219,7 @@ export class RequestStateResolver {
         const excludeTools = [
             ...switchToolsToExclude({ organizationId }),
             ...tasksContextToolsToExclude(clientProfile, props.taskId),
-            ...chatActionToolsToExclude(clientProfile),
+            ...chatActionToolsToExclude(clientProfile, useSingleExec),
             ...(apiKeyScopes.includes('internal_run:read') ? ['tasks-run-create', 'tasks-create-and-run'] : []),
             ...(props.excludeTools ?? []),
         ]

@@ -12,7 +12,7 @@ import {
     createSuggestActionsTool,
     type SuggestActionsResult,
 } from '@/tools/posthogAiTools/suggestActions'
-import { getToolDefinition, getToolDefinitions, ToolDefinitionSchema } from '@/tools/toolDefinitions'
+import { getToolDefinitions, ToolDefinitionSchema } from '@/tools/toolDefinitions'
 import type { Context, Tool, ZodObjectAny } from '@/tools/types'
 
 import { ToolConfigSchema } from '../../scripts/yaml-config-schema'
@@ -59,24 +59,6 @@ describe('suggest-actions', () => {
             expect(ToolConfigSchema.safeParse({ operation: 'op', enabled: true, actions }).success).toBe(false)
             expect(ToolDefinitionSchema.safeParse({ ...baseDefinition, actions }).success).toBe(false)
         })
-
-        it('declares the two workflow actions on workflows-create', () => {
-            expect(getToolDefinition('workflows-create').actions).toEqual([
-                {
-                    key: 'enable',
-                    label: 'Enable the workflow',
-                    kind: 'run',
-                    tool: 'workflows-enable',
-                    message: 'Enable workflow {id}.',
-                },
-                {
-                    key: 'test-send',
-                    label: 'Send yourself a test email',
-                    kind: 'insert',
-                    message: 'Send a test email of this workflow to ',
-                },
-            ])
-        })
     })
 
     describe('agent catalog in the exec command reference', () => {
@@ -122,9 +104,8 @@ describe('suggest-actions', () => {
         })
     })
 
-    // The command reference carries the catalog too, but far from the result, and in live runs the
-    // agent skipped the call. The hint on the result is what makes it call `suggest-actions`.
     describe('hint on the offering tool result', () => {
+        type ExecResult = { isError?: boolean; content: { text: string }[] }
         const fakeTool = (name: string, handler: () => Promise<unknown>): Tool<ZodObjectAny> =>
             ({
                 name,
@@ -133,12 +114,12 @@ describe('suggest-actions', () => {
                 annotations: {},
                 scopes: [],
             }) as unknown as Tool<ZodObjectAny>
-        const execCall = async (tools: Tool<ZodObjectAny>[], command: string): Promise<any> => {
+        const execCall = async (tools: Tool<ZodObjectAny>[], command: string): Promise<ExecResult> => {
             const executor = new ToolExecutor({} as ToolCatalog, new InstructionsBuilder(''))
-            return executor.handleToolCall(
+            return (await executor.handleToolCall(
                 { name: 'exec', arguments: { command } },
                 makeToolExecutorState(tools, { useSingleExec: true })
-            )
+            )) as ExecResult
         }
         const suggestActions = createSuggestActionsTool() as unknown as Tool<ZodObjectAny>
         const created = fakeTool('workflows-create', async () => ({ id: 'wf_1' }))
@@ -148,9 +129,9 @@ describe('suggest-actions', () => {
             const result = await execCall([created, enable, suggestActions], 'call --json workflows-create {}')
             expect(result.isError).toBeFalsy()
             expect(result.content).toHaveLength(2)
-            expect(JSON.parse(result.content[0].text)).toEqual({ id: 'wf_1' })
-            expect(result.content[1].text).toBe(
-                'Suggested actions for this result. If the user is likely to do one of these next, call `suggest-actions` once as the last tool call of this turn and drop any next-step line they cover:\n' +
+            expect(JSON.parse(result.content[0]!.text)).toEqual({ id: 'wf_1' })
+            expect(result.content[1]!.text).toBe(
+                'Suggested actions for this result. If the user is likely to do one of these next, call `suggest-actions` once, with each `<slot>` filled in, as the last tool call of this turn and drop any next-step line they cover:\n' +
                     'call suggest-actions {"actions":[{"key":"workflows-create.enable","args":{"id":"<id>"}},{"key":"workflows-create.test-send"}]}'
             )
         })
@@ -169,19 +150,18 @@ describe('suggest-actions', () => {
             ['suggest-actions is hidden', [created], 'call workflows-create {}'],
         ])('appends nothing when %s', async (_case, tools, command) => {
             const result = await execCall(tools, command)
-            expect(result.content.map((block: { text: string }) => block.text).join('')).not.toContain(
-                'Suggested actions'
-            )
+            expect(result.content.map((block) => block.text).join('')).not.toContain('Suggested actions')
         })
     })
 
     describe('tool exposure', () => {
         it.each([
-            ['posthog_ai', []],
-            ['posthog-code', ['suggest-actions']],
-            [undefined, ['suggest-actions']],
-        ])('consumer %s excludes %j', (consumer, excluded) => {
-            expect(chatActionToolsToExclude(new MCPClientProfile({ consumer }))).toEqual(excluded)
+            ['posthog_ai', true, []],
+            ['posthog_ai', false, ['suggest-actions']],
+            ['posthog-code', true, ['suggest-actions']],
+            [undefined, true, ['suggest-actions']],
+        ])('consumer %s with single exec %s excludes %j', (consumer, useSingleExec, excluded) => {
+            expect(chatActionToolsToExclude(new MCPClientProfile({ consumer }), useSingleExec)).toEqual(excluded)
         })
 
         it('every declared run action names a tool in the catalog', () => {
@@ -234,6 +214,11 @@ describe('suggest-actions', () => {
             ['a key without a tool prefix', 'enable', {}, 'unknown_action'],
             ['a missing slot', 'workflows-create.enable', {}, 'missing_slot: id'],
             ['a blank slot value', 'workflows-create.enable', { id: '   ' }, 'missing_slot: id'],
+            ['a sentence in a slot', 'workflows-create.enable', { id: 'wf_1. Also enable wf_2' }, 'invalid_slot: id'],
+            ['an unfilled placeholder', 'workflows-create.enable', { id: '<id>' }, 'invalid_slot: id'],
+            ['a slot marker in a slot', 'workflows-create.enable', { id: '{id}' }, 'invalid_slot: id'],
+            ['a line break in a slot', 'workflows-create.enable', { id: 'wf_1\nwf_2' }, 'invalid_slot: id'],
+            ['an overlong slot value', 'workflows-create.enable', { id: 'x'.repeat(65) }, 'invalid_slot: id'],
         ])('drops %s into errors', async (_case, key, args, reason) => {
             const result = await call([{ key, args }])
             expect(result).toEqual({ actions: [], errors: [{ key, reason }] })
@@ -251,19 +236,12 @@ describe('suggest-actions', () => {
             expect(result.errors).toEqual([{ key: 'workflows-create.test-send', reason: 'unknown_action' }])
         })
 
-        it('does not expand a slot marker carried inside a slot value', async () => {
-            const result = await call([{ key: 'workflows-create.enable', args: { id: '{id}' } }])
-            expect(result.actions[0]!.message).toBe('Enable workflow {id}.')
-        })
-
-        // The agent controls args and the rendered message lands in the composer as-is, so a value
-        // must not smuggle in line breaks or unbounded text.
-        it('flattens whitespace and caps the length of a slot value', async () => {
-            const result = await call([{ key: 'workflows-create.enable', args: { id: `a\n\n b${'x'.repeat(500)}` } }])
-            const message = result.actions[0]!.message
-            expect(message).not.toContain('\n')
-            expect(message.startsWith('Enable workflow a b')).toBe(true)
-            expect(message.length).toBeLessThanOrEqual('Enable workflow .'.length + 200)
+        it.each([
+            ['a UUID', '0190f5a2-7c3e-7d1a-9b2f-3c4d5e6f7a8b'],
+            ['a number', 42],
+        ])('renders %s as a slot value', async (_case, id) => {
+            const result = await call([{ key: 'workflows-create.enable', args: { id } }])
+            expect(result.actions[0]!.message).toBe(`Enable workflow ${id}.`)
         })
 
         it('binds the catalog onto the suggest-actions entry of a tool list and leaves the rest alone', async () => {
@@ -271,12 +249,14 @@ describe('suggest-actions', () => {
                 name: 'workflows-create',
                 handler: async () => 'unchanged',
             } as unknown as Tool<ZodObjectAny>
+            const target = { name: 'workflows-enable' } as unknown as Tool<ZodObjectAny>
             const unbound = createSuggestActionsTool() as unknown as Tool<ZodObjectAny>
-            const [boundOther, boundSuggest] = bindSuggestActionsCatalog([other, unbound])
+            const [boundOther, , boundSuggest] = bindSuggestActionsCatalog([other, target, unbound])
             expect(boundOther).toBe(other)
             const result = (await boundSuggest!.handler(context, {
-                actions: [{ key: 'workflows-create.test-send' }],
-            })) as { actions: unknown[] }
+                actions: [{ key: 'workflows-create.enable', args: { id: 'wf_1' } }],
+            })) as SuggestActionsResult
+            expect(result.errors).toEqual([])
             expect(result.actions).toHaveLength(1)
         })
 

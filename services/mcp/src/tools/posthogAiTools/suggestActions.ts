@@ -14,8 +14,11 @@ import type { Context, Tool, ToolBase, ZodObjectAny } from '@/tools/types'
 
 export const SUGGEST_ACTIONS_TOOL_NAME = 'suggest-actions'
 
-/** Keeps an agent-supplied value from smuggling line breaks or unbounded text into the composer. */
-const MAX_SLOT_VALUE_LENGTH = 200
+/**
+ * A click sends the rendered message as the user's own turn under a fixed label, so a slot value
+ * is an identifier and never carries words of its own.
+ */
+const SLOT_VALUE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 
 const schema = z.object({
     actions: z
@@ -53,10 +56,12 @@ export interface SuggestActionsResult {
     errors: { key: string; reason: string }[]
 }
 
-function renderSlotValue(value: string | number | boolean): string {
-    const flat = String(value).replace(/\s+/g, ' ').trim()
-    // Slice by code point so the cap cannot split a surrogate pair.
-    return Array.from(flat).slice(0, MAX_SLOT_VALUE_LENGTH).join('')
+function slotValueProblem(raw: string | number | boolean | undefined): 'missing_slot' | 'invalid_slot' | null {
+    const value = raw === undefined ? '' : String(raw).trim()
+    if (!value) {
+        return 'missing_slot'
+    }
+    return SLOT_VALUE_PATTERN.test(value) ? null : 'invalid_slot'
 }
 
 function resolveAction(
@@ -80,13 +85,12 @@ function resolveAction(
     const values = new Map<string, string>()
     for (const slot of chatActionSlots(template)) {
         const raw = pick.args?.[slot]
-        const value = raw === undefined ? '' : renderSlotValue(raw)
-        if (!value) {
-            return { reason: `missing_slot: ${slot}` }
+        const problem = slotValueProblem(raw)
+        if (problem) {
+            return { reason: `${problem}: ${slot}` }
         }
-        values.set(slot, value)
+        values.set(slot, String(raw).trim())
     }
-    // One pass over the template, so a value that contains `{other}` is never expanded itself.
     const message = renderChatActionTemplate(template, (slot) => values.get(slot) ?? '')
     return { key: pick.key, label: action.label, kind: action.kind, message }
 }
@@ -151,7 +155,7 @@ export function renderChatActionHint(tool: string, actions: ChatAction[]): strin
         return { key: chatActionKey(tool, action.key), ...args }
     })
     return (
-        'Suggested actions for this result. If the user is likely to do one of these next, call `suggest-actions` once as the last tool call of this turn and drop any next-step line they cover:\n' +
+        'Suggested actions for this result. If the user is likely to do one of these next, call `suggest-actions` once, with each `<slot>` filled in, as the last tool call of this turn and drop any next-step line they cover:\n' +
         `call ${SUGGEST_ACTIONS_TOOL_NAME} ${JSON.stringify({ actions: picks })}`
     )
 }
