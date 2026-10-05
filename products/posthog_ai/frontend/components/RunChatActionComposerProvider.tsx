@@ -2,7 +2,11 @@ import { useActions, useValues } from 'kea'
 import { type ReactNode, useMemo } from 'react'
 
 import { type RunInteractionLogicProps, runInteractionLogic } from '../logics/runInteractionLogic'
-import { type ChatActionComposer, ChatActionComposerProvider } from './ChatActionComposerContext'
+import {
+    type ChatActionComposer,
+    ChatActionComposerProvider,
+    PENDING_REQUEST_REASON,
+} from './ChatActionComposerContext'
 
 /**
  * Wires the suggested-action buttons to the runner's composer. Kept as its own component so the draft
@@ -23,7 +27,8 @@ export function RunChatActionComposerProvider({
     children: ReactNode
 }): JSX.Element {
     const logic = runInteractionLogic(logicProps)
-    const { composerForm, cancellationState, stagedAttachments, isSubmitting } = useValues(logic)
+    const { composerForm, cancellationState, stagedAttachments, isSubmitting, pendingPermissionRequest } =
+        useValues(logic)
     const { setComposerFormValues, submitComposerForm } = useActions(logic)
     const composerOccupied = composerForm.draft.trim().length > 0 || stagedAttachments.length > 0
     const value = useMemo<ChatActionComposer | null>(() => {
@@ -48,6 +53,7 @@ export function RunChatActionComposerProvider({
                 isSubmitting,
                 composerOccupied,
             }),
+            insertDisabledReason: pendingPermissionRequest ? PENDING_REQUEST_REASON : null,
         }
     }, [
         readOnly,
@@ -57,6 +63,7 @@ export function RunChatActionComposerProvider({
         composerOccupied,
         cancellationState,
         isSubmitting,
+        pendingPermissionRequest,
         setComposerFormValues,
         submitComposerForm,
     ])

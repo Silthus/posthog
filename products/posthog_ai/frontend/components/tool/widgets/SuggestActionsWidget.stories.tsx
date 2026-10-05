@@ -121,6 +121,29 @@ function SuggestActionsThread({
             }),
             'replay'
         )
+        // A tool call right before the card, so a skin that folds tool runs would have to fold the buttons too.
+        logic.actions.ingestAcpFrame(
+            frame({
+                sessionUpdate: 'tool_call',
+                toolCallId: 'create-1',
+                title: 'Create workflow',
+                serverName: 'posthog',
+                toolName: 'exec',
+                status: 'in_progress',
+                rawInput: { command: 'call workflows-create {"name":"Welcome email"}' },
+                _meta: { claudeCode: { toolName: 'mcp__posthog__exec' } },
+            }),
+            'replay'
+        )
+        logic.actions.ingestAcpFrame(
+            frame({
+                sessionUpdate: 'tool_call_update',
+                toolCallId: 'create-1',
+                status: 'completed',
+                rawOutput: { content: [{ type: 'text', text: '{"id":"wf_1"}' }] },
+            }),
+            'replay'
+        )
         logic.actions.ingestAcpFrame(
             frame({
                 sessionUpdate: 'tool_call',

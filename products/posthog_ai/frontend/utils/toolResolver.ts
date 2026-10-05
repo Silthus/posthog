@@ -18,10 +18,10 @@ export interface ResolvedToolCall extends ResolvedToolKey {
     claudeToolName?: string
 }
 
-/** Reads `_meta.claudeCode` off a tool frame's `_meta` without trusting its shape. */
 /** The resolved key of a PostHog exec command whose verb or `call` sub-tool could not be read. */
 export const UNPARSED_EXEC_KEY = '__posthog_exec_unknown__'
 
+/** Reads `_meta.claudeCode` off a tool frame's `_meta` without trusting its shape. */
 export function getClaudeCodeMeta(meta: unknown): Record<string, unknown> | undefined {
     if (typeof meta !== 'object' || meta === null) {
         return undefined

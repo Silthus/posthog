@@ -12,7 +12,12 @@ export interface ChatActionComposer {
     send: (message: string) => void
     /** Why `send` is blocked right now (a draft in progress, a run stopping), or null when it can go. */
     sendDisabledReason: string | null
+    /** Why `insert` is blocked right now (a pending request hides the composer), or null when it can go. */
+    insertDisabledReason: string | null
 }
+
+/** A pending permission or question takes the composer's place, so text inserted there stays out of sight. */
+export const PENDING_REQUEST_REASON = 'Answer the request below first'
 
 const ChatActionComposerContext = createContext<ChatActionComposer | null>(null)
 

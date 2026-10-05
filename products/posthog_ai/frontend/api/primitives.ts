@@ -52,7 +52,11 @@ export { DEFAULT_SUGGESTIONS_DATA } from '../components/suggestions/suggestionsD
 export { Thread } from '../components/Thread'
 // The composer seam the suggested-action buttons drive; a host that renders a thread above its own
 // composer provides one, as the runner and the Max panel do.
-export { ChatActionComposerProvider, useChatActionComposer } from '../components/ChatActionComposerContext'
+export {
+    ChatActionComposerProvider,
+    PENDING_REQUEST_REASON,
+    useChatActionComposer,
+} from '../components/ChatActionComposerContext'
 export type { ChatActionComposer } from '../components/ChatActionComposerContext'
 export { ThreadView } from '../components/ThreadView'
 export type { ThreadSkin } from '../components/quill/quillThreadContext'

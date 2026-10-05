@@ -32,6 +32,7 @@ jest.mock('../maxThreadLogic', () => {
                 setQuestion: (question: string) => ({ question }),
                 setStubContextDisabledReason: (reason: string | undefined) => ({ reason }),
                 setStubShared: (shared: boolean) => ({ shared }),
+                setStubPendingRequest: (pending: boolean) => ({ pending }),
             }),
             reducers({
                 question: ['', { setQuestion: (_: string, { question }: { question: string }) => question }],
@@ -43,6 +44,13 @@ jest.mock('../maxThreadLogic', () => {
                     },
                 ],
                 queueDisabledReason: [undefined as string | undefined, {}],
+                pendingSandboxPermissionRequest: [
+                    null as unknown,
+                    {
+                        setStubPendingRequest: (_: unknown, { pending }: { pending: boolean }) =>
+                            pending ? { requestId: 'req-1' } : null,
+                    },
+                ],
                 isSharedThread: [false, { setStubShared: (_: boolean, { shared }: { shared: boolean }) => shared }],
             }),
         ]),
@@ -52,6 +60,7 @@ jest.mock('../maxThreadLogic', () => {
 interface StubActions {
     setStubContextDisabledReason: (reason: string | undefined) => void
     setStubShared: (shared: boolean) => void
+    setStubPendingRequest: (pending: boolean) => void
 }
 
 /** The stub's test-only actions, absent from the real logic's type. */
@@ -67,6 +76,7 @@ function Probe(): JSX.Element {
             <button onClick={() => composer.insert('Send a test email of this workflow to ')}>insert</button>
             <button onClick={() => composer.send('Enable workflow wf_1.')}>send</button>
             <span>{composer.sendDisabledReason ?? 'none'}</span>
+            <span>insert: {composer.insertDisabledReason ?? 'live'}</span>
         </>
     )
 }
@@ -112,6 +122,12 @@ describe('MaxChatActionComposerProvider', () => {
         expect(screen.getByText('none')).toBeInTheDocument()
         arrange()
         expect(await screen.findByText(reason)).toBeInTheDocument()
+    })
+
+    it('blocks insert while a pending request takes the place of the input', async () => {
+        expect(screen.getByText('insert: live')).toBeInTheDocument()
+        stubActions().setStubPendingRequest(true)
+        expect(await screen.findByText('insert: Answer the request below first')).toBeInTheDocument()
     })
 
     // Another user's conversation has no input, so its buttons must not write into one.

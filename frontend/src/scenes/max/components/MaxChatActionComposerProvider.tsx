@@ -1,7 +1,11 @@
 import { useActions, useMountedLogic, useValues } from 'kea'
 import { type ReactNode, useMemo } from 'react'
 
-import { type ChatActionComposer, ChatActionComposerProvider } from 'products/posthog_ai/frontend/api/primitives'
+import {
+    type ChatActionComposer,
+    ChatActionComposerProvider,
+    PENDING_REQUEST_REASON,
+} from 'products/posthog_ai/frontend/api/primitives'
 
 import { maxLogic } from '../maxLogic'
 import { maxThreadLogic } from '../maxThreadLogic'
@@ -12,7 +16,8 @@ import { maxThreadLogic } from '../maxThreadLogic'
  */
 export function MaxChatActionComposerProvider({ children }: { children: ReactNode }): JSX.Element {
     const threadLogic = useMountedLogic(maxThreadLogic)
-    const { question, contextDisabledReason, queueDisabledReason, isSharedThread } = useValues(threadLogic)
+    const { question, contextDisabledReason, queueDisabledReason, isSharedThread, pendingSandboxPermissionRequest } =
+        useValues(threadLogic)
     const { askMax, setQuestion } = useActions(threadLogic)
     const { focusInput } = useActions(maxLogic)
     const value = useMemo<ChatActionComposer | null>(() => {
@@ -31,6 +36,7 @@ export function MaxChatActionComposerProvider({ children }: { children: ReactNod
                 (question.trim() ? 'Send or clear your draft first' : null) ??
                 queueDisabledReason ??
                 null,
+            insertDisabledReason: pendingSandboxPermissionRequest ? PENDING_REQUEST_REASON : null,
         }
     }, [
         isSharedThread,
@@ -38,6 +44,7 @@ export function MaxChatActionComposerProvider({ children }: { children: ReactNod
         question,
         contextDisabledReason,
         queueDisabledReason,
+        pendingSandboxPermissionRequest,
         askMax,
         setQuestion,
         focusInput,

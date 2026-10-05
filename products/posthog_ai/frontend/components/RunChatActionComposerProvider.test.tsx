@@ -25,6 +25,7 @@ jest.mock('../logics/runInteractionLogic', () => {
                 setStubCancelling: (state: string | null) => ({ state }),
                 setStubAttachments: (attachments: unknown[]) => ({ attachments }),
                 setStubSubmitting: (submitting: boolean) => ({ submitting }),
+                setStubPendingRequest: (pending: boolean) => ({ pending }),
             }),
             reducers({
                 composerForm: [
@@ -40,6 +41,13 @@ jest.mock('../logics/runInteractionLogic', () => {
                 stagedAttachments: [
                     [] as unknown[],
                     { setStubAttachments: (_: unknown, { attachments }: { attachments: unknown[] }) => attachments },
+                ],
+                pendingPermissionRequest: [
+                    null as unknown,
+                    {
+                        setStubPendingRequest: (_: unknown, { pending }: { pending: boolean }) =>
+                            pending ? { requestId: 'req-1' } : null,
+                    },
                 ],
                 isSubmitting: [
                     false,
@@ -69,6 +77,7 @@ interface StubActions {
     setStubCancelling: (state: string | null) => void
     setStubAttachments: (attachments: unknown[]) => void
     setStubSubmitting: (submitting: boolean) => void
+    setStubPendingRequest: (pending: boolean) => void
 }
 
 /** The stub's test-only actions, absent from the real logic's type. */
@@ -86,6 +95,7 @@ function Probe(): JSX.Element {
             <button onClick={() => composer.insert('Send a test email of this workflow to ')}>insert</button>
             <button onClick={() => composer.send('Enable workflow wf_1.')}>send</button>
             <span data-attr="reason">{composer.sendDisabledReason ?? 'none'}</span>
+            <span>insert: {composer.insertDisabledReason ?? 'live'}</span>
         </>
     )
 }
@@ -120,6 +130,13 @@ describe('RunChatActionComposerProvider', () => {
             ])
             .toNotHaveDispatchedActions(['submitComposerForm'])
         expect(focusComposer).toHaveBeenCalledTimes(1)
+    })
+
+    it('blocks insert while a pending request hides the composer', async () => {
+        renderProvider()
+        expect(screen.getByText('insert: live')).toBeInTheDocument()
+        stubActions(logic).setStubPendingRequest(true)
+        expect(await screen.findByText('insert: Answer the request below first')).toBeInTheDocument()
     })
 
     it('gives a read-only view no composer', () => {

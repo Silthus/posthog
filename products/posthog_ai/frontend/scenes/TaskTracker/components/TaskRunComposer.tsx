@@ -109,9 +109,12 @@ export function TaskRunComposer({
         flushDraftRef.current = draft.flush
     }, [flushDraftRef, draft.flush])
 
+    // Starts at the request current on mount, so a remount never takes focus for a request it already served.
+    const handledFocusRequest = useRef(focusRequest)
     useEffect(() => {
         const textArea = textAreaRef.current
-        if (focusRequest > 0 && textArea) {
+        if (focusRequest !== handledFocusRequest.current && textArea) {
+            handledFocusRequest.current = focusRequest
             textArea.focus()
             textArea.setSelectionRange(textArea.value.length, textArea.value.length)
         }

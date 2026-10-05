@@ -41,7 +41,7 @@ const structured = (actions: unknown[], errors: unknown[] = []): unknown => ({
 })
 
 function makeComposer(overrides: Partial<ChatActionComposer> = {}): ChatActionComposer {
-    return { insert: jest.fn(), send: jest.fn(), sendDisabledReason: null, ...overrides }
+    return { insert: jest.fn(), send: jest.fn(), sendDisabledReason: null, insertDisabledReason: null, ...overrides }
 }
 
 function renderWidget(
@@ -107,6 +107,23 @@ describe('SuggestActionsWidget', () => {
         expect(composer.send).not.toHaveBeenCalled()
         fireEvent.click(screen.getByText('Send yourself a test email'))
         expect(composer.insert).toHaveBeenCalled()
+    })
+
+    it('disables insert while the composer is hidden behind a pending request', () => {
+        const composer = makeComposer({ insertDisabledReason: 'Answer the request below first' })
+        renderWidget(toolMessage(structured(ACTIONS)), { composer })
+        fireEvent.click(screen.getByText('Send yourself a test email'))
+        expect(composer.insert).not.toHaveBeenCalled()
+    })
+
+    it('renders a button per pick when two picks share a key', () => {
+        const composer = makeComposer()
+        const second = { ...ACTIONS[1], message: 'Enable workflow wf_2.' }
+        renderWidget(toolMessage(structured([ACTIONS[1], second])), { composer })
+        const buttons = screen.getAllByText('Enable the workflow')
+        expect(buttons).toHaveLength(2)
+        fireEvent.click(buttons[1]!)
+        expect(composer.send).toHaveBeenCalledWith('Enable workflow wf_2.')
     })
 
     it('renders every button disabled when no surface provides a composer', () => {

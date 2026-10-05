@@ -33,6 +33,11 @@ const CONNECTED_PROJECT_SUB_TOOLS = new Set(['posthog-connection-call', 'posthog
 /** PostHog sub-tools that act on real people; the exec server never asks for confirmation itself. */
 const DESTRUCTIVE_CHAT_ACTION_SUB_TOOLS = new Set(['workflows-enable', 'workflows-publish'])
 
+/** A publish without `confirm: true` only previews its impact, so it needs no card; an unreadable body might not. */
+function isPublishPreview(innerToolName: string, innerInput: Record<string, unknown> | undefined): boolean {
+    return innerToolName === 'workflows-publish' && innerInput !== undefined && innerInput.confirm !== true
+}
+
 function isConnectedProjectSubTool(subTool: string): boolean {
     return CONNECTED_PROJECT_SUB_TOOLS.has(subTool.toLowerCase())
 }
@@ -43,9 +48,10 @@ function isConnectedProjectSubTool(subTool: string): boolean {
  * this parser does not know. Full-auto checks this too, so both paths fail closed the same way.
  */
 export function requiresChatActionApproval(record: PermissionRequestRecord): boolean {
-    const { resolvedKey, innerToolName } = resolveToolCall(record.rawToolCall)
+    const { resolvedKey, innerToolName, innerInput } = resolveToolCall(record.rawToolCall)
     if (innerToolName != null) {
-        return DESTRUCTIVE_CHAT_ACTION_SUB_TOOLS.has(innerToolName.toLowerCase())
+        const subTool = innerToolName.toLowerCase()
+        return DESTRUCTIVE_CHAT_ACTION_SUB_TOOLS.has(subTool) && !isPublishPreview(subTool, innerInput)
     }
     return resolvedKey === UNPARSED_EXEC_KEY && isExecCallVerb(record)
 }

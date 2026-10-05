@@ -65,7 +65,7 @@ export function SuggestActionsWidget(props: ToolRendererProps): JSX.Element {
             return 'Not available in this view'
         }
         if (action.kind === 'insert') {
-            return undefined
+            return composer.insertDisabledReason ?? undefined
         }
         if (!turnComplete) {
             return 'Wait for the agent to finish this turn'
@@ -78,7 +78,7 @@ export function SuggestActionsWidget(props: ToolRendererProps): JSX.Element {
             <div className="flex flex-wrap gap-2">
                 {actions.map((action) => (
                     <LemonButton
-                        key={action.key}
+                        key={`${action.key}:${action.message}`}
                         type="secondary"
                         size="small"
                         data-attr="posthog-ai-suggested-action"
