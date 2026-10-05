@@ -1,0 +1,69 @@
+SCENE READY All templates
+Make it yours: Welcome email sequence
+signed_up
+2 EMAILS IN THIS WORKFLOW
+1
+Welcome!
+Right away
+2
+Let us know if we can help!
+After 1 day
+Email 1 of 2
+Subject
+Visual
+Plain text
+Change with PostHog AI
+Send me a test
+Enable and open workflow
+Enable workflow
+It starts sending right away, from Example via PostHog <sandbox@example.com>.
+All templates
+Make it yours: Welcome email sequence
+signed_up
+2 EMAILS IN THIS WORKFLOW
+1
+Welcome!
+Right away
+2
+Let us know if we can help!
+After 1 day
+Email 1 of 2
+Subject
+Welcome!
+Visual
+Plain text
+Hi {{ person.properties.first_name }} welcome!
+We are excited to have you around. Feel free to respond directly to this email
+if you have any feedback or this is anything we can do to help you!
+Best
+Change with PostHog AI
+Send me a test
+Enable and open workflow
+Enable workflow
+It starts sending right away, from Example via PostHog <sandbox@example.com>.
+PostHog AI
+How can I help you build?
+Build something people want.
+What's new in PostHog AI
+Connect GitHub
+Designing email templates skill
+Email 1 of 2: Welcome!
+Attach
+Describe the task in detail…
+Auto
+Default · Claude Sonnet 5.5
+High
+Try PostHog AI for…
+Coding
+Product analytics
+SQL
+Session replay
+SDK setup
+Feature flags
+Experiments
+Surveys
+Docs
+Full scene {"x":16,"y":16,"width":1056,"height":732}
+Narrow scene {"x":16,"y":16,"width":520,"height":1157}
+Switched to email 2 and context updated.
+Manual close stayed closed across switching; Change with PostHog AI reopened with email 1.

@@ -1,0 +1,12 @@
+
+  ci:preflight — 5 changed file(s) vs origin/feat/workflows-first-run-make-it-yours
+
+   → [staleness] branch freshness vs master
+       last synced 7d ago — merge master in: git merge origin/master
+   ✓ [complexity] cyclomatic complexity (warn >10, >15 in tests)
+       5 file(s) · ok
+   ✓ [size] file size (warn >1000 lines)
+       5 file(s) · ok
+
+  summary {"changed_files": 5, "triggered": ["complexity", "size"], "failures": 0, "mode": "strict"}
+
