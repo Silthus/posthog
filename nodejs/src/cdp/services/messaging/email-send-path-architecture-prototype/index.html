@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PROTOTYPE: email send path architecture brief (#294)</title>
+<title>PROTOTYPE: email send path architecture brief (#294), round 1 locked</title>
 <style>
   :root {
     --accent: #c2410c;
@@ -85,7 +85,7 @@
 <p>This brief proposes how the method splits into small steps and submodules while <code>EmailService</code> stays a deep module with one public method, which seams the outside-in tests drive, which cases are missing, how the behavior-preserving refactor lands as PRs after the test harness, and which comments survive. The open sandbox-sender stack (PostHog/posthog#111904 → #112071) adds about 400 more lines to the same method, so the design shows where that lands too.</p>
 
 <h2 id="glossary">2. Glossary</h2>
-<p class="muted">Terms this brief uses. Card C11 decides whether they go into a <code>CONTEXT.md</code>.</p>
+<p class="muted">Terms this brief uses. Per card C11 they go into <code>services/messaging/GLOSSARY.md</code> with slice R3.</p>
 <table>
   <tr><th>Term</th><th>Meaning</th><th>Not to be confused with</th></tr>
   <tr><td><b>Send</b></td><td>One <code>executeSendEmail</code> call for one email step: one message to <code>to</code> + <code>cc</code> + <code>bcc</code>. A send can run many times (each reschedule re-runs it).</td><td>A delivery (one copy to one address; SES counts these).</td></tr>
@@ -466,117 +466,118 @@ sequenceDiagram
 </ul>
 
 <h2 id="cards">13. Decision cards</h2>
-<h3>Open</h3>
+<h3>Locked in round 1</h3>
+<p class="muted">Michael accepted every recommendation in round 1 on 2026-10-06. No card is open.</p>
 
-<div class="card"><h4>C1 · Outcome model<span class="status open">open</span></h4>
+<div class="card locked"><h4>C1 · Outcome model<span class="status locked">locked</span></h4>
 <p>How steps report what happened.</p>
 <ol>
   <li><b>A <code>SendOutcome</code> union and one <code>applyOutcome</code> writer.</b> Steps return values; one place writes queue fields, metrics, VM stack and events. Kills the reschedule bug class, and section 6 becomes the code's own shape. Cost: a new type, and R3 touches every exit.</li>
   <li><b>Keep mutating <code>result</code></b>, but extract <code>reschedule(result, params, delay)</code> and <code>skip(result, reason)</code> helpers. Smaller diff; the matrix stays implicit, and a new exit can still forget a field.</li>
 </ol>
-<div class="rec">Recommend 1. The bug that started this map is exactly "one exit wrote a different footprint".</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 1. The bug that started this map is exactly "one exit wrote a different footprint".</div></div>
 
-<div class="card"><h4>C2 · Constructor wiring<span class="status open">open</span></h4>
+<div class="card locked"><h4>C2 · Constructor wiring<span class="status locked">locked</span></h4>
 <ol>
   <li><b>One <code>EmailServiceDeps</code> object; <code>EmailService</code> builds its submodules inside.</b> Named fields, optional limiters read as "off". Touches two production call sites and the tests (R1).</li>
   <li><b>Keep 11 positional params</b> (13 with sandbox). Zero churn; tests keep passing <code>undefined, null, limiter</code> by position.</li>
   <li><b>Inject the built submodules</b> (gates, pacers, providers). Maximum swapability, but each has one adapter: a hypothetical seam, and tests have no use for it.</li>
 </ol>
-<div class="rec">Recommend 1.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 1.</div></div>
 
-<div class="card"><h4>C3 · Gate shape<span class="status open">open</span></h4>
+<div class="card locked"><h4>C3 · Gate shape<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Explicit calls in <code>runSend</code></b> to a small <code>EmailSendGates</code> class. Order readable in one place; the sender check sits between gates naturally.</li>
   <li><b>A <code>SendGate[]</code> pipeline.</b> Uniform and extensible, but the sender check (fails, not skips) breaks the uniform shape, and every gate has one implementation.</li>
 </ol>
-<div class="rec">Recommend 1. YAGNI on the pipeline until gates multiply beyond the sandbox ones, which C4 already scopes to the provider.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 1. YAGNI on the pipeline until gates multiply beyond the sandbox ones, which C4 already scopes to the provider.</div></div>
 
-<div class="card"><h4>C4 · Provider seam<span class="status open">open</span></h4>
+<div class="card locked"><h4>C4 · Provider seam<span class="status locked">locked</span></h4>
 <ol>
   <li><b><code>EmailProvider</code> interface with SES and maildev adapters</b>, chosen by <code>integration.config.provider</code>. Two real adapters today, a third (sandbox) in flight, and a provider-neutral throttle contract.</li>
   <li><b>Keep provider methods private on <code>EmailService</code></b>, and only extract a pure <code>buildSesSendEmailInput</code>. Less structure; the sandbox stack keeps branching inside the SES method.</li>
 </ol>
-<div class="rec">Recommend 1. Two adapters make it a real seam.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 1. Two adapters make it a real seam.</div></div>
 
-<div class="card"><h4>C5 · Queue-level seam for the round-trip<span class="status open">open</span></h4>
+<div class="card locked"><h4>C5 · Queue-level seam for the round-trip<span class="status locked">locked</span></h4>
 <ol>
   <li><b><code>HogFlowExecutorService.execute</code> in a loop</b>, passing <code>result.invocation</code> back in. Existing pattern (<code>hogflows/hogflow-executor.service.test.ts:3036</code>); skips worker flow loading and the job codec.</li>
   <li><b>Email worker <code>processInvocations</code> with a codec hop</b> through <code>invocationToV2JobInit</code> / <code>v2JobToInvocation</code> between attempts. Real worker, flow reload, and the persisted shape; still no Postgres queue I/O.</li>
   <li><b>Real cyclotron Postgres queues and workers</b> in the existing <code>workflows-e2e.serial.test.ts</code> email suite (setup at <code>:2832-2855</code>; it already covers routing and pacing parks, with maildev). Highest fidelity, including the reschedule SQL; serial, slower, and its pacing cases only assert the park, never the later send.</li>
 </ol>
-<div class="rec">Recommend 2 for M1-M4 and M17, plus <b>one</b> case of 3 for M1 against the SES fake: a throttle waits under a second, so the full production path costs little, and it is the exact bug that started this map.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 2 for M1-M4 and M17, plus <b>one</b> case of 3 for M1 against the SES fake: a throttle waits under a second, so the full production path costs little, and it is the exact bug that started this map.</div></div>
 
-<div class="card"><h4>C6 · Rate limiter in S1 tests<span class="status open">open</span></h4>
+<div class="card locked"><h4>C6 · Rate limiter in S1 tests<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Real <code>RateLimiterService</code> on the test Valkey.</b> Pacing tests exercise the Lua claim semantics; delays are asserted as ranges. Exact-slot math moves to S3.</li>
   <li><b>Keep the hand-rolled <code>{ claimOrReserve } as RateLimiterService</code> stubs.</b> Deterministic delays; the test passes even if the claim contract drifts.</li>
 </ol>
-<div class="rec">Recommend 1, with S3 owning the exact numbers.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 1, with S3 owning the exact numbers.</div></div>
 
-<div class="card"><h4>C7 · Unknown provider value<span class="status open">open</span></h4>
+<div class="card locked"><h4>C7 · Unknown provider value<span class="status locked">locked</span></h4>
 <p>Today an unknown <code>provider</code> reports a sent email without sending anything (M6).</p>
 <ol>
   <li><b>Preserve in the refactor; a separate small fix PR fails the send</b>, landing before R5.</li>
   <li><b>Fix it inside R5</b> as the registry's natural behavior. Breaks "behavior-preserving" for that slice.</li>
 </ol>
-<div class="rec">Recommend 1, proposed as a follow-up ticket.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 1, proposed as a follow-up ticket.</div></div>
 
-<div class="card"><h4>C8 · Billing of suspended and suppressed skips<span class="status open">open</span></h4>
+<div class="card locked"><h4>C8 · Billing of suspended and suppressed skips<span class="status locked">locked</span></h4>
 <p>Today suspended and suppressed sends count as billable invocations; paused sends do not (section 6).</p>
 <ol>
   <li><b>Preserve, characterize (M9), and raise a follow-up</b> for a policy decision.</li>
   <li><b>Unify in R3</b> so every skip sets <code>skipped</code>. A billing change hidden in a refactor.</li>
 </ol>
-<div class="rec">Recommend 1. It is a billing decision, not a code-shape one.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 1. It is a billing decision, not a code-shape one.</div></div>
 
-<div class="card"><h4>C9 · Direct tests on submodules<span class="status open">open</span></h4>
+<div class="card locked"><h4>C9 · Direct tests on submodules<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Only pure policy functions get direct tests</b> (S3); gates, pacers, providers and the outcome writer are tested through S1 and S2.</li>
   <li><b>Direct tests per submodule.</b> Faster feedback per module, but they test past the interface and break on the next reshuffle.</li>
   <li><b>No direct tests at all.</b> Delay math through <code>executeSendEmail</code> needs a stubbed limiter (conflicts with C6 option 1).</li>
 </ol>
-<div class="rec">Recommend 1.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 1.</div></div>
 
-<div class="card"><h4>C10 · Order against the sandbox stack (#111904 → #112071)<span class="status open">open</span></h4>
+<div class="card locked"><h4>C10 · Order against the sandbox stack (#111904 → #112071)<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Refactor waits for the sandbox stack to merge</b>, then decomposes it too (section 5.4). The stack is already in review; R5 absorbs it as a third provider.</li>
   <li><b>Refactor lands first; the stack rebases</b> onto the new modules. Cleaner end state sooner; the stack's author pays a large rebase of reviewed code.</li>
   <li><b>Interleave:</b> land R1-R2 independent of the stack, hold R3-R5 until it merges.</li>
 </ol>
-<div class="rec">Recommend 3. R1-R2 touch regions the stack barely changes (two constructor params, the team cap call); R3-R5 collide with its throttle patch, outcome metric, gates and SES route head-on.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 3. R1-R2 touch regions the stack barely changes (two constructor params, the team cap call); R3-R5 collide with its throttle patch, outcome metric, gates and SES route head-on.</div></div>
 
-<div class="card"><h4>C11 · Glossary in the repo<span class="status open">open</span></h4>
+<div class="card locked"><h4>C11 · Glossary in the repo<span class="status locked">locked</span></h4>
 <ol>
-  <li><b>Add <code>services/messaging/CONTEXT.md</code></b> with the section 2 terms, in R3.</li>
+  <li><b>Add <code>services/messaging/GLOSSARY.md</code></b> with the section 2 terms, in R3 (the <code>domain-modeling</code> glossary convention).</li>
   <li><b>Keep the terms in code names only</b> (<code>SendOutcome</code>, <code>EmailSendGates</code>, <code>SendPacer</code>).</li>
 </ol>
-<div class="rec">Recommend 1: send gate vs pre-send skip vs pacing is exactly the distinction a future reader gets wrong.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 1: send gate vs pre-send skip vs pacing is exactly the distinction a future reader gets wrong.</div></div>
 
-<div class="card"><h4>C12 · Comment changes<span class="status open">open</span></h4>
+<div class="card locked"><h4>C12 · Comment changes<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Ride with the slice that moves the code</b>, following section 11.</li>
   <li><b>One comment-only PR</b> before the refactor.</li>
 </ol>
-<div class="rec">Recommend 1. A comment-only PR rewrites lines that R2-R5 then move again.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 1. A comment-only PR rewrites lines that R2-R5 then move again.</div></div>
 
-<div class="card"><h4>C13 · <code>queueMetadata</code> lost on reschedule<span class="status open">open</span></h4>
+<div class="card locked"><h4>C13 · <code>queueMetadata</code> lost on reschedule<span class="status locked">locked</span></h4>
 <p>Every reschedule drops the origin queue and priority stash (section 6, M17). Same bug class as #112295, a different field.</p>
 <ol>
   <li><b>Small fix PR before R3:</b> re-attach <code>queueMetadata</code> on all three reschedules, test-first at S2 (M17). R3 then folds it into <code>applyOutcome</code>.</li>
   <li><b>Fix inside R3</b>, where the single reschedule writer makes it a one-liner. Breaks "behavior-preserving" for the riskiest slice.</li>
   <li><b>Preserve and file a follow-up</b> with no order constraint.</li>
 </ol>
-<div class="rec">Recommend 1, proposed as a follow-up ticket. It is a real ordering bug on a hot path and the test seam for it (S2) exists once the harness lands.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 1, proposed as a follow-up ticket. It is a real ordering bug on a hot path and the test seam for it (S2) exists once the harness lands.</div></div>
 
-<div class="card"><h4>C14 · Failures after the provider accepted<span class="status open">open</span></h4>
+<div class="card locked"><h4>C14 · Failures after the provider accepted<span class="status locked">locked</span></h4>
 <p>Two paths run after SES accepted the email: building the asset row (inside the try, so a throw reports <code>email_failed</code>, M20) and the engagement-config read (outside it, so a throw rejects the whole call, M19). In a workflow, <code>HogFlowExecutorService</code> catches that rejection and fails the step (<code>hogflows/hogflow-executor.service.ts:635-683</code>): the email went out, but the run shows an error and no <code>email_sent</code>.</p>
 <ol>
   <li><b>Preserve in the refactor; one follow-up</b> makes post-send work unable to change the outcome (asset and engagement failures log and continue).</li>
   <li><b>Make <code>applyOutcome</code> non-throwing in R3.</b> Natural in the new shape, but a behavior change inside the refactor.</li>
 </ol>
-<div class="rec">Recommend 1. Both are rare (cached config, defensive asset builder), and the fix deserves its own review.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-06), as recommended.</b> Option 1. Both are rare (cached config, defensive asset builder), and the fix deserves its own review.</div></div>
 
-<h3>Locked</h3>
+<h3>Locked from the code and the map</h3>
 <div class="card locked"><h4>L1 · One public method<span class="status locked">locked</span></h4><p><code>executeSendEmail(invocation, isTest)</code> stays the only public method and its signature does not change. <b>Reason:</b> map destination 1 ("EmailService still a deep module with a small public interface"); the only production caller is <code>hog-executor-async.service.ts:187</code>.</p></div>
 <div class="card locked"><h4>L2 · SES is faked at HTTP, not at <code>send()</code><span class="status locked">locked</span></h4><p>Tests reach the local SES fake through <code>sesEndpoint</code>; throttles come from the fake. <b>Reason:</b> map charting decision 2026-10-06.</p></div>
 <div class="card locked"><h4>L3 · Behavior-preserving, after the harness<span class="status locked">locked</span></h4><p>R1-R5 change no assertion and land after the harness tickets. Behavior changes (C7, C8, refunds, give-up limit) are separate PRs. <b>Reason:</b> map Notes, "Risk".</p></div>
