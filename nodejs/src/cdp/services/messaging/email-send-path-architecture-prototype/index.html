@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PROTOTYPE: email send path architecture brief (#294)</title>
+<style>
+  :root {
+    --accent: #c2410c;
+    --accent-soft: #fff1e8;
+    --ink: #1c1917;
+    --muted: #57534e;
+    --line: #e7e5e4;
+    --bg: #fafaf9;
+    --code: #f5f5f4;
+    --new: #dcfce7;
+    --changed: #fef3c7;
+    --extended: #dbeafe;
+    --untouched: #f5f5f4;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 24px 96px; }
+  .banner { background: var(--accent); color: white; padding: 8px 24px; font-weight: 600; font-size: 13px; letter-spacing: .02em; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 20px; margin: 48px 0 8px; padding-top: 12px; border-top: 2px solid var(--accent); }
+  h3 { font-size: 16px; margin: 24px 0 6px; }
+  p, li { max-width: 880px; }
+  .muted { color: var(--muted); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; font-size: 13.5px; background: white; }
+  th, td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); font-weight: 600; }
+  nav.toc { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; margin: 16px 0; columns: 2; font-size: 14px; }
+  nav.toc a { color: var(--accent); text-decoration: none; display: block; }
+  .mermaid { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 8px 0 16px; }
+  .legend span { display: inline-block; padding: 2px 10px; border-radius: 4px; margin-right: 6px; border: 1px solid var(--line); font-size: 13px; }
+  .card { background: white; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+  .card.locked { border-left-color: #78716c; }
+  .card h4 { margin: 0 0 6px; font-size: 15px; }
+  .status { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 10px; margin-left: 6px; vertical-align: 1px; }
+  .status.open { background: var(--accent); color: white; }
+  .status.locked { background: #78716c; color: white; }
+  .card ol, .card ul { margin: 6px 0; padding-left: 22px; }
+  .rec { background: var(--accent-soft); border-radius: 6px; padding: 6px 10px; margin-top: 6px; }
+  .pill { display: inline-block; font-size: 12px; padding: 0 7px; border-radius: 9px; background: var(--code); border: 1px solid var(--line); }
+  .why { color: #166534; font-weight: 600; }
+  .narr { color: #9a3412; font-weight: 600; }
+  .wrong { color: #991b1b; font-weight: 600; }
+</style>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose', flowchart: { htmlLabels: true } })
+</script>
+</head>
+<body>
+<div class="banner">PROTOTYPE · throwaway architecture brief for Silthus/posthog#294 · lives only on branch <code style="background:none;color:white">prototype/email-send-path-shape</code> · not production code</div>
+<main>
+
+<h1>How should <code>executeSendEmail</code> decompose, and which seams do tests drive?</h1>
+<p class="muted">Map Silthus/posthog#291 · ticket #294 · baseline: PostHog/posthog#112295's branch at <code>9668491</code> (throttle reschedule re-attaches <code>queueParameters</code>). All <code>path:line</code> references point at that commit, relative to <code>nodejs/src/cdp/</code>.</p>
+
+<nav class="toc">
+  <a href="#question">1. Question</a>
+  <a href="#glossary">2. Glossary</a>
+  <a href="#today">3. The shape today</a>
+  <a href="#map">4. Change map</a>
+  <a href="#contracts">5. Contracts</a>
+  <a href="#matrix">6. Outcome matrix</a>
+  <a href="#flows">7. Flows</a>
+  <a href="#seams">8. Test seams</a>
+  <a href="#missing">9. Missing test cases</a>
+  <a href="#slices">10. Refactor PR slices</a>
+  <a href="#comments">11. Comments: what survives</a>
+  <a href="#data">12. Data, caching, performance</a>
+  <a href="#cards">13. Decision cards</a>
+  <a href="#blast">14. Blast radius</a>
+  <a href="#followups">15. Proposed follow-ups</a>
+</nav>
+
+<h2 id="question">1. Question</h2>
+<p><code>EmailService.executeSendEmail</code> (<code>services/messaging/email.service.ts:368-709</code>) is one 340-line method. It runs three send gates, a sender check, a tracking decision, two pacing claims, a provider switch, three copies of the reschedule logic and the outcome bookkeeping, all by mutating one <code>result</code> object. PostHog/posthog#112295 fixed a bug that hid in that shape: one of the three reschedule copies forgot to re-attach <code>queueParameters</code>, so a throttled email was silently dropped, and no test noticed because no test crosses the queue.</p>
+<p>This brief proposes how the method splits into small steps and submodules while <code>EmailService</code> stays a deep module with one public method, which seams the outside-in tests drive, which cases are missing, how the behavior-preserving refactor lands as PRs after the test harness, and which comments survive. The open sandbox-sender stack (PostHog/posthog#111904 → #112071) adds about 400 more lines to the same method, so the design shows where that lands too.</p>
+
+<h2 id="glossary">2. Glossary</h2>
+<p class="muted">Terms this brief uses. Card C11 decides whether they go into a <code>CONTEXT.md</code>.</p>
+<table>
+  <tr><th>Term</th><th>Meaning</th><th>Not to be confused with</th></tr>
+  <tr><td><b>Send</b></td><td>One <code>executeSendEmail</code> call for one email step: one message to <code>to</code> + <code>cc</code> + <code>bcc</code>. A send can run many times (each reschedule re-runs it).</td><td>A delivery (one copy to one address; SES counts these).</td></tr>
+  <tr><td><b>Pre-send skip</b></td><td>A check in the workflow action handler, before the email reaches <code>EmailService</code>: recipient opt-out, suppression, predicted bounce (<code>hogflows/actions/hog_function.ts:361-428</code>). Runs on every dequeue, including each retry.</td><td>Send gate.</td></tr>
+  <tr><td><b>Send gate</b></td><td>A check inside <code>EmailService</code> that can stop a send before the provider: team suspension, workflow pause, suppression. The choke point every route passes, so no caller can bypass it. A gate never spends a token.</td><td>Pacing (delays, never stops).</td></tr>
+  <tr><td><b>Sender check</b></td><td>Integration lookup and validation plus From resolution. A broken sender <i>fails</i> the send; it does not skip it.</td><td>Send gate.</td></tr>
+  <tr><td><b>Tracking decision</b></td><td>Whether this send carries open/click tracking: step toggle, then category, then recipient consent. Fails closed to untracked.</td><td>Tracking code (the signed id in header and tag, always present).</td></tr>
+  <tr><td><b>Pacing</b></td><td>A token-bucket claim that can delay a send: <b>workflow pacing</b> (user-configured per-workflow rate) and the <b>team cap</b> (trust-tier hourly and daily caps per project, per recipient). Test sends bypass pacing.</td><td>Provider throttle.</td></tr>
+  <tr><td><b>Provider</b></td><td>Where the message goes: SES or local maildev today; sandbox (SES on a shared route) in the open stack. Picked by <code>integration.config.provider</code>.</td><td>Sender (the From identity).</td></tr>
+  <tr><td><b>Provider throttle</b></td><td>The provider refused the send for a transient rate reason (<code>TooManyRequestsException</code>, <code>ThrottlingException</code>).</td><td><code>SendingPausedException</code>, which fails.</td></tr>
+  <tr><td><b>Reschedule</b></td><td>The send returns unfinished with its email params, its priority and a wake time, so the email queue runs it again later. Three causes: workflow pacing, team cap, provider throttle.</td><td>Retry of a failed send (there is none).</td></tr>
+  <tr><td><b>Outcome</b></td><td>The single result of one send: <b>sent</b>, <b>skipped</b> (reason), <b>rescheduled</b> (cause, delay) or <b>failed</b> (error). Each outcome has a fixed footprint of metrics, events, VM stack push and queue fields (section 6).</td><td>The invocation result object, which the outcome is written into.</td></tr>
+  <tr><td><b>Test send</b></td><td>A send from the editor's "Run test" (<code>isTest</code>). Real over the wire, gated like any send, but records no metric, asset or event and bypasses pacing.</td><td></td></tr>
+</table>
+
+<h2 id="today">3. The shape today</h2>
+<p>What <code>executeSendEmail</code> does, in order. Every row is a <code>return</code> or a step that mutates <code>result</code>.</p>
+<table>
+  <tr><th>#</th><th>Step</th><th>Lines</th><th>Exit</th></tr>
+  <tr><td>0</td><td>Assert email params, create result (keeps priority), look up integration (<b>outside</b> the try)</td><td>372-391</td><td>throws (not an outcome)</td></tr>
+  <tr><td>1</td><td>Gate: team suspension (staff or SES tenant pause)</td><td>405-431</td><td>skipped · <code>email_suspended</code> · <b>no</b> <code>skipped</code> flag</td></tr>
+  <tr><td>2</td><td>Gate: workflow pause</td><td>437-466</td><td>skipped · <code>email_paused</code> · <code>skipped = true</code></td></tr>
+  <tr><td>3</td><td>Sender check: integration exists, same team, kind email, verified, configured; resolve From</td><td>469-480, 932-994</td><td>failed</td></tr>
+  <tr><td>4</td><td>Gate: suppression over to + cc + bcc</td><td>486-501, 825-850</td><td>skipped · <code>email_suppressed</code> · <b>no</b> <code>skipped</code> flag</td></tr>
+  <tr><td>5</td><td>Tracking decision</td><td>505, 860-906</td><td>none (fails closed)</td></tr>
+  <tr><td>6</td><td>Pacing: workflow (<code>claimOrReserve</code>)</td><td>511-548</td><td>rescheduled (copy 1 of reschedule)</td></tr>
+  <tr><td>7</td><td>Pacing: team cap (<code>claimAllOrNothingPair</code> or shadow <code>claimUpTo</code>)</td><td>554-572, 726-818</td><td>rescheduled (copy 2)</td></tr>
+  <tr><td>8</td><td>UTM tagging</td><td>575-599</td><td>none</td></tr>
+  <tr><td>9</td><td>Provider switch: maildev, SES, unsupported; <b>no default branch</b></td><td>601-611, 997-1160</td><td>failed, or throws <code>SESThrottleError</code></td></tr>
+  <tr><td>10</td><td>Asset row, success log</td><td>617-622</td><td></td></tr>
+  <tr><td>11</td><td>catch: throttle → reschedule (copy 3); else failed</td><td>623-646</td><td>rescheduled / failed</td></tr>
+  <tr><td>12</td><td>Outcome bookkeeping: VM push, metrics, untracked metric, asset, engagement event. The engagement-config read (683-687) sits outside the try.</td><td>649-708</td><td>sent / failed, or throws after the provider accepted</td></tr>
+</table>
+<p>Two facts every exit shares, both from <code>createInvocationResult</code> → <code>cloneInvocation</code> (<code>utils/invocation-utils.ts:190-212</code>): the result's invocation drops <code>queueParameters</code>, <code>queueScheduledAt</code> <b>and <code>queueMetadata</code></b> unless they are passed back in, and it shares <code>state</code> with the input, so the VM stack push also mutates the caller's invocation. The reschedules re-attach <code>queueParameters</code> but not <code>queueMetadata</code>; section 6 shows what that costs.</p>
+<p>The sandbox stack (#111904/#112071, draft) adds a fourth provider branch, three more gates (sender switch, sandbox pause, organization membership), daily caps claimed inside <code>sendEmailWithSES</code>, a claim refund on throttle, and a fourth reschedule patch (<code>if (isSandbox) result.invocation.queueParameters = params</code>). The method grows to about 750 lines across helpers.</p>
+
+<h2 id="map">4. Change map</h2>
+<div class="legend"><span style="background:var(--new)">new</span><span style="background:var(--changed)">changed</span><span style="background:var(--extended)">extended</span><span style="background:var(--untouched)">untouched</span></div>
+<pre class="mermaid">
+flowchart LR
+  subgraph caller["Callers (untouched)"]
+    HFH["HogFunctionHandler<br/>hogflows/actions/hog_function.ts<br/>pre-send skips"]
+    HEA["HogExecutorAsyncService<br/>hog-executor-async.service.ts:187"]
+  end
+  subgraph svc["EmailService (deep module, one public method)"]
+    ES["EmailService.executeSendEmail<br/>email.service.ts<br/>orchestrates one send"]
+    SEND["EmailSend<br/>email-send.ts<br/>params, recipients, isTest, log"]
+    GATES["Send gates<br/>email-send-gates.ts<br/>suspension, pause, suppression"]
+    SENDER["Sender check<br/>email-sender.ts<br/>integration + From"]
+    TRACK["Tracking decision<br/>email-tracking-decision.ts"]
+    PACE["Pacing<br/>email-pacing.ts<br/>WorkflowPacing, TeamSendingCap"]
+    OUT["Outcome<br/>email-send-outcome.ts<br/>SendOutcome + applyOutcome"]
+    subgraph prov["Providers"]
+      SES["SesEmailProvider<br/>providers/ses.ts"]
+      MD["MaildevEmailProvider<br/>providers/maildev.ts"]
+    end
+  end
+  RL["RateLimiterService"]
+  SUP["EmailSuppressionService"]
+  TWC["TeamWorkflowsConfigService"]
+  TRK["email-tracking.service<br/>(addTrackingToEmail, ids)"]
+  AWS["SESv2 SDK → sesEndpoint<br/>(local fake in tests)"]
+  HFH --> HEA --> ES
+  ES --> SEND
+  ES --> GATES --> SUP
+  GATES --> TWC
+  ES --> SENDER
+  ES --> TRACK --> TWC
+  ES --> PACE --> RL
+  ES --> OUT
+  ES --> SES --> AWS
+  ES --> MD
+  SES --> TRK
+  MD --> TRK
+  classDef new fill:#dcfce7,stroke:#16a34a
+  classDef changed fill:#fef3c7,stroke:#d97706
+  classDef extended fill:#dbeafe,stroke:#2563eb
+  classDef untouched fill:#f5f5f4,stroke:#a8a29e
+  class SEND,GATES,SENDER,TRACK,PACE,OUT,SES,MD new
+  class ES changed
+  class HFH,HEA,RL,SUP,TWC,TRK,AWS untouched
+</pre>
+<p>Every new box is a move of code that exists today, not new behavior. Nothing outside <code>services/messaging/</code> changes, apart from the constructor call sites if card C2 picks a deps object.</p>
+
+<h2 id="contracts">5. Contracts</h2>
+
+<h3>5.1 <code>EmailService</code>: the public interface</h3>
+<pre><code>// BEFORE (email.service.ts:338-371)
+class EmailService {
+  sesV2Client: SESv2Client | null                  // public only so tests can spy on send()
+  constructor(sesConfig, integrationManager, teamWorkflowsConfigService, encryptionSaltKeys,
+              siteUrl, trackingCodeSigner, emailSuppressionService, recipientsManager,
+              messageAssetsService?, workflowEmailRateLimiter = null, teamEmailRateLimiter = null)
+              // + sandboxSender = null, organizationMembers = null in the sandbox stack
+  executeSendEmail(invocation, isTest = false): Promise&lt;CyclotronJobInvocationResult&lt;…HogFunction&gt;&gt;
+}
+
+// AFTER
+class EmailService {
+  constructor(deps: EmailServiceDeps)              // card C2
+  executeSendEmail(invocation, isTest = false): Promise&lt;CyclotronJobInvocationResult&lt;…HogFunction&gt;&gt;
+}
+
+type EmailServiceDeps = {
+  config: EmailServiceConfig                       // SES region/endpoint/config sets + team cap mode/tables
+  integrationManager: IntegrationManagerService
+  teamWorkflowsConfig: TeamWorkflowsConfigService
+  suppression: EmailSuppressionService
+  recipients: RecipientsManagerService
+  trackingCodeSigner: EmailTrackingCodeSigner
+  encryptionSaltKeys: string
+  siteUrl: string
+  messageAssets?: MessageAssetsService
+  workflowEmailRateLimiter?: RateLimiterService     // absent = workflow pacing off
+  teamEmailRateLimiter?: RateLimiterService         // absent = team cap off
+}</code></pre>
+<p><b>Interface</b> (everything a caller must know, unchanged by the refactor):</p>
+<ul>
+  <li>Throws in exactly three places: <code>queueParameters.type</code> is not <code>email</code>; the integration lookup rejects (step 0, outside the try; M10); the engagement-config read rejects after the outcome is known, possibly after the provider accepted (step 12; M19). Every other problem becomes an outcome.</li>
+  <li>A reschedule re-attaches the <b>original</b> params, not the UTM-tagged or tracked HTML: the retry prepares the content again.</li>
+  <li>Exactly one outcome per call. Its footprint on the result is fixed by section 6.</li>
+  <li><b>Rescheduled</b> ⇒ <code>finished: false</code>, <code>queueParameters</code> equal to the input's, <code>queuePriority</code> equal to the input's, <code>queueScheduledAt</code> in the future, no metric, no VM push, no event.</li>
+  <li><b>Test send</b> ⇒ gates apply, pacing does not, no metric, asset or event.</li>
+  <li>Not undone on a later reschedule or failure: a workflow pacing token stays spent when the team cap then denies, and both stay spent on a provider throttle (map follow-up "refund on throttle"). Shadow-mode partial claims stay spent. The global SES dequeue token is spent before the method runs at all (<code>services/cyclotron-v2/worker-rate-limited.ts:42-70</code>).</li>
+  <li>Cost per call: 1 integration read, 1 suspension read, up to N suppression reads and N consent reads (N = recipients), up to 3 Valkey claims (2 in enforce mode; shadow mode claims the two cap buckets separately), 1 provider call, and 1 engagement-config read on sent or failed.</li>
+</ul>
+
+<h3>5.2 Internal modules (not exported from the package; private seams)</h3>
+<pre><code>// email-send.ts: the request, built once per call
+type EmailSend = {
+  invocation: CyclotronJobInvocationHogFunction
+  params: CyclotronInvocationQueueParametersEmailType
+  isTest: boolean
+  recipients: string[]        // to + cc + bcc as bare addresses; today rebuilt 3 ways (L486, L554, L879)
+  result: CyclotronJobInvocationResult&lt;CyclotronJobInvocationHogFunction&gt;
+  log: AddLogFunction         // customer-facing run log, written by each step
+}
+
+// email-send-outcome.ts: the only code that writes queue fields, metrics, VM stack and events
+type SkipReason = 'suspended' | 'paused' | 'suppressed'
+type RescheduleCause = 'workflow_pacing' | 'team_cap' | 'provider_throttle'
+type SendOutcome =
+  | { kind: 'sent'; trackingEnabled: boolean; assetRow: MessageAssetRow | null }
+  | { kind: 'skipped'; reason: SkipReason }
+  | { kind: 'rescheduled'; cause: RescheduleCause; delayMs: number }
+  | { kind: 'failed'; error: string; trackingEnabled: boolean }
+
+function applyOutcome(send: EmailSend, outcome: SendOutcome, captureEngagement: () =&gt; Promise&lt;boolean&gt;): Promise&lt;void&gt;
+
+// email-send-gates.ts
+class EmailSendGates {
+  constructor(teamWorkflowsConfig: TeamWorkflowsConfigService, suppression: EmailSuppressionService)
+  stoppedByTeamOrWorkflow(send: EmailSend): Promise&lt;SendOutcome | null&gt;   // suspension, then workflow pause
+  suppressed(send: EmailSend): Promise&lt;SendOutcome | null&gt;
+}
+
+// email-sender.ts: throws a customer-readable Error, which becomes 'failed'
+function resolveSender(integration: IntegrationType | null, send: EmailSend): Sender   // { email, name }
+
+// email-tracking-decision.ts (moved from EmailService.resolveTrackingEnabled)
+class TrackingDecision { decide(send: EmailSend): Promise&lt;boolean&gt; }
+
+// email-pacing.ts
+interface SendPacer { claim(send: EmailSend): Promise&lt;SendOutcome | null&gt; }   // null = go; logs its own line
+class WorkflowPacing implements SendPacer { constructor(limiter?: RateLimiterService) }
+class TeamSendingCap implements SendPacer { constructor(limiter: RateLimiterService | undefined, teamWorkflowsConfig, caps: TeamEmailCapConfig) }
+export function pickReservedRetryDelayMs(retryAfterMs: number | null, refillPerSecond: number, reserved: boolean): number
+export function teamEmailCapBuckets(teamId: number, hourlyCap: number, dailyCap: number): TeamEmailCapBucket[]
+export function parseTierCaps(value?: string): number[]
+export function parseTeamEmailCapMode(value?: string): TeamEmailCapMode
+
+// providers/email-provider.ts
+type OutgoingEmail = { send: EmailSend; params: EmailParams /* UTM-tagged */; from: Sender; trackingEnabled: boolean }
+interface EmailProvider { deliver(email: OutgoingEmail): Promise&lt;void&gt; }   // throws SESThrottleError on throttle, Error otherwise
+class SesEmailProvider implements EmailProvider   // owns SESv2Client (sesRegion, sesEndpoint), builds SendEmailCommandInput
+class MaildevEmailProvider implements EmailProvider</code></pre>
+
+<h3>5.3 The method after the refactor</h3>
+<pre><code>public async executeSendEmail(invocation, isTest = false) {
+  const send = startSend(invocation, isTest)                       // asserts email params, keeps priority
+  const integration = await this.integrationManager.get(selectEmailSenderIntegrationId(invocation.id, send.params.from))
+  const outcome = await this.runSend(send, integration)
+  await applyOutcome(send, outcome, () =&gt; this.teamWorkflowsConfig.shouldCaptureEngagementEvents(invocation.teamId))
+  return send.result
+}
+
+private async runSend(send: EmailSend, integration: IntegrationType | null): Promise&lt;SendOutcome&gt; {
+  let trackingEnabled = true
+  try {
+    const stopped = await this.gates.stoppedByTeamOrWorkflow(send)
+    if (stopped) return stopped
+    const from = resolveSender(integration, send)
+    const suppressed = await this.gates.suppressed(send)
+    if (suppressed) return suppressed
+    trackingEnabled = await this.tracking.decide(send)
+    const delayed = (await this.workflowPacing.claim(send)) ?? (await this.teamCap.claim(send))
+    if (delayed) return delayed
+    const params = withUtmTags(send, this.siteUrl)
+    await this.providerFor(integration).deliver({ send, params, from, trackingEnabled })
+    return sent(send, params, from, trackingEnabled, this.messageAssets)
+  } catch (error) {
+    return error instanceof SESThrottleError
+      ? { kind: 'rescheduled', cause: 'provider_throttle', delayMs: error.retryAfterMs }
+      : { kind: 'failed', error: error.message, trackingEnabled }
+  }
+}</code></pre>
+<p>Invariants this shape enforces by construction: one reschedule writer (the #112295 bug class cannot recur per cause), gates before any token spend (order is visible in eight lines), and a step cannot both skip and send.</p>
+
+<h3>5.4 Where the sandbox stack lands in this shape</h3>
+<pre><code>// sandbox becomes a third EmailProvider plus provider-scoped gates, not branches in runSend
+class SandboxEmailProvider implements EmailProvider {
+  gates(send): Promise&lt;SendOutcome | null&gt;     // sender switch, sandbox pause, org membership
+  deliver(email): Promise&lt;void&gt;               // daily caps claim → SesEmailProvider with the sandbox route → refund on throttle
+}</code></pre>
+<p>Card C10 decides whether the refactor waits for the stack or the stack rebases onto the refactor.</p>
+
+<h2 id="matrix">6. Outcome matrix</h2>
+<p>The footprint each outcome writes into the result. This table is the spec <code>applyOutcome</code> implements and the matrix the <code>executeSendEmail</code> tests drive. Values in bold are today's inconsistencies, preserved by the refactor (cards C7 and C8).</p>
+<table>
+  <tr><th>Outcome</th><th>finished</th><th>error</th><th>skipped flag</th><th>queueParameters</th><th>queueScheduledAt</th><th>VM push</th><th>Metrics (not test)</th><th>Asset (not test)</th><th>Engagement event (not test)</th></tr>
+  <tr><td>sent</td><td>true</td><td>–</td><td>–</td><td>cleared</td><td>–</td><td><code>{success:true}</code></td><td><code>email_sent</code> (+ <code>email_untracked</code>)</td><td>yes</td><td><code>$workflows_email_sent</code></td></tr>
+  <tr><td>skipped: suspended</td><td>true</td><td>–</td><td><b>unset → billed</b></td><td>cleared</td><td>–</td><td><code>{success:false}</code></td><td><code>email_suspended</code></td><td>–</td><td>–</td></tr>
+  <tr><td>skipped: paused</td><td>true</td><td>–</td><td>true</td><td>cleared</td><td>–</td><td><code>{success:false}</code></td><td><code>email_paused</code></td><td>–</td><td>–</td></tr>
+  <tr><td>skipped: suppressed</td><td>true</td><td>–</td><td><b>unset → billed</b></td><td>cleared</td><td>–</td><td><code>{success:false}</code></td><td><code>email_suppressed</code></td><td>–</td><td>–</td></tr>
+  <tr><td>rescheduled: any cause</td><td>false</td><td>–</td><td>–</td><td>re-attached (priority kept; <b><code>queueMetadata</code> dropped</b>)</td><td>now + delay</td><td>none</td><td>none</td><td>–</td><td>–</td></tr>
+  <tr><td>failed</td><td>true</td><td>message</td><td>–</td><td>cleared</td><td>–</td><td><code>{success:false}</code></td><td><code>email_failed</code></td><td>–</td><td><code>$workflows_email_failed</code></td></tr>
+</table>
+<p class="muted">"Billed": <code>hogflows/actions/hog_function.ts:189</code> records a billable invocation unless <code>skipped</code> is set. The pause path sets it (<code>email.service.ts:463</code>, with a comment saying why); suspension and suppression do not. Engagement events also need a distinct id and the team's capture setting. A provider-specific prefix applies to some error messages (<code>Failed to send email via SES: …</code>).</p>
+<p class="muted">"<code>queueMetadata</code> dropped": <code>routeEmailToQueue</code> stashes the origin queue and priority there (<code>hog-executor-async.service.ts:290-310</code>). After a reschedule the persisted job no longer carries it, so when the flow later hits a fetch on the email worker, <code>routeToQueue</code> falls back to <code>'hogflow'</code> and to the job's current email-class priority (<code>hog-executor-async.service.ts:146-157</code>). A watcher-degraded run (priority 2) can return to the hogflow queue at 0 or 1 and jump ahead. Read from the code, not reproduced; card C13 and M17.</p>
+
+<h2 id="flows">7. Flows</h2>
+<h3>7.1 Main path: a workflow email on the email queue</h3>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant Q as Cyclotron email queue
+  participant W as CdpCyclotronWorkerEmail
+  participant H as HogFunctionHandler
+  participant A as HogExecutorAsyncService
+  participant E as EmailService
+  participant P as SesEmailProvider
+  Q->>W: dequeue job (state + queueParameters)
+  W->>H: execute email step
+  H->>H: pre-send skips (opt-out, suppression, predicted bounce)
+  H->>A: executeWithAsyncFunctions (queue = email)
+  A->>E: executeSendEmail(invocation)
+  E->>E: gates → sender → suppression → tracking → pacing
+  E->>P: deliver(email)
+  P-->>E: ok
+  E->>E: applyOutcome(sent)
+  E-->>A: finished, email_sent, VM push success
+  A-->>H: result
+  H-->>W: bill, continue to next action (back to origin queue)
+</pre>
+
+<h3>7.2 The reschedule round-trip (the #112295 bug class)</h3>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant W as Email worker
+  participant H as HogFunctionHandler
+  participant E as EmailService
+  participant P as SES (fake in tests)
+  participant J as Job queue codec
+  W->>H: execute email step
+  H->>E: executeSendEmail
+  E->>P: deliver
+  P-->>E: TooManyRequestsException
+  E->>E: applyOutcome(rescheduled): params re-attached, priority kept, wake = now + 500-1000 ms
+  E-->>H: finished false
+  H->>H: copy queue, priority, queueParameters onto the flow invocation (hog_function.ts:161-186)
+  H-->>W: scheduledAt
+  W->>J: serializeState → invocationToV2JobInit (job-queue-postgres-v2.ts:290-318)
+  J-->>W: v2JobToInvocation on wake (job-queue-postgres-v2.ts:341-373)
+  W->>H: execute email step again (pre-send skips re-run)
+  H->>E: executeSendEmail (queueParameters.type = email, else the VM resumes and the email is lost)
+  E->>P: deliver
+  P-->>E: ok
+  E-->>H: sent
+</pre>
+
+<h3>7.3 Failure path: a broken sender</h3>
+<pre class="mermaid">
+sequenceDiagram
+  participant E as EmailService
+  participant G as Send gates
+  participant S as resolveSender
+  participant O as applyOutcome
+  E->>G: stoppedByTeamOrWorkflow
+  G-->>E: null
+  E->>S: resolveSender(integration)
+  S-->>E: throws "Email integration not found…"
+  E->>O: failed(error, trackingEnabled = true)
+  O-->>E: finished, error, email_failed, VM push false, $workflows_email_failed
+</pre>
+
+<h2 id="seams">8. Test seams</h2>
+<p>Two seams carry the suite. Everything else is tested through them.</p>
+<table>
+  <tr><th>Seam</th><th>Drives</th><th>Real</th><th>Faked</th></tr>
+  <tr><td><b>S1. <code>EmailService.executeSendEmail</code></b><br/>(<code>email.service.test.ts</code>)</td><td>The gate × outcome × test-send matrix of section 6, pacing decisions, provider message content, tracking decision, sender resolution.</td><td>Postgres (integrations, suppression, team config), the AWS SDK and SES protocol through <code>sesEndpoint</code> → local SES fake (harness), Valkey limiter (card C6).</td><td>Nothing inside <code>EmailService</code>. The fake replaces SES at HTTP, including throttle responses (map charting decision).</td></tr>
+  <tr><td><b>S2. Email worker round-trip</b><br/><code>CdpCyclotronWorkerEmail.processInvocations</code> with a codec hop (card C5)</td><td>The reschedule round-trip for all three causes, priority class across retries, config changes between attempts (pause after reschedule).</td><td>Worker, flow loading, handler, executor, <code>EmailService</code>, the job codec (<code>invocationToV2JobInit</code> / <code>v2JobToInvocation</code>), SES fake.</td><td>Queue I/O only (<code>createMockJobQueue</code>, already used by <code>consumers/cdp-cyclotron-worker-hogflow.test.ts:162-168</code>). Its methods are no-op mocks, so the test moves each result through the real codec itself.</td></tr>
+  <tr><td>S3. Pure policy functions (card C9)</td><td><code>pickReservedRetryDelayMs</code>, <code>teamEmailCapBuckets</code>, <code>parseTierCaps</code>, <code>parseTeamEmailCapMode</code>, address parsing, subject sanitizing.</td><td>Everything (pure).</td><td>Only <code>Math.random</code> where a delay is jittered.</td></tr>
+</table>
+<p>No submodule from section 5.2 gets its own test file. Gates, pacing, providers and the outcome writer are private seams: they exist for locality, and a test that targets one of them breaks on the next refactor without catching a regression S1 misses.</p>
+<p><b>Requirements this puts on the harness ticket:</b> the fake keeps the raw <code>SendEmail</code> request (tenant, configuration set, tags and headers are SES-only fields the current tests assert), it can return a throttle for the next N requests, and tests reach it through <code>sesEndpoint</code> alone. Then <code>sesV2Client</code> becomes private and the seven spies on <code>sesV2Client.send</code> in the tests go away.</p>
+
+<h2 id="missing">9. Missing test cases</h2>
+<p>Each names the regression it catches. "Characterize" means the test pins today's behavior before the refactor, even where a follow-up may change it.</p>
+<table>
+  <tr><th>#</th><th>Seam</th><th>Case</th><th>Regression it catches</th></tr>
+  <tr><td>M1</td><td>S2</td><td>An SES-throttled send reschedules on the email queue and the retry sends exactly once; the workflow continues; one <code>email_sent</code>.</td><td>#112295: a reschedule that loses its email params drops the email silently.</td></tr>
+  <tr><td>M2</td><td>S2</td><td>Same round-trip for a workflow pacing denial, then a grant.</td><td>Same bug class, second cause.</td></tr>
+  <tr><td>M3</td><td>S2</td><td>Same round-trip for a team cap denial, then a grant.</td><td>Same bug class, third cause.</td></tr>
+  <tr><td>M4</td><td>S2</td><td>A workflow paused while its send waits for a retry is skipped on the retry.</td><td>A retry that reuses stale flow metadata sends past a pause.</td></tr>
+  <tr><td>M5</td><td>S1</td><td>Workflow pacing and team cap reschedules keep <code>queuePriority</code> (only the throttle case is covered, <code>email.service.test.ts:429</code>).</td><td>A bulk send returns as fast-lane after a pacing delay.</td></tr>
+  <tr><td>M6</td><td>S1</td><td>Characterize: an unknown <code>provider</code> value reports <code>email_sent</code> without sending (no <code>default</code> in the switch, <code>email.service.ts:601-611</code>).</td><td>Pins the silent-success hole until the fix ticket flips it to failed.</td></tr>
+  <tr><td>M7</td><td>S1</td><td><code>provider: 'unsupported'</code> fails with "Email delivery mode not supported".</td><td>Losing the explicit unsupported branch in the provider registry.</td></tr>
+  <tr><td>M8</td><td>S1</td><td>Maildev not accepting the message fails the send.</td><td>The maildev adapter swallowing a rejection.</td></tr>
+  <tr><td>M9</td><td>S1</td><td>Characterize: suspended and suppressed skips leave <code>skipped</code> unset; paused sets it.</td><td>The outcome writer unifying skips changes billing by accident.</td></tr>
+  <tr><td>M10</td><td>S1</td><td>Characterize: an integration lookup that throws rejects <code>executeSendEmail</code> instead of recording <code>email_failed</code>.</td><td>Moving the lookup inside the try changes the job's failure mode.</td></tr>
+  <tr><td>M11</td><td>S1</td><td>A send that fails before the tracking decision reports <code>$email_tracking_enabled: true</code>.</td><td>The outcome writer reading an undefined tracking flag.</td></tr>
+  <tr><td>M12</td><td>S1</td><td>Team cap shadow mode sends, drains both buckets, never reschedules.</td><td>Shadow mode starting to delay sends.</td></tr>
+  <tr><td>M13</td><td>S1</td><td>Team cap: a failed or null tier lookup lets the send through.</td><td>A config blip throttling a customer.</td></tr>
+  <tr><td>M14</td><td>S1</td><td>Team cap charges one token per recipient (to + cc + bcc), clamped to bucket capacity.</td><td>Multi-recipient sends under-charged, or never granted.</td></tr>
+  <tr><td>M15</td><td>S1</td><td>Characterize: a workflow pacing token stays spent when the team cap then denies, and both stay spent on a provider throttle.</td><td>Pins today's behavior; the refund follow-up flips this case.</td></tr>
+  <tr><td>M16</td><td>S1</td><td>A test send that SES throttles: characterize what the result looks like.</td><td>The editor's "Run test" hanging or misreporting on a throttle.</td></tr>
+  <tr><td>M17</td><td>S2</td><td>After a reschedule, the email sends, then a fetch step returns the run to its origin queue at its origin priority.</td><td>The <code>queueMetadata</code> drop in section 6 (fails today; card C13).</td></tr>
+  <tr><td>M18</td><td>S1</td><td>With both limiters configured, a suspended, paused or suppressed send claims no token from either.</td><td>A gate moved after a claim (L4) spending a project's budget on unsent mail.</td></tr>
+  <tr><td>M19</td><td>S1</td><td>Characterize: the engagement-config read rejecting after the provider accepted makes <code>executeSendEmail</code> reject.</td><td>Pins the post-send throw that the follow-up (card C14) may make safe.</td></tr>
+  <tr><td>M20</td><td>S1</td><td>Characterize: an asset row that throws after the provider accepted records <code>email_failed</code>.</td><td>Same: pins a "sent but reported failed" path before card C14 decides it.</td></tr>
+  <tr><td>M21</td><td>S1</td><td>Suppression of a <code>cc</code> or <code>bcc</code> address in RFC-822 form blocks the whole send.</td><td>Recipient-list consolidation (<code>EmailSend.recipients</code>) losing the bracket parsing.</td></tr>
+</table>
+<p class="muted">Row M5 also covers the full reschedule footprint for all three causes (no VM push, events or assets), which today is only asserted on metrics. Coverage source: a static sweep of every <code>it</code> in <code>email.service.test.ts</code> by GPT-6.1 Sol, checked against the code. Not an instrumented coverage report.</p>
+
+<h2 id="slices">10. Refactor PR slices</h2>
+<p>A stack of behavior-preserving draft PRs against <code>master</code>, each green on the harness suite (S1 and S2 with the SES fake). No slice changes a test assertion; a slice may only change how a test constructs the service.</p>
+<table>
+  <tr><th>#</th><th>Slice</th><th>Moves</th><th>Size (est.)</th><th>Why this order</th></tr>
+  <tr><td>R1</td><td><code>EmailServiceDeps</code> constructor</td><td>Positional params → one object; call sites in <code>cdp-services.ts:436</code>, <code>templates/test/test-helpers.ts:208</code>, tests</td><td>small, mechanical</td><td>Every test builds the service; doing it first keeps later diffs readable.</td></tr>
+  <tr><td>R2</td><td>Extract pacing</td><td><code>email-pacing.ts</code>: <code>WorkflowPacing</code>, <code>TeamSendingCap</code>, delay math, cap tables, metrics</td><td>~330 lines moved</td><td>Largest self-contained block (<code>email.service.ts:102-269, 507-572, 711-818</code>); no other step depends on it.</td></tr>
+  <tr><td>R3</td><td>Outcome model</td><td><code>email-send.ts</code>, <code>email-send-outcome.ts</code>; the three reschedule copies and the bookkeeping tail become <code>applyOutcome</code></td><td>medium, the core change</td><td>Gates and providers in R4 and R5 return outcomes, so the type lands first. Highest risk: qa-swarm candidate.</td></tr>
+  <tr><td>R4</td><td>Extract gates, sender, tracking decision</td><td><code>email-send-gates.ts</code>, <code>email-sender.ts</code>, <code>email-tracking-decision.ts</code></td><td>~250 lines moved</td><td>Needs the outcome type.</td></tr>
+  <tr><td>R5</td><td>Provider adapters</td><td><code>providers/ses.ts</code>, <code>providers/maildev.ts</code>, provider registry; <code>sesV2Client</code> private</td><td>~200 lines moved</td><td>Last, because the sandbox stack collides here most (card C10).</td></tr>
+</table>
+<p>Comment changes ride with the slice that moves the code (card C12), so there is no separate comment PR.</p>
+
+<h2 id="comments">11. Comments: what survives</h2>
+<p>Most comments in this file carry a real why and move with their code. The refactor removes duplicates, two wrong comments and narration halves.</p>
+<table>
+  <tr><th>Lines</th><th>Comment</th><th>Verdict</th></tr>
+  <tr><td>366-367</td><td>"Send email. <code>isTest</code> flags sends from the editor's Run test…"</td><td><span class="narr">narrates</span> "Send email."; <span class="why">why</span> on <code>isTest</code> survives on the param</td></tr>
+  <tr><td>378-381</td><td>Preserve the incoming priority on reschedule</td><td><span class="why">why</span> · moves to <code>startSend</code></td></tr>
+  <tr><td>399-404, 433-436, 482-485, 503-504</td><td>Four "same choke point, no route can bypass it" comments</td><td><span class="why">why</span>, but said four times · one comment on <code>EmailSendGates</code></td></tr>
+  <tr><td>417-418, 441-443, 460-462</td><td>One metric for both causes; error not warn; mark skip for billing</td><td><span class="why">why</span> · move with their gates</td></tr>
+  <tr><td>468</td><td>Wrong-team reads as not-found</td><td><span class="why">why</span> (security) · moves to <code>resolveSender</code></td></tr>
+  <tr><td>507-510</td><td>Pacing claimed last, after every skip gate; fail closed</td><td><span class="why">why</span> (ordering invariant) · stays in <code>runSend</code>; fix the stale <code>claimUpTo</code> name (the call is <code>claimOrReserve</code>)</td></tr>
+  <tr><td>515-519, 551-553, 712-725, 754-762, 771-777, 791-792</td><td>Burst capacity, per-recipient charge, two buckets, clamp, atomic claim, limiter failure pacing, shadow mode</td><td><span class="why">why</span> · move to <code>email-pacing.ts</code>; 771-773 repeats the doc block, merge</td></tr>
+  <tr><td>533-537, 559-561</td><td>Re-attach the email payload before rescheduling (twice)</td><td><span class="why">why</span>, duplicated · one line on the reschedule branch of <code>applyOutcome</code></td></tr>
+  <tr><td>574, 613-616</td><td>UTM before click tracking; <code>[Email:…]</code> token only with an asset</td><td><span class="why">why</span></td></tr>
+  <tr><td>625-627</td><td>Throttle: "Treat as a transient delivery delay…"</td><td>first sentence <span class="narr">narrates</span>; "our bucket is primary, this catches SES disagreeing" is <span class="why">why</span></td></tr>
+  <tr><td>641-644, 653-654, 665-666, 699-702</td><td>No VM push or metric on throttle; test sends record nothing; untracked metric; tracking dimension always set</td><td><span class="why">why</span> · move to <code>applyOutcome</code></td></tr>
+  <tr><td>648</td><td>"Push the response to the VM stack if running inline (not from the email queue)"</td><td><span class="wrong">wrong</span>: the push is unconditional · delete</td></tr>
+  <tr><td>820-824</td><td>Suppression helper doc</td><td>mostly <span class="narr">narrates</span>; keep "a suppressed address anywhere blocks the send"</td></tr>
+  <tr><td>852-859, 877-878, 908-910, 921, 945-946, 955-957, 975-978</td><td>Tracking controls and fail-closed; consent per recipient; config sets; warn once; override rules</td><td><span class="why">why</span></td></tr>
+  <tr><td>996</td><td>"Send email to local maildev instance for testing (DEBUG=1 only)"</td><td><span class="narr">narrates</span>, and the DEBUG detail is off (the transport exists in dev and test envs, <code>helpers/maildev.ts:7-8</code>) · delete</td></tr>
+  <tr><td>1004</td><td>"This can timeout but there is no native timeout so we do our own one"</td><td><span class="wrong">wrong</span>: no timeout here; the transport sets its own timeouts in <code>helpers/maildev.ts</code> · delete</td></tr>
+  <tr><td>1050-1052, 1098-1099, 1104-1113, 1116-1119</td><td>Signed code in header, short code in tag; backwards-compat tag; tenant attribution; header as carrier</td><td><span class="why">why</span> · 1104-1113 trims to its two reasons</td></tr>
+  <tr><td>43-100, 107-108, 123-130, 143-187, 196-269, 276-285, 316-322</td><td>Module-level docs: Auto-Submitted, throttle names, jitter, metadata parsing, park delays, cap mode and tables, TTLs, hash tag, config</td><td><span class="why">why</span> · 226-227 carries a cross-file invariant (mirrors <code>posthog/settings/web.py</code>) and must survive</td></tr>
+  <tr><td>test 394-402, 430-433, 447-449</td><td>Test comments restating the production why</td><td><span class="narr">narrate</span> · the test name carries it</td></tr>
+</table>
+
+<h2 id="data">12. Data, caching, performance</h2>
+<ul>
+  <li><b>Data:</b> no schema or storage change. The job blob shape (<code>state</code>, <code>queueParameters</code>, <code>queueMetadata</code>) stays as is.</li>
+  <li><b>Caching:</b> none added or moved. <code>TeamWorkflowsConfigService</code> keeps its cache and pub/sub reload.</li>
+  <li><b>Hot path:</b> the same reads and claims in the same order. Computing <code>recipients</code> once removes two re-parses per send; nothing measurable.</li>
+</ul>
+
+<h2 id="cards">13. Decision cards</h2>
+<h3>Open</h3>
+
+<div class="card"><h4>C1 · Outcome model<span class="status open">open</span></h4>
+<p>How steps report what happened.</p>
+<ol>
+  <li><b>A <code>SendOutcome</code> union and one <code>applyOutcome</code> writer.</b> Steps return values; one place writes queue fields, metrics, VM stack and events. Kills the reschedule bug class, and section 6 becomes the code's own shape. Cost: a new type, and R3 touches every exit.</li>
+  <li><b>Keep mutating <code>result</code></b>, but extract <code>reschedule(result, params, delay)</code> and <code>skip(result, reason)</code> helpers. Smaller diff; the matrix stays implicit, and a new exit can still forget a field.</li>
+</ol>
+<div class="rec">Recommend 1. The bug that started this map is exactly "one exit wrote a different footprint".</div></div>
+
+<div class="card"><h4>C2 · Constructor wiring<span class="status open">open</span></h4>
+<ol>
+  <li><b>One <code>EmailServiceDeps</code> object; <code>EmailService</code> builds its submodules inside.</b> Named fields, optional limiters read as "off". Touches two production call sites and the tests (R1).</li>
+  <li><b>Keep 11 positional params</b> (13 with sandbox). Zero churn; tests keep passing <code>undefined, null, limiter</code> by position.</li>
+  <li><b>Inject the built submodules</b> (gates, pacers, providers). Maximum swapability, but each has one adapter: a hypothetical seam, and tests have no use for it.</li>
+</ol>
+<div class="rec">Recommend 1.</div></div>
+
+<div class="card"><h4>C3 · Gate shape<span class="status open">open</span></h4>
+<ol>
+  <li><b>Explicit calls in <code>runSend</code></b> to a small <code>EmailSendGates</code> class. Order readable in one place; the sender check sits between gates naturally.</li>
+  <li><b>A <code>SendGate[]</code> pipeline.</b> Uniform and extensible, but the sender check (fails, not skips) breaks the uniform shape, and every gate has one implementation.</li>
+</ol>
+<div class="rec">Recommend 1. YAGNI on the pipeline until gates multiply beyond the sandbox ones, which C4 already scopes to the provider.</div></div>
+
+<div class="card"><h4>C4 · Provider seam<span class="status open">open</span></h4>
+<ol>
+  <li><b><code>EmailProvider</code> interface with SES and maildev adapters</b>, chosen by <code>integration.config.provider</code>. Two real adapters today, a third (sandbox) in flight, and a provider-neutral throttle contract.</li>
+  <li><b>Keep provider methods private on <code>EmailService</code></b>, and only extract a pure <code>buildSesSendEmailInput</code>. Less structure; the sandbox stack keeps branching inside the SES method.</li>
+</ol>
+<div class="rec">Recommend 1. Two adapters make it a real seam.</div></div>
+
+<div class="card"><h4>C5 · Queue-level seam for the round-trip<span class="status open">open</span></h4>
+<ol>
+  <li><b><code>HogFlowExecutorService.execute</code> in a loop</b>, passing <code>result.invocation</code> back in. Existing pattern (<code>hogflows/hogflow-executor.service.test.ts:3036</code>); skips worker flow loading and the job codec.</li>
+  <li><b>Email worker <code>processInvocations</code> with a codec hop</b> through <code>invocationToV2JobInit</code> / <code>v2JobToInvocation</code> between attempts. Real worker, flow reload, and the persisted shape; still no Postgres queue I/O.</li>
+  <li><b>Real cyclotron Postgres queues and workers</b> in the existing <code>workflows-e2e.serial.test.ts</code> email suite (setup at <code>:2832-2855</code>; it already covers routing and pacing parks, with maildev). Highest fidelity, including the reschedule SQL; serial, slower, and its pacing cases only assert the park, never the later send.</li>
+</ol>
+<div class="rec">Recommend 2 for M1-M4 and M17, plus <b>one</b> case of 3 for M1 against the SES fake: a throttle waits under a second, so the full production path costs little, and it is the exact bug that started this map.</div></div>
+
+<div class="card"><h4>C6 · Rate limiter in S1 tests<span class="status open">open</span></h4>
+<ol>
+  <li><b>Real <code>RateLimiterService</code> on the test Valkey.</b> Pacing tests exercise the Lua claim semantics; delays are asserted as ranges. Exact-slot math moves to S3.</li>
+  <li><b>Keep the hand-rolled <code>{ claimOrReserve } as RateLimiterService</code> stubs.</b> Deterministic delays; the test passes even if the claim contract drifts.</li>
+</ol>
+<div class="rec">Recommend 1, with S3 owning the exact numbers.</div></div>
+
+<div class="card"><h4>C7 · Unknown provider value<span class="status open">open</span></h4>
+<p>Today an unknown <code>provider</code> reports a sent email without sending anything (M6).</p>
+<ol>
+  <li><b>Preserve in the refactor; a separate small fix PR fails the send</b>, landing before R5.</li>
+  <li><b>Fix it inside R5</b> as the registry's natural behavior. Breaks "behavior-preserving" for that slice.</li>
+</ol>
+<div class="rec">Recommend 1, proposed as a follow-up ticket.</div></div>
+
+<div class="card"><h4>C8 · Billing of suspended and suppressed skips<span class="status open">open</span></h4>
+<p>Today suspended and suppressed sends count as billable invocations; paused sends do not (section 6).</p>
+<ol>
+  <li><b>Preserve, characterize (M9), and raise a follow-up</b> for a policy decision.</li>
+  <li><b>Unify in R3</b> so every skip sets <code>skipped</code>. A billing change hidden in a refactor.</li>
+</ol>
+<div class="rec">Recommend 1. It is a billing decision, not a code-shape one.</div></div>
+
+<div class="card"><h4>C9 · Direct tests on submodules<span class="status open">open</span></h4>
+<ol>
+  <li><b>Only pure policy functions get direct tests</b> (S3); gates, pacers, providers and the outcome writer are tested through S1 and S2.</li>
+  <li><b>Direct tests per submodule.</b> Faster feedback per module, but they test past the interface and break on the next reshuffle.</li>
+  <li><b>No direct tests at all.</b> Delay math through <code>executeSendEmail</code> needs a stubbed limiter (conflicts with C6 option 1).</li>
+</ol>
+<div class="rec">Recommend 1.</div></div>
+
+<div class="card"><h4>C10 · Order against the sandbox stack (#111904 → #112071)<span class="status open">open</span></h4>
+<ol>
+  <li><b>Refactor waits for the sandbox stack to merge</b>, then decomposes it too (section 5.4). The stack is already in review; R5 absorbs it as a third provider.</li>
+  <li><b>Refactor lands first; the stack rebases</b> onto the new modules. Cleaner end state sooner; the stack's author pays a large rebase of reviewed code.</li>
+  <li><b>Interleave:</b> land R1-R2 independent of the stack, hold R3-R5 until it merges.</li>
+</ol>
+<div class="rec">Recommend 3. R1-R2 touch regions the stack barely changes (two constructor params, the team cap call); R3-R5 collide with its throttle patch, outcome metric, gates and SES route head-on.</div></div>
+
+<div class="card"><h4>C11 · Glossary in the repo<span class="status open">open</span></h4>
+<ol>
+  <li><b>Add <code>services/messaging/CONTEXT.md</code></b> with the section 2 terms, in R3.</li>
+  <li><b>Keep the terms in code names only</b> (<code>SendOutcome</code>, <code>EmailSendGates</code>, <code>SendPacer</code>).</li>
+</ol>
+<div class="rec">Recommend 1: send gate vs pre-send skip vs pacing is exactly the distinction a future reader gets wrong.</div></div>
+
+<div class="card"><h4>C12 · Comment changes<span class="status open">open</span></h4>
+<ol>
+  <li><b>Ride with the slice that moves the code</b>, following section 11.</li>
+  <li><b>One comment-only PR</b> before the refactor.</li>
+</ol>
+<div class="rec">Recommend 1. A comment-only PR rewrites lines that R2-R5 then move again.</div></div>
+
+<div class="card"><h4>C13 · <code>queueMetadata</code> lost on reschedule<span class="status open">open</span></h4>
+<p>Every reschedule drops the origin queue and priority stash (section 6, M17). Same bug class as #112295, a different field.</p>
+<ol>
+  <li><b>Small fix PR before R3:</b> re-attach <code>queueMetadata</code> on all three reschedules, test-first at S2 (M17). R3 then folds it into <code>applyOutcome</code>.</li>
+  <li><b>Fix inside R3</b>, where the single reschedule writer makes it a one-liner. Breaks "behavior-preserving" for the riskiest slice.</li>
+  <li><b>Preserve and file a follow-up</b> with no order constraint.</li>
+</ol>
+<div class="rec">Recommend 1, proposed as a follow-up ticket. It is a real ordering bug on a hot path and the test seam for it (S2) exists once the harness lands.</div></div>
+
+<div class="card"><h4>C14 · Failures after the provider accepted<span class="status open">open</span></h4>
+<p>Two paths run after SES accepted the email: building the asset row (inside the try, so a throw reports <code>email_failed</code>, M20) and the engagement-config read (outside it, so a throw rejects the whole call, M19). In a workflow, <code>HogFlowExecutorService</code> catches that rejection and fails the step (<code>hogflows/hogflow-executor.service.ts:635-683</code>): the email went out, but the run shows an error and no <code>email_sent</code>.</p>
+<ol>
+  <li><b>Preserve in the refactor; one follow-up</b> makes post-send work unable to change the outcome (asset and engagement failures log and continue).</li>
+  <li><b>Make <code>applyOutcome</code> non-throwing in R3.</b> Natural in the new shape, but a behavior change inside the refactor.</li>
+</ol>
+<div class="rec">Recommend 1. Both are rare (cached config, defensive asset builder), and the fix deserves its own review.</div></div>
+
+<h3>Locked</h3>
+<div class="card locked"><h4>L1 · One public method<span class="status locked">locked</span></h4><p><code>executeSendEmail(invocation, isTest)</code> stays the only public method and its signature does not change. <b>Reason:</b> map destination 1 ("EmailService still a deep module with a small public interface"); the only production caller is <code>hog-executor-async.service.ts:187</code>.</p></div>
+<div class="card locked"><h4>L2 · SES is faked at HTTP, not at <code>send()</code><span class="status locked">locked</span></h4><p>Tests reach the local SES fake through <code>sesEndpoint</code>; throttles come from the fake. <b>Reason:</b> map charting decision 2026-10-06.</p></div>
+<div class="card locked"><h4>L3 · Behavior-preserving, after the harness<span class="status locked">locked</span></h4><p>R1-R5 change no assertion and land after the harness tickets. Behavior changes (C7, C8, refunds, give-up limit) are separate PRs. <b>Reason:</b> map Notes, "Risk".</p></div>
+<div class="card locked"><h4>L4 · Step order<span class="status locked">locked</span></h4><p>Integration lookup → suspension → pause → sender check → suppression → tracking decision → workflow pacing → team cap → UTM → provider. <b>Reason:</b> behavior-preserving (L3); the order decides which outcome wins when several apply, and pacing after gates keeps skipped sends from spending tokens (<code>email.service.ts:507-510</code>).</p></div>
+<div class="card locked"><h4>L5 · A reschedule writes no metric, VM push or event<span class="status locked">locked</span></h4><p><b>Reason:</b> <code>email.service.ts:640-646</code> and the throttle test at <code>email.service.test.ts:409-427</code>; the retry produces them once.</p></div>
+
+<h2 id="blast">14. Blast radius</h2>
+<ul>
+  <li><b>What can break:</b> every workflow and destination email send. Worst cases: a reschedule that drops the email (M1-M3 guard it), a skipped send that bills differently (M9), a gate moved after a token claim (L4), a lost SES header (tenant, tracking code, unsubscribe) that breaks reputation attribution or the webhook.</li>
+  <li><b>Who notices:</b> customers (emails missing or late, wrong run-log lines), the SES webhook (missing tracking header), billing (skip flag), on-call (throttle and park metrics).</li>
+  <li><b>Mitigation:</b> each slice runs S1 and S2 against the SES fake; R3 gets a qa-swarm (send path is a danger area); <code>merge-risk</code> on every PR.</li>
+  <li><b>Out of scope:</b> pre-send skips in <code>HogFunctionHandler</code>, the hog executor loop, push notifications, the refund-on-throttle and give-up-limit follow-ups, the real-SES test.</li>
+</ul>
+
+<h2 id="followups">15. Follow-up tickets this brief proposes</h2>
+<p class="muted">For the conductor to graduate on acceptance. None is dispatched from here.</p>
+<table>
+  <tr><th>#</th><th>Kind</th><th>Ticket</th><th>Depends on</th></tr>
+  <tr><td>T1</td><td>tests</td><td>Missing cases M5-M16, M18-M21 at seam S1, against the SES fake</td><td>harness (SES fake)</td></tr>
+  <tr><td>T2</td><td>tests</td><td>Round-trip cases M1-M4, M17 at seam S2, plus the one E2E throttle case (C5)</td><td>harness</td></tr>
+  <tr><td>T3</td><td>fix</td><td>Re-attach <code>queueMetadata</code> on reschedule (C13)</td><td>T2 (M17)</td></tr>
+  <tr><td>T4</td><td>fix</td><td>Unknown provider fails the send (C7)</td><td>T1 (M6)</td></tr>
+  <tr><td>T5</td><td>grilling</td><td>Should suspended and suppressed skips be billable? (C8)</td><td>none</td></tr>
+  <tr><td>T6</td><td>fix</td><td>Post-send work cannot change the outcome (C14)</td><td>T1 (M19, M20)</td></tr>
+  <tr><td>R1-R5</td><td>refactor</td><td>The slices of section 10</td><td>T1, T2; R3-R5 after the sandbox stack (C10)</td></tr>
+</table>
+
+</main>
+</body>
+</html>
