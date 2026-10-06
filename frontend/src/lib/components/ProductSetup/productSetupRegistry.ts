@@ -653,6 +653,7 @@ export const PRODUCT_SETUP_REGISTRY: Partial<Record<ProductKey, ProductSetupConf
                     description: 'Send a test email from a template, broadcast, or workflow email step.',
                     taskType: 'onboarding',
                     getUrl: () => urls.workflows(),
+                    targetSelector: '[data-attr="first-run-recommended-template"]',
                 },
                 {
                     id: SetupTaskId.LaunchWorkflow,

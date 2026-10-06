@@ -189,20 +189,4 @@ describe('productSetupLogic', () => {
             workflowsLogic.unmount()
         }
     })
-
-    it('opens the Workflows tab without a gallery highlight for the test email task', async () => {
-        featureFlagLogic.actions.setFeatureFlags([], { [FEATURE_FLAGS.WORKFLOWS_FIRST_RUN]: true })
-        const workflowsLogic = productSetupLogic({ productKey: ProductKey.WORKFLOWS })
-        workflowsLogic.mount()
-        try {
-            await expectLogic(workflowsLogic, () =>
-                workflowsLogic.actions.runTask(SetupTaskId.SendWorkflowTestEmail)
-            ).toFinishAllListeners()
-
-            expect(router.values.location.pathname).toEqual(expect.stringContaining(urls.workflows()))
-            expect(globalSetupLogic.values.highlight).toBeNull()
-        } finally {
-            workflowsLogic.unmount()
-        }
-    })
 })
