@@ -5853,8 +5853,7 @@ class HogFlowViewSet(
         serializer = HogFlowInvocationSerializer(
             data=request.data, context={**self.get_serializer_context(), "instance": hog_flow}
         )
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=400)
+        serializer.is_valid(raise_exception=True)
 
         payload = dict(serializer.validated_data)
         if payload.pop("use_draft", False):

@@ -6337,6 +6337,23 @@ class TestFlagGatedTemplates(APIBaseTest):
         if expected_status == status.HTTP_400_BAD_REQUEST:
             assert "Template not found" in response.json()["detail"]
 
+    def test_invocation_rejects_an_inline_gated_step_when_the_flag_is_off(self):
+        with patch("products.workflows.backend.presentation.views.hog_flow.gated_template_enabled", return_value=True):
+            created = self._post_flow_with_create_task_action_as_web()
+        assert created.status_code == status.HTTP_201_CREATED
+        flow = created.json()
+
+        with patch("products.workflows.backend.presentation.views.hog_flow.gated_template_enabled", return_value=False):
+            response = self.client.post(
+                f"/api/projects/{self.team.id}/hog_flows/new/invocations/",
+                {"configuration": {"name": flow["name"], "actions": flow["actions"], "edges": flow["edges"]}},
+                format="json",
+                HTTP_X_POSTHOG_CLIENT="mcp",
+            )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()
+        assert "Template not found" in str(response.json())
+
     def test_flag_eval_failure_hides_the_gated_template(self):
         # A flag-service blip must hide the pre-release step, not expose it.
         with patch(
