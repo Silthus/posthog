@@ -7,7 +7,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -16,7 +16,18 @@ from posthog.api.documentation import _FallbackSerializer
 from posthog.api.mixins import ValidatedRequest, validated_request
 from posthog.api.routing import TeamAndOrgViewSetMixin
 from posthog.api.streaming import streaming_response
+from posthog.auth import ProjectSecretAPIKeyAuthentication
+from posthog.models.user import User
+from posthog.permissions import get_authenticator_scopes, is_authenticated_via_project_secret_api_key
+from posthog.ph_client import feature_enabled_or_false
 from posthog.plugins import plugin_server_api
+from posthog.rate_limit import (
+    BurstRateThrottle,
+    PersonalOrProjectSecretApiKeyRateThrottle,
+    ProjectSecretApiKeyTeamRateThrottle,
+    SustainedRateThrottle,
+)
+from posthog.scopes import scopes_not_covered
 
 from products.messaging.backend.models.message_category import MessageCategory, MessageCategoryType
 from products.messaging.backend.models.message_preferences import (
@@ -29,6 +40,35 @@ from products.messaging.backend.tasks import sync_preferences_to_customerio_task
 
 MAX_BULK_OPT_OUT_ENTRIES = 1000
 UNSAFE_FILENAME_CHARACTERS = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+class MessagingPreferencesBurstThrottle(PersonalOrProjectSecretApiKeyRateThrottle):
+    scope = BurstRateThrottle.scope
+    rate = BurstRateThrottle.rate
+
+
+class MessagingPreferencesSustainedThrottle(PersonalOrProjectSecretApiKeyRateThrottle):
+    scope = SustainedRateThrottle.scope
+    rate = SustainedRateThrottle.rate
+
+
+class MessagingPreferencesProjectSecretKeyTeamBurstThrottle(ProjectSecretApiKeyTeamRateThrottle):
+    scope = "messaging_preferences_psak_team_burst"
+    rate = BurstRateThrottle.rate
+
+
+class MessagingPreferencesProjectSecretKeyTeamSustainedThrottle(ProjectSecretApiKeyTeamRateThrottle):
+    scope = "messaging_preferences_psak_team_sustained"
+    rate = SustainedRateThrottle.rate
+
+
+MESSAGING_PREFERENCE_SCOPE_BY_ACTION: dict[str, str] = {
+    "opt_outs": "messaging_preference:read",
+    "export_opt_outs_csv": "messaging_preference:read",
+    "add_opt_out": "messaging_preference:write",
+    "bulk_add_opt_outs": "messaging_preference:write",
+    "remove_opt_out": "messaging_preference:write",
+}
 
 
 class OptOutsPagination(PageNumberPagination):
@@ -194,15 +234,50 @@ class MessagePreferencesViewSet(TeamAndOrgViewSetMixin, viewsets.ViewSet):
     # in neither.
     scope_object_read_actions = ["opt_outs", "export_opt_outs_csv"]
     scope_object_write_actions = ["add_opt_out", "bulk_add_opt_outs", "remove_opt_out"]
+    authentication_classes = [ProjectSecretAPIKeyAuthentication]
+    psak_allowed_actions = list(MESSAGING_PREFERENCE_SCOPE_BY_ACTION)
+    # The default throttles let project secret keys through unthrottled.
+    throttle_classes = [
+        MessagingPreferencesBurstThrottle,
+        MessagingPreferencesSustainedThrottle,
+        MessagingPreferencesProjectSecretKeyTeamBurstThrottle,
+        MessagingPreferencesProjectSecretKeyTeamSustainedThrottle,
+    ]
     serializer_class = _FallbackSerializer
 
     def _require_resource_access(self, required_level: Literal["viewer", "editor"], message: str) -> None:
+        if is_authenticated_via_project_secret_api_key(self.request):
+            if not feature_enabled_or_false(
+                "workflows-agent-message-preferences",
+                str(self.team.uuid),
+                groups={"organization": str(self.team.organization_id), "project": str(self.team.uuid)},
+                group_properties={
+                    "organization": {"id": str(self.team.organization_id)},
+                    "project": {"id": str(self.team.uuid)},
+                },
+                send_feature_flag_events=False,
+            ):
+                raise NotFound()
+            return
         # Resource-level check: `AccessControlPermission` only guarantees the caller has some
         # hog_flow object access. These endpoints act on team-wide data with no per-workflow
         # object, so require project-wide hog_flow access — otherwise a member granted access to
         # a single workflow could read or rewrite the whole team's opt-out list.
         if not self.user_access_control.check_access_level_for_resource("hog_flow", required_level):
             raise PermissionDenied(message)
+
+    def dangerously_get_required_scopes(self, request: Request, view: viewsets.ViewSet) -> list[str] | None:
+        narrow_scope = MESSAGING_PREFERENCE_SCOPE_BY_ACTION.get(self.action)
+        if narrow_scope is None:
+            return None
+        held_scopes = get_authenticator_scopes(request.successful_authenticator) or []
+        if is_authenticated_via_project_secret_api_key(request) or not scopes_not_covered(held_scopes, [narrow_scope]):
+            return [narrow_scope]
+        # Falls back to the hog_flow scope that existing personal keys and MCP clients hold.
+        return None
+
+    def _requesting_user(self) -> User | None:
+        return self.request.user if isinstance(self.request.user, User) else None
 
     @validated_request(
         query_serializer=OptOutsListQuerySerializer,
@@ -255,7 +330,7 @@ class MessagePreferencesViewSet(TeamAndOrgViewSetMixin, viewsets.ViewSet):
 
     @extend_schema(
         request=AddOptOutRequestSerializer,
-        responses={201: MessagePreferencesSerializer},
+        responses={200: MessagePreferencesSerializer, 201: MessagePreferencesSerializer},
         summary="Manually add a recipient to the opt-out list",
     )
     @action(detail=False, methods=["post"])
@@ -280,7 +355,7 @@ class MessagePreferencesViewSet(TeamAndOrgViewSetMixin, viewsets.ViewSet):
         preference, created = MessageRecipientPreference.objects.get_or_create(
             team_id=self.team_id,
             identifier=identifier,
-            defaults={"created_by": request.user},
+            defaults={"created_by": self._requesting_user()},
         )
         preference.set_preference(category_id, PreferenceStatus.OPTED_OUT)
 
@@ -293,7 +368,7 @@ class MessagePreferencesViewSet(TeamAndOrgViewSetMixin, viewsets.ViewSet):
 
     @extend_schema(
         request=RemoveOptOutRequestSerializer,
-        responses={201: MessagePreferencesSerializer},
+        responses={200: MessagePreferencesSerializer, 201: MessagePreferencesSerializer},
         summary="Remove a recipient from the opt-out list",
     )
     @action(detail=False, methods=["post"])
@@ -316,7 +391,7 @@ class MessagePreferencesViewSet(TeamAndOrgViewSetMixin, viewsets.ViewSet):
         preference, created = MessageRecipientPreference.objects.get_or_create(
             team_id=self.team_id,
             identifier=identifier,
-            defaults={"created_by": request.user},
+            defaults={"created_by": self._requesting_user()},
         )
         preferences = dict(preference.preferences or {})
 
@@ -386,7 +461,7 @@ class MessagePreferencesViewSet(TeamAndOrgViewSetMixin, viewsets.ViewSet):
         self._require_resource_access("viewer", "You need hog_flow viewer access to view the opt-out list.")
 
         category_key = request.query_params.get("category_key")
-        service = OptOutService(team_id=self.team_id, user=request.user)
+        service = OptOutService(team_id=self.team_id, user=self._requesting_user())
 
         try:
             rows = service.export_rows(category_key)
@@ -423,7 +498,7 @@ class MessagePreferencesViewSet(TeamAndOrgViewSetMixin, viewsets.ViewSet):
             for entry in serializer.validated_data["opt_outs"]
         ]
 
-        service = OptOutService(team_id=self.team_id, user=request.user)
+        service = OptOutService(team_id=self.team_id, user=self._requesting_user())
         try:
             result = service.opt_out_recipients(entries, serializer.validated_data.get("category_key") or None)
         except UnknownCategoryError as e:
