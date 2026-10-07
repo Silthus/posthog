@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype: shared MCP App in PostHog chat</title>
+<style>
+:root{color-scheme:light dark;--bg:#f8f7f5;--fg:#242424;--muted:#67635d;--line:#d6d1c8;--accent:#7145b5;--panel:#fff;--tint:#eee8f6}
+@media(prefers-color-scheme:dark){:root{--bg:#191919;--fg:#eeeae3;--muted:#b2aaa0;--line:#454039;--panel:#242424;--tint:#362c46}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 system-ui,sans-serif}main{max-width:1000px;margin:auto;padding:24px}h1{font-size:25px;line-height:1.2;margin:0 0 12px}h2{font-size:18px;margin:28px 0 12px}h3{font-size:15px;margin:0 0 8px}p{max-width:86ch}a{color:var(--accent)}button,select{font:inherit;color:inherit;border:1px solid var(--line);border-radius:5px;padding:7px 10px;background:var(--panel)}button{cursor:pointer}button:hover{border-color:var(--accent)}button:disabled{opacity:.55;cursor:default}button.primary{background:var(--accent);color:white;border-color:var(--accent)}.row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.notice{padding:12px;border-left:3px solid var(--accent);background:var(--tint)}.muted,small{color:var(--muted)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.panel{background:var(--panel);padding:16px;border:1px solid var(--line);border-radius:7px}.flow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.node{padding:10px;border:1px solid var(--line);border-radius:6px}.new{border-color:var(--accent);background:var(--tint)}iframe{width:100%;height:245px;border:0;background:var(--panel)}pre{font:12px/1.55 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0}code{font:12px ui-monospace,monospace}table{width:100%;border-collapse:collapse}td,th{text-align:left;vertical-align:top;padding:9px;border-bottom:1px solid var(--line)}.trace{height:185px;overflow:auto;white-space:pre-wrap;font:11px/1.5 ui-monospace,monospace}.card{border-top:2px solid var(--accent);padding-top:12px;margin:20px 0}summary{cursor:pointer;font-weight:600}.state{min-height:70px}.tag{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}.wrap{container-type:inline-size}@container(max-width:600px){.grid{grid-template-columns:1fr}}@media(max-width:600px){main{padding:16px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<p class="tag">Throwaway architecture and protocol prototype</p>
+<h1>One MCP App, two kinds of chat host</h1>
+<p>Can the same app show workflow actions, confirm a write, execute the tool directly and show its result inside PostHog chat and external MCP Apps clients?</p>
+<p class="notice"><strong>Simulated backend.</strong> This page demonstrates the JSON-RPC interaction using one iframe app under two host shells. It does not connect to PostHog, Claude or ChatGPT, authenticate a user, send an email, or validate a production sandbox.</p>
+<h2>Try the shared app</h2>
+<p>Pick an outcome, click Enable, and confirm. The app updates in place. The protocol trace shows a direct <code>tools/call</code> and no chat message. Press Next user turn to inspect what the model receives.</p>
+<div class="row"><label>Tool outcome <select id="scenario"><option value="success">Success</option><option value="sender">Unverified sender</option><option value="denied">Permission denied</option></select></label><button id="reset">Reset both hosts</button><button id="next-turn">Next user turn</button></div>
+<div class="grid" style="margin-top:16px">
+<section class="panel"><h3>PostHog chat host simulation</h3><small>I created a draft workflow. You can enable it below.</small><iframe id="posthog-app" title="Shared workflow app in PostHog chat" sandbox="allow-scripts"></iframe><details><summary>Protocol trace</summary><div id="posthog-trace" class="trace"></div></details><p class="muted">Authoritative host outcome log</p><pre id="posthog-history" class="state">[]</pre><p class="muted">Context delivered on next turn</p><pre id="posthog-model" class="state">No context delivered yet.</pre></section>
+<section class="panel"><h3>External MCP Apps host simulation</h3><small>The identical HTML resource is mounted here.</small><iframe id="external-app" title="Shared workflow app in an external host" sandbox="allow-scripts"></iframe><details><summary>Protocol trace</summary><div id="external-trace" class="trace"></div></details><p class="muted">Authoritative host outcome log</p><pre id="external-history" class="state">[]</pre><p class="muted">Context delivered on next turn</p><pre id="external-model" class="state">No context delivered yet.</pre></section>
+</div>
+<h2>Change map</h2>
+<p class="muted">Purple blocks are new or extended. Plain blocks already exist.</p>
+<div class="flow"><div class="node">Product MCP tools + UI resources</div><span>→</span><div class="node new">Shared actions app</div><span>→</span><div class="node new">PostHog AppBridge host</div><span>→</span><div class="node new">Authenticated tool proxy</div><span>→</span><div class="node">MCP server → product API</div></div>
+<p>External hosts load the same app from the same MCP server through their existing connections. Each host controls authentication, callable tools and consent.</p>
+<table><tr><th>Today</th><th>Proposed</th></tr><tr><td>Native suggested-action widget sends a canned prompt for <code>run</code>.</td><td>App calls a validated tool directly through its host.</td></tr><tr><td>Accepted native prototype uses a generated browser API adapter.</td><td>Shared app uses MCP <code>tools/call</code>; host transport is the open decision.</td></tr><tr><td>External apps and native product cards use separate rendering paths.</td><td>One actions app renders in every compatible host; native widgets remain the fallback.</td></tr></table>
+<h2>Contracts at the seams</h2>
+<div class="grid"><section class="panel"><h3>Action declaration</h3><pre>Before:
+{ key, label, kind: "run", message }
+
+After (proposed):
+{ key, label, kind: "run", tool, args,
+  destructive, binding }</pre><p>Selection stays with <code>suggest-actions</code>. The server binds the tool and arguments to the offering result, current project and authorized caller. A label or an app request does not grant permission.</p></section><section class="panel"><h3>Host interface</h3><pre>ui resource + tool result → sandboxed app
+
+App → tools/call { name, arguments }
+Host → validated CallToolResult
+
+App → ui/update-model-context
+Host → next-turn state snapshot</pre><p>Credentials stay in the host/backend. Writes require authorization and confirmed arguments. Only allow declared tools and UI resources. Unknown targets fail closed.</p></section></div>
+<h2>Flows</h2>
+<p><strong>Read:</strong> agent calls the offering tool → result declares app resource → host fetches HTML → sandbox initializes → host sends structured result → app shows actions.</p>
+<p><strong>Write:</strong> user confirms → app requests <code>tools/call</code> → host validates tool, bound project and permission → MCP server calls product API → host records canonical outcome → app shows success → next user turn includes outcome context.</p>
+<p><strong>Failure:</strong> product rejects an unverified sender → tool returns <code>isError</code> → app shows error and Try again in place → host records the failed attempt. A timeout after an uncertain write must reconcile status before retrying.</p>
+<h2>Data, caching and performance</h2>
+<p>Production needs a durable outcome record keyed by project, task/run, offering tool call and action instance. Reloads replay the canonical result and restore spent buttons. The demo keeps records in memory and Reset clears them.</p>
+<p><code>ui/update-model-context</code> replaces the latest state for one app. It is not an append-only audit log. The host stores verified tool outcomes separately and supplies them to the next turn. App state remains untrusted context.</p>
+<p>Cache versioned app HTML/assets by resource URI, not by user credentials. Do not cache permission decisions or tenant results across callers. Lazy-load the host SDK and resource only for app-bearing tool calls. One click adds one backend tool request and one outcome write.</p>
+<h2>Decision cards</h2>
+<section class="card"><p class="tag">Open · recommendation A</p><h3>How does PostHog's host execute a tool?</h3><p><strong>A. Session-authenticated backend proxy to the MCP server.</strong> Keep one tool implementation. Backend fixes project and caller, grants only the necessary scopes, and never returns credentials to the app. Adds a transport and auth seam requiring security review.</p><p><strong>B. Bridge MCP tool names to native typed browser adapters.</strong> Preserves the accepted session-auth design. Smaller first workflow integration, but duplicates tool routing and behavior for each product.</p><p>Recommendation A fits the shared server goal. This reopens the transport decision from the native prototype; the existing token-minting helper alone does not prove the permission model.</p></section>
+<section class="card"><p class="tag">Open · recommendation A</p><h3>Where do follow-up controls live?</h3><p><strong>A. One small suggested-actions MCP App.</strong> Preserve buttons below the answer; shared controls can grow to typed forms. Start with one workflow action and a clear result summary.</p><p><strong>B. Put controls in each product's detail app.</strong> Richer context, but requires changing every product app and may add a large card where two buttons suffice.</p><p>Recommendation A matches the current chat interaction. Product apps can adopt the shared controls when richer configuration is needed.</p></section>
+<section class="card"><p class="tag">Locked by Michael's accepted native prototype</p><p>Direct execution without an agent turn; inline confirmation; success/error shown in place; canonical outcomes replay after reload; the next turn learns the result; bound tool arguments. Native composer insert/send behavior remains host-specific.</p></section>
+<h2>Blast radius and proof limits</h2>
+<p>Production touches the tool advertisement/visibility rules, result metadata through exec, iframe sandbox and CSP, server execution authorization, run history and hidden context. Gate the new host behind a feature flag and retain native/text fallbacks. The existing permission card remains for agent-originated tool calls.</p>
+<p>This demo verifies the interaction and a subset of the protocol. It does not use the SDK, provide production sandbox isolation, prove authenticated RBAC or CSRF, persist across reloads, or certify live Claude/ChatGPT rendering. Production must use the official AppBridge transport and validate the real resource under enforced CSP.</p>
+<h2>Code grounding</h2>
+<ul>
+<li><a href="https://github.com/PostHog/posthog/blob/3a41bd396fc/services/mcp/src/resources/ui-apps.ts#L13">Server metadata, resource registration and CSP</a></li>
+<li><a href="https://github.com/PostHog/posthog/blob/3a41bd396fc/products/workflows/mcp/tools.yaml#L10">Existing workflow apps</a></li>
+<li><a href="https://github.com/PostHog/posthog/blob/3a41bd396fc/products/posthog_ai/README.md#L168">Web chat currently uses native cards</a></li>
+<li><a href="https://github.com/PostHog/posthog/blob/3a41bd396fc/services/mcp/src/tools/exec.ts#L2057">Exec data and app metadata handling</a></li>
+<li><a href="https://github.com/PostHog/posthog/blob/3a41bd396fc/products/desktop/packages/ui/src/features/mcp-apps/hooks/useAppBridge.ts#L204">Existing Desktop AppBridge host reference</a></li>
+<li><a href="https://github.com/PostHog/posthog/blob/3a41bd396fc/services/mcp/src/ui-apps/apps/loops-review.tsx#L34">Existing app-originated writes</a></li>
+<li><a href="https://github.com/PostHog/posthog/blob/3a41bd396fc/products/posthog_ai/backend/api/mcp_tools.py#L82">Current Python registry endpoint, not generated MCP tools</a></li>
+<li><a href="https://github.com/Silthus/posthog/issues/277#issuecomment-5999973114">Earlier native prototype decisions</a> · <a href="https://modelcontextprotocol.io/extensions/apps/overview">MCP Apps standard</a> · <a href="https://developers.openai.com/plugins/build/chatgpt-ui">ChatGPT standard support</a></li>
+</ul>
+</main>
+<script>
+function workflowApp() {
+    let nextId = 1;
+    let data = null;
+    let phase = 'loading';
+    let error = '';
+    const pending = new Map();
+    const view = document.getElementById('view');
+    const send = (method, params) => {
+        const id = nextId++;
+        return new Promise((resolve, reject) => {
+            pending.set(id, { resolve, reject });
+            parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*');
+        });
+    };
+    function render() {
+        view.replaceChildren();
+        const heading = document.createElement('strong');
+        heading.textContent = data?.name ?? 'Connecting to host…';
+        view.append(heading);
+        const text = document.createElement('p');
+        text.textContent = phase === 'confirm' ? 'Enable this workflow? It can send emails to people who match its trigger.' : phase === 'running' ? 'Enabling workflow…' : phase === 'done' ? 'Workflow enabled.' : phase === 'error' ? error : 'Draft workflow · wf_demo';
+        if (phase === 'error') text.setAttribute('role', 'alert');
+        view.append(text);
+        const controls = document.createElement('div');
+        controls.className = 'controls';
+        const button = (label, action, disabled = false) => {
+            const node = document.createElement('button');
+            node.textContent = label;
+            node.disabled = disabled;
+            node.onclick = action;
+            controls.append(node);
+        };
+        if (phase === 'confirm') {
+            button('Confirm enable', execute);
+            button('Cancel', () => { phase = 'ready'; render(); });
+        } else if (phase === 'error') {
+            button('Try again', () => { phase = 'confirm'; render(); });
+        } else {
+            button(phase === 'done' ? 'Enabled' : phase === 'running' ? 'Enabling…' : 'Enable the workflow', () => { phase = 'confirm'; render(); }, phase !== 'ready');
+        }
+        view.append(controls);
+    }
+    async function execute() {
+        if (phase !== 'confirm') return;
+        phase = 'running';
+        render();
+        try {
+            const result = await send('tools/call', { name: 'workflows-enable', arguments: { id: data.id } });
+            if (result.isError) {
+                phase = 'error';
+                error = result.content.find(block => block.type === 'text')?.text ?? 'Could not enable workflow.';
+            } else {
+                phase = 'done';
+            }
+            render();
+            await send('ui/update-model-context', { structuredContent: { workflow_id: data.id, status: result.isError ? 'enable_failed' : 'active' } });
+        } catch (failure) {
+            phase = 'error';
+            error = failure.message;
+            render();
+        }
+    }
+    addEventListener('message', event => {
+        if (event.source !== parent || event.data?.jsonrpc !== '2.0') return;
+        const message = event.data;
+        if (message.method === 'ui/notifications/tool-result') {
+            data = message.params.structuredContent;
+            phase = data.status === 'active' ? 'done' : 'ready';
+            render();
+        } else if (pending.has(message.id)) {
+            const waiter = pending.get(message.id);
+            pending.delete(message.id);
+            if (message.error) waiter.reject(new Error(message.error.message));
+            else waiter.resolve(message.result);
+        }
+    });
+    render();
+    send('ui/initialize', { protocolVersion: '2026-01-26', appInfo: { name: 'Shared workflow actions prototype', version: '0.0.1' }, appCapabilities: {} }).then(() => {
+        parent.postMessage({ jsonrpc: '2.0', method: 'ui/notifications/initialized', params: {} }, '*');
+    });
+}
+const sharedAppHtml = '<!doctype html><html><head><meta charset="utf-8"><style>body{font:14px/1.5 system-ui;margin:0;padding:16px;color:#272321;background:#fff}strong{font-size:15px}p{margin:14px 0;max-width:65ch}.controls{display:flex;flex-wrap:wrap;gap:8px}button{font:inherit;border:1px solid #c6b8d9;border-radius:5px;padding:7px 10px;background:#f4eefb;color:#4c2979;cursor:pointer}button:disabled{opacity:.55;cursor:default}[role=alert]{color:#a62626}</style></head><body><div id="view"></div><script>(' + workflowApp.toString() + ')();</scr' + 'ipt></body></html>';
+const hosts = ['posthog', 'external'].map(key => ({ key, frame: document.getElementById(key + '-app'), trace: [], history: [], snapshot: null, seen: 0, calls: new Set(), generation: 0 }));
+function trace(host, direction, message) {
+    host.trace.push(direction + ' ' + JSON.stringify(message));
+    const element = document.getElementById(host.key + '-trace');
+    element.textContent = host.trace.join('\n');
+    element.scrollTop = element.scrollHeight;
+}
+function send(host, message) {
+    trace(host, 'Host → App', message);
+    host.frame.contentWindow.postMessage(message, '*');
+}
+function renderHistory(host) {
+    document.getElementById(host.key + '-history').textContent = JSON.stringify(host.history, null, 2);
+}
+addEventListener('message', async event => {
+    const host = hosts.find(candidate => candidate.frame.contentWindow === event.source);
+    if (!host || event.data?.jsonrpc !== '2.0' || !event.data.method) return;
+    const message = event.data;
+    trace(host, 'App → Host', message);
+    if (message.method === 'ui/initialize') {
+        send(host, { jsonrpc: '2.0', id: message.id, result: { protocolVersion: '2026-01-26', hostInfo: { name: host.key + '-simulation', version: '0.0.1' }, hostCapabilities: { serverTools: {}, updateModelContext: {} }, hostContext: { theme: 'light', displayMode: 'inline' } } });
+    } else if (message.method === 'ui/notifications/initialized') {
+        send(host, { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [{ type: 'text', text: 'Created draft workflow wf_demo.' }], structuredContent: { id: 'wf_demo', name: 'Welcome email workflow', status: 'draft' } } });
+    } else if (message.method === 'ui/update-model-context') {
+        host.snapshot = message.params;
+        send(host, { jsonrpc: '2.0', id: message.id, result: {} });
+    } else if (message.method === 'tools/call') {
+        const callKey = host.generation + ':' + message.id;
+        if (host.calls.has(callKey)) return;
+        host.calls.add(callKey);
+        const generation = host.generation;
+        const scenario = document.getElementById('scenario').value;
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (generation !== host.generation) return;
+        const allowed = message.params?.name === 'workflows-enable' && message.params.arguments?.id === 'wf_demo';
+        const failure = !allowed ? 'This tool or workflow is not bound to this app.' : scenario === 'sender' ? 'Verify the email sender before enabling this workflow.' : scenario === 'denied' ? 'You do not have permission to enable this workflow.' : null;
+        const result = failure ? { isError: true, content: [{ type: 'text', text: failure }] } : { content: [{ type: 'text', text: 'Workflow enabled.' }], structuredContent: { id: 'wf_demo', status: 'active' } };
+        host.history.push({ action: 'enable', workflow_id: 'wf_demo', status: failure ? 'failed' : 'active', ...(failure ? { error: failure } : {}) });
+        renderHistory(host);
+        send(host, { jsonrpc: '2.0', id: message.id, result });
+    } else if (message.id !== undefined) {
+        send(host, { jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'Method not supported in this prototype.' } });
+    }
+});
+function reset() {
+    hosts.forEach(host => {
+        host.generation++;
+        host.trace = [];
+        host.history = [];
+        host.snapshot = null;
+        host.seen = 0;
+        host.calls.clear();
+        document.getElementById(host.key + '-trace').textContent = '';
+        document.getElementById(host.key + '-model').textContent = 'No context delivered yet.';
+        renderHistory(host);
+        host.frame.srcdoc = sharedAppHtml;
+    });
+}
+document.getElementById('reset').onclick = reset;
+document.getElementById('next-turn').onclick = () => {
+    hosts.forEach(host => {
+        const outcomes = host.history.slice(host.seen);
+        host.seen = host.history.length;
+        document.getElementById(host.key + '-model').textContent = JSON.stringify({ verified_outcomes: outcomes, app_state: host.snapshot?.structuredContent ?? null }, null, 2);
+    });
+};
+reset();
+</script>
+</body>
+</html>
