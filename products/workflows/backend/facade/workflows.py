@@ -18,6 +18,7 @@ from products.workflows.backend.services.hog_flow_reads import (
     get_workflow_edit_state,
     get_workflow_ref,
     list_workflows,
+    search_workflows,
     workflow_from_fields,
     workflow_publish_impact,
 )
@@ -37,6 +38,7 @@ __all__ = [
     "get_workflow_edit_state",
     "get_workflow_ref",
     "list_workflows",
+    "search_workflows",
     "workflow_from_fields",
     "workflow_publish_impact",
 ]
