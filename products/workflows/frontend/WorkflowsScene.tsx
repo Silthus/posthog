@@ -4,7 +4,9 @@ import { router, urlToAction } from 'kea-router'
 import { LemonButton } from '@posthog/lemon-ui'
 
 import { AccessControlAction } from 'lib/components/AccessControlAction'
+import { FEATURE_FLAGS } from 'lib/constants'
 import { LemonTabs } from 'lib/lemon-ui/LemonTabs'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { trackedActionToUrl } from 'lib/logic/scenes/trackedActionToUrl'
 import { removeProjectIdIfPresent } from 'lib/utils/kea-router'
 import { addProductIntent } from 'lib/utils/product-intents'
@@ -29,6 +31,8 @@ import { newWorkflowLogic } from './Workflows/newWorkflowLogic'
 import { NewWorkflowModal } from './Workflows/NewWorkflowModal'
 import { workflowTemplatesLogic } from './Workflows/templates/workflowTemplatesLogic'
 import { workflowsLogic } from './Workflows/workflowsLogic'
+import { WorkflowsListV2 } from './Workflows/WorkflowsListV2/WorkflowsListV2'
+import { WorkflowsListV2ColumnsMenu } from './Workflows/WorkflowsListV2/WorkflowsListV2ColumnsMenu'
 import { WorkflowsTable } from './Workflows/WorkflowsTable'
 import { templateTypeForListType } from './Workflows/workflowTypeFilters'
 import { WorkflowsTemplates } from './WorkflowsTemplates'
@@ -173,6 +177,8 @@ function topTabFor(tab: WorkflowsSceneTab): WorkflowsTopTab {
 
 export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
     const { currentTab } = useValues(workflowsSceneLogic(props))
+    const { featureFlags } = useValues(featureFlagLogic)
+    const listV2 = !!featureFlags[FEATURE_FLAGS.WORKFLOWS_LIST_V2]
     const { startNewWorkflow } = useActions(newWorkflowLogic)
     const { setTypeFilter } = useActions(workflowTemplatesLogic)
     const { filters } = useValues(workflowsLogic)
@@ -180,7 +186,7 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
     const workflowsTab = {
         label: 'Workflows',
         key: 'workflows' as const,
-        content: <WorkflowsTable />,
+        content: listV2 ? <WorkflowsListV2 /> : <WorkflowsTable />,
         link: urls.workflows(),
     }
     const showsNewWorkflowButton = currentTab === 'workflows' || currentTab === 'templates'
@@ -229,6 +235,7 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
                                 </LemonButton>
                             </AccessControlAction>
                         )}
+{currentTab === 'workflows' && listV2 && <WorkflowsListV2ColumnsMenu />}
                         {currentTab !== 'workflows' && currentTab !== 'templates' && (
                             <MessagingTabActions tab={currentTab} channelsUrl={urls.workflows('channels')} />
                         )}
