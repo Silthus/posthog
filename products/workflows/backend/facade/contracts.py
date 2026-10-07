@@ -656,3 +656,37 @@ class EmailDesignRenderingNotConfigured(Exception):
 
 class EmailDesignRenderFailed(Exception):
     pass
+
+
+class WorkflowViewFilter(TypedDict):
+    facet: str
+    value: str
+    negated: bool
+
+
+class WorkflowViewState(TypedDict):
+    filters: list[WorkflowViewFilter]
+    text: str
+    columns: list[str]
+
+
+@frozen
+class WorkflowViewRecord:
+    id: UUID
+    name: str
+    state: WorkflowViewState
+    version: int
+    default_key: str | None
+    deleted: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+@frozen
+class WorkflowViewPage:
+    count: int
+    results: list[WorkflowViewRecord]
+
+
+class WorkflowViewConflict(Exception):
+    pass

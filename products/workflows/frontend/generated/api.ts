@@ -59,11 +59,13 @@ import type {
     PaginatedHogFlowSearchResultListApi,
     PaginatedHogFlowTemplateListApi,
     PaginatedWorkflowProposalListApi,
+    PaginatedWorkflowViewListApi,
     PatchedHogFlowActionEmailUpdateApi,
     PatchedHogFlowGraphUpdateApi,
     PatchedHogFlowScheduleApi,
     PatchedHogFlowTemplateApi,
     PatchedHogFlowUpdateApi,
+    PatchedWorkflowViewUpdateApi,
     TeamEmailReputationResponseApi,
     WorkflowEmailPauseStatusApi,
     WorkflowProposalApi,
@@ -71,6 +73,10 @@ import type {
     WorkflowProposalCreateApi,
     WorkflowProposalOutcomeApi,
     WorkflowStatsRowApi,
+    WorkflowViewApi,
+    WorkflowViewCreateApi,
+    WorkflowViewsDestroyParams,
+    WorkflowViewsListParams,
 } from './api.schemas'
 
 // https://stackoverflow.com/questions/49579094/typescript-conditional-types-filter-out-readonly-properties-pick-only-requir/49579497#49579497
@@ -1372,6 +1378,139 @@ export const hogFlowsUserBlastRadiusCreate = async (
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...options?.headers },
         body: JSON.stringify(blastRadiusRequestApi),
+    })
+}
+
+export const getWorkflowViewsListUrl = (projectId: string, params?: WorkflowViewsListParams) => {
+    const normalizedParams = new URLSearchParams()
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            normalizedParams.append(key, value === null ? 'null' : String(value))
+        }
+    })
+
+    const stringifiedParams = normalizedParams.toString()
+
+    return stringifiedParams.length > 0
+        ? `/api/projects/${projectId}/workflow_views/?${stringifiedParams}`
+        : `/api/projects/${projectId}/workflow_views/`
+}
+
+export const workflowViewsList = async (
+    projectId: string,
+    params?: WorkflowViewsListParams,
+    options?: RequestInit
+): Promise<PaginatedWorkflowViewListApi> => {
+    return apiMutator<PaginatedWorkflowViewListApi>(getWorkflowViewsListUrl(projectId, params), {
+        ...options,
+        method: 'GET',
+    })
+}
+
+export const getWorkflowViewsCreateUrl = (projectId: string) => {
+    return `/api/projects/${projectId}/workflow_views/`
+}
+
+export const workflowViewsCreate = async (
+    projectId: string,
+    workflowViewCreateApi: WorkflowViewCreateApi,
+    options?: RequestInit
+): Promise<WorkflowViewApi> => {
+    return apiMutator<WorkflowViewApi>(getWorkflowViewsCreateUrl(projectId), {
+        ...options,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        body: JSON.stringify(workflowViewCreateApi),
+    })
+}
+
+export const getWorkflowViewsRetrieveUrl = (projectId: string, id: string) => {
+    return `/api/projects/${projectId}/workflow_views/${id}/`
+}
+
+export const workflowViewsRetrieve = async (
+    projectId: string,
+    id: string,
+    options?: RequestInit
+): Promise<WorkflowViewApi> => {
+    return apiMutator<WorkflowViewApi>(getWorkflowViewsRetrieveUrl(projectId, id), {
+        ...options,
+        method: 'GET',
+    })
+}
+
+export const getWorkflowViewsPartialUpdateUrl = (projectId: string, id: string) => {
+    return `/api/projects/${projectId}/workflow_views/${id}/`
+}
+
+export const workflowViewsPartialUpdate = async (
+    projectId: string,
+    id: string,
+    patchedWorkflowViewUpdateApi?: PatchedWorkflowViewUpdateApi,
+    options?: RequestInit
+): Promise<WorkflowViewApi> => {
+    return apiMutator<WorkflowViewApi>(getWorkflowViewsPartialUpdateUrl(projectId, id), {
+        ...options,
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        body: JSON.stringify(patchedWorkflowViewUpdateApi),
+    })
+}
+
+export const getWorkflowViewsDestroyUrl = (projectId: string, id: string, params: WorkflowViewsDestroyParams) => {
+    const normalizedParams = new URLSearchParams()
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            normalizedParams.append(key, value === null ? 'null' : String(value))
+        }
+    })
+
+    const stringifiedParams = normalizedParams.toString()
+
+    return stringifiedParams.length > 0
+        ? `/api/projects/${projectId}/workflow_views/${id}/?${stringifiedParams}`
+        : `/api/projects/${projectId}/workflow_views/${id}/`
+}
+
+export const workflowViewsDestroy = async (
+    projectId: string,
+    id: string,
+    params: WorkflowViewsDestroyParams,
+    options?: RequestInit
+): Promise<void> => {
+    return apiMutator<void>(getWorkflowViewsDestroyUrl(projectId, id, params), {
+        ...options,
+        method: 'DELETE',
+    })
+}
+
+export const getWorkflowViewsInitializeCreateUrl = (projectId: string) => {
+    return `/api/projects/${projectId}/workflow_views/initialize/`
+}
+
+export const workflowViewsInitializeCreate = async (
+    projectId: string,
+    options?: RequestInit
+): Promise<WorkflowViewApi> => {
+    return apiMutator<WorkflowViewApi>(getWorkflowViewsInitializeCreateUrl(projectId), {
+        ...options,
+        method: 'POST',
+    })
+}
+
+export const getWorkflowViewsRestoreDefaultCreateUrl = (projectId: string) => {
+    return `/api/projects/${projectId}/workflow_views/restore_default/`
+}
+
+export const workflowViewsRestoreDefaultCreate = async (
+    projectId: string,
+    options?: RequestInit
+): Promise<WorkflowViewApi> => {
+    return apiMutator<WorkflowViewApi>(getWorkflowViewsRestoreDefaultCreateUrl(projectId), {
+        ...options,
+        method: 'POST',
     })
 }
 
