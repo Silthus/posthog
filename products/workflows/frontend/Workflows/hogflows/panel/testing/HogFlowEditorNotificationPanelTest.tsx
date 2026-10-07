@@ -184,12 +184,15 @@ export function EmailActionTestContent(): JSX.Element | null {
                                 if (shouldShowConfirmation) {
                                     LemonDialog.open({
                                         title: 'Confirm email test',
+                                        shouldAwaitSubmit: true,
                                         description: `This will send an email to ${testEmailAddress}, do you want to proceed?`,
                                         primaryButton: {
                                             children: 'Send email',
                                             type: 'primary',
-                                            onClick: () => {
-                                                submitTestInvocation()
+                                            onClick: async () => {
+                                                await hogFlowEditorNotificationTestLogic(
+                                                    logicProps
+                                                ).asyncActions.submitTestInvocationRequest(testInvocation)
                                             },
                                         },
                                         secondaryButton: {
