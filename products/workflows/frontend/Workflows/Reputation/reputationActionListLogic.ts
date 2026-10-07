@@ -120,7 +120,8 @@ export const reputationActionListLogic = kea<reputationActionListLogicType>([
                 return
             }
             const page: ReputationPageControls = {
-                openSupportForm: (message) => actions.openSupportForm({ kind: 'support', message }),
+                openSupportForm: (message) =>
+                    actions.openSupportForm({ kind: 'support', isEmailFormOpen: true, message }),
                 showBreakdown: actions.showBreakdown,
             }
             onClick(page)

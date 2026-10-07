@@ -1,11 +1,13 @@
 import { router } from 'kea-router'
 import { expectLogic, partial } from 'kea-test-utils'
+import posthog from 'posthog-js'
 
-import { supportLogic } from 'lib/components/Support/supportLogic'
 import { urls } from 'scenes/urls'
 
 import { useMocks } from '~/mocks/jest'
 import { initKeaTests } from '~/test/init'
+
+import { sidepanelTicketsLogic } from 'products/conversations/frontend/components/SidePanel/sidepanelTicketsLogic'
 
 import { reputationActionListLogic } from './reputationActionListLogic'
 import { HEALTHY, NEEDS_WORK, reputationMocks } from './reputationFixtures'
@@ -97,12 +99,26 @@ describe('reputationActionListLogic', () => {
         useMocks(reputationMocks({ ...HEALTHY, aws: { health: 'critical', sending_status: 'DISABLED', findings: [] } }))
         await mountLogic()
 
-        await expectLogic(logic, () => logic.actions.runActionCta('provider-status')).toDispatchActions([
-            supportLogic.actionCreators.openSupportForm({
-                kind: 'support',
-                message:
-                    'Our email provider paused sending for this project. Please review it and re-enable sending. What I changed to lower our bounce and spam complaint rates: ',
-            }),
-        ])
+        const originalConversations = posthog.conversations
+        Object.assign(posthog, {
+            conversations: {
+                isAvailable: () => true,
+                getTickets: jest.fn().mockResolvedValue({ results: [] }),
+            },
+        })
+        const tickets = sidepanelTicketsLogic()
+        tickets.mount()
+        try {
+            await expectLogic(tickets).toFinishAllListeners()
+            await expectLogic(logic, () => logic.actions.runActionCta('provider-status')).toFinishAllListeners()
+
+            expect(tickets.values.view).toBe('new')
+            expect(JSON.stringify(tickets.values.newTicketDraft)).toContain(
+                'Our email provider paused sending for this project. Please review it and re-enable sending.'
+            )
+        } finally {
+            tickets.unmount()
+            Object.assign(posthog, { conversations: originalConversations })
+        }
     })
 })
