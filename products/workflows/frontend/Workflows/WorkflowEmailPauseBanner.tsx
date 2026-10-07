@@ -56,6 +56,7 @@ export function WorkflowEmailPauseBanner(): JSX.Element | null {
                         onClick: () =>
                             openSupportForm({
                                 kind: 'support',
+                                isEmailFormOpen: true,
                                 message: `Email sending is paused for the workflow "${originalWorkflow?.name || 'Unnamed workflow'}" (${workflow.id}), and only support can resume it. Please review it and re-enable sending. What I changed in its audience: `,
                             }),
                         'data-attr': 'workflow-email-paused-contact-support',
