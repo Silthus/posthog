@@ -7,7 +7,7 @@ from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from datetime import timedelta
 from time import monotonic
-from typing import Any, NamedTuple, Optional, TypeVar, cast
+from typing import Any, Final, NamedTuple, Optional, TypeVar, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
@@ -178,6 +178,7 @@ from products.workflows.backend.facade.enums import (
     HogFlowOriginProduct,
     HogFlowScheduleStatus,
     HogFlowState,
+    HogFlowType,
     WorkflowProposalStatus,
 )
 from products.workflows.backend.facade.message_assets import fetch_message_asset_html, fetch_message_assets
@@ -3957,6 +3958,78 @@ def _validate_merge_keys(field: str, items: Any) -> None:
         seen.add(key)
 
 
+class HogFlowListSummarySerializer(HogFlowSummarySerializer):
+    """One row of the workflows list: the summary fields and the workflow type, without the step graph."""
+
+    type = serializers.ChoiceField(
+        source="workflow_type",
+        choices=HogFlowType.choices,
+        read_only=True,
+        help_text=(
+            "`loop` and `broadcast` for workflows those surfaces own. Otherwise `messaging` when the workflow "
+            "has an email, SMS or push step, else `automation`. The same rules as the `type` filter."
+        ),
+    )
+
+    class Meta(HogFlowSummarySerializer.Meta):
+        fields = [*HogFlowSummarySerializer.Meta.fields, "type"]
+        read_only_fields = fields
+
+
+LIST_QUERY_PARAMETERS: Final[list[OpenApiParameter]] = [
+    OpenApiParameter(
+        "search",
+        OpenApiTypes.STR,
+        description="Case-insensitive search. Matches workflow name and description first; only when nothing matches those, it matches step names and the subject line, preheader and body text of email steps, in both the live workflow and its pending draft.",
+    ),
+    OpenApiParameter(
+        "created_by",
+        OpenApiTypes.UUID,
+        description="Filter to workflows created by the user with this uuid.",
+    ),
+    OpenApiParameter(
+        "type",
+        OpenApiTypes.STR,
+        description="Comma-separated workflow types. `loop` and `broadcast` return the workflows those surfaces own; `messaging` returns the remaining workflows with an email, SMS, or push action, and `automation` the rest.",
+    ),
+    OpenApiParameter(
+        "origin_product",
+        OpenApiTypes.STR,
+        enum=HogFlow.OriginProduct.values,
+        description="Filter to workflows owned by a product surface, e.g. `loops` for Desktop loops.",
+    ),
+    OpenApiParameter(
+        "trigger",
+        OpenApiTypes.STR,
+        description='Filter by trigger config as a JSON object. Returns workflows whose trigger contains the given object, e.g. {"type": "event"}.',
+    ),
+    OpenApiParameter(
+        "broadcast_eligible",
+        OpenApiTypes.BOOL,
+        description="Pass `true` to return broadcasts plus the ordinary workflows the broadcasts UI can render: a batch trigger and a single email step.",
+    ),
+    OpenApiParameter(
+        "broadcast_status",
+        OpenApiTypes.STR,
+        description=(
+            "Comma-separated broadcast statuses as the broadcasts UI shows them: draft, scheduled, sending, "
+            "sent, failed, archived. Scheduled, sending, sent and failed come from the latest run and "
+            "whether a schedule still has sends to come."
+        ),
+    ),
+]
+
+
+SUMMARIES_QUERY_PARAMETERS: Final[list[OpenApiParameter]] = [
+    OpenApiParameter(
+        "search",
+        OpenApiTypes.STR,
+        description="Case-insensitive search over workflow name, description, step names and the subject line, preheader and body text of email steps, in both the live workflow and its pending draft.",
+    ),
+    *(parameter for parameter in LIST_QUERY_PARAMETERS if parameter.name != "search"),
+]
+
+
 class _RevisionPages:
     """Lets LimitOffsetPagination page revisions in the database, as it did over a queryset."""
 
@@ -4073,64 +4146,7 @@ class HogFlowVersionMetricsRequestSerializer(AppMetricsRequestSerializer):
     metrics_totals=extend_schema(
         parameters=[AppMetricsRequestSerializer], responses=AppMetricsTotalsResponseSerializer
     ),
-    list=extend_schema(
-        parameters=[
-            OpenApiParameter("id", OpenApiTypes.UUID),
-            OpenApiParameter("created_at", OpenApiTypes.DATETIME),
-            OpenApiParameter("updated_at", OpenApiTypes.DATETIME),
-            OpenApiParameter(
-                "status",
-                OpenApiTypes.STR,
-                enum=sorted(HogFlowState.values),
-                description="\n".join(f"* `{value}` - {label}" for value, label in HogFlowState.choices),
-            ),
-            OpenApiParameter(
-                "optimization_enabled",
-                OpenApiTypes.BOOL,
-                description="Only workflows someone turned suggestions on for.",
-            ),
-            OpenApiParameter(
-                "search",
-                OpenApiTypes.STR,
-                description="Case-insensitive search. Matches workflow name and description first; only when nothing matches those, it matches step names and the subject line, preheader and body text of email steps, in both the live workflow and its pending draft.",
-            ),
-            OpenApiParameter(
-                "created_by",
-                OpenApiTypes.UUID,
-                description="Filter to workflows created by the user with this uuid.",
-            ),
-            OpenApiParameter(
-                "type",
-                OpenApiTypes.STR,
-                description="Comma-separated workflow types. `loop` and `broadcast` return the workflows those surfaces own; `messaging` returns the remaining workflows with an email, SMS, or push action, and `automation` the rest.",
-            ),
-            OpenApiParameter(
-                "origin_product",
-                OpenApiTypes.STR,
-                enum=HogFlowOriginProduct.values,
-                description="Filter to workflows owned by a product surface, e.g. `loops` for Desktop loops.",
-            ),
-            OpenApiParameter(
-                "trigger",
-                OpenApiTypes.STR,
-                description='Filter by trigger config as a JSON object. Returns workflows whose trigger contains the given object, e.g. {"type": "event"}.',
-            ),
-            OpenApiParameter(
-                "broadcast_eligible",
-                OpenApiTypes.BOOL,
-                description="Pass `true` to return broadcasts plus the ordinary workflows the broadcasts UI can render: a batch trigger and a single email step.",
-            ),
-            OpenApiParameter(
-                "broadcast_status",
-                OpenApiTypes.STR,
-                description=(
-                    "Comma-separated broadcast statuses as the broadcasts UI shows them: draft, scheduled, sending, "
-                    "sent, failed, archived. Scheduled, sending, sent and failed come from the latest run and "
-                    "whether a schedule still has sends to come."
-                ),
-            ),
-        ]
-    ),
+    list=extend_schema(parameters=LIST_QUERY_PARAMETERS),
 )
 class HogFlowViewSet(
     TeamAndOrgViewSetMixin, AccessControlViewSetMixin, LogEntryMixin, AppMetricsMixin, viewsets.ModelViewSet
@@ -4138,6 +4154,7 @@ class HogFlowViewSet(
     scope_object = "hog_flow"
     scope_object_read_actions = [
         "list",
+        "summaries",
         "retrieve",
         "logs",
         "metrics",
@@ -4270,6 +4287,8 @@ class HogFlowViewSet(
         return None
 
     def get_serializer_class(self) -> type[BaseSerializer]:
+        if self.action == "summaries":
+            return HogFlowListSummarySerializer
         if self.action == "list":
             # MCP list ("workflows-list") is a discovery/summary tool — return metadata only so it
             # never exposes action config bodies (which can hold credential-like values). The web app
@@ -4353,6 +4372,7 @@ class HogFlowViewSet(
             raise exceptions.ValidationError({"search": "Search term cannot exceed 200 characters"})
 
         return WorkflowListQuery(
+            summaries=self.action == "summaries",
             search=search,
             created_by_uuid=created_by_uuid,
             types=frozenset(types),
@@ -4445,6 +4465,19 @@ class HogFlowViewSet(
 
     def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return Response(self.get_serializer(self._workflow()).data)
+
+    @extend_schema(
+        summary="List workflow summaries",
+        description=(
+            "Workflow rows without the step graph, for loading a whole project's list page by page. "
+            "Sorted newest created first. Takes the same filters as the list."
+        ),
+        parameters=SUMMARIES_QUERY_PARAMETERS,
+        responses={200: HogFlowListSummarySerializer(many=True)},
+    )
+    @action(detail=False, methods=["GET"], url_path="summaries")
+    def summaries(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return self.list(request, *args, **kwargs)
 
     @staticmethod
     def _is_mcp_request(request: Request) -> bool:

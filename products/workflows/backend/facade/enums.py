@@ -81,3 +81,10 @@ class HogFlowExitCondition(LabeledStrEnum):
     TRIGGER_NOT_MATCHED = "exit_on_trigger_not_matched"
     TRIGGER_NOT_MATCHED_OR_CONVERSION = "exit_on_trigger_not_matched_or_conversion"
     ONLY_AT_END = "exit_only_at_end"
+
+
+class HogFlowType(LabeledStrEnum):
+    MESSAGING = "messaging"
+    AUTOMATION = "automation"
+    LOOP = "loop"
+    BROADCAST = "broadcast"
