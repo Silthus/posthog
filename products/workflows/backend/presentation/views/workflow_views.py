@@ -103,6 +103,14 @@ class WorkflowViewUpdateSerializer(serializers.Serializer):
         required=False, help_text="Replacement filters, text search, and visible columns."
     )
 
+    @property
+    def partial(self) -> bool:
+        return False
+
+    @partial.setter
+    def partial(self, _value: bool) -> None:
+        pass
+
 
 class WorkflowViewDeleteSerializer(serializers.Serializer):
     version = serializers.IntegerField(

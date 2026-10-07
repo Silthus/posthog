@@ -85129,21 +85129,6 @@ export namespace Schemas {
       error_code?: string | null;
     }
 
-    export interface PatchedWorkflowViewUpdate {
-      /**
-         * Version last read; stale edits are rejected with 409.
-         * @minimum 1
-         */
-      version?: number;
-      /**
-         * Replacement shared workflow view name.
-         * @maxLength 128
-         */
-      name?: string;
-      /** Replacement filters, text search, and visible columns. */
-      state?: WorkflowViewState;
-    }
-
     export interface PathCleaningPreviewExample {
       /** A real sampled path before the suggested rules are applied. */
       before: string;
@@ -111828,6 +111813,21 @@ export namespace Schemas {
       name: string;
       /** Saved filters, text search, and visible columns. */
       state: WorkflowViewState;
+    }
+
+    export interface WorkflowViewUpdate {
+      /**
+         * Version last read; stale edits are rejected with 409.
+         * @minimum 1
+         */
+      version: number;
+      /**
+         * Replacement shared workflow view name.
+         * @maxLength 128
+         */
+      name?: string;
+      /** Replacement filters, text search, and visible columns. */
+      state?: WorkflowViewState;
     }
 
     export interface ZendeskImportError {

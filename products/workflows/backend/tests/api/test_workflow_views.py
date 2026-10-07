@@ -4,7 +4,11 @@ from uuid import uuid4
 from posthog.test.base import APIBaseTest
 from unittest.mock import patch
 
+from django.test import SimpleTestCase
+
+from drf_spectacular.generators import SchemaGenerator
 from parameterized import parameterized
+from rest_framework.routers import SimpleRouter
 
 from posthog.constants import AvailableFeature
 from posthog.models import Organization, OrganizationMembership, Team, User
@@ -13,6 +17,21 @@ from posthog.models.utils import generate_random_token_personal, hash_key_value
 
 from products.access_control.backend.models.access_control import AccessControl
 from products.workflows.backend.models.hog_flow.hog_flow import HogFlow
+from products.workflows.backend.presentation.views.workflow_views import WorkflowViewViewSet
+
+
+class TestWorkflowViewSchema(SimpleTestCase):
+    def test_shared_view_patch_requires_a_version_and_allows_optional_changes(self) -> None:
+        router = SimpleRouter()
+        router.register("workflow_views", WorkflowViewViewSet, basename="workflow_views")
+        schema = SchemaGenerator(patterns=router.urls).get_schema(request=None, public=True)
+        operation = schema["paths"]["/workflow_views/{id}/"]["patch"]
+        request_ref = operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+        request_schema = schema["components"]["schemas"][request_ref.rsplit("/", 1)[-1]]
+
+        self.assertEqual(request_schema.get("required", []), ["version"])
+        self.assertTrue(operation["requestBody"]["required"])
+        self.assertEqual(set(request_schema["properties"]), {"version", "name", "state"})
 
 
 class TestWorkflowViewAPI(APIBaseTest):
