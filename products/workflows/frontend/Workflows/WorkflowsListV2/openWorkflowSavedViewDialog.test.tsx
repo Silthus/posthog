@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom'
 
-import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { ApiError } from 'lib/api-error'
@@ -13,10 +13,11 @@ describe('saved workflow view dialog', () => {
     beforeEach(() => initKeaTests())
 
     afterEach(async () => {
-        const cancel = screen.queryByRole('button', { name: 'Cancel' })
+        const cancel = screen.queryByText('Cancel')
         if (cancel) {
+            const removed = waitForElementToBeRemoved(screen.getByRole('textbox'))
             await userEvent.click(cancel)
-            await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument())
+            await removed
         }
         cleanup()
     })
