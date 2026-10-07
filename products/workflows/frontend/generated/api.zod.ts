@@ -3238,7 +3238,7 @@ export const workflowViewsPartialUpdateBodyStateOneTextMax = 1000
 export const workflowViewsPartialUpdateBodyStateOneColumnsMax = 6
 
 export const WorkflowViewsPartialUpdateBody = /* @__PURE__ */ zod.object({
-    version: zod.number().min(1).optional().describe('Version last read; stale edits are rejected with 409.'),
+    version: zod.number().min(1).describe('Version last read; stale edits are rejected with 409.'),
     name: zod
         .string()
         .max(workflowViewsPartialUpdateBodyNameMax)

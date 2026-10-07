@@ -2217,12 +2217,12 @@ export interface WorkflowViewCreateApi {
     state: WorkflowViewStateApi
 }
 
-export interface PatchedWorkflowViewUpdateApi {
+export interface WorkflowViewUpdateApi {
     /**
      * Version last read; stale edits are rejected with 409.
      * @minimum 1
      */
-    version?: number
+    version: number
     /**
      * Replacement shared workflow view name.
      * @maxLength 128

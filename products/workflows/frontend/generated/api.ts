@@ -63,7 +63,6 @@ import type {
     PatchedHogFlowScheduleApi,
     PatchedHogFlowTemplateApi,
     PatchedHogFlowUpdateApi,
-    PatchedWorkflowViewUpdateApi,
     TeamEmailReputationResponseApi,
     WorkflowEmailPauseStatusApi,
     WorkflowProposalApi,
@@ -74,6 +73,7 @@ import type {
     WorkflowStatsRowApi,
     WorkflowViewApi,
     WorkflowViewCreateApi,
+    WorkflowViewUpdateApi,
     WorkflowViewsDestroyParams,
     WorkflowViewsListParams,
 } from './api.schemas'
@@ -1418,14 +1418,14 @@ export const getWorkflowViewsPartialUpdateUrl = (projectId: string, id: string) 
 export const workflowViewsPartialUpdate = async (
     projectId: string,
     id: string,
-    patchedWorkflowViewUpdateApi?: PatchedWorkflowViewUpdateApi,
+    workflowViewUpdateApi: WorkflowViewUpdateApi,
     options?: RequestInit
 ): Promise<WorkflowViewApi> => {
     return apiMutator<WorkflowViewApi>(getWorkflowViewsPartialUpdateUrl(projectId, id), {
         ...options,
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...options?.headers },
-        body: JSON.stringify(patchedWorkflowViewUpdateApi),
+        body: JSON.stringify(workflowViewUpdateApi),
     })
 }
 
