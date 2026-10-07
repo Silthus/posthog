@@ -1,6 +1,6 @@
 ---
 name: designing-email-templates
-description: 'Author, save, and edit email templates in the PostHog workflows library — compose email design JSON with Liquid personalization and create and round-trip-edit templates over MCP. Use when asked to design, build, update, or fix an email template for workflows, broadcasts, or campaigns.'
+description: 'Design, save, and edit PostHog email templates over MCP with Liquid personalization. Use for transactional application email, workflow messages, marketing campaigns, or broadcasts.'
 ---
 
 # Designing email templates
@@ -22,6 +22,8 @@ Email content uses Liquid templating. Liquid tags pass through the renderer as p
 ```liquid
 Hi {{ person.properties.first_name | default: 'there' }},
 ```
+
+Transactional templates can use `{{ event.properties.receipt_number }}` without a person-profile email. For the authenticated webhook, recipient, sender, and message policy, use the `building-workflows` skill's transactional email recipe. Saving a library template stores content without sending mail.
 
 Marketing emails must include an unsubscribe link — render it with the built-in variables:
 

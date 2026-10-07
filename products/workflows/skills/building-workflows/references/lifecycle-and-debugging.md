@@ -49,3 +49,7 @@ The MCP tools for the workflows product, grouped by job. The lifecycle that stri
 - `workflows-patch-email-template` — **the way to edit an existing template's design.** Id-addressed ops over the Unlayer blocks, applied atomically; same shape as `workflows-patch-graph`. Use for any change to an existing design.
 - `workflows-update-email-template` — full-replace, last resort (see `workflows-update` vs `workflows-patch-graph`).
 - `workflows-list-email-templates`, `workflows-get-email-template` / `workflows-show-email-template` — list and read.
+
+## Transactional webhook verification
+
+For a backend webhook, follow the mock-test criteria and send-stage proof in [transactional-email.md](transactional-email.md). Test globals contain the mapped event; webhook Authorization and request-body mapping require separate verification.
