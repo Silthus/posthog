@@ -31,6 +31,7 @@ import { workflowTemplateLogic } from './templates/workflowTemplateLogic'
 import { workflowLogic } from './workflowLogic'
 import { WorkflowSceneLogicProps } from './workflowSceneLogic'
 import { parseWorkflowTriggerPrefill, TRIGGER_PREFILL_PARAM } from './workflowTriggerPrefill'
+import { WorkflowTestButton } from './WorkflowTestButton'
 
 export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.Element => {
     const {
@@ -210,6 +211,7 @@ export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.El
                 actions={
                     <>
                         {isManualWorkflow && <HogFlowManualTriggerButton {...props} />}
+                        <WorkflowTestButton />
                         {isSavedWorkflow && (
                             <>
                                 <AccessControlAction
