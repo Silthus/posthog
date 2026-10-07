@@ -26,7 +26,7 @@ from products.workflows.backend.facade.contracts import (
     WorkflowPage,
     WorkflowRef,
 )
-from products.workflows.backend.facade.enums import HogFlowScheduleStatus, WorkflowProposalStatus
+from products.workflows.backend.facade.enums import HogFlowScheduleStatus, HogFlowType, WorkflowProposalStatus
 from products.workflows.backend.models.hog_flow.hog_flow import MESSAGING_ACTION_TYPES, HogFlow
 from products.workflows.backend.models.hog_flow_schedule import HogFlowSchedule
 from products.workflows.backend.models.workflow_proposal import WorkflowProposal
@@ -250,7 +250,9 @@ def _list_queryset(
     # workflow with one suggestion would push a fresh one off their first page.
     # `id` breaks ties so LIMIT/OFFSET paging stays stable: rows sharing an updated_at can
     # otherwise repeat on one page and never appear on another.
-    if query.suggestions_first:
+    if query.summaries:
+        queryset = annotate_workflow_type(queryset).order_by("-created_at", "-id")
+    elif query.suggestions_first:
         queryset = queryset.order_by("-pending_suggestions", "-updated_at", "-id")
     else:
         queryset = queryset.order_by("-updated_at", "-id")
@@ -318,6 +320,8 @@ def _list_queryset(
     # name, so the common search stays cheap and a subject line or body text, which rarely appears in a
     # workflow name, is still found.
     by_name = Q(name__iregex=regex_pattern) | Q(description__iregex=regex_pattern)
+    if query.summaries:
+        return queryset.filter(by_name | Q(_action_content_matches(regex_pattern)))
     if queryset.filter(by_name).exists():
         return queryset.filter(by_name)
     return queryset.filter(Q(_action_content_matches(regex_pattern)))
@@ -374,6 +378,7 @@ def _to_workflow(
         email_sending_paused_by=flow.email_sending_paused_by,
         email_sending_resumed_at=flow.email_sending_resumed_at,
         user_access_level=access_level,
+        workflow_type=getattr(flow, "workflow_type", None),
         pending_suggestions=getattr(flow, "pending_suggestions", None),
         suggestions_enabled=getattr(flow, "suggestions_enabled", None),
     )
@@ -391,15 +396,35 @@ OWNED_WORKFLOW_TYPES: Final[dict[str, str]] = {
 }
 
 
+def _has_messaging_action_q() -> Q:
+    messaging = Q()
+    for action_type in MESSAGING_ACTION_TYPES:
+        messaging |= Q(actions__contains=[{"type": action_type}])
+    return messaging
+
+
+def annotate_workflow_type(queryset: QuerySet) -> QuerySet:
+    """Adds `workflow_type`, decided by the same rules as the `type` filter in workflow_type_q."""
+    return queryset.annotate(
+        workflow_type=models.Case(
+            *(
+                models.When(origin_product=origin_product, then=models.Value(workflow_type))
+                for workflow_type, origin_product in OWNED_WORKFLOW_TYPES.items()
+            ),
+            models.When(_has_messaging_action_q(), then=models.Value(HogFlowType.MESSAGING)),
+            default=models.Value(HogFlowType.AUTOMATION),
+            output_field=models.CharField(),
+        )
+    )
+
+
 def workflow_type_q(requested: set[str]) -> Q:
     owned = Q(origin_product__in=[OWNED_WORKFLOW_TYPES[t] for t in requested if t in OWNED_WORKFLOW_TYPES])
     behavioural = requested - set(OWNED_WORKFLOW_TYPES)
     if not behavioural:
         return owned
 
-    messaging = Q()
-    for action_type in MESSAGING_ACTION_TYPES:
-        messaging |= Q(actions__contains=[{"type": action_type}])
+    messaging = _has_messaging_action_q()
     unowned = ~Q(origin_product__in=list(OWNED_WORKFLOW_TYPES.values()))
     if behavioural == {"messaging", "automation"}:
         return owned | unowned
