@@ -65,6 +65,25 @@ describe('RootErrorBoundary', () => {
         expect(event.properties.chunk_load_error).toBe(false)
     })
 
+    it('redacts the reserved fragment from the direct boot beacon and keeps unrelated parameters', () => {
+        window.history.replaceState(
+            {},
+            '',
+            '/login?next=%2Fproject%2F7%2Fworkflows%2Fnew%2Fworkflow%3Fmode%3Deditor&keep=yes#distributionContext=credential-sentinel&tab=workflow'
+        )
+        render(
+            <RootErrorBoundary>
+                <ThrowRenderError />
+            </RootErrorBoundary>
+        )
+        const body = sendBeacon.mock.calls[0][1]
+        expect(body).not.toContain('credential-sentinel')
+        expect(JSON.parse(body).properties.$current_url).toBe(
+            'http://localhost/login?next=%2Fproject%2F7%2Fworkflows%2Fnew%2Fworkflow%3Fmode%3Deditor&keep=yes#tab=workflow'
+        )
+        window.history.replaceState({}, '', '/')
+    })
+
     it('shows load-failure copy for chunk-load errors', () => {
         render(
             <RootErrorBoundary>

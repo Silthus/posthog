@@ -2,6 +2,8 @@ import React from 'react'
 
 import { isChunkLoadError } from 'lib/utils/isChunkLoadError'
 
+import { redactWorkflowDistributionUrl } from 'products/workflows/frontend/Workflows/workflowDistributionUrl'
+
 /**
  * Report a boot failure straight to the capture API. posthog-js lives inside the App chunk —
  * the very chunk this boundary guards — so when boot fails there is no SDK to report through,
@@ -30,7 +32,7 @@ function reportBootFailure(error: unknown): void {
             properties: {
                 // Personless event: don't create person profiles from anonymous boot beacons
                 $process_person_profile: false,
-                $current_url: window.location.href,
+                $current_url: redactWorkflowDistributionUrl(window.location.href),
                 $exception_level: 'fatal',
                 $exception_list: [
                     {

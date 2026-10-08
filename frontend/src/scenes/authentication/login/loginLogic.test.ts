@@ -542,6 +542,29 @@ describe('loginLogic', () => {
             expect(hrefSpy).toHaveBeenCalledWith('/project/999/pipeline/destinations/hog-abc')
         })
 
+        it('preserves an external reference when the authenticated session switches projects', () => {
+            const fragment = new URLSearchParams({
+                distributionContext: JSON.stringify({
+                    projectId: 999,
+                    projectUuid: 'b28a84c7-c68f-4d16-b7b8-761320667f7d',
+                    waveId: 'workflows-distribution-v1',
+                    placementId: 'sdk-wizard',
+                    sourceActionId: 'example-login-17',
+                    eligibleAt: 1791446400000,
+                }),
+            }).toString()
+            router.actions.push(
+                `/login?next=${encodeURIComponent('/project/999/workflows/new/workflow?mode=editor')}#${fragment}`
+            )
+            handleLoginRedirect()
+            const destination = new URL(hrefSpy.mock.calls[0][0], 'http://localhost')
+            expect(destination.pathname).toBe('/project/999/workflows/new/workflow')
+            expect(destination.search).toBe('?mode=editor')
+            expect(new URLSearchParams(destination.hash.slice(1)).get('distributionContext')).toBe(
+                new URLSearchParams(fragment).get('distributionContext')
+            )
+        })
+
         it('stays client-side when the target is already the current project', () => {
             router.actions.push(`/login?next=${encodeURIComponent('/project/5/pipeline/destinations/hog-abc')}`)
             handleLoginRedirect()
@@ -606,6 +629,26 @@ describe('loginLogic', () => {
             redirectAfterLogin()
             expect(replaceSpy).toHaveBeenCalledTimes(1)
             expect(replaceSpy).toHaveBeenCalledWith('/project/5/insights?foo=bar#tab=raw')
+        })
+
+        it('preserves an external reference in the full document navigation after password login', () => {
+            const reference = JSON.stringify({
+                projectId: 7,
+                projectUuid: 'b28a84c7-c68f-4d16-b7b8-761320667f7d',
+                waveId: 'workflows-distribution-v1',
+                placementId: 'contextual-mcp',
+                sourceActionId: 'example-login-雪%25',
+                eligibleAt: 1791446400000,
+            })
+            router.actions.push(
+                `/login?next=${encodeURIComponent('/project/7/workflows/new/workflow?mode=editor')}#distributionContext=${encodeURIComponent(reference)}`
+            )
+            redirectAfterLogin()
+            expect(replaceSpy).toHaveBeenCalledTimes(1)
+            const destination = new URL(replaceSpy.mock.calls[0][0], 'http://localhost')
+            expect(destination.pathname).toBe('/project/7/workflows/new/workflow')
+            expect(destination.search).toBe('?mode=editor')
+            expect(new URLSearchParams(destination.hash.slice(1)).get('distributionContext')).toBe(reference)
         })
 
         it('ignores a next path pointing at another origin', () => {

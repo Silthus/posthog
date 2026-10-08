@@ -1,6 +1,7 @@
 import posthog from 'posthog-js'
 import { sampleOnProperty } from 'posthog-js/lib/src/extensions/sampling'
 
+import { useMocks } from '~/mocks/jest'
 import { AppContext } from '~/types'
 
 import { LastSeenFeatureFlags, isInDeferredInitSample, loadPostHogJS, withLastSeenFeatureFlags } from './loadPostHogJS'
@@ -65,6 +66,60 @@ describe('loadPostHogJS', () => {
                 expect(isInDeferredInitSample(sessionId)).toBe(sampleOnProperty(sessionId, 0.5))
             }
         )
+    })
+
+    it.each([
+        '/login?next=%2Fproject%2F7%2Fworkflows%2Fnew%2Fworkflow',
+        '/project/7/workflows/new/workflow?mode=editor',
+    ])('redacts URL capture through the installed SDK before the receiver loads at %s', (path) => {
+        useMocks({ post: { '/i/v0/e/': () => [200, { status: 1 }], '/e/': () => [200, { status: 1 }] } })
+        window.JS_POSTHOG_API_KEY = 'phc_example'
+        jest.mocked(posthog.get_session_id).mockReturnValue('example-session')
+        window.history.replaceState({}, '', `${path}&keep=yes#distributionContext=credential-sentinel&tab=workflow`)
+        jest.mocked(posthog.init).mockClear()
+        loadPostHogJS()
+        const config = jest.mocked(posthog.init).mock.calls[0][1]!
+        const date = new Date('2026-10-08T08:00:00Z')
+        const beforeSend = config.before_send
+        if (typeof beforeSend !== 'function') {
+            throw new Error('Expected the app capture callback')
+        }
+        expect(
+            beforeSend({
+                uuid: '964d1cba-21d8-408d-940a-bdc01beb286d',
+                event: 'example event',
+                properties: { example_date: date },
+            })?.properties.example_date
+        ).toBe(date)
+        const { PostHog } = jest.requireActual<typeof import('posthog-js')>('posthog-js')
+        const sdk = new PostHog()
+        sdk.init('phc_example_sdk', {
+            ...config,
+            api_host: window.location.origin,
+            api_transport: 'fetch',
+            loaded: undefined,
+            persistence: 'memory',
+            autocapture: false,
+            advanced_disable_flags: true,
+            capture_pageview: false,
+            capture_pageleave: false,
+            disable_session_recording: true,
+            disable_surveys: true,
+            opt_out_capturing_by_default: false,
+            request_batching: false,
+        })
+        sdk.opt_in_capturing()
+        const captured = sdk.capture('$pageview', { $referrer: window.location.href })
+        expect(JSON.stringify(captured)).not.toContain('credential-sentinel')
+        expect(captured?.properties.$current_url).toBe(`http://localhost${path}&keep=yes#tab=workflow`)
+        expect(captured?.properties.$referrer).toBe(`http://localhost${path}&keep=yes#tab=workflow`)
+        const mask = config.session_recording?.maskCapturedNetworkRequestFn
+        expect(mask?.({ name: window.location.href } as never)?.name).toBe(
+            `http://localhost${path}&keep=yes#tab=workflow`
+        )
+        sdk.opt_out_capturing()
+        window.history.replaceState({}, '', '/')
+        window.JS_POSTHOG_API_KEY = undefined
     })
 
     describe('without a project key', () => {
