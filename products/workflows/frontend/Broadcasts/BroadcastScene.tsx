@@ -27,12 +27,15 @@ const NEW_BROADCAST_COMPOSER_CONTEXT = buildNewBroadcastComposerContext()
 export const scene: SceneExport<BroadcastWizardLogicProps> = {
     component: BroadcastScene,
     logic: broadcastWizardLogic,
-    paramsToProps: ({ params: { id } }): BroadcastWizardLogicProps => ({ id: id || 'new' }),
+    paramsToProps: ({ params: { id }, searchParams }): BroadcastWizardLogicProps => ({
+        id: id || 'new',
+        distributionContextKey: searchParams.distributionContext,
+    }),
     productKey: ProductKey.WORKFLOWS,
 }
 
-export function BroadcastScene({ id }: BroadcastWizardLogicProps): JSX.Element {
-    const logicProps: BroadcastWizardLogicProps = { id: id || 'new' }
+export function BroadcastScene({ id, distributionContextKey }: BroadcastWizardLogicProps): JSX.Element {
+    const logicProps: BroadcastWizardLogicProps = { id: id || 'new', distributionContextKey }
 
     return (
         <BindLogic logic={broadcastWizardLogic} props={logicProps}>

@@ -9,6 +9,11 @@ import { urls } from 'scenes/urls'
 
 import { AccessControlLevel, AccessControlResourceType } from '~/types'
 
+import {
+    BroadcastReleaseSeed,
+    isValidBroadcastReleaseSeed,
+    stageBroadcastRelease,
+} from '../Broadcasts/broadcastReleaseHandoff'
 import type { WorkflowTriggerConfig } from './workflowTriggerPrefill'
 
 export const DISTRIBUTION_WAVE = 'workflows-distribution-v1'
@@ -33,7 +38,11 @@ interface DistributionSourceContext {
 }
 
 export type DistributionSource = DistributionSourceContext &
-    ({ trigger?: WorkflowTriggerConfig; templateId?: never } | { templateId: string; trigger?: never })
+    (
+        | { trigger?: WorkflowTriggerConfig; templateId?: never; releaseSeed?: never }
+        | { templateId: string; trigger?: never; releaseSeed?: never }
+        | { releaseSeed: BroadcastReleaseSeed; trigger?: never; templateId?: never }
+    )
 
 export interface DistributionContext {
     contextKey: string
@@ -46,6 +55,7 @@ export interface DistributionContext {
 }
 
 export interface DistributionOffer extends DistributionContext {
+    releaseSeed?: BroadcastReleaseSeed
     trigger?: WorkflowTriggerConfig
     templateId?: string
 }
@@ -149,7 +159,16 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
         offers: [
             {} as Record<string, DistributionOffer>,
             {
-                setOffer: (state, { offer }) => ({ ...state, [offer.contextKey]: offer }),
+                setOffer: (state, { offer }) => ({
+                    ...Object.fromEntries(
+                        Object.entries(state).filter(
+                            ([, existing]) =>
+                                !offer.releaseSeed ||
+                                existing.releaseSeed?.experimentId !== offer.releaseSeed.experimentId
+                        )
+                    ),
+                    [offer.contextKey]: offer,
+                }),
                 removeOffer: (state, { contextKey }) =>
                     Object.fromEntries(Object.entries(state).filter(([key]) => key !== contextKey)),
                 clearTransient: () => ({}),
@@ -170,7 +189,11 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
                 !source.eligible ||
                 !isAuthorized(source.projectUuid) ||
                 !source.sourceActionId ||
-                source.sourceActionId.length > 128
+                source.sourceActionId.length > 128 ||
+                (source.releaseSeed &&
+                    (source.placementId !== 'release-announcement' ||
+                        source.releaseSeed.projectUuid !== source.projectUuid ||
+                        !isValidBroadcastReleaseSeed(source.releaseSeed)))
             ) {
                 return
             }
@@ -179,11 +202,29 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
             }
             const placementFlag = `${DISTRIBUTION_FLAG}-${source.placementId}`
             const overrides = posthog.get_property('$override_feature_flags')
-            if (overrides && (DISTRIBUTION_FLAG in overrides || placementFlag in overrides)) {
+            const payloadOverrides = source.releaseSeed
+                ? posthog.get_property('$override_feature_flag_payloads')
+                : undefined
+            const errors = source.releaseSeed ? posthog.get_property('$feature_flag_errors') : undefined
+            if (
+                [overrides, payloadOverrides, errors].some(
+                    (map) => map && (DISTRIBUTION_FLAG in map || placementFlag in map)
+                )
+            ) {
                 return
             }
-            const placement = posthog.getFeatureFlagResult(placementFlag, { send_event: false })
-            const assignment = posthog.getFeatureFlagResult(DISTRIBUTION_FLAG, { send_event: false })
+            let placement: ReturnType<typeof posthog.getFeatureFlagResult>
+            let assignment: ReturnType<typeof posthog.getFeatureFlagResult>
+            try {
+                const options = { send_event: false, ...(source.releaseSeed ? { fresh: true } : {}) }
+                placement = posthog.getFeatureFlagResult(placementFlag, options)
+                assignment = posthog.getFeatureFlagResult(DISTRIBUTION_FLAG, options)
+            } catch (error) {
+                if (!source.releaseSeed) {
+                    throw error
+                }
+                return
+            }
             if (
                 !placement?.enabled ||
                 !assignment?.enabled ||
@@ -209,8 +250,13 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
                 actions.remember(context)
                 captureStage(context, 'eligible')
             }
-            if (context.arm === 'offer' && !context.outcome) {
-                actions.setOffer({ ...context, trigger: source.trigger, templateId: source.templateId })
+            if (context.arm === 'offer' && !context.outcome && !(source.releaseSeed && context.opened)) {
+                actions.setOffer({
+                    ...context,
+                    trigger: source.trigger,
+                    templateId: source.templateId,
+                    releaseSeed: source.releaseSeed,
+                })
             }
         },
         offerShown: ({ contextKey }) => {
@@ -236,6 +282,13 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
             })
             actions.removeOffer(contextKey)
             captureStage(offer, 'clicked')
+            if (offer.releaseSeed) {
+                stageBroadcastRelease(contextKey, offer.releaseSeed)
+                router.actions.push(
+                    combineUrl(urls.broadcastNew(), { mode: 'editor', [DISTRIBUTION_CONTEXT_PARAM]: contextKey }).url
+                )
+                return
+            }
             router.actions.push(
                 combineUrl(urls.workflowNew(), {
                     mode: 'editor',
@@ -248,7 +301,7 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
         dismiss: ({ contextKey }) => {
             const offer = values.offers[contextKey]
             if (offer && isAuthorized(offer.projectUuid)) {
-                const { trigger: _trigger, templateId: _templateId, ...context } = offer
+                const { trigger: _trigger, templateId: _templateId, releaseSeed: _releaseSeed, ...context } = offer
                 actions.remember({ ...context, opened: false, outcome: 'dismissed' })
                 actions.removeOffer(contextKey)
                 captureStage(context, 'dismissed')
@@ -274,7 +327,11 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
             }
         },
         draftCreated: ({ context, workflowId, templateId }) => {
-            if (workflowId && isAuthorized(context.projectUuid)) {
+            if (
+                workflowId &&
+                isAuthorized(context.projectUuid) &&
+                (context.placementId !== 'release-announcement' || context.eligibleAt > Date.now() - MEMORY_TTL)
+            ) {
                 actions.remember({ ...context, opened: false, outcome: 'created' })
                 actions.removeOffer(context.contextKey)
                 captureStage(context, 'draft created', workflowId, templateId)

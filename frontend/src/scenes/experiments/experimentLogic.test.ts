@@ -1,5 +1,7 @@
 import { api } from 'lib/api.mock'
+import { MOCK_DEFAULT_TEAM } from 'lib/api.mock'
 
+import { router } from 'kea-router'
 import { expectLogic } from 'kea-test-utils'
 import posthog from 'posthog-js'
 
@@ -7,6 +9,7 @@ import { FEATURE_FLAGS } from 'lib/constants'
 import { dayjs } from 'lib/dayjs'
 import { lemonToast } from 'lib/lemon-ui/LemonToast/LemonToast'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
+import { teamLogic } from 'scenes/teamLogic'
 import { userLogic } from 'scenes/userLogic'
 
 import experimentJson from '~/mocks/fixtures/api/experiments/_experiment_launched_with_funnel_and_trends.json'
@@ -22,9 +25,11 @@ import {
     NodeKind,
 } from '~/queries/schema/schema-general'
 import { initKeaTests } from '~/test/init'
-import { Experiment, ExperimentStatus, MultivariateFlagVariant } from '~/types'
+import { Experiment, ExperimentConclusion, ExperimentStatus, MultivariateFlagVariant } from '~/types'
+import { AccessControlLevel, AccessControlResourceType } from '~/types'
 
 import type { ExperimentHealthFinding } from 'products/experiments/frontend/health/experimentHealthFindingEvents'
+import { workflowDistributionLogic } from 'products/workflows/frontend/Workflows/workflowDistributionLogic'
 
 import { ExperimentWarning, experimentLogic } from './experimentLogic'
 import type { ExperimentSavedMetric } from './utils'
@@ -2127,6 +2132,213 @@ describe('experimentLogic', () => {
     })
 
     describe('finishExperiment (ship variant)', () => {
+        it.each([
+            'approval',
+            'network',
+            'project switch',
+            'denied',
+            'flag off',
+            'unknown',
+            'overridden',
+            'payload overridden',
+            'flags unavailable',
+            'flag errors',
+            'end only',
+            'launch only',
+            'generic update',
+        ])('does not offer an announcement for %s', async (reason) => {
+            localStorage.clear()
+            window.POSTHOG_APP_CONTEXT!.resource_access_control = Object.fromEntries(
+                Object.values(AccessControlResourceType).map((resource) => [resource, AccessControlLevel.Editor])
+            ) as Record<AccessControlResourceType, AccessControlLevel>
+            Object.defineProperty(posthog, 'getGroups', {
+                value: jest.fn(() => ({ project: MOCK_DEFAULT_TEAM.uuid })),
+                configurable: true,
+            })
+            jest.spyOn(posthog, 'getFeatureFlagResult').mockImplementation((key) =>
+                reason === 'flags unavailable'
+                    ? undefined
+                    : {
+                          key,
+                          enabled: reason !== 'flag off',
+                          variant:
+                              key === 'workflows-distribution'
+                                  ? reason === 'unknown'
+                                      ? 'unknown'
+                                      : 'offer'
+                                  : undefined,
+                          payload: undefined,
+                      }
+            )
+            jest.mocked(posthog.get_property).mockImplementation((key) =>
+                (reason === 'overridden' && key === '$override_feature_flags') ||
+                (reason === 'payload overridden' && key === '$override_feature_flag_payloads') ||
+                (reason === 'flag errors' && key === '$feature_flag_errors')
+                    ? { 'workflows-distribution': 'offer' }
+                    : undefined
+            )
+            jest.mocked(posthog.capture).mockClear()
+            const distribution = workflowDistributionLogic()
+            distribution.mount()
+            teamLogic.actions.loadCurrentTeamSuccess(MOCK_DEFAULT_TEAM)
+            if (reason === 'denied') {
+                window.POSTHOG_APP_CONTEXT!.resource_access_control.hog_flow = AccessControlLevel.Viewer
+            }
+            const shipped = {
+                ...experiment,
+                metrics: [],
+                metrics_secondary: [],
+                saved_metrics: [],
+                feature_flag: {
+                    ...experiment.feature_flag!,
+                    id: 42,
+                    key: 'compact-navigation',
+                    active: true,
+                    filters: { groups: [] },
+                },
+            } as Experiment
+            let resolveShip!: (response: Experiment) => void
+            let rejectShip!: (error: unknown) => void
+            const originalCreate = api.create
+            const createSpy = jest.spyOn(api, 'create').mockImplementation((url, payload) => {
+                if (!url.includes('/experiments/')) {
+                    return originalCreate(url, payload)
+                }
+                return new Promise((resolve, reject) => {
+                    resolveShip = resolve
+                    rejectShip = reject
+                })
+            })
+            logic.actions.setExperiment(shipped)
+            const updateSpy = jest.spyOn(api, 'update').mockResolvedValue(shipped)
+            if (reason === 'end only') {
+                logic.actions.endExperiment()
+            } else if (reason === 'launch only') {
+                logic.actions.launchExperiment()
+            } else if (reason === 'generic update') {
+                logic.actions.updateExperiment({
+                    start_date: '2026-10-01T00:00:00Z',
+                    conclusion: ExperimentConclusion.Won,
+                })
+            } else {
+                logic.actions.finishExperiment({ selectedVariantKey: 'compact', releaseToEveryone: false })
+            }
+            if (reason === 'approval' || reason === 'network') {
+                rejectShip(
+                    reason === 'approval'
+                        ? { status: 409, data: { change_request_id: 'synthetic-approval', code: 'approval_required' } }
+                        : new Error('Unavailable')
+                )
+            } else {
+                if (reason === 'project switch') {
+                    teamLogic.actions.loadCurrentTeamSuccess({ ...MOCK_DEFAULT_TEAM, id: 7, uuid: 'another-project' })
+                    teamLogic.actions.loadCurrentTeamSuccess(MOCK_DEFAULT_TEAM)
+                }
+                if (reason !== 'generic update') {
+                    resolveShip(shipped)
+                }
+            }
+            await expectLogic(logic).toFinishAllListeners()
+            expect(Object.values(distribution.values.offers)).toHaveLength(0)
+            expect(posthog.capture).not.toHaveBeenCalledWith('workflow distribution eligible', expect.anything())
+            updateSpy.mockRestore()
+            createSpy.mockRestore()
+            distribution.unmount()
+            jest.restoreAllMocks()
+        })
+
+        it.each([
+            { arm: 'offer', releaseToEveryone: true, ended: false },
+            { arm: 'offer', releaseToEveryone: false, ended: true },
+            { arm: 'control', releaseToEveryone: true, ended: false },
+        ])(
+            'offers an inactive announcement only after successful shipping in the $arm arm (everyone $releaseToEveryone, ended $ended)',
+            async ({ arm, releaseToEveryone, ended }) => {
+                localStorage.clear()
+                window.POSTHOG_APP_CONTEXT!.resource_access_control = Object.fromEntries(
+                    Object.values(AccessControlResourceType).map((resource) => [resource, AccessControlLevel.Editor])
+                ) as Record<AccessControlResourceType, AccessControlLevel>
+                Object.defineProperty(posthog, 'getGroups', {
+                    value: jest.fn(() => ({ project: MOCK_DEFAULT_TEAM.uuid })),
+                    configurable: true,
+                })
+                jest.spyOn(posthog, 'getFeatureFlagResult').mockImplementation((key) => ({
+                    key,
+                    enabled: true,
+                    variant: key === 'workflows-distribution' ? arm : undefined,
+                    payload: undefined,
+                }))
+                jest.mocked(posthog.get_property).mockReturnValue(undefined)
+                jest.mocked(posthog.capture).mockClear()
+                const distribution = workflowDistributionLogic()
+                distribution.mount()
+                teamLogic.actions.loadCurrentTeamSuccess(MOCK_DEFAULT_TEAM)
+                const shipped = {
+                    ...experiment,
+                    name: 'Compact navigation',
+                    end_date: ended ? '2026-10-01T00:00:00Z' : null,
+                    feature_flag: { id: 42, key: 'compact-navigation', active: true, filters: {} },
+                } as Experiment
+                let resolveShip!: (response: Experiment) => void
+                const createSpy = jest.spyOn(api, 'create').mockImplementation(
+                    () =>
+                        new Promise((resolve) => {
+                            resolveShip = resolve
+                        })
+                )
+                logic.actions.setExperiment(shipped)
+                logic.actions.finishExperiment({ selectedVariantKey: 'compact', releaseToEveryone })
+                expect(Object.values(distribution.values.offers)).toHaveLength(0)
+                expect(posthog.capture).not.toHaveBeenCalledWith('workflow distribution eligible', expect.anything())
+                resolveShip(shipped)
+                await expectLogic(logic).toFinishAllListeners()
+                expect(posthog.capture).toHaveBeenCalledWith(
+                    'workflow distribution eligible',
+                    expect.objectContaining({
+                        project_uuid: MOCK_DEFAULT_TEAM.uuid,
+                        placement_id: 'release-announcement',
+                        arm,
+                    })
+                )
+                const offers = Object.values(distribution.values.offers)
+                expect(offers).toHaveLength(arm === 'offer' ? 1 : 0)
+                if (arm === 'offer') {
+                    expect(offers[0]).toMatchObject({
+                        releaseSeed: {
+                            experimentId: shipped.id,
+                            experimentName: 'Compact navigation',
+                            flagId: 42,
+                            flagKey: 'compact-navigation',
+                            variantKey: 'compact',
+                            releaseToEveryone,
+                        },
+                    })
+                    if (ended) {
+                        distribution.actions.dismiss(offers[0].contextKey)
+                    } else {
+                        distribution.actions.open(offers[0].contextKey)
+                        expect(router.values.location.pathname).toContain('/broadcasts/new')
+                        expect(router.values.searchParams.mode).toBe('editor')
+                    }
+                }
+                expect(createSpy).toHaveBeenCalledTimes(1)
+                createSpy.mockResolvedValue(shipped)
+                distribution.unmount()
+                distribution.mount()
+                await expectLogic(logic, () =>
+                    logic.actions.finishExperiment({ selectedVariantKey: 'compact', releaseToEveryone })
+                ).toFinishAllListeners()
+                expect(Object.values(distribution.values.offers)).toHaveLength(0)
+                expect(
+                    jest
+                        .mocked(posthog.capture)
+                        .mock.calls.filter(([event]) => event === 'workflow distribution eligible')
+                ).toHaveLength(1)
+                createSpy.mockRestore()
+                distribution.unmount()
+            }
+        )
+
         it('calls ship_variant endpoint and dispatches setExperiment with response', async () => {
             const runningExperiment = {
                 ...experiment,

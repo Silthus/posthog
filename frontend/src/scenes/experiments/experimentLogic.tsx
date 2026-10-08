@@ -14,6 +14,7 @@ import {
 import { loaders } from 'kea-loaders'
 import { router } from 'kea-router'
 import posthog from 'posthog-js'
+import { v5 as uuid } from 'uuid'
 
 import api from 'lib/api'
 import { isApprovalRequiredError } from 'lib/api-error'
@@ -104,6 +105,7 @@ import {
 } from 'products/experiments/frontend/scenes/experimentsLogic'
 import { funnelDataLogic } from 'products/product_analytics/frontend/insights/funnels/funnelDataLogic'
 import { trendsDataLogic } from 'products/product_analytics/frontend/insights/trends/trendsDataLogic'
+import { workflowDistributionLogic } from 'products/workflows/frontend/Workflows/workflowDistributionLogic'
 
 import type { ProductIntentProperties } from '../../lib/utils/product-intents'
 import type { Noun } from '../../models/groupsModel'
@@ -1286,6 +1288,8 @@ export const experimentLogic = kea<experimentLogicType>([
     path((key) => ['scenes', 'experiment', 'experimentLogic', key]),
     connect(() => ({
         values: [
+            workflowDistributionLogic,
+            [],
             projectLogic,
             ['currentProjectId'],
             teamLogic,
@@ -2233,6 +2237,12 @@ export const experimentLogic = kea<experimentLogicType>([
         ],
     }),
     listeners(({ values, actions, asyncActions, cache, props }) => ({
+        [teamLogic.actionTypes.loadCurrentTeamSuccess]: ({ currentTeam }) => {
+            if (cache.shipProjectUuid && cache.shipProjectUuid !== currentTeam?.uuid) {
+                cache.shipProjectGeneration = (cache.shipProjectGeneration ?? 0) + 1
+                cache.shipProjectUuid = currentTeam?.uuid
+            }
+        },
         reportExperimentMetricsRefreshed: ({ experiment, forceRefresh, context }) => {
             posthog.capture('experiment metrics refreshed', {
                 ...getEventPropertiesForExperiment(experiment),
@@ -2758,6 +2768,13 @@ export const experimentLogic = kea<experimentLogicType>([
             repository,
             setRepositoryAsTeamDefault,
         }) => {
+            if (values.endExperimentLoading) {
+                return
+            }
+            const projectUuid = teamLogic.values.currentTeam?.uuid
+            const projectId = values.currentProjectId
+            cache.shipProjectUuid = projectUuid
+            const projectGeneration = (cache.shipProjectGeneration ??= 0)
             actions.setEndExperimentLoading(true)
             try {
                 // nosemgrep: prefer-codegen-api -- Legacy raw API call with a hand-written URL and an unchecked response type. experimentsShipVariantCreate() from 'products/experiments/frontend/generated/api' serves this route, but its generated types do not describe this call yet, so fix the endpoint's OpenAPI schema first.
@@ -2774,6 +2791,33 @@ export const experimentLogic = kea<experimentLogicType>([
                     }
                 )
                 actions.setExperiment(response)
+                if (
+                    projectUuid &&
+                    projectGeneration === cache.shipProjectGeneration &&
+                    projectId === values.currentProjectId &&
+                    teamLogic.values.currentTeam?.uuid === projectUuid &&
+                    typeof response.id === 'number' &&
+                    response.feature_flag?.id
+                ) {
+                    workflowDistributionLogic.actions.offer({
+                        projectUuid,
+                        placementId: 'release-announcement',
+                        sourceActionId: uuid(
+                            JSON.stringify([response.id, selectedVariantKey, releaseToEveryone]),
+                            uuid.URL
+                        ),
+                        eligible: true,
+                        releaseSeed: {
+                            projectUuid,
+                            experimentId: response.id,
+                            experimentName: response.name,
+                            flagId: response.feature_flag.id,
+                            flagKey: response.feature_flag.key,
+                            variantKey: selectedVariantKey,
+                            releaseToEveryone,
+                        },
+                    })
+                }
                 refreshTreeItem('experiment', String(values.experimentId))
                 actions.closeFinishExperimentModal()
                 lemonToast.success(

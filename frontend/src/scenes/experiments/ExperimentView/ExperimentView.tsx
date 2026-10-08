@@ -20,6 +20,7 @@ import { MetricSourceModal } from 'products/experiments/frontend/modals/MetricSo
 import { SharedMetricDetailsModal } from 'products/experiments/frontend/modals/SharedMetricDetailsModal/SharedMetricDetailsModal'
 import { SharedMetricModal } from 'products/experiments/frontend/modals/SharedMetricModal/SharedMetricModal'
 import { sharedMetricModalLogic } from 'products/experiments/frontend/modals/SharedMetricModal/sharedMetricModalLogic'
+import { BroadcastReleaseOffer } from 'products/workflows/frontend/Broadcasts/BroadcastReleaseOffer'
 
 import { EmptyMetricsPanel } from '../ExperimentForm/MetricsPanel/EmptyMetricsPanel'
 import { ExperimentImplementationDetails } from '../ExperimentImplementationDetails'
@@ -159,6 +160,7 @@ export function ExperimentView(): JSX.Element {
     return (
         <SceneContent>
             <PageHeaderCustom />
+            <BroadcastReleaseOffer experimentId={typeof experiment.id === 'number' ? experiment.id : null} />
             {experimentLoading ? (
                 <LoadingState />
             ) : (

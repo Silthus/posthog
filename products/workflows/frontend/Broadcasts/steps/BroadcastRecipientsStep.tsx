@@ -141,8 +141,8 @@ function AudienceListModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
 }
 
 export function BroadcastRecipientsStep(): JSX.Element {
-    const { audienceProperties } = useValues(broadcastWizardLogic)
-    const { setAudienceProperties } = useActions(broadcastWizardLogic)
+    const { audienceProperties, releaseSession, blastRadiusLoading } = useValues(broadcastWizardLogic)
+    const { setAudienceProperties, chooseEveryone } = useActions(broadcastWizardLogic)
     const [audienceListOpen, setAudienceListOpen] = useState(false)
 
     return (
@@ -150,22 +150,38 @@ export function BroadcastRecipientsStep(): JSX.Element {
             <div>
                 <h2 className="m-0 text-xl font-semibold">Who should receive this email?</h2>
                 <p className="m-0 text-secondary">
-                    Filter by person properties or cohorts. Without filters, the broadcast goes to everyone.
+                    {releaseSession
+                        ? 'Choose recipients using person properties or cohorts, or explicitly select everyone.'
+                        : 'Filter by person properties or cohorts. Without filters, the broadcast goes to everyone.'}
                 </p>
             </div>
-            <div className="flex items-start justify-between gap-2">
-                <div>
-                    <span className="font-semibold">This broadcast will reach</span> <AudienceSizePreview />
-                </div>
+            {releaseSession && (
                 <LemonButton
-                    size="small"
                     type="secondary"
-                    onClick={() => setAudienceListOpen(true)}
-                    data-attr="broadcast-audience-view-list"
+                    onClick={chooseEveryone}
+                    loading={blastRadiusLoading}
+                    data-attr="release-announcement-choose-everyone"
                 >
-                    View list
+                    {releaseSession.audienceChosen && audienceProperties.length === 0
+                        ? 'Everyone selected'
+                        : 'Choose everyone'}
                 </LemonButton>
-            </div>
+            )}
+            {(!releaseSession || releaseSession.audienceChosen) && (
+                <div className="flex items-start justify-between gap-2">
+                    <div>
+                        <span className="font-semibold">This broadcast will reach</span> <AudienceSizePreview />
+                    </div>
+                    <LemonButton
+                        size="small"
+                        type="secondary"
+                        onClick={() => setAudienceListOpen(true)}
+                        data-attr="broadcast-audience-view-list"
+                    >
+                        View list
+                    </LemonButton>
+                </div>
+            )}
             <AudienceListModal isOpen={audienceListOpen} onClose={() => setAudienceListOpen(false)} />
             <PropertyFilters
                 pageKey="broadcast-wizard-recipients"

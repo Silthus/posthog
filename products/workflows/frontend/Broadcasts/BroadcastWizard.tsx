@@ -1,7 +1,7 @@
 import { useActions, useValues } from 'kea'
 
 import { IconChevronDown } from '@posthog/icons'
-import { LemonButton } from '@posthog/lemon-ui'
+import { LemonBanner, LemonButton } from '@posthog/lemon-ui'
 
 import { LemonMenu } from 'lib/lemon-ui/LemonMenu'
 
@@ -22,7 +22,7 @@ export function BroadcastWizard(): JSX.Element {
     const { currentStep, stepValidationErrors, currentStepHasErrors, saving, launching, scheduleMode } =
         useValues(broadcastWizardLogic)
     const { setStep, prevStep, continueStep, launchBroadcast, archiveBroadcast } = useActions(broadcastWizardLogic)
-    const { broadcastId, broadcast } = useValues(broadcastWizardLogic)
+    const { broadcastId, broadcast, releaseSession } = useValues(broadcastWizardLogic)
     useBroadcastAgentPanel()
 
     return (
@@ -58,12 +58,37 @@ export function BroadcastWizard(): JSX.Element {
                 }
             />
             <div className="mx-auto w-full max-w-4xl space-y-5">
+                {releaseSession && (
+                    <LemonBanner type="info">
+                        <div className="space-y-1 break-words">
+                            <div>{releaseSession.seed.experimentName}</div>
+                            <div>
+                                <span>Flag: </span>
+                                <span>{releaseSession.seed.flagKey}</span>
+                            </div>
+                            <div>
+                                <span>Released variant: </span>
+                                <span>{releaseSession.seed.variantKey}</span>
+                            </div>
+                            <div>
+                                {releaseSession.seed.releaseToEveryone
+                                    ? 'Rollout: everyone'
+                                    : 'Rollout: experiment population'}
+                            </div>
+                            <div>
+                                Release scope does not select email recipients. This announcement stays a draft until
+                                you launch it.
+                            </div>
+                        </div>
+                    </LemonBanner>
+                )}
                 <div className="space-y-3">
                     <div className="flex justify-center">
                         <BroadcastWizardStepper
                             currentStep={currentStep}
                             onStepClick={setStep}
                             stepErrors={stepValidationErrors}
+                            wrap={!!releaseSession}
                         />
                     </div>
                 </div>

@@ -2,6 +2,12 @@
 
 How a batch-triggered workflow run resolves its audience, and the knobs that bound it.
 
+## Release announcement drafts
+
+After shipping an experiment variant, the optional release announcement opens an unsaved Broadcasts draft. Release rollout and experiment exposure do not select email recipients. The author must choose person filters or cohorts, or deliberately choose everyone. Empty filters alone do not complete that choice. Saving keeps the batch/email/exit graph inactive; the author launches it separately, either immediately or at one future time. This entry offers no recurring schedule.
+
+Successful launch requires an active draft and an accepted batch job or one-time schedule. It does not confirm recipient delivery. Draft association uses the successful create response's ID. Dismissal and observed-draft suppression are local to the browser and context; another device or member, eviction, or an uncertain create can repeat the entry. Missing association remains unknown.
+
 ## The resolver
 
 Triggering a batch workflow creates one cyclotron job on `HOGFLOW_BATCH_RESOLVE_QUEUE`, processed by the `cdp-cyclotron-worker-batch-resolve` consumer. Each dequeue fetches one audience page from Django's internal endpoints (`user_blast_radius_persons` for person audiences, `account_audience` for account audiences), enqueues that page's runs, and reschedules itself with the next cursor until the audience is exhausted or truncated by `maxAudienceSize`. The terminal status (`completed`/`failed`) is PUT back to Django on a final dequeue, and the resolver only acks after that write succeeds.

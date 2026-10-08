@@ -54,6 +54,7 @@ export function BroadcastScheduleStep(): JSX.Element {
         recurringRepeating,
         effectiveTimezone,
         stepValidationErrors,
+        releaseSession,
     } = useValues(broadcastWizardLogic)
     const {
         setScheduleMode,
@@ -68,7 +69,11 @@ export function BroadcastScheduleStep(): JSX.Element {
         <div className="flex flex-col gap-4">
             <div>
                 <h2 className="m-0 text-xl font-semibold">When should this email go out?</h2>
-                <p className="m-0 text-secondary">Send it right away, pick a time, or set up a repeating schedule.</p>
+                <p className="m-0 text-secondary">
+                    {releaseSession
+                        ? 'Send this announcement once, now or at a future time.'
+                        : 'Send it right away, pick a time, or set up a repeating schedule.'}
+                </p>
             </div>
 
             <LemonRadio
@@ -77,7 +82,7 @@ export function BroadcastScheduleStep(): JSX.Element {
                 options={[
                     { value: 'now', label: 'Send now' },
                     { value: 'later', label: 'Send later' },
-                    { value: 'recurring', label: 'Recurring' },
+                    ...(!releaseSession ? [{ value: 'recurring' as const, label: 'Recurring' }] : []),
                 ]}
             />
 
@@ -106,7 +111,7 @@ export function BroadcastScheduleStep(): JSX.Element {
                 </div>
             )}
 
-            {scheduleMode === 'recurring' && (
+            {scheduleMode === 'recurring' && !releaseSession && (
                 <div className="max-w-160">
                     <RecurringSchedulePicker
                         state={scheduleState}

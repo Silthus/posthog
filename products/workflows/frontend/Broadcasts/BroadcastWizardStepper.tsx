@@ -9,12 +9,14 @@ interface BroadcastWizardStepperProps {
     currentStep: BroadcastWizardStep
     onStepClick: (step: BroadcastWizardStep) => void
     stepErrors?: Partial<Record<BroadcastWizardStep, string[]>>
+    wrap?: boolean
 }
 
 export function BroadcastWizardStepper({
     currentStep,
     onStepClick,
     stepErrors = {},
+    wrap = false,
 }: BroadcastWizardStepperProps): JSX.Element {
     const currentOrder = BROADCAST_WIZARD_STEPS.indexOf(currentStep)
     const currentStepHasErrors = (stepErrors[currentStep]?.length ?? 0) > 0
@@ -28,7 +30,10 @@ export function BroadcastWizardStepper({
     }
 
     return (
-        <nav className="flex items-center" aria-label="Broadcast wizard progress">
+        <nav
+            className={cn('flex items-center', wrap && 'flex-wrap justify-center gap-y-2')}
+            aria-label="Broadcast wizard progress"
+        >
             {BROADCAST_WIZARD_STEPS.map((step, index) => {
                 const isCompleted = currentOrder > index
                 const isCurrent = currentStep === step
