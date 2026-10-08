@@ -1,8 +1,8 @@
 import { useActions, useValues } from 'kea'
 import { router } from 'kea-router'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 
-import { IconBadge, IconEye, IconHide, IconInfo } from '@posthog/icons'
+import { IconBadge, IconEye, IconHide, IconInfo, IconX } from '@posthog/icons'
 import { LemonTag, LemonTagType, Spinner, Tooltip } from '@posthog/lemon-ui'
 
 import { FlaggedFeature } from 'lib/components/FlaggedFeature'
@@ -130,9 +130,24 @@ export function DefinitionView(rawProps: DefinitionLogicProps): JSX.Element {
     // The app renders scene components with raw route params, so decode the id like paramsToProps does
     const props = { ...rawProps, id: decodeDefinitionId(rawProps.id) }
     const logic = definitionLogic(props)
-    const { definition, definitionLoading, definitionMissing, singular, isEvent, isProperty, metrics, metricsLoading } =
-        useValues(logic)
-    const { deleteDefinition } = useActions(logic)
+    const {
+        definition,
+        definitionLoading,
+        definitionMissing,
+        singular,
+        isEvent,
+        isProperty,
+        metrics,
+        metricsLoading,
+        eventWorkflowOffer,
+    } = useValues(logic)
+    const { deleteDefinition, openEventWorkflow, dismissEventWorkflowOffer, showEventWorkflowOffer } = useActions(logic)
+
+    useEffect(() => {
+        if (eventWorkflowOffer) {
+            showEventWorkflowOffer()
+        }
+    }, [eventWorkflowOffer?.contextKey, showEventWorkflowOffer])
 
     const memoizedQuery = useMemo(() => {
         const columnsToUse =
@@ -200,6 +215,26 @@ export function DefinitionView(rawProps: DefinitionLogicProps): JSX.Element {
                 }
                 actions={
                     <>
+                        {eventWorkflowOffer && (
+                            <div className="flex flex-wrap items-center gap-1">
+                                <LemonButton
+                                    type="secondary"
+                                    size="small"
+                                    onClick={openEventWorkflow}
+                                    data-attr="event-definition-automate"
+                                >
+                                    Automate this event
+                                </LemonButton>
+                                <LemonButton
+                                    size="small"
+                                    icon={<IconX />}
+                                    onClick={dismissEventWorkflowOffer}
+                                    aria-label="Dismiss automation suggestion"
+                                    tooltip="Dismiss automation suggestion"
+                                    data-attr="event-definition-dismiss-automation"
+                                />
+                            </div>
+                        )}
                         {isEvent && (
                             <ViewRecordingsPlaylistButton
                                 filters={{
