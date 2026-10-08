@@ -12,6 +12,7 @@ import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
 
 import { useMocks } from '~/mocks/jest'
+import { getByDataAttr, queryByDataAttr } from '~/test/byDataAttr'
 import { initKeaTests } from '~/test/init'
 import { AccessControlLevel, AccessControlResourceType } from '~/types'
 
@@ -115,14 +116,14 @@ describe('selected event view to inactive editor to observed save', () => {
                 <DefinitionView id={event.id} />
             </Provider>
         )
-        expect(screen.queryByRole('button', { name: 'Automate this event' })).not.toBeInTheDocument()
+        expect(queryByDataAttr(document.body, 'event-definition-automate')).not.toBeInTheDocument()
         await waitFor(() =>
             expect(
                 document.querySelector('[data-attr="definition-description-view"]') ||
                     screen.queryByText('Event not found')
             ).toBeTruthy()
         )
-        expect(screen.queryByRole('button', { name: 'Automate this event' })).not.toBeInTheDocument()
+        expect(queryByDataAttr(document.body, 'event-definition-automate')).not.toBeInTheDocument()
         expect(
             jest.mocked(posthog.capture).mock.calls.filter(([name]) => name.startsWith('workflow distribution'))
         ).toEqual([])
@@ -151,7 +152,7 @@ describe('selected event view to inactive editor to observed save', () => {
                 </Provider>
             )
             await screen.findByText(event.description)
-            expect(screen.queryByRole('button', { name: 'Automate this event' })).not.toBeInTheDocument()
+            expect(queryByDataAttr(document.body, 'event-definition-automate')).not.toBeInTheDocument()
             const captures = jest
                 .mocked(posthog.capture)
                 .mock.calls.filter(([name]) => name.startsWith('workflow distribution'))
@@ -179,7 +180,7 @@ describe('selected event view to inactive editor to observed save', () => {
                 <DefinitionView id={event.id} />
             </Provider>
         )
-        fireEvent.click(await screen.findByRole('button', { name: 'Dismiss automation suggestion' }))
+        fireEvent.click(await screen.findByLabelText('Dismiss automation suggestion'))
         expect(posthog.capture).toHaveBeenCalledWith(
             'workflow distribution dismissed',
             expect.objectContaining({ placement_id: 'selected-event' })
@@ -191,7 +192,7 @@ describe('selected event view to inactive editor to observed save', () => {
             </Provider>
         )
         await screen.findByText(event.description)
-        expect(screen.queryByRole('button', { name: 'Automate this event' })).not.toBeInTheDocument()
+        expect(queryByDataAttr(document.body, 'event-definition-automate')).not.toBeInTheDocument()
         view.unmount()
         useMocks({ get: { '/api/projects/:team/event_definitions/:id/': { ...event, name: 'Workspace joined' } } })
         render(
@@ -199,7 +200,7 @@ describe('selected event view to inactive editor to observed save', () => {
                 <DefinitionView id={event.id} />
             </Provider>
         )
-        expect(await screen.findByRole('button', { name: 'Automate this event' })).toBeInTheDocument()
+        expect(await screen.findByText('Automate this event')).toBeInTheDocument()
     })
 
     it.each(['source', 'project', 'access'])('rejects a stale click after the %s changes', async (context) => {
@@ -208,7 +209,8 @@ describe('selected event view to inactive editor to observed save', () => {
                 <DefinitionView id={event.id} />
             </Provider>
         )
-        const button = await screen.findByRole('button', { name: 'Automate this event' })
+        await screen.findByText('Automate this event')
+        const button = getByDataAttr(document.body, 'event-definition-automate')
         act(() => {
             if (context === 'source') {
                 router.actions.push(urls.eventDefinition('another-event'))
@@ -230,7 +232,8 @@ describe('selected event view to inactive editor to observed save', () => {
                 <DefinitionView id={event.id} />
             </Provider>
         )
-        const button = await screen.findByRole('button', { name: 'Automate this event' })
+        await screen.findByText('Automate this event')
+        const button = getByDataAttr(document.body, 'event-definition-automate')
         act(() => {
             fireEvent.click(button)
             fireEvent.click(button)
@@ -283,6 +286,6 @@ describe('selected event view to inactive editor to observed save', () => {
             </Provider>
         )
         await waitFor(() => expect(screen.getByText(event.description)).toBeInTheDocument())
-        expect(screen.queryByRole('button', { name: 'Automate this event' })).not.toBeInTheDocument()
+        expect(queryByDataAttr(document.body, 'event-definition-automate')).not.toBeInTheDocument()
     })
 })
