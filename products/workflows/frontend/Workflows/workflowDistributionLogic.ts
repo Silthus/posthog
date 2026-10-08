@@ -1,9 +1,12 @@
-import { MakeLogicType, actions, connect, kea, listeners, path, reducers } from 'kea'
+import { MakeLogicType, actions, afterMount, connect, kea, listeners, path, reducers } from 'kea'
 import { combineUrl, router } from 'kea-router'
 import posthog from 'posthog-js'
 import { v5 as uuid } from 'uuid'
 
+import { lemonToast } from '@posthog/lemon-ui'
+
 import { getAccessControlDisabledReason } from 'lib/utils/accessControlUtils'
+import { addProjectIdIfMissing } from 'lib/utils/kea-router'
 import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
 
@@ -30,6 +33,7 @@ interface DistributionSourceContext {
     placementId: DistributionPlacement
     sourceActionId: string
     eligible: boolean
+    providerTemplateId?: 'template-sendgrid' | 'template-customerio'
 }
 
 export type DistributionSource = DistributionSourceContext &
@@ -42,12 +46,15 @@ export interface DistributionContext {
     arm: 'offer' | 'control'
     eligibleAt: number
     opened?: boolean
+    shown?: boolean
+    providerTemplateId?: 'template-sendgrid' | 'template-customerio'
     outcome?: 'dismissed' | 'created'
 }
 
 export interface DistributionOffer extends DistributionContext {
     trigger?: WorkflowTriggerConfig
     templateId?: string
+    sourceActionId?: string
 }
 
 function isAuthorized(projectUuid: string): boolean {
@@ -70,6 +77,7 @@ function captureStage(context: DistributionContext, stage: string, workflowId?: 
                 context_key: context.contextKey,
                 arm: context.arm,
                 stage,
+                ...(context.providerTemplateId ? { provider_template_id: context.providerTemplateId } : {}),
                 eligible_at: new Date(context.eligibleAt).toISOString(),
                 ...(workflowId ? { workflow_id: workflowId } : {}),
                 ...(templateId ? { template_id: templateId } : {}),
@@ -92,7 +100,7 @@ export interface workflowDistributionLogicActions {
     setOffer: (offer: DistributionOffer) => { offer: DistributionOffer }
     removeOffer: (contextKey: string) => { contextKey: string }
     offerShown: (contextKey: string) => { contextKey: string }
-    open: (contextKey: string) => { contextKey: string }
+    open: (contextKey: string, newTab?: boolean) => { contextKey: string; newTab?: boolean }
     dismiss: (contextKey: string) => { contextKey: string }
     editorArrived: (contextKey?: string) => { contextKey?: string }
     setEditorContext: (context: DistributionContext | null) => { context: DistributionContext | null }
@@ -106,6 +114,7 @@ export interface workflowDistributionLogicActions {
         workflowId: string
         templateId?: string
     }
+    syncMemory: (memory: DistributionContext[]) => { memory: DistributionContext[] }
     clearTransient: () => {}
 }
 
@@ -123,7 +132,7 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
         setOffer: (offer: DistributionOffer) => ({ offer }),
         removeOffer: (contextKey: string) => ({ contextKey }),
         offerShown: (contextKey: string) => ({ contextKey }),
-        open: (contextKey: string) => ({ contextKey }),
+        open: (contextKey: string, newTab?: boolean) => ({ contextKey, newTab }),
         dismiss: (contextKey: string) => ({ contextKey }),
         editorArrived: (contextKey?: string) => ({ contextKey }),
         setEditorContext: (context: DistributionContext | null) => ({ context }),
@@ -133,6 +142,7 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
             workflowId,
             templateId,
         }),
+        syncMemory: (memory: DistributionContext[]) => ({ memory }),
         clearTransient: () => ({}),
     }),
     reducers({
@@ -140,6 +150,7 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
             [] as DistributionContext[],
             { persist: true },
             {
+                syncMemory: (_, { memory }) => memory,
                 remember: (state, { context }) =>
                     [...state.filter((item) => item.contextKey !== context.contextKey), context]
                         .filter((item) => item.eligibleAt > Date.now() - MEMORY_TTL)
@@ -164,7 +175,7 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
             },
         ],
     }),
-    listeners(({ actions, values, cache }) => ({
+    listeners(({ actions, values }) => ({
         offer: ({ source }) => {
             if (
                 !source.eligible ||
@@ -204,29 +215,42 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
                 placementId: source.placementId,
                 arm: assignment.variant as 'offer' | 'control',
                 eligibleAt: Date.now(),
+                ...(source.providerTemplateId ? { providerTemplateId: source.providerTemplateId } : {}),
             }
             if (!existing) {
                 actions.remember(context)
                 captureStage(context, 'eligible')
             }
             if (context.arm === 'offer' && !context.outcome) {
-                actions.setOffer({ ...context, trigger: source.trigger, templateId: source.templateId })
+                actions.setOffer({
+                    ...context,
+                    trigger: source.trigger,
+                    templateId: source.templateId,
+                    sourceActionId: source.sourceActionId,
+                })
             }
         },
         offerShown: ({ contextKey }) => {
             const offer = values.offers[contextKey]
-            const shown = (cache.shown ??= new Set<string>()) as Set<string>
-            if (offer && isAuthorized(offer.projectUuid) && !shown.has(contextKey)) {
-                shown.add(contextKey)
+            const remembered = values.memory.find((context) => context.contextKey === contextKey)
+            if (offer && remembered && isAuthorized(offer.projectUuid) && !remembered.shown) {
+                actions.remember({ ...remembered, shown: true })
                 captureStage(offer, 'offer shown')
             }
         },
-        open: ({ contextKey }) => {
+        open: ({ contextKey, newTab }) => {
             const offer = values.offers[contextKey]
             if (!offer || !isAuthorized(offer.projectUuid)) {
                 return
             }
+            const popup = newTab ? window.open('about:blank', '_blank') : null
+            if (newTab && !popup) {
+                lemonToast.error('Could not open Workflows. Allow pop-ups and try again.')
+                return
+            }
             actions.remember({
+                ...values.memory.find((context) => context.contextKey === contextKey),
+                ...(offer.providerTemplateId ? { providerTemplateId: offer.providerTemplateId } : {}),
                 contextKey,
                 projectUuid: offer.projectUuid,
                 placementId: offer.placementId,
@@ -236,19 +260,28 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
             })
             actions.removeOffer(contextKey)
             captureStage(offer, 'clicked')
-            router.actions.push(
-                combineUrl(urls.workflowNew(), {
-                    mode: 'editor',
-                    [DISTRIBUTION_CONTEXT_PARAM]: contextKey,
-                    ...(offer.templateId ? { templateId: offer.templateId } : {}),
-                    ...(offer.trigger && !offer.templateId ? { trigger: JSON.stringify(offer.trigger) } : {}),
-                }).url
-            )
+            const url = combineUrl(urls.workflowNew(), {
+                mode: 'editor',
+                [DISTRIBUTION_CONTEXT_PARAM]: contextKey,
+                ...(offer.templateId ? { templateId: offer.templateId } : {}),
+                ...(offer.trigger && !offer.templateId ? { trigger: JSON.stringify(offer.trigger) } : {}),
+            }).url
+            if (popup) {
+                popup.opener = null
+                popup.location.replace(addProjectIdIfMissing(url, teamLogic.values.currentTeamId ?? undefined))
+            } else {
+                router.actions.push(url)
+            }
         },
         dismiss: ({ contextKey }) => {
             const offer = values.offers[contextKey]
             if (offer && isAuthorized(offer.projectUuid)) {
-                const { trigger: _trigger, templateId: _templateId, ...context } = offer
+                const {
+                    trigger: _trigger,
+                    templateId: _templateId,
+                    sourceActionId: _sourceActionId,
+                    ...context
+                } = offer
                 actions.remember({ ...context, opened: false, outcome: 'dismissed' })
                 actions.removeOffer(contextKey)
                 captureStage(context, 'dismissed')
@@ -273,6 +306,16 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
                 actions.remember({ ...opened, opened: false })
             }
         },
+        syncMemory: () => {
+            for (const context of values.memory) {
+                if (context.outcome) {
+                    actions.removeOffer(context.contextKey)
+                }
+                if (context.contextKey === values.editorContext?.contextKey && (!context.opened || context.outcome)) {
+                    actions.setEditorContext(null)
+                }
+            }
+        },
         draftCreated: ({ context, workflowId, templateId }) => {
             if (workflowId && isAuthorized(context.projectUuid)) {
                 actions.remember({ ...context, opened: false, outcome: 'created' })
@@ -289,4 +332,26 @@ export const workflowDistributionLogic = kea<workflowDistributionLogicType>([
             }
         },
     })),
+    afterMount(({ actions, cache }) => {
+        cache.disposables.add(
+            () => {
+                const sync = (event: StorageEvent): void => {
+                    if (event.key === 'products.workflows.workflowDistributionLogic.memory' && event.newValue) {
+                        try {
+                            const memory = JSON.parse(event.newValue) as DistributionContext[]
+                            if (Array.isArray(memory)) {
+                                actions.syncMemory(memory)
+                            }
+                        } catch {
+                            return
+                        }
+                    }
+                }
+                window.addEventListener('storage', sync)
+                return () => window.removeEventListener('storage', sync)
+            },
+            'distribution-memory',
+            { pauseOnPageHidden: false }
+        )
+    }),
 ])

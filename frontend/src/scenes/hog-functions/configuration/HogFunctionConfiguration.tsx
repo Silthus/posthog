@@ -22,6 +22,7 @@ import { SurveyResponseKeysReference } from 'scenes/surveys/components/SurveyRes
 
 import { useAttachedContext, useToolStreamListener } from 'products/posthog_ai/frontend/api/logics'
 import { resolveToolCall } from 'products/posthog_ai/frontend/api/tools'
+import { WorkflowNativeDestinationOffer } from 'products/workflows/frontend/Workflows/WorkflowNativeDestinationOffer'
 
 import { humanizeHogFunctionType } from '../hog-function-utils'
 import { HogFunctionStatusIndicator } from '../misc/HogFunctionStatusIndicator'
@@ -175,6 +176,8 @@ export function HogFunctionConfiguration({
                         </LemonBanner>
                     </div>
                 ) : null}
+
+                <WorkflowNativeDestinationOffer {...logicProps} />
 
                 <Form
                     logic={hogFunctionConfigurationLogic}

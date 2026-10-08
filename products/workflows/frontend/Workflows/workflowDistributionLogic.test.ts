@@ -256,4 +256,18 @@ describe('authorized browser offer-to-saved-draft', () => {
             jest.mocked(posthog.capture).mock.calls.filter(([event]) => event === 'workflow distribution draft created')
         ).toHaveLength(0)
     })
+    it('does not repeat visible-offer capture after a tab reload', async () => {
+        await expectLogic(distribution, () => distribution.actions.offer(source)).toFinishAllListeners()
+        const key = Object.values(distribution.values.offers)[0].contextKey
+        distribution.actions.offerShown(key)
+        distribution.unmount()
+        initKeaTests()
+        distribution = workflowDistributionLogic()
+        distribution.mount()
+        await expectLogic(distribution, () => distribution.actions.offer(source)).toFinishAllListeners()
+        distribution.actions.offerShown(key)
+        expect(
+            jest.mocked(posthog.capture).mock.calls.filter(([event]) => event === 'workflow distribution offer shown')
+        ).toHaveLength(1)
+    })
 })
