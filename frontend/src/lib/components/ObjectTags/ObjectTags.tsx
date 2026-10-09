@@ -127,7 +127,6 @@ export function ObjectTags({
                         onBlur?.()
                     }}
                     loading={saving}
-                    disabledReason={saving ? 'Saving tags' : undefined}
                     data-attr="new-tag-input"
                     placeholder={inputPlaceholder}
                     autoFocus
