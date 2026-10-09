@@ -93,9 +93,10 @@ export function WorkflowsListV2(): JSX.Element {
                         ),
                     rowAriaLabel: (row) => `Select ${row.name}`,
                     noun: ['item', 'items'],
-                    renderActions: ({ selectedKeys }) => (
+                    renderActions: ({ selectedKeys, clearSelection }) => (
                         <WorkflowBulkTagsButton
                             rows={filteredRows.filter((row) => selectedKeys.includes(`${row.kind}:${row.id}`))}
+                            onSuccess={clearSelection}
                         />
                     ),
                 }}

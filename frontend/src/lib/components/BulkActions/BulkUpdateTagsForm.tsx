@@ -25,7 +25,6 @@ export type BulkTaggableResource =
     | 'conversations/tickets'
     | 'experiments'
     | 'hog_flows'
-    | 'messaging_templates'
 
 export interface BulkUpdateTagsFormProps {
     resource: BulkTaggableResource
@@ -86,7 +85,9 @@ export function BulkUpdateTagsForm({
         } catch (error: any) {
             // The server explains rule failures such as a project that requires tags, so show its
             // message rather than a generic one the user cannot act on.
-            lemonToast.error(error?.detail || 'Failed to update tags')
+            lemonToast.error(
+                error?.detail || (error instanceof Error ? error.message : undefined) || 'Failed to update tags'
+            )
         } finally {
             setLoading(false)
         }

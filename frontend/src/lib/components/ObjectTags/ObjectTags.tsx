@@ -152,7 +152,11 @@ export function ObjectTags({
                                   <button
                                       key={index}
                                       type="button"
-                                      className={wrap ? 'inline-flex min-w-0 max-w-full' : 'inline-flex'}
+                                      className={
+                                          wrap
+                                              ? 'inline-flex min-w-0 max-w-full cursor-pointer'
+                                              : 'inline-flex cursor-pointer'
+                                      }
                                       onClick={() => onTagClick(tag)}
                                   >
                                       {tagLabel}
@@ -193,7 +197,7 @@ export function ObjectTags({
                     {!staticOnly && onChange && saving !== undefined && (
                         <button
                             type="button"
-                            className="inline-flex font-normal"
+                            className="inline-flex font-normal cursor-pointer disabled:cursor-not-allowed"
                             disabled={saving}
                             onClick={() => {
                                 onEdit?.()

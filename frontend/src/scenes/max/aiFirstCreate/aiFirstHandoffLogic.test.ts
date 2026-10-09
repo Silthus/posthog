@@ -172,9 +172,13 @@ describe('aiFirstHandoffLogic', () => {
         panel.unmount()
     })
 
-    it.each([false, true])(
-        'opens the current creation while a previous preparation is pending (fails %s)',
-        async (fails) => {
+    it.each([
+        [false, false],
+        [true, false],
+        [true, true],
+    ])(
+        'opens the current creation while a previous preparation is pending (fails %s, same stream %s)',
+        async (fails, sameStream) => {
             logic.unmount()
             let completeFirst: () => void = () => {}
             let markStarted: () => void = () => {}
@@ -200,6 +204,7 @@ describe('aiFirstHandoffLogic', () => {
             const eventFor = (streamKey: string, id: string): ToolStreamEvent =>
                 createEvent({
                     streamKey,
+                    toolCallId: id,
                     invocation: {
                         ...createEvent({}).invocation,
                         output: {
@@ -211,8 +216,9 @@ describe('aiFirstHandoffLogic', () => {
             panel.actions.setActiveCreation({ streamKey: 'draft-1' })
             toolStreamEventsLogic.actions.emitToolEvent(eventFor('draft-1', CREATED_ID))
             await started
-            panel.actions.setActiveCreation({ streamKey: 'draft-2' })
-            toolStreamEventsLogic.actions.emitToolEvent(eventFor('draft-2', 'second-created'))
+            const nextStream = sameStream ? 'draft-1' : 'draft-2'
+            panel.actions.setActiveCreation({ streamKey: nextStream })
+            toolStreamEventsLogic.actions.emitToolEvent(eventFor(nextStream, 'second-created'))
             completeFirst()
             await expectLogic(logic).toFinishAllListeners()
             expect(prepared).toEqual([CREATED_ID, 'second-created'])
