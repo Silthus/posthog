@@ -33,6 +33,20 @@ describe('newWorkflowLogic', () => {
     })
 
     describe('AI-first new workflow', () => {
+        it('carries positive list tags into a new workflow from the modal', async () => {
+            setFlags([FEATURE_FLAGS.WORKFLOWS_LIST_V2])
+            const logic = newWorkflowLogic()
+            logic.mount()
+            router.actions.push('/workflows', { q: 'tag:welcome -tag:archived tag:"trial users"' }, {})
+
+            await expectLogic(logic, () => {
+                logic.actions.startNewWorkflow()
+                logic.actions.createEmptyWorkflow()
+            }).toFinishAllListeners()
+
+            expect(router.values.searchParams).toEqual({ tags: '["welcome","trial users"]' })
+        })
+
         // The flag-off path must stay byte-identical, and exposure is recorded only for a click the composer could answer.
         it.each([
             { name: 'flag on', flags: AI_FIRST_FLAGS, routed: true, exposed: true },

@@ -14,7 +14,7 @@ export interface WorkflowRowTarget {
 
 type WorkflowStatus = 'draft' | 'active' | 'archived'
 
-export type WorkflowRowAction = 'toggle' | 'duplicate' | 'archive' | 'restore' | 'delete'
+export type WorkflowRowAction = 'toggle' | 'duplicate' | 'archive' | 'restore' | 'delete' | 'tags'
 
 export function workflowActionErrorDetail(error: unknown): string {
     const e = error as { detail?: string; message?: string } | undefined

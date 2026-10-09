@@ -45,6 +45,7 @@ describe('workflowsListV2Logic', () => {
         ]
         useMocks({
             get: {
+                '/api/projects/:team_id/messaging_templates/': () => [200, paginated([])],
                 '/api/projects/:team_id/hog_flows/summaries/': async ({ request }) => {
                     const params = new URL(request.url).searchParams
                     workflowRequests.push(params)
@@ -182,6 +183,31 @@ describe('workflowsListV2Logic', () => {
         expect(shownIds(logic)).toEqual([])
     })
 
+    it('keeps the template load error visible when workflows finish later', async () => {
+        let answerWorkflows: () => void = () => {}
+        useMocks({
+            get: {
+                '/api/projects/:team_id/messaging_templates/': () => [500, { detail: 'Templates unavailable' }],
+                '/api/projects/:team_id/hog_flows/summaries/': () =>
+                    new Promise((resolve) => {
+                        answerWorkflows = () => resolve([200, paginated(FIXTURE_WORKFLOWS)])
+                    }),
+            },
+        })
+        logic = workflowsListV2Logic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadEmailTemplatesFailure'])
+        answerWorkflows()
+        await expectLogic(logic).toDispatchActions(['loadWorkflowsSuccess'])
+        expect(logic.values.loadFailed).toBe(true)
+
+        useMocks({ get: { '/api/projects/:team_id/messaging_templates/': () => [200, paginated([])] } })
+        logic.actions.loadEmailTemplates()
+        await expectLogic(logic).toDispatchActions(['loadEmailTemplatesSuccess'])
+        expect(logic.values.loadFailed).toBe(false)
+        expect(logic.values.listLoaded).toBe(true)
+    })
+
     it('stops at a next link that does not move forward and shows the load error', async () => {
         let requests = 0
         useMocks({
@@ -233,7 +259,9 @@ describe('workflowsListV2Logic', () => {
         logic.mount()
         await expectLogic(logic).toDispatchActions(['loadWorkflowsSuccess', 'loadMetricsSuccess'])
 
-        const workflow = logic.values.rows.find((row) => row.id === 'wf-renewal')!
+        const workflow = logic.values.rows
+            .filter((row): row is WorkflowListRow => row.kind === 'workflow')
+            .find((row) => row.id === 'wf-renewal')!
         await expectLogic(logic, () => logic.actions.toggleWorkflowStatus(workflow)).toFinishAllListeners()
         await expectLogic(logic, () => logic.actions.duplicateWorkflow(workflow)).toDispatchActions([
             'loadWorkflowsSuccess',
@@ -292,11 +320,19 @@ describe('workflowsListV2Logic', () => {
         answerMetrics()
         await expectLogic(logic).toDispatchActions(['loadMetricsSuccess'])
         expect(shownIds(logic)).toEqual(['wf-page-two', 'wf-sync', 'wf-old-promo'])
-        expect(logic.values.rows.find((row) => row.id === 'wf-renewal')).toMatchObject({
+        expect(
+            logic.values.rows
+                .filter((row): row is WorkflowListRow => row.kind === 'workflow')
+                .find((row) => row.id === 'wf-renewal')
+        ).toMatchObject({
             health: 'failing',
             last7Days: { succeeded: 3, failed: 2 },
         })
-        expect(logic.values.rows.find((row) => row.id === 'wf-old-promo')?.last7Days).toEqual({
+        expect(
+            logic.values.rows
+                .filter((row): row is WorkflowListRow => row.kind === 'workflow')
+                .find((row) => row.id === 'wf-old-promo')?.last7Days
+        ).toEqual({
             succeeded: 0,
             failed: 0,
         })
@@ -523,7 +559,9 @@ describe('workflowsListV2Logic', () => {
                 },
             })
         })
-        const row = logic.values.rows.find((r) => r.id === 'wf-renewal')!
+        const row = logic.values.rows
+            .filter((row): row is WorkflowListRow => row.kind === 'workflow')
+            .find((r) => r.id === 'wf-renewal')!
 
         logic.actions.duplicateWorkflow(row)
         logic.actions.duplicateWorkflow(row)
@@ -562,7 +600,9 @@ describe('workflowsListV2Logic', () => {
             post: { '/api/projects/:team_id/hog_flows/': () => [200, { id: copy.id }] },
         })
 
-        logic.actions.duplicateWorkflow(logic.values.rows.find((row) => row.id === 'wf-sync')!)
+        logic.actions.duplicateWorkflow(
+            logic.values.rows.find((row): row is WorkflowListRow => row.kind === 'workflow' && row.id === 'wf-sync')!
+        )
         await expectLogic(logic).toFinishAllListeners()
         expect(shownIds(logic)).toEqual(['wf-sync', 'wf-sync-copy'])
     })
@@ -581,7 +621,15 @@ describe('workflowsListV2Logic', () => {
         logic.mount()
         await expectLogic(logic).toDispatchActions(['loadWorkflowsSuccess'])
 
-        await expectLogic(logic, () => run(logic.values.rows.find((row) => row.id === id)!)).toFinishAllListeners()
-        expect(logic.values.rows[0].workflow).toMatchObject({ id, status, updated_at: '2026-09-27T12:00:00Z' })
+        await expectLogic(logic, () =>
+            run(
+                logic.values.rows
+                    .filter((row): row is WorkflowListRow => row.kind === 'workflow')
+                    .find((row) => row.id === id)!
+            )
+        ).toFinishAllListeners()
+        expect(
+            logic.values.rows.filter((row): row is WorkflowListRow => row.kind === 'workflow')[0].workflow
+        ).toMatchObject({ id, status, updated_at: '2026-09-27T12:00:00Z' })
     })
 })

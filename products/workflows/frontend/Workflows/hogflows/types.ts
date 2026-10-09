@@ -6,7 +6,7 @@ import { EmailFieldErrors } from 'scenes/hog-functions/email-templater/types'
 
 import { AccessControlLevel, UserBasicType } from '~/types'
 
-import { HogFlowOriginProductEnumApi } from '../../generated/api.schemas'
+import { HogFlowApi, HogFlowOriginProductEnumApi } from '../../generated/api.schemas'
 import { CyclotronJobInputSchemaTypeSchema, HogFlowActionSchema, HogFlowTriggerSchema } from './steps/types'
 
 const HogFlowEdgeSchema = z.object({
@@ -89,6 +89,7 @@ export const HogFlowBatchJobSchema = z.object({
 
 // NOTE: these are purposefully exported as interfaces to support kea typegen
 export interface HogFlow extends z.infer<typeof HogFlowSchema> {
+    tags?: HogFlowApi['tags']
     created_by?: UserBasicType | null
     // UX discriminator set by purpose-built surfaces; 'broadcast' rows are managed via the
     // broadcasts UI and hidden from the ordinary workflows list.
