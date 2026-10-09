@@ -40,14 +40,14 @@ describe('buildWorkflowListRows', () => {
     })
 
     it.each([
-        ['a failed run', [{ workflow_id: 'wf', succeeded: 10, failed: 1 }], 'failing'],
-        ['only succeeded runs', [{ workflow_id: 'wf', succeeded: 10, failed: 0 }], 'healthy'],
-        ['a row with no runs', [{ workflow_id: 'wf', succeeded: 0, failed: 0 }], 'idle'],
-        ['no row for the workflow', [], 'idle'],
-        ['metrics not loaded', null, 'idle'],
+        ['a failed run', [{ workflow_id: 'wf', succeeded: 10, failed: 1 }], ['failing']],
+        ['only succeeded runs', [{ workflow_id: 'wf', succeeded: 10, failed: 0 }], ['healthy']],
+        ['a row with no runs', [{ workflow_id: 'wf', succeeded: 0, failed: 0 }], ['idle']],
+        ['no row for the workflow', [], ['idle']],
+        ['metrics not loaded', null, []],
     ])('health with %s', (_, metrics, expected) => {
         const [row] = buildWorkflowListRows([buildWorkflowRow({ id: 'wf' })], metrics)
-        expect(valuesOf('health', row)).toEqual([expected])
+        expect(valuesOf('health', row)).toEqual(expected)
     })
 
     it.each([

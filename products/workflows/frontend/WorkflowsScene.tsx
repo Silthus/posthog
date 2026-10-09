@@ -32,6 +32,7 @@ import { NewWorkflowModal } from './Workflows/NewWorkflowModal'
 import { workflowTemplatesLogic } from './Workflows/templates/workflowTemplatesLogic'
 import { WorkflowsListV2 } from './Workflows/WorkflowsListV2/WorkflowsListV2'
 import { WorkflowsListV2ColumnsMenu } from './Workflows/WorkflowsListV2/WorkflowsListV2ColumnsMenu'
+import { workflowsListV2Logic } from './Workflows/WorkflowsListV2/workflowsListV2Logic'
 import { workflowsLogic } from './Workflows/workflowsLogic'
 import { WorkflowsTable } from './Workflows/WorkflowsTable'
 import { templateTypeForListType } from './Workflows/workflowTypeFilters'
@@ -222,10 +223,12 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
                                             product_type: ProductKey.WORKFLOWS,
                                             intent_context: ProductIntentContext.WORKFLOW_CREATED,
                                         })
-                                        // Open the template chooser on the type the list shows, so a person on the
-                                        // Messaging tab sees messaging templates first.
                                         setTypeFilter(
-                                            currentTab === 'workflows' ? templateTypeForListType(filters.type) : 'all'
+                                            currentTab === 'workflows'
+                                                ? listV2
+                                                    ? workflowsListV2Logic.values.templateTypeFilter
+                                                    : templateTypeForListType(filters.type)
+                                                : 'all'
                                         )
                                         startNewWorkflow()
                                     }}
