@@ -2636,6 +2636,9 @@ class HogFlowSummarySerializer(HogFlowMinimalSerializer):
 
 
 class HogFlowSerializer(HogFlowMinimalSerializer):
+    _create_in_folder = serializers.CharField(
+        required=False, allow_blank=True, write_only=True, help_text="Project folder for a newly created workflow."
+    )
     origin_product = serializers.ChoiceField(
         choices=HogFlowOriginProduct.choices,
         required=False,
@@ -2889,6 +2892,7 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
     class Meta:
         fields = [
             "id",
+            "_create_in_folder",
             "name",
             "description",
             "version",

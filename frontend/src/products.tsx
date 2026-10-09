@@ -1931,6 +1931,15 @@ export const fileSystemTypes = {
         iconColor: ['var(--color-product-feature-flags-light)'],
         filterKey: 'feature_flag',
     },
+    hog_flow: {
+        flag: FEATURE_FLAGS.WORKFLOWS_PROJECT_FILES,
+        name: 'Workflow',
+        iconType: 'workflows',
+        iconColor: ['var(--color-product-workflows-light)'] as FileSystemIconColor,
+        href: (ref: string) => urls.workflow(ref, 'workflow'),
+        listHref: () => urls.workflows(),
+        filterKey: 'hog_flow',
+    },
     insight: {
         name: 'Insight',
         iconType: 'product_analytics',
@@ -1945,6 +1954,14 @@ export const fileSystemTypes = {
         href: (ref: string) => urls.businessIntelligenceWorksheet(ref),
         listHref: () => urls.businessIntelligence(),
         filterKey: 'insight',
+    },
+    message_template: {
+        flag: FEATURE_FLAGS.WORKFLOWS_PROJECT_FILES,
+        name: 'Email template',
+        iconType: 'broadcasts',
+        href: (ref: string) => urls.workflowsLibraryTemplate(ref),
+        listHref: () => urls.workflows('library'),
+        filterKey: 'message_template',
     },
     notebook: {
         name: 'Notebook',
@@ -1983,14 +2000,6 @@ export const fileSystemTypes = {
         iconColor: ['var(--color-product-tasks-light)', 'var(--color-product-tasks-dark)'],
         filterKey: 'task',
         flag: FEATURE_FLAGS.TASKS,
-    },
-    workflows: {
-        name: 'Workflow',
-        iconType: 'workflows',
-        iconColor: ['var(--color-product-workflows-light)'] as FileSystemIconColor,
-        href: (ref: string) => urls.workflow(ref, 'workflow'),
-        listHref: () => urls.workflows(),
-        filterKey: 'workflows',
     },
 }
 
