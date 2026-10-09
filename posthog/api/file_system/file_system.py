@@ -516,13 +516,17 @@ class FileSystemViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
             .exclude(type__in=WORKFLOW_FILE_SYSTEM_TYPES)
             .exclude(type="folder", path__in=["Unfiled/Workflows", "Unfiled/Email templates"])
         )
+        workflow_files = self._scope_by_project(FileSystem.objects.all()).filter(
+            path__startswith=Concat(OuterRef("path"), Value("/")), type__in=WORKFLOW_FILE_SYSTEM_TYPES
+        )
         return (
             queryset.exclude(type__in=WORKFLOW_FILE_SYSTEM_TYPES)
-            .alias(_has_other_files=Exists(other_files))
+            .alias(_has_other_files=Exists(other_files), _has_workflow_files=Exists(workflow_files))
             .exclude(
                 type="folder",
                 path__in=["Unfiled", "Unfiled/Workflows", "Unfiled/Email templates"],
                 _has_other_files=False,
+                _has_workflow_files=True,
             )
         )
 

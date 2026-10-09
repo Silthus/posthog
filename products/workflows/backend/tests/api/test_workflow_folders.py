@@ -2,7 +2,6 @@ from posthog.test.base import APIBaseTest
 from unittest.mock import MagicMock, patch
 
 from posthog.constants import AvailableFeature
-from posthog.models.activity_logging.activity_log import ActivityLog
 from posthog.models.file_system.file_system import FileSystem
 from posthog.models.organization import OrganizationMembership
 from posthog.models.user import User
@@ -60,6 +59,9 @@ class TestWorkflowFolders(APIBaseTest):
             FileSystem.objects.create(team=self.team, path=path, depth=len(path.split("/")), type="folder")
         response = self.client.get(f"/api/projects/{self.team.id}/file_system/", {"search": "Unfiled"})
         self.assertEqual(response.json()["results"], [])
+        FileSystem.objects.filter(team=self.team, type="message_template").delete()
+        response = self.client.get(f"/api/projects/{self.team.id}/file_system/", {"path": "Unfiled"})
+        self.assertEqual([entry["path"] for entry in response.json()["results"]], ["Unfiled"])
 
     @patch("posthoganalytics.feature_enabled", return_value=False)
     def test_disabled_project_files_leave_tree_search_and_unfiled_unchanged(self, _flag: MagicMock) -> None:
@@ -165,11 +167,8 @@ class TestWorkflowFolders(APIBaseTest):
             deleted = self.client.delete(f"/api/projects/{self.team.id}/file_system/{files[0]['id']}/")
         self.assertTrue(any(call.args[1] == "hog_flow_deleted" for call in report_action.call_args_list))
         self.assertEqual(deleted.status_code, 200, deleted.content)
-        self.assertTrue(
-            ActivityLog.objects.filter(
-                team_id=self.team.id, scope="HogFlow", item_id=workflow_id, activity="deleted"
-            ).exists()
-        )
+        activity = self.client.get(f"/api/projects/{self.team.id}/activity_log", {"scope": "HogFlow"}).json()["results"]
+        self.assertTrue(any(entry["item_id"] == workflow_id and entry["activity"] == "deleted" for entry in activity))
 
     def test_email_template_can_be_created_and_moved_in_project_files(self) -> None:
         created = self.client.post(
