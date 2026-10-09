@@ -30,6 +30,8 @@ import { WorkflowsOnboardingWizard } from './setupGuide/wizard/WorkflowsOnboardi
 import { newWorkflowLogic } from './Workflows/newWorkflowLogic'
 import { NewWorkflowModal } from './Workflows/NewWorkflowModal'
 import { workflowTemplatesLogic } from './Workflows/templates/workflowTemplatesLogic'
+import { WorkflowsListV2 } from './Workflows/WorkflowsListV2/WorkflowsListV2'
+import { WorkflowsListV2ColumnsMenu } from './Workflows/WorkflowsListV2/WorkflowsListV2ColumnsMenu'
 import { workflowsLogic } from './Workflows/workflowsLogic'
 import { WorkflowsTable } from './Workflows/WorkflowsTable'
 import { templateTypeForListType } from './Workflows/workflowTypeFilters'
@@ -176,6 +178,7 @@ function topTabFor(tab: WorkflowsSceneTab): WorkflowsTopTab {
 export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
     const { currentTab } = useValues(workflowsSceneLogic(props))
     const { featureFlags } = useValues(featureFlagLogic)
+    const listV2 = !!featureFlags[FEATURE_FLAGS.WORKFLOWS_LIST_V2]
     const guidedOnboardingEnabled = !!featureFlags[FEATURE_FLAGS.WORKFLOWS_GUIDED_ONBOARDING]
     const { startNewWorkflow } = useActions(newWorkflowLogic)
     const { setTypeFilter } = useActions(workflowTemplatesLogic)
@@ -184,7 +187,7 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
     const workflowsTab = {
         label: 'Workflows',
         key: 'workflows' as const,
-        content: <WorkflowsTable />,
+        content: listV2 ? <WorkflowsListV2 /> : <WorkflowsTable />,
         link: urls.workflows(),
     }
     const showsNewWorkflowButton = currentTab === 'workflows' || currentTab === 'templates'
@@ -233,6 +236,7 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
                                 </LemonButton>
                             </AccessControlAction>
                         )}
+                        {currentTab === 'workflows' && listV2 && <WorkflowsListV2ColumnsMenu />}
                         {currentTab !== 'workflows' && currentTab !== 'templates' && (
                             <MessagingTabActions tab={currentTab} channelsUrl={urls.workflows('channels')} />
                         )}
