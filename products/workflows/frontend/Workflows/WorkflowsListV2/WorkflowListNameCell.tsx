@@ -25,7 +25,7 @@ export function WorkflowListNameCell({ row }: { row: WorkflowListRow }): JSX.Ele
         </Tooltip>
     ) : undefined
     const title = (
-        <span className="flex items-center gap-2 flex-wrap">
+        <span className="flex items-center gap-2 flex-wrap min-w-0 w-full">
             {name}
             {featureFlags[FEATURE_FLAGS.SELF_OPTIMISING_WORKFLOWS] &&
                 row.workflow.status === 'active' &&
