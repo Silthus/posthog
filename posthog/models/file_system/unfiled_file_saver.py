@@ -22,11 +22,9 @@ from products.dashboards.backend.models.dashboard import Dashboard
 from products.early_access_features.backend.models import EarlyAccessFeature
 from products.experiments.backend.models.experiment import Experiment
 from products.feature_flags.backend.models.feature_flag import FeatureFlag
-from products.messaging.backend.models.message_template import MessageTemplate
 from products.notebooks.backend.models import Notebook
 from products.product_analytics.backend.facade.models import Insight
 from products.surveys.backend.models import Survey
-from products.workflows.backend.models.hog_flow.hog_flow import HogFlow
 
 MIXIN_MODELS: dict[str, type[FileSystemSyncMixin]] = {
     "action": Action,
@@ -40,8 +38,6 @@ MIXIN_MODELS: dict[str, type[FileSystemSyncMixin]] = {
     "cohort": Cohort,
     "hog_function": HogFunction,
     "survey": Survey,
-    "hog_flow": HogFlow,
-    "message_template": MessageTemplate,
 }
 
 # Which models feed each surface's tree. New product surfaces register their own models here so
