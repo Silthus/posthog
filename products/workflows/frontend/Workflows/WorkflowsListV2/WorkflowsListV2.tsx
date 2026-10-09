@@ -39,8 +39,7 @@ export function WorkflowsListV2(): JSX.Element {
         metricsLoaded,
     } = useValues(workflowsListV2Logic)
     const { setValue, loadWorkflows, loadMetrics, clearFilters } = useActions(workflowsListV2Logic)
-    const showAutomationEmptyState =
-        guidedOnboardingEnabled && !!featureFlags[FEATURE_FLAGS.WORKFLOWS_NEW_NAVIGATION] && isUnfilteredAutomationView
+    const showAutomationEmptyState = guidedOnboardingEnabled && isUnfilteredAutomationView
 
     useOnMountEffect(() => {
         // Leaving the new-workflow scene keeps its logic mounted, so drop it here as WorkflowsTable does.
