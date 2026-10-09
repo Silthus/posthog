@@ -40,6 +40,7 @@ export interface workflowsSavedViewsLogicValues {
     facets: FacetDefinition<WorkflowListRow>[] // workflowsListV2Logic
     matchesText: MatchesText<WorkflowListRow> // workflowsListV2Logic
     rows: WorkflowListRow[] // workflowsListV2Logic
+    metricsLoaded: boolean // workflowsListV2Logic
     serverSearch: ServerSearchResult | null // workflowsListV2Logic
     shownColumns: OptionalColumn[] // workflowsListV2Logic
     value: FacetSearchValue // workflowsListV2Logic
@@ -193,7 +194,8 @@ export interface workflowsSavedViewsLogicMeta {
             rows: WorkflowListRow[],
             facets: FacetDefinition<WorkflowListRow>[],
             matchesText: MatchesText<WorkflowListRow>,
-            serverSearch: ServerSearchResult | null
+            serverSearch: ServerSearchResult | null,
+            metricsLoaded: boolean
         ) => Record<string, number>
     }
 }
@@ -212,7 +214,16 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
             featureFlagLogic,
             ['featureFlags', 'receivedFeatureFlags'],
             workflowsListV2Logic,
-            ['currentTeamId', 'value', 'shownColumns', 'rows', 'facets', 'matchesText', 'serverSearch'],
+            [
+                'currentTeamId',
+                'value',
+                'shownColumns',
+                'rows',
+                'facets',
+                'matchesText',
+                'serverSearch',
+                'metricsLoaded',
+            ],
             userLogic,
             ['user'],
         ],
@@ -387,16 +398,20 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
         ],
         myWorkflowsDeleted: [(s) => [s.defaultView], (view: WorkflowViewApi | null): boolean => view?.deleted === true],
         viewCounts: [
-            (s) => [s.views, s.rows, s.facets, s.matchesText, s.serverSearch],
+            (s) => [s.views, s.rows, s.facets, s.matchesText, s.serverSearch, s.metricsLoaded],
             (
                 views: WorkflowSavedView[],
                 rows: WorkflowListRow[],
                 facets: FacetDefinition<WorkflowListRow>[],
                 matchesText: MatchesText<WorkflowListRow>,
-                serverSearch: ServerSearchResult | null
+                serverSearch: ServerSearchResult | null,
+                metricsLoaded: boolean
             ): Record<string, number> =>
                 Object.fromEntries(
                     views.flatMap((view) => {
+                        if (!metricsLoaded && view.state.filters.some((filter) => filter.facet === 'health')) {
+                            return []
+                        }
                         const text = view.state.text.trim()
                         if (text.length >= 3 && (serverSearch?.text !== text || serverSearch.failed)) {
                             return []

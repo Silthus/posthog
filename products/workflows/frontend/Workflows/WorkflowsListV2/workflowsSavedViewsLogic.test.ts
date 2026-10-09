@@ -93,6 +93,19 @@ describe('workflowsSavedViewsLogic', () => {
 
     afterEach(() => logic?.unmount())
 
+    it('withholds health view counts when run metrics are unavailable', async () => {
+        useMocks({
+            get: { '/api/projects/:team_id/hog_flows/metrics/global/': () => [500, { detail: 'Unavailable' }] },
+        })
+        router.actions.push(urls.workflows())
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+        await workflowsListV2Logic.asyncActions.loadWorkflows()
+        await workflowsListV2Logic.asyncActions.loadMetrics()
+        expect(logic.values.viewCounts['needs-attention']).toBeUndefined()
+    })
+
     it('opens a shared view from a view-only link after its saved state loads', async () => {
         router.actions.push(urls.workflows(), { view: VIEW_ID })
         logic = workflowsSavedViewsLogic()

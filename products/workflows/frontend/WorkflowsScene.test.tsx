@@ -52,6 +52,23 @@ describe('WorkflowsScene', () => {
 
     afterEach(() => cleanup())
 
+    it('offers a metrics retry instead of an empty health result when metrics fail', async () => {
+        useMocks({
+            get: { '/api/projects/:team_id/hog_flows/metrics/global/': () => [500, { detail: 'Unavailable' }] },
+        })
+        featureFlagLogic.actions.setFeatureFlags([], { [FEATURE_FLAGS.WORKFLOWS_LIST_V2]: true })
+        router.actions.push(urls.workflows(), { q: 'health:failing' })
+        render(
+            <Provider>
+                <WorkflowsScene />
+            </Provider>
+        )
+        await waitFor(() =>
+            expect(document.querySelector('[data-attr="workflows-list-v2-metrics-retry"]')).not.toBeNull()
+        )
+        expect(document.body).not.toHaveTextContent('No workflows match these filters')
+    })
+
     it('keeps guided automation setup on an empty automation view', async () => {
         workflows = FIXTURE_WORKFLOWS.filter((workflow) => workflow.type === 'messaging')
         featureFlagLogic.actions.setFeatureFlags([], {
