@@ -579,15 +579,19 @@ describe('workflowsSavedViewsLogic', () => {
 
     it('preserves the baseline query when loading the saved-view API fails', async () => {
         useMocks({ get: { '/api/projects/:team_id/workflow_views/': () => [500, { detail: 'Unavailable' }] } })
-        router.actions.push(urls.workflows(), { q: 'status:draft', text: 'renewal' })
+        router.actions.push(urls.workflows(), { view: VIEW_ID, q: 'status:draft', text: 'renewal' })
         logic = workflowsSavedViewsLogic()
         logic.mount()
         await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
         expect(logic.values.available).toBe(false)
+        expect(logic.values.savedViewsLoadFailed).toBe(true)
         expect(workflowsListV2Logic.values.value).toEqual({
             filters: [{ facet: 'status', value: 'draft', negated: false }],
             text: 'renewal',
         })
+        useMocks({ get: { '/api/projects/:team_id/workflow_views/': () => [200, paginated([savedView])] } })
+        await logic.asyncActions.loadSavedViews()
+        expect(logic.values.savedViewsLoadFailed).toBe(false)
     })
 
     it('lets a viewer select shared views but prevents all shared writes', async () => {
