@@ -1,5 +1,7 @@
 import { useActions, useValues } from 'kea'
 
+import { LemonBanner, LemonButton } from '@posthog/lemon-ui'
+
 import { openWorkflowSavedViewDialog } from './openWorkflowSavedViewDialog'
 import { WorkflowSavedViewActions } from './WorkflowSavedViewActions'
 import { WorkflowSavedViewTabsRow } from './WorkflowSavedViewTabsRow'
@@ -18,8 +20,22 @@ export function WorkflowSavedViewTabs(): JSX.Element | null {
         saving,
         sharedSaveDisabledReason,
         writeDisabledReason,
+        savedViewsLoadFailed,
+        savedViewsLoading,
     } = useValues(workflowsSavedViewsLogic)
-    const { applyView, resetView, updateActiveView, deleteView } = useActions(workflowsSavedViewsLogic)
+    const { applyView, resetView, updateActiveView, deleteView, loadSavedViews } = useActions(workflowsSavedViewsLogic)
+    if (savedViewsLoadFailed) {
+        return (
+            <LemonBanner type="warning" className="mb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>Couldn't load saved views. Saved filters haven't been applied.</span>
+                    <LemonButton type="secondary" size="small" loading={savedViewsLoading} onClick={loadSavedViews}>
+                        Retry
+                    </LemonButton>
+                </div>
+            </LemonBanner>
+        )
+    }
     if (!available) {
         return null
     }

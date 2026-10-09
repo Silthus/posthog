@@ -52,14 +52,29 @@ describe('WorkflowsScene', () => {
 
     afterEach(() => cleanup())
 
+    it('keeps guided automation setup on an empty automation view', async () => {
+        workflows = FIXTURE_WORKFLOWS.filter((workflow) => workflow.type === 'messaging')
+        featureFlagLogic.actions.setFeatureFlags([], {
+            [FEATURE_FLAGS.WORKFLOWS_LIST_V2]: true,
+            [FEATURE_FLAGS.WORKFLOWS_GUIDED_ONBOARDING]: true,
+        })
+        router.actions.push(urls.workflows(), { q: 'type:automation' })
+        render(
+            <Provider>
+                <WorkflowsScene />
+            </Provider>
+        )
+        await waitFor(() =>
+            expect(document.querySelector('[data-attr="workflows-automation-empty-state-guided-setup"]')).not.toBeNull()
+        )
+    })
+
     it.each([false, true])(
-        'filters the list and writes pills to the URL with grouped navigation %s',
-        async (groupedNavigation) => {
+        'filters the list and writes pills to the URL with guided onboarding %s',
+        async (guidedOnboarding) => {
             featureFlagLogic.actions.setFeatureFlags([], {
                 [FEATURE_FLAGS.WORKFLOWS_LIST_V2]: true,
-                [FEATURE_FLAGS.WORKFLOWS_NEW_NAVIGATION]: groupedNavigation,
-                [FEATURE_FLAGS.WORKFLOWS_GUIDED_ONBOARDING]: groupedNavigation,
-                [FEATURE_FLAGS.WORKFLOWS_ONBOARDING_WIZARD]: groupedNavigation,
+                [FEATURE_FLAGS.WORKFLOWS_GUIDED_ONBOARDING]: guidedOnboarding,
             })
             const user = userEvent.setup()
             render(
