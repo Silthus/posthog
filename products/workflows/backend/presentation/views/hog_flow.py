@@ -3965,6 +3965,20 @@ class HogFlowListSummarySerializer(HogFlowSummarySerializer):
 
 
 LIST_QUERY_PARAMETERS: Final[list[OpenApiParameter]] = [
+    OpenApiParameter("id", OpenApiTypes.UUID),
+    OpenApiParameter("created_at", OpenApiTypes.DATETIME),
+    OpenApiParameter("updated_at", OpenApiTypes.DATETIME),
+    OpenApiParameter(
+        "status",
+        OpenApiTypes.STR,
+        enum=sorted(HogFlowState.values),
+        description="\n".join(f"* `{value}` - {label}" for value, label in HogFlowState.choices),
+    ),
+    OpenApiParameter(
+        "optimization_enabled",
+        OpenApiTypes.BOOL,
+        description="Only workflows someone turned suggestions on for.",
+    ),
     OpenApiParameter(
         "search",
         OpenApiTypes.STR,

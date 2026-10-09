@@ -310,7 +310,7 @@ MCP requests (`x-posthog-client: mcp`) get `HogFlowSummarySerializer` instead, w
 It takes the same filters and search as the list. Keep these in mind when you change it:
 
 - **It sorts on `-created_at, -id`.** A save during the load changes `updated_at`, so sorting on it moves rows between pages.
-- **It applies the access-level filter itself.** `_filter_queryset_by_access_level` in the routing mixin only runs for `list`.
+- **It uses the list facade for access checks.** The routing mixin only filters `list`; the facade filters both list and summary pages.
 - **Only this path is gzipped.** The full list has step config next to the `search` input that its `next` link reflects, which is the shape `ScopedGZipMiddleware` warns about.
 
 ## Metrics and version attribution
