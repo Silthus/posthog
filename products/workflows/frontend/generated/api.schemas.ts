@@ -2090,6 +2090,11 @@ export interface HogFlowListSummaryApi {
     /** @nullable */
     readonly name: string | null
     readonly description: string
+    /**
+     * Tags attached to the workflow.
+     * @items.maxLength 255
+     */
+    tags?: string[]
     readonly version: number
     readonly status: HogFlowStateEnumApi
     readonly origin_product: HogFlowOriginProductEnumApi | null

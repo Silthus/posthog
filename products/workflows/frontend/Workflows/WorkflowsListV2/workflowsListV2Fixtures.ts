@@ -28,6 +28,7 @@ export function buildWorkflowRow(
         name: `Workflow ${overrides.id}`,
         description: '',
         version: 1,
+        tags: [],
         status: 'draft',
         type: 'automation',
         origin_product: null,
