@@ -1,12 +1,14 @@
 """The email template library: saved templates a workflow email step can start from."""
 
 from collections.abc import Callable, Sequence
+from dataclasses import field
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 
+from posthog.api.tagged_item import current_tag_names
 from posthog.dataclasses import frozen
 
 from products.messaging.backend.models.message_template import MessageTemplate
@@ -34,6 +36,7 @@ class MessageTemplateRow:
     type: str
     message_category_id: UUID | None
     deleted: bool
+    tags: list[str] = field(default_factory=list)
 
 
 def _to_contract(row: MessageTemplate) -> MessageTemplateRow:
@@ -48,6 +51,7 @@ def _to_contract(row: MessageTemplate) -> MessageTemplateRow:
         type=row.type,
         message_category_id=row.message_category_id,
         deleted=row.deleted,
+        tags=sorted(current_tag_names(row)),
     )
 
 
@@ -93,3 +97,9 @@ def edit_template_content(
     `edit` gets a copy of the stored content. An exception from it rolls the change back.
     """
     return _to_contract(templates_service.edit_content_locked(team_id, template_id, edit))
+
+
+def bulk_update_template_tags(
+    team_id: int, template_ids: list[UUID], tag_action: str, tags: list[str]
+) -> list[dict[str, Any]]:
+    return templates_service.bulk_update_template_tags(team_id, template_ids, tag_action, tags)

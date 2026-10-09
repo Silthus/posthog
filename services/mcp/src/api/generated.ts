@@ -54194,6 +54194,11 @@ export namespace Schemas {
       name?: string | null;
       /** Optional description. */
       description?: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version: number;
       /** draft (no execution), active (live), archived (disabled).
        *
@@ -54408,6 +54413,11 @@ export namespace Schemas {
       /** @nullable */
       readonly name: string | null;
       readonly description: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version: number;
       readonly status: HogFlowStateEnum;
       readonly origin_product: HogFlowOriginProductEnum | null;
@@ -54712,6 +54722,11 @@ export namespace Schemas {
       name?: string | null;
       /** Optional description. */
       description?: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version: number;
       /** draft (no execution), active (live), archived (disabled).
        *
@@ -65635,6 +65650,11 @@ export namespace Schemas {
     }
 
     export interface MessageTemplate {
+      /**
+         * Tags attached to the email template.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly id: string;
       /**
          * Human-readable template name shown in the library.
@@ -80038,6 +80058,11 @@ export namespace Schemas {
       name?: string | null;
       /** Optional description. */
       description?: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version?: number;
       /** draft (no execution), active (live), archived (disabled).
        *
@@ -81058,6 +81083,11 @@ export namespace Schemas {
     }
 
     export interface PatchedMessageTemplate {
+      /**
+         * Tags attached to the email template.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly id?: string;
       /**
          * Human-readable template name shown in the library.

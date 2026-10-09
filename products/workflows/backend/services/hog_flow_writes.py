@@ -7,6 +7,8 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
+from posthog.api.tagged_item import cleanup_orphan_tags, set_tags_on_object
+
 from products.workflows.backend.facade.contracts import (
     WorkflowEditState,
     WorkflowHasNoDraft,
@@ -44,7 +46,10 @@ def create_workflow(*, team_id: int, user_id: Optional[int], validated_data: dic
         data = dict(validated_data)
         if "actions" in data:
             data["encrypted_inputs"] = strip_secrets_from_content(data, template_cache={})
+        tags = data.pop("tags", None)
         instance = HogFlow.objects.create(team_id=team_id, created_by_id=user_id, **data)
+        if tags is not None:
+            set_tags_on_object(tags, instance)
         HogFlowRevision.objects.create(
             team_id=team_id,
             hog_flow=instance,
@@ -105,11 +110,15 @@ def _save_live(instance: HogFlow, validated_data: dict, **overrides: object) -> 
     # encrypted_inputs when the write carries actions (a metadata-only update must not touch stored
     # secrets), then save the whole row.
     data = {**validated_data, **overrides}
+    tags = data.pop("tags", None)
     if "actions" in data:
         data["encrypted_inputs"] = strip_secrets_from_content(data, template_cache={})
     for attr, value in data.items():
         setattr(instance, attr, value)
     instance.save()
+    if tags is not None:
+        set_tags_on_object(tags, instance)
+        cleanup_orphan_tags(instance.team_id)
 
 
 def save_validated_workflow(*, team_id: int, hog_flow_id: UUID, validated_data: dict) -> None:
