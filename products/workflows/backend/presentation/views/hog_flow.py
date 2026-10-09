@@ -3958,9 +3958,15 @@ class HogFlowListSummarySerializer(HogFlowSummarySerializer):
             "has an email, SMS or push step, else `automation`. The same rules as the `type` filter."
         ),
     )
+    pending_suggestions = serializers.IntegerField(
+        read_only=True, allow_null=True, help_text="How many suggested changes are waiting on this workflow."
+    )
+    suggestions_enabled = serializers.BooleanField(
+        read_only=True, allow_null=True, help_text="Whether someone turned suggestions on for this workflow."
+    )
 
     class Meta(HogFlowSummarySerializer.Meta):
-        fields = [*HogFlowSummarySerializer.Meta.fields, "type"]
+        fields = [*HogFlowSummarySerializer.Meta.fields, "type", "pending_suggestions", "suggestions_enabled"]
         read_only_fields = fields
 
 
@@ -4399,7 +4405,7 @@ class HogFlowViewSet(
                 # Service credentials are synthetic users that UserAccessControl cannot evaluate.
                 user_access_control=None if is_service_auth(request) else self.user_access_control,
                 # Half implemented: admins may want to list workflows they cannot open.
-                include_all_if_admin=request.GET.get("admin_include_all") == "true",
+                include_all_if_admin=self.action == "list" and request.GET.get("admin_include_all") == "true",
                 offset=offset,
                 limit=limit,
             )
