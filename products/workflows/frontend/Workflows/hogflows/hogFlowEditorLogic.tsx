@@ -30,14 +30,8 @@ import { optOutCategoriesLogic } from '../../OptOuts/optOutCategoriesLogic'
 import type { MessageCategory } from '../../OptOuts/optOutCategoriesLogic'
 import { EXIT_NODE_ID, TRIGGER_NODE_ID, WorkflowLogicProps, workflowLogic } from '../workflowLogic'
 import { getFormattedNodes } from './react_flow_utils/autolayout'
-import {
-    BOTTOM_HANDLE_POSITION,
-    MAX_ZOOM,
-    MIN_ZOOM,
-    NODE_HEIGHT,
-    NODE_WIDTH,
-    TOP_HANDLE_POSITION,
-} from './react_flow_utils/constants'
+import { MAX_ZOOM, MIN_ZOOM, NODE_HEIGHT, NODE_WIDTH } from './react_flow_utils/constants'
+import { bottomHandlePosition, getNodeSize, topHandlePosition } from './react_flow_utils/nodeSize'
 import { getSmartStepPath } from './react_flow_utils/SmartEdge'
 import { getHogFlowStep } from './steps/HogFlowSteps'
 import { CyclotronInputType, StepViewNodeHandle } from './steps/types'
@@ -2549,6 +2543,9 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                     })
 
                     const handlesByIdByNodeId: Record<string, Record<string, StepViewNodeHandle>> = {}
+                    const nodeSizeById = Object.fromEntries(
+                        hogFlow.actions.map((action) => [action.id, getNodeSize(action)])
+                    )
 
                     edges.forEach((edge) => {
                         if (!handlesByIdByNodeId[edge.source]) {
@@ -2562,14 +2559,14 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                             id: edge.sourceHandle,
                             type: 'source',
                             position: Position.Bottom,
-                            ...BOTTOM_HANDLE_POSITION,
+                            ...bottomHandlePosition(nodeSizeById[edge.source]),
                         }
 
                         handlesByIdByNodeId[edge.target][edge.targetHandle ?? ''] = {
                             id: edge.targetHandle,
                             type: 'target',
                             position: Position.Top,
-                            ...TOP_HANDLE_POSITION,
+                            ...topHandlePosition(nodeSizeById[edge.target]),
                         }
                     })
 
@@ -2723,7 +2720,7 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                                 id: branchJoinDropzoneTargetId,
                                 type: 'dropzone',
                                 position: {
-                                    x: targetNode.position.x,
+                                    x: targetNode.position.x + ((targetNode.width ?? NODE_WIDTH) - NODE_WIDTH) / 2,
                                     y: targetNode.position.y - NODE_HEIGHT,
                                 },
                                 data: {
