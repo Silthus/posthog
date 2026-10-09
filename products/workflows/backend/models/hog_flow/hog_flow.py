@@ -219,7 +219,11 @@ class HogFlow(FileSystemSyncMixin, UUIDTModel):  # nosemgrep: no-new-uuidt-model
     @classmethod
     def get_file_system_unfiled(cls, team: Team, surface: str = DEFAULT_SURFACE) -> QuerySet["HogFlow"]:
         return cls._filter_unfiled_queryset(
-            cls.objects.filter(team=team), team, type="hog_flow", ref_field="id", surface=surface
+            cls.objects.filter(team=team, origin_product__isnull=True),
+            team,
+            type="hog_flow",
+            ref_field="id",
+            surface=surface,
         )
 
     def get_file_system_representation(self) -> FileSystemRepresentation:
@@ -230,6 +234,7 @@ class HogFlow(FileSystemSyncMixin, UUIDTModel):  # nosemgrep: no-new-uuidt-model
             name=self.name or "Untitled",
             href=f"/workflows/{self.id}/workflow",
             meta={"created_at": str(self.created_at), "created_by": self.created_by_id},
+            should_delete=bool(self.origin_product),
         )
 
 

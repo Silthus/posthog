@@ -8,6 +8,8 @@ from uuid import UUID
 
 from django.db import models, transaction
 
+from posthog.event_usage import report_user_action
+from posthog.exceptions_capture import capture_exception
 from posthog.helpers.impersonation import is_impersonated
 from posthog.models.activity_logging.activity_log import Detail, changes_between, log_activity
 
@@ -21,6 +23,26 @@ if TYPE_CHECKING:
     from posthog.api.file_system.deletion import DeletionContext
 
 _SCOPE: Final = "HogFlow"
+
+
+def report_file_system_workflow_deletion(context: "DeletionContext", instance: HogFlow) -> None:
+    properties = {
+        "workflow_id": context.entry.ref,
+        "workflow_name": instance.name,
+        "team_id": str(instance.team_id),
+        "organization_id": str(instance.team.organization_id),
+        "via": "file_system",
+    }
+
+    def report_deletion() -> None:
+        try:
+            report_user_action(
+                context.user, "hog_flow_deleted", properties, team=instance.team, request=context.request
+            )
+        except Exception as error:
+            capture_exception(error)
+
+    transaction.on_commit(report_deletion)
 
 
 def log_file_system_workflow_deletion(context: "DeletionContext", instance: HogFlow) -> None:
