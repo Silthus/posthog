@@ -1,3 +1,6 @@
+import { parentPath } from '~/layout/panel-layout/ProjectTree/utils'
+import { FileSystemEntry } from '~/queries/schema/schema-general'
+
 import type { FacetDefinition } from './FacetSearchBar/facetQuery'
 import { HEALTH_TAGS, STATUS_LABELS, TRIGGER_LABELS, TYPE_LABELS } from './workflowListLabels'
 import { WorkflowListRow } from './workflowListRows'
@@ -21,7 +24,10 @@ export function matchesWorkflowListText(row: WorkflowListRow, text: string): boo
 }
 
 /** `rows` supplies the names shown for creator uuids. */
-export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinition<WorkflowListRow>[] {
+export function buildWorkflowListFacets(
+    rows: WorkflowListRow[],
+    itemsByRef: Record<string, FileSystemEntry> = {}
+): FacetDefinition<WorkflowListRow>[] {
     const creatorNames = new Map<string, string>()
     for (const { workflow } of rows) {
         if (workflow.created_by) {
@@ -30,6 +36,16 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
     }
 
     return [
+        {
+            key: 'in',
+            label: 'In folder',
+            description: 'Project folder',
+            caseSensitive: true,
+            getValues: (row) => {
+                const entry = itemsByRef[`hog_flow::${row.id}`]
+                return entry && !entry.shortcut ? [parentPath(entry.path)] : []
+            },
+        },
         {
             key: 'status',
             label: 'Status',

@@ -11,6 +11,7 @@ import api, { ApiError } from 'lib/api'
 import { CyclotronJobInputsValidation } from 'lib/components/CyclotronJob/CyclotronJobInputsValidation'
 import { tryShowMCPHint } from 'lib/components/MCPHint/mcpHintLogic'
 import { SetupTaskId, globalSetupLogic } from 'lib/components/ProductSetup'
+import { FEATURE_FLAGS } from 'lib/constants'
 import { dayjs } from 'lib/dayjs'
 import { lemonToast } from 'lib/lemon-ui/LemonToast'
 import { publicWebhooksHostOrigin } from 'lib/utils/apiHost'
@@ -3205,7 +3206,16 @@ export const workflowLogic = kea<workflowLogicType>([
                         updates = sanitizeWorkflow(updates, values.hogFunctionTemplatesById)
 
                         if (!props.id || props.id === 'new') {
-                            const result = await api.hogFlows.createHogFlow(updates)
+                            const folder =
+                                posthog.getFeatureFlag(FEATURE_FLAGS.WORKFLOWS_PROJECT_FILES) &&
+                                posthog.getFeatureFlag(FEATURE_FLAGS.WORKFLOWS_LIST_V2)
+                                    ? new URLSearchParams(router.values.location.search).get('_create_in_folder')
+                                    : null
+                            // nosemgrep: prefer-codegen-api-namespaced-workflows -- generated actions lack the editor's discriminated config types
+                            const result = await api.hogFlows.createHogFlow({
+                                ...updates,
+                                ...(typeof folder === 'string' ? { _create_in_folder: folder } : {}),
+                            })
 
                             if (props.templateId) {
                                 posthog.capture('hog_flow_created_from_template', {
