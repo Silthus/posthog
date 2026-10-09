@@ -3,7 +3,6 @@ import { useMemo } from 'react'
 
 import {
     LemonCheckbox,
-    LemonDivider,
     LemonInput,
     LemonSegmentedButton,
     LemonSelect,
@@ -25,8 +24,6 @@ import { ProfilePicture } from 'lib/lemon-ui/ProfilePicture'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { capitalizeFirstLetter } from 'lib/utils/strings'
 import { urls } from 'scenes/urls'
-
-import { AccessControlLevel, AccessControlResourceType } from '~/types'
 
 import { AutomationEmptyState } from '../setupGuide/AutomationEmptyState'
 import { AutomationSuggestionBanner } from '../setupGuide/AutomationSuggestionBanner'
