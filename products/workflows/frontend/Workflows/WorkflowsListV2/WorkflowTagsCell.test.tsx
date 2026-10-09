@@ -2,6 +2,8 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expectLogic } from 'kea-test-utils'
 
+import { ObjectTags } from 'lib/components/ObjectTags/ObjectTags'
+
 import { useMocks } from '~/mocks/jest'
 import { initKeaTests } from '~/test/init'
 
@@ -17,6 +19,18 @@ import { WorkflowTagsCell } from './WorkflowTagsCell'
 
 describe('inline workflow tags', () => {
     afterEach(cleanup)
+
+    it('keeps the shared tag editor focused while tag suggestions load', async () => {
+        initKeaTests()
+        const onChange = jest.fn()
+        const { rerender } = render(<ObjectTags tags={[]} saving={false} onChange={onChange} />)
+        await userEvent.setup().click(screen.getByText('Add tag'))
+        const input = document.activeElement
+        expect(input?.tagName).toBe('INPUT')
+        rerender(<ObjectTags tags={[]} saving onChange={onChange} />)
+        expect((input as HTMLInputElement).disabled).toBe(false)
+        expect(document.activeElement).toBe(input)
+    })
 
     it('lists an email template alongside workflows and saves its tags', async () => {
         const template = {
@@ -91,7 +105,7 @@ describe('inline workflow tags', () => {
             expect(document.activeElement).toBe(screen.getByText('Add tag').closest('button'))
             await user.keyboard('{Enter}')
             await user.keyboard('onboarding')
-            await user.click(await screen.findByText('onboarding'))
+            await user.keyboard('{Enter}')
             await waitFor(() => expect(savedTags).toEqual(['onboarding']))
             logic.actions.setValue({ filters: [{ facet: 'tag', value: 'onboarding', negated: false }], text: '' })
             await waitFor(() => expect(logic.values.filteredRows.map((row) => row.id)).toEqual(['wf-welcome']))
