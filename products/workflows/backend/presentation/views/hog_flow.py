@@ -3958,11 +3958,12 @@ class HogFlowListSummarySerializer(HogFlowSummarySerializer):
             "has an email, SMS or push step, else `automation`. The same rules as the `type` filter."
         ),
     )
-    pending_suggestions = serializers.IntegerField(
-        read_only=True, allow_null=True, help_text="How many suggested changes are waiting on this workflow."
+
+    pending_suggestions = serializers.SerializerMethodField(
+        help_text="How many suggested changes are waiting on this workflow."
     )
-    suggestions_enabled = serializers.BooleanField(
-        read_only=True, allow_null=True, help_text="Whether someone turned suggestions on for this workflow."
+    suggestions_enabled = serializers.SerializerMethodField(
+        help_text="Whether someone turned suggestions on for this workflow."
     )
 
     class Meta(HogFlowSummarySerializer.Meta):
