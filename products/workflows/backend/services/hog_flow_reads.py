@@ -98,13 +98,7 @@ def get_team_workflow_edit_state(
     """The team's workflow for an edit made outside a request, read once for the archived and access checks.
     An archived workflow raises WorkflowArchived before the access check, so every caller gets the same answer."""
     try:
-        flow = (
-            HogFlow.objects.select_related("created_by")
-            .prefetch_related(
-                Prefetch("tagged_items", queryset=TaggedItem.objects.select_related("tag"), to_attr="prefetched_tags")
-            )
-            .get(team_id=team_id, pk=workflow_id)
-        )
+        flow = HogFlow.objects.select_related("created_by").get(team_id=team_id, pk=workflow_id)
     except (HogFlow.DoesNotExist, ValidationError, ValueError):
         raise WorkflowNotFound()
     if flow.status == HogFlow.State.ARCHIVED:

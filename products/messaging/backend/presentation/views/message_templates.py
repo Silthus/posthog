@@ -281,6 +281,8 @@ class MessageTemplatesViewSet(
         level = self.user_access_control.access_level_for_resource("hog_flow")
         editable = level is not None and access_level_satisfied_for_resource("hog_flow", level.access_level, "editor")
         updated = bulk_update_template_tags(self.team_id, data["ids"], data["action"], data["tags"]) if editable else []
+        for row in updated:
+            self._emit_resource_edited(get_template(self.team_id, row["id"]))
         found = {row["id"] for row in updated}
         return Response(
             BulkUpdateTagsUUIDResponseSerializer(

@@ -1,20 +1,13 @@
-from typing import TYPE_CHECKING
-
 from django.db import models
 
 from posthog.models.tagged_items_relation import Taggable
 from posthog.models.utils import UUIDTModel
-
-if TYPE_CHECKING:
-    from posthog.models.tagged_item import TaggedItem
 
 
 class MessageTemplate(Taggable, UUIDTModel):  # nosemgrep: no-new-uuidt-models — preserves the existing primary key
     """
     A model for storing message templates used for email and eventually other messaging channels.
     """
-
-    prefetched_tags: list["TaggedItem"]
 
     team = models.ForeignKey("posthog.Team", on_delete=models.CASCADE, related_name="+")
     name = models.CharField(max_length=400)
