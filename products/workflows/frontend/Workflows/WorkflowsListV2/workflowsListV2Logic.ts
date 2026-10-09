@@ -161,6 +161,8 @@ export interface workflowsListV2LogicValues {
     shownColumns: OptionalColumn[]
     templateTypeFilter: WorkflowTemplateTypeFilter
     isUnfilteredAutomationView: boolean
+    hasHealthFilter: boolean
+    metricsLoaded: boolean
     value: FacetSearchValue
     visibleColumns: OptionalColumn[]
     workflows: HogFlowListSummaryApi[] | null
@@ -284,6 +286,8 @@ export interface workflowsListV2LogicMeta {
     __keaTypeGenInternalSelectorTypes: {
         templateTypeFilter: (value: FacetSearchValue) => WorkflowTemplateTypeFilter
         isUnfilteredAutomationView: (value: FacetSearchValue) => boolean
+        hasHealthFilter: (value: FacetSearchValue) => boolean
+        metricsLoaded: (metrics: WorkflowStatsRowApi[] | null) => boolean
         rows: (workflows: HogFlowListSummaryApi[] | null, metrics: WorkflowStatsRowApi[] | null) => WorkflowListRow[]
         listLoaded: (workflows: HogFlowListSummaryApi[] | null) => boolean
         facets: (rows: WorkflowListRow[], user: UserType | null) => FacetDefinition<WorkflowListRow>[]
@@ -448,6 +452,11 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
         },
     }),
     selectors({
+        hasHealthFilter: [
+            (s) => [s.value],
+            (value: FacetSearchValue): boolean => value.filters.some((filter) => filter.facet === 'health'),
+        ],
+        metricsLoaded: [(s) => [s.metrics], (metrics: WorkflowStatsRowApi[] | null): boolean => metrics !== null],
         isUnfilteredAutomationView: [
             (s) => [s.value],
             (value: FacetSearchValue): boolean =>
