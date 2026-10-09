@@ -242,12 +242,14 @@ class TestHogFlowSearchAPI(APIBaseTest):
 
         assert flow.name == "Changed name"
         assert flow.description == "Keep this description"
+        search_text = flow.search_text
         if enabled:
-            assert "Changed name" in flow.search_text
-            assert "Keep this description" in flow.search_text
-            assert "Original name" not in flow.search_text
+            assert search_text is not None
+            assert "Changed name" in search_text
+            assert "Keep this description" in search_text
+            assert "Original name" not in search_text
         else:
-            assert flow.search_text is None
+            assert search_text is None
 
     def _search(self, query: str, **params: str | int) -> "_MonkeyPatchedResponse":
         query_params: dict[str, str | int] = {"q": query, **params}
