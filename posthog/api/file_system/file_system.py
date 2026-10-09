@@ -9,7 +9,7 @@ from uuid import UUID
 
 from django.apps import apps
 from django.db import transaction
-from django.db.models import Case, CharField, Exists, F, Func, IntegerField, Q, QuerySet, Value, When
+from django.db.models import Case, CharField, Exists, F, Func, IntegerField, OuterRef, Q, QuerySet, Value, When
 from django.db.models.functions import Concat, Lower
 
 from drf_spectacular.utils import extend_schema
@@ -36,7 +36,11 @@ from posthog.api.shared import UserBasicSerializer
 from posthog.api.utils import action
 from posthog.decorators import disallow_if_impersonated
 from posthog.exceptions import Conflict
-from posthog.models.file_system.constants import RETIRED_FILE_SYSTEM_TYPES
+from posthog.models.file_system.constants import (
+    RETIRED_FILE_SYSTEM_TYPES,
+    WORKFLOW_FILE_SYSTEM_TYPES,
+    workflow_project_files_enabled,
+)
 from posthog.models.file_system.file_system import (
     DEFAULT_SURFACE,
     FileSystem,
@@ -497,6 +501,28 @@ class FileSystemViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
         queryset = queryset.filter(Q(**self.parent_query_kwargs) | ~Q(type__startswith="hog_function/"))
         return queryset
 
+    @cached_property
+    def _workflow_files_enabled(self) -> bool:
+        return workflow_project_files_enabled(self.team, cast(User, self.request.user))
+
+    def _visible_files(self, queryset: QuerySet) -> QuerySet:
+        if self._workflow_files_enabled:
+            return queryset
+        other_files = (
+            self._scope_by_project(FileSystem.objects.all())
+            .filter(path__startswith=Concat(OuterRef("path"), Value("/")))
+            .exclude(type__in=WORKFLOW_FILE_SYSTEM_TYPES)
+        )
+        return (
+            queryset.exclude(type__in=WORKFLOW_FILE_SYSTEM_TYPES)
+            .alias(_has_other_files=Exists(other_files))
+            .exclude(
+                type="folder",
+                path__in=["Unfiled/Workflows", "Unfiled/Email templates"],
+                _has_other_files=False,
+            )
+        )
+
     def _filter_queryset_by_parents_lookups(self, queryset):
         return self._scope_by_project(queryset)
 
@@ -504,6 +530,7 @@ class FileSystemViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
         queryset = self._scope_by_project_and_environment(queryset)
         if self.action in ("list", "retrieve"):
             queryset = queryset.exclude(type__in=RETIRED_FILE_SYSTEM_TYPES)
+            queryset = self._visible_files(queryset)
 
         depth_param = self.request.query_params.get("depth")
         parent_param = self.request.query_params.get("parent")
@@ -713,12 +740,15 @@ class FileSystemViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
         not_type_param = request.query_params.get("not_type")
         # Drop retired types before the view-log limit, or their views take slots that hydration then empties.
         exclude_types = [*RETIRED_FILE_SYSTEM_TYPES, *([not_type_param] if not_type_param else [])]
+        if not self._workflow_files_enabled:
+            exclude_types.extend(WORKFLOW_FILE_SYSTEM_TYPES)
         search_param = request.query_params.get("search")
 
         base_queryset = FileSystem.objects.filter(surface_q(self.file_system_surface), team_id=self.team.id).exclude(
             type__in=RETIRED_FILE_SYSTEM_TYPES
         )
         base_queryset = self._filter_by_access_control(base_queryset)
+        base_queryset = self._visible_files(base_queryset)
         if search_param:
             base_queryset = self._apply_search_to_queryset(
                 base_queryset, search_param, basename_only=str_to_bool(request.query_params.get("search_name_only"))
@@ -1308,7 +1338,7 @@ class FileSystemViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
         """
 
         # TODO: this needs some concurrency controls or a unique index
-        scoped_files = self._scope_by_project_and_environment(FileSystem.objects.all())
+        scoped_files = self._visible_files(self._scope_by_project_and_environment(FileSystem.objects.all()))
         existing_paths = set(scoped_files.values_list("path", flat=True))
 
         folders_to_create = []

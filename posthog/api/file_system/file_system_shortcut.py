@@ -13,7 +13,13 @@ from rest_framework.response import Response
 from posthog.api.file_system.access_levels import FileSystemAccessLevelSerializerMixin
 from posthog.api.routing import TeamAndOrgViewSetMixin
 from posthog.models import User
-from posthog.models.file_system.constants import DEFAULT_SURFACE, RETIRED_FILE_SYSTEM_TYPES, surface_q
+from posthog.models.file_system.constants import (
+    DEFAULT_SURFACE,
+    RETIRED_FILE_SYSTEM_TYPES,
+    WORKFLOW_FILE_SYSTEM_TYPES,
+    surface_q,
+    workflow_project_files_enabled,
+)
 from posthog.models.file_system.file_system_shortcut import FileSystemShortcut, lock_user_shortcuts
 
 
@@ -167,6 +173,8 @@ class FileSystemShortcutViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
         # Destroy keeps retired rows, so that a user can still remove a shortcut that no other action returns.
         if self.action != "destroy":
             queryset = queryset.exclude(type__in=RETIRED_FILE_SYSTEM_TYPES)
+            if not workflow_project_files_enabled(self.team, cast(User, self.request.user)):
+                queryset = queryset.exclude(type__in=WORKFLOW_FILE_SYSTEM_TYPES)
         ordering_param = self.request.GET.get("ordering", "")
         if ordering_param == "-created_at":
             return queryset.order_by("-created_at")
