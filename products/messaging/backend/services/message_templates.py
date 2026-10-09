@@ -8,7 +8,7 @@ from django.db.models import Prefetch
 from django.db.models.functions import Cast
 from django.utils import timezone
 
-from posthog.api.tagged_item import apply_bulk_tag_changes, cleanup_orphan_tags, set_tags_on_object
+from posthog.api.tagged_item import apply_bulk_tag_changes, cleanup_orphan_tags, current_tag_names, set_tags_on_object
 from posthog.models.tagged_item import TaggedItem
 
 from products.messaging.backend.models import MessageCategory, MessageTemplate
@@ -120,6 +120,11 @@ def bulk_update_template_tags(
 ) -> list[dict[str, Any]]:
     with transaction.atomic():
         templates = list(team_templates(team_id).filter(id__in=template_ids).order_by("pk").select_for_update())
+        previous_tags = {template.id: current_tag_names(template) for template in templates}
         updated = apply_bulk_tag_changes(templates, tag_action, tags)
-        team_templates(team_id).filter(id__in=[row["id"] for row in updated]).update(updated_at=timezone.now())
+        for row in updated:
+            row["changed"] = set(row["tags"]) != previous_tags[row["id"]]
+        team_templates(team_id).filter(id__in=[row["id"] for row in updated if row["changed"]]).update(
+            updated_at=timezone.now()
+        )
     return updated
