@@ -74,6 +74,7 @@ from posthog.api.tagged_item import (
     BulkUpdateTagsUUIDRequestSerializer,
     BulkUpdateTagsUUIDResponseSerializer,
     TaggedItemViewSetMixin,
+    current_tag_names,
 )
 from posthog.auth import InternalAPIAuthentication
 from posthog.cdp.filters import DATA_WAREHOUSE_SOURCES, compile_filters_expr
@@ -4370,21 +4371,26 @@ class HogFlowViewSet(
 
     @action(methods=["POST"], detail=False)
     def bulk_update_tags(self, request: Request, **kwargs: Any) -> Response:
+        serializer = self.bulk_update_tags_request_serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
         with transaction.atomic():
+            objects = self.prefetch_tagged_items_if_available(
+                self.get_queryset().filter(id__in=serializer.validated_data["ids"])
+            )
+            previous_tags = {obj.id: current_tag_names(obj) for obj in objects}
             response = super().bulk_update_tags(request, **kwargs)
             if response.status_code != status.HTTP_200_OK:
                 return response
-            updated_ids = [row["id"] for row in response.data["updated"]]
+            updated_ids = [
+                row["id"] for row in response.data["updated"] if set(row["tags"]) != previous_tags[row["id"]]
+            ]
             self.get_queryset().filter(id__in=updated_ids).update(updated_at=timezone.now())
-        for workflow_id in updated_ids:
-            self._emit_resource_edited(
-                get_workflow(
-                    team_id=self.team_id,
-                    workflow_id=workflow_id,
-                    user_access_control=self.user_access_control,
-                    required_level="editor",
+            for workflow_id in updated_ids:
+                self._emit_resource_edited(
+                    get_workflow(
+                        team_id=self.team_id, workflow_id=workflow_id, user_access_control=None, required_level=None
+                    )
                 )
-            )
         return response
 
     def _trigger_filter(self) -> Any:
