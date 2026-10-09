@@ -6,6 +6,7 @@ from uuid import UUID
 from django.db import models, transaction
 from django.db.models import Prefetch
 from django.db.models.functions import Cast
+from django.utils import timezone
 
 from posthog.api.tagged_item import apply_bulk_tag_changes, cleanup_orphan_tags, set_tags_on_object
 from posthog.models.tagged_item import TaggedItem
@@ -88,7 +89,7 @@ def create_template(team_id: int, created_by_id: int | None, fields: dict[str, A
     with transaction.atomic():
         template.save(force_insert=True)
         if "tags" in fields:
-            template.prefetched_tags = set_tags_on_object(fields["tags"], template)
+            template.prefetched_tags = set_tags_on_object(fields["tags"], template)  # type: ignore[attr-defined]
     return template
 
 
@@ -98,7 +99,7 @@ def update_template(team_id: int, template_id: UUID | str, fields: dict[str, Any
     with transaction.atomic():
         template.save()
         if "tags" in fields:
-            template.prefetched_tags = set_tags_on_object(fields["tags"], template)
+            template.prefetched_tags = set_tags_on_object(fields["tags"], template)  # type: ignore[attr-defined]
             cleanup_orphan_tags(team_id)
     return template
 
@@ -117,5 +118,8 @@ def edit_content_locked(
 def bulk_update_template_tags(
     team_id: int, template_ids: list[UUID], tag_action: str, tags: list[str]
 ) -> list[dict[str, Any]]:
-    templates = list(team_templates(team_id).filter(id__in=template_ids))
-    return apply_bulk_tag_changes(templates, tag_action, tags)
+    with transaction.atomic():
+        templates = list(team_templates(team_id).filter(id__in=template_ids).order_by("pk").select_for_update())
+        updated = apply_bulk_tag_changes(templates, tag_action, tags)
+        team_templates(team_id).filter(id__in=[row["id"] for row in updated]).update(updated_at=timezone.now())
+    return updated

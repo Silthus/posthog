@@ -16,6 +16,7 @@ from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.db import models, transaction
 from django.db.models import QuerySet
 from django.http import Http404, HttpResponse
+from django.utils import timezone
 
 import requests
 import structlog
@@ -4159,6 +4160,7 @@ class HogFlowViewSet(
     viewsets.ModelViewSet,
 ):
     bulk_update_tags_request_serializer_class = BulkUpdateTagsUUIDRequestSerializer
+    bulk_tag_activity_scope = "HogFlow"
     scope_object = "hog_flow"
     scope_object_read_actions = [
         "list",
@@ -4319,10 +4321,31 @@ class HogFlowViewSet(
         return context
 
     def safely_get_queryset(self, queryset: QuerySet) -> QuerySet:
+        if self.action == "bulk_update_tags":
+            queryset = queryset.order_by("pk").select_for_update()
         trigger = self._trigger_filter()
         if trigger:
             queryset = queryset.filter(trigger__contains=trigger)
         return queryset
+
+    @action(methods=["POST"], detail=False)
+    def bulk_update_tags(self, request: Request, **kwargs: Any) -> Response:
+        with transaction.atomic():
+            response = super().bulk_update_tags(request, **kwargs)
+            if response.status_code != status.HTTP_200_OK:
+                return response
+            updated_ids = [row["id"] for row in response.data["updated"]]
+            self.get_queryset().filter(id__in=updated_ids).update(updated_at=timezone.now())
+        for workflow_id in updated_ids:
+            self._emit_resource_edited(
+                get_workflow(
+                    team_id=self.team_id,
+                    workflow_id=workflow_id,
+                    user_access_control=self.user_access_control,
+                    required_level="editor",
+                )
+            )
+        return response
 
     def _trigger_filter(self) -> Any:
         if not self.request.GET.get("trigger"):
