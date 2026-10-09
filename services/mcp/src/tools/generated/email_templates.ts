@@ -10,7 +10,7 @@ import type { Context, ToolBase, ZodObjectAny } from '@/tools/types'
 
 const WorkflowsCreateEmailTemplateSchema = () => {
     const MessagingTemplatesCreateBody = orvalSchemas.MessagingTemplatesCreateBody()
-    return MessagingTemplatesCreateBody
+    return MessagingTemplatesCreateBody.omit({ _create_in_folder: true })
 }
 
 const workflowsCreateEmailTemplate = (): ToolBase<
@@ -161,7 +161,7 @@ const WorkflowsUpdateEmailTemplateSchema = () => {
     const MessagingTemplatesPartialUpdateBody = orvalSchemas.MessagingTemplatesPartialUpdateBody()
     const MessagingTemplatesPartialUpdateParams = orvalSchemas.MessagingTemplatesPartialUpdateParams()
     return MessagingTemplatesPartialUpdateParams.omit({ project_id: true }).extend(
-        MessagingTemplatesPartialUpdateBody.shape
+        MessagingTemplatesPartialUpdateBody.omit({ _create_in_folder: true }).shape
     )
 }
 
