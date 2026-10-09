@@ -2724,7 +2724,9 @@ class HogFlowSearchResultSerializer(serializers.ModelSerializer):
     # Metadata only, like HogFlowSummarySerializer, because action config can hold credential-like values. The
     # matched steps name the step and quote only the searchable text.
     created_by = UserBasicSerializer(read_only=True, allow_null=True)
-    user_access_level = serializers.CharField(read_only=True, allow_null=True)
+    user_access_level = serializers.CharField(
+        read_only=True, allow_null=True, help_text="The effective access level the user has for this object"
+    )
     matched_fields = serializers.SerializerMethodField(
         help_text="The workflow fields that matched: `name`, `description`, both or neither. Null with `output=names`."
     )
@@ -4719,10 +4721,6 @@ class HogFlowViewSet(
         )
         context = {**self.get_serializer_context(), "search_shape": shape}
         return self.get_paginated_response(HogFlowSearchResultSerializer(page.results, many=True, context=context).data)
-
-    @staticmethod
-    def _is_mcp_request(request: Request) -> bool:
-        return request.headers.get("x-posthog-client") == "mcp"
 
     @extend_schema(
         summary="List workflow summaries",

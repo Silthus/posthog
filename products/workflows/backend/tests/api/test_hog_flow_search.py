@@ -220,6 +220,16 @@ class TestHogFlowSearchAPI(APIBaseTest):
 
         assert self._search("welcome").status_code == status.HTTP_403_FORBIDDEN
 
+    def test_search_uses_edits_made_while_indexing_was_disabled(self) -> None:
+        flow = HogFlow.objects.create(team=self.team, name="Original title")
+        self.search_flag_mock.return_value = False
+        flow.name = "Replacement title"
+        flow.save(update_fields=["name"])
+        self.search_flag_mock.return_value = True
+
+        assert [row["id"] for row in self._search("Replacement").json()["results"]] == [str(flow.id)]
+        assert self._search("Original").json()["results"] == []
+
     @parameterized.expand([(False,), (True,)])
     def test_deferred_save_preserves_source_fields_with_search_off_or_on(self, enabled: bool) -> None:
         self.search_flag_mock.return_value = enabled

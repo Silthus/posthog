@@ -231,6 +231,9 @@ class HogFlow(UUIDTModel):
         if team_id is None and self.pk:
             team_id = type(self).objects.using(using).filter(pk=self.pk).values_list("team_id", flat=True).first()
         if team_id is None or not workflow_search_enabled(team_id):
+            self.search_text = None
+            if kwargs.get("update_fields"):
+                kwargs["update_fields"] = set(kwargs["update_fields"]) | {"search_text"}
             super().save(*args, **kwargs)
             return
         update_fields = None if kwargs.get("update_fields") is None else set(kwargs["update_fields"])
