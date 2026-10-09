@@ -250,6 +250,16 @@ class TestHogFlowAccessControl(ClickhouseTestMixin, APIBaseTest):
         self.client.force_login(self.user)
         self.assertEqual(self.client.get(self._detail_url()).status_code, status.HTTP_200_OK)
 
+    def test_summaries_keep_object_filtering_with_admin_include_all(self):
+        self.hog_flow.created_by = self.editor_user
+        self.hog_flow.save()
+        self._create_access_control(self.user, resource_id=str(self.hog_flow.id), access_level="none")
+        self.client.force_login(self.user)
+
+        summaries = self.client.get(f"{self._list_url()}/summaries", {"admin_include_all": "true"})
+        self.assertEqual(summaries.status_code, status.HTTP_200_OK)
+        self.assertEqual(summaries.json()["results"], [])
+
     def test_no_enforcement_without_access_control_feature(self):
         # Drop the entitlement — access control rows become inert and ordinary members regain access.
         self.organization.available_product_features = []

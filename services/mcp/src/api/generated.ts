@@ -54443,6 +54443,16 @@ export namespace Schemas {
        * * `loop` - Loop
        * * `broadcast` - Broadcast */
       readonly type: HogFlowTypeEnum;
+      /**
+         * How many suggested changes are waiting on this workflow.
+         * @nullable
+         */
+      readonly pending_suggestions: number | null;
+      /**
+         * Whether someone turned suggestions on for this workflow.
+         * @nullable
+         */
+      readonly suggestions_enabled: boolean | null;
     }
 
     /**

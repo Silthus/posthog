@@ -222,7 +222,10 @@ def list_workflows(
     template_cache: TemplateCache = {}
     return WorkflowPage(
         count=count,
-        results=[_to_workflow(flow, user_access_control, template_cache, with_schedules=False) for flow in flows],
+        results=[
+            _to_workflow(flow, user_access_control, template_cache, with_schedules=False, summaries=query.summaries)
+            for flow in flows
+        ],
     )
 
 
@@ -333,8 +336,11 @@ def _to_workflow(
     template_cache: TemplateCache,
     *,
     with_schedules: bool,
+    summaries: bool = False,
 ) -> Workflow:
-    masked: dict[str, object] = {"actions": flow.actions, "trigger": flow.trigger, "draft": flow.draft}
+    masked: dict[str, object] = {"trigger": flow.trigger}
+    if not summaries:
+        masked.update(actions=flow.actions, draft=flow.draft)
     mask_workflow_fields(
         masked,
         live_actions=flow.actions,
@@ -363,14 +369,14 @@ def _to_workflow(
         exit_condition=flow.exit_condition,
         email_sending_rate_limit=flow.email_sending_rate_limit,
         edges=flow.edges,
-        actions=cast("list[dict] | dict", masked["actions"]),
+        actions=cast("list[dict] | dict", masked.get("actions", [])),
         abort_action=flow.abort_action,
         variables=flow.variables,
         billable_action_types=flow.billable_action_types,
         schedules=tuple(list_schedules_oldest_first(team_id=flow.team_id, hog_flow_id=flow.id))
         if with_schedules
         else (),
-        draft=cast("dict | None", masked["draft"]),
+        draft=cast("dict | None", masked.get("draft")),
         draft_updated_at=flow.draft_updated_at,
         action_redirects=flow.action_redirects,
         email_sending_paused_at=flow.email_sending_paused_at,
