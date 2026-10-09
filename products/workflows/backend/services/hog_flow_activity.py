@@ -26,6 +26,9 @@ _SCOPE: Final = "HogFlow"
 
 
 def report_file_system_workflow_deletion(context: "DeletionContext", instance: HogFlow) -> None:
+    user = context.user
+    if user is None:
+        return
     properties = {
         "workflow_id": context.entry.ref,
         "workflow_name": instance.name,
@@ -36,9 +39,7 @@ def report_file_system_workflow_deletion(context: "DeletionContext", instance: H
 
     def report_deletion() -> None:
         try:
-            report_user_action(
-                context.user, "hog_flow_deleted", properties, team=instance.team, request=context.request
-            )
+            report_user_action(user, "hog_flow_deleted", properties, team=instance.team, request=context.request)
         except Exception as error:
             capture_exception(error)
 

@@ -1085,7 +1085,13 @@ class FileSystemViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
         moving_files = self._filter_by_access_control(
             self._visible_files(self._scope_by_project_and_environment(moving_files))
         ).filter(type__in=WORKFLOW_FILE_SYSTEM_TYPES, shortcut=False)
-        self._ensure_can_delete_objects(list(moving_files.values_list("type", "ref", "team_id")))
+        self._ensure_can_delete_objects(
+            [
+                (entry_type, ref, team_id)
+                for entry_type, ref, team_id in moving_files.values_list("type", "ref", "team_id")
+                if ref
+            ]
+        )
 
         self._assure_parent_folders(new_path, cast(User, request.user))
 
