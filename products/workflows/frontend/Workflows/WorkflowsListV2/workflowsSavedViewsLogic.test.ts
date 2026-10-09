@@ -56,6 +56,7 @@ describe('workflowsSavedViewsLogic', () => {
         writes = []
         useMocks({
             get: {
+                '/api/projects/:team_id/messaging_templates/': () => [200, paginated([])],
                 '/api/projects/:team_id/hog_flows/summaries/': ({ request }) => [
                     200,
                     paginated(new URL(request.url).searchParams.has('search') ? [] : FIXTURE_WORKFLOWS),

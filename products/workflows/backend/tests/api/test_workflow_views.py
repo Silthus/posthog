@@ -42,6 +42,20 @@ class TestWorkflowViewAPI(APIBaseTest):
         self.flags.start()
         self.addCleanup(self.flags.stop)
 
+    def test_saved_view_round_trips_tag_filters_for_workflows_and_email_templates(self) -> None:
+        state = {
+            "filters": [
+                {"facet": "tag", "value": "onboarding", "negated": False},
+                {"facet": "type", "value": "email-template", "negated": False},
+            ],
+            "text": "",
+            "columns": ["type"],
+        }
+        response = self.client.post(self.base_url, {"name": "Tagged emails", "state": state}, format="json")
+        assert response.status_code == 201, response.json()
+        reloaded = self.client.get(f"{self.base_url}{response.json()['id']}/")
+        assert reloaded.json()["state"] == state
+
     def _create_view(self) -> dict[str, Any]:
         response = self.client.post(
             self.base_url,

@@ -45,6 +45,7 @@ class WorkflowViewFacet(TextChoices):
     OWNER = "owner"
     HEALTH = "health"
     CREATED_BY = "created-by"
+    TAG = "tag"
 
 
 class WorkflowViewColumn(TextChoices):
