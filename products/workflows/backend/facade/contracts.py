@@ -490,6 +490,28 @@ class WorkflowPage:
 
 
 @frozen
+class WorkflowSearchMatch:
+    id: UUID
+    name: str | None
+    description: str
+    version: int
+    status: str
+    origin_product: str | None
+    created_at: datetime
+    created_by: "User | None"
+    updated_at: datetime
+    user_access_level: str | None
+    actions: list[dict[str, Any]] | dict[str, Any] | None = field(default=None, repr=False)
+    draft: dict[str, Any] | None = field(default=None, repr=False)
+
+
+@frozen
+class WorkflowSearchPage:
+    count: int
+    results: list[WorkflowSearchMatch]
+
+
+@frozen
 class WorkflowListFilterError:
     message: str
     code: str | None

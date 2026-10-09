@@ -88,3 +88,26 @@ class HogFlowType(LabeledStrEnum):
     AUTOMATION = "automation"
     LOOP = "loop"
     BROADCAST = "broadcast"
+
+
+class StepSearchField(LabeledStrEnum):
+    STEP_NAME = "step_name"
+    SUBJECT = "subject"
+    PREHEADER = "preheader"
+    BODY = "body"
+
+
+class StepSearchVersion(LabeledStrEnum):
+    LIVE = "live"
+    DRAFT = "draft"
+
+
+class WorkflowMetadataField(LabeledStrEnum):
+    NAME = "name"
+    DESCRIPTION = "description"
+
+
+class WorkflowSearchOutput(LabeledStrEnum):
+    NAMES = "names"
+    COUNTS = "counts"
+    MATCHES = "matches"
