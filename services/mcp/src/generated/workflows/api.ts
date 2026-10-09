@@ -75,6 +75,8 @@ export const HogFlowsCreateParams = () => zod.object({
 export const hogFlowsCreateBodyNameMax = 400
 
 export const hogFlowsCreateBodyDescriptionDefault = ``
+export const hogFlowsCreateBodyTagsItemMax = 255
+
 export const hogFlowsCreateBodyTriggerMaskingOneTtlMin = 60
 export const hogFlowsCreateBodyTriggerMaskingOneTtlMax = 94608000
 
@@ -97,6 +99,10 @@ export const HogFlowsCreateBody = () => zod
     .object({
         name: zod.string().max(hogFlowsCreateBodyNameMax).nullish().describe('Workflow name.'),
         description: zod.string().default(hogFlowsCreateBodyDescriptionDefault).describe('Optional description.'),
+        tags: zod
+            .array(zod.string().max(hogFlowsCreateBodyTagsItemMax))
+            .optional()
+            .describe('Tags attached to the workflow.'),
         status: zod
             .enum(['draft', 'active', 'archived'])
             .describe('\* `draft` - Draft\n\* `active` - Active\n\* `archived` - Archived')
@@ -497,6 +503,8 @@ export const HogFlowsPartialUpdateParams = () => zod.object({
 
 export const hogFlowsPartialUpdateBodyNameMax = 400
 
+export const hogFlowsPartialUpdateBodyTagsItemMax = 255
+
 export const hogFlowsPartialUpdateBodyTriggerMaskingOneTtlMin = 60
 export const hogFlowsPartialUpdateBodyTriggerMaskingOneTtlMax = 94608000
 
@@ -512,6 +520,10 @@ export const HogFlowsPartialUpdateBody = () => zod
     .object({
         name: zod.string().max(hogFlowsPartialUpdateBodyNameMax).nullish().describe('Workflow name.'),
         description: zod.string().optional().describe('Optional description.'),
+        tags: zod
+            .array(zod.string().max(hogFlowsPartialUpdateBodyTagsItemMax))
+            .optional()
+            .describe('Tags attached to the workflow.'),
         trigger_masking: zod
             .union([
                 zod.object({

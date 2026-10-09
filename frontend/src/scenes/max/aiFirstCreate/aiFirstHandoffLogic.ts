@@ -28,6 +28,7 @@ export interface AiFirstHandoffLogicProps {
     findCreatedId: (innerInput: Record<string, unknown> | undefined) => Promise<string | null>
     /** The editor page for the created entity. */
     urlFor: (id: string) => string
+    prepareCreated?: (id: string) => Promise<void>
     /** Toast for a saved entity the page could not open. Say where to find it. */
     notOpenedMessage: string
     // pinned: analytics event names. The surface's events are `${eventPrefix} viewed`, `${eventPrefix} submitted`,
@@ -171,7 +172,8 @@ export const aiFirstHandoffLogic: LogicWrapper<aiFirstHandoffLogicType> = kea<ai
                 event.phase !== 'completed' ||
                 event.toolName !== props.toolName ||
                 event.streamKey !== values.activeCreation?.streamKey ||
-                cache.handedOff
+                cache.handedOff ||
+                cache.preparingCreatedStreamKey === event.streamKey
             ) {
                 return
             }
@@ -188,11 +190,32 @@ export const aiFirstHandoffLogic: LogicWrapper<aiFirstHandoffLogicType> = kea<ai
             }
             // The page can be left, or the composer cleared or re-sent, while the lookup is in flight. The
             // shared panel logic outlives this page, so a left page must not read values or route from here.
-            if (disposables.isDisposed || cache.handedOff || event.streamKey !== values.activeCreation?.streamKey) {
+            if (
+                disposables.isDisposed ||
+                cache.handedOff ||
+                cache.preparingCreatedStreamKey === event.streamKey ||
+                event.streamKey !== values.activeCreation?.streamKey
+            ) {
                 return
             }
             if (!createdId) {
                 lemonToast.error(props.notOpenedMessage)
+                return
+            }
+            try {
+                cache.preparingCreatedStreamKey = event.streamKey
+                await props.prepareCreated?.(createdId)
+            } catch {
+                if (!disposables.isDisposed && event.streamKey === values.activeCreation?.streamKey) {
+                    lemonToast.error(props.notOpenedMessage)
+                }
+                return
+            } finally {
+                if (cache.preparingCreatedStreamKey === event.streamKey) {
+                    cache.preparingCreatedStreamKey = null
+                }
+            }
+            if (disposables.isDisposed || cache.handedOff || event.streamKey !== values.activeCreation?.streamKey) {
                 return
             }
             cache.handedOff = true

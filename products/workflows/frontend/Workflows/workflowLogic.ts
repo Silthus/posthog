@@ -55,6 +55,7 @@ import { ResourceSaveQueue } from './resourceSaveQueue'
 import { prepareWorkflowDuplicate } from './workflowDuplication'
 import { workflowSceneLogic } from './workflowSceneLogic'
 import { workflowsLogic } from './workflowsLogic'
+import { workflowTagContext } from './workflowTagContext'
 import { parseWorkflowTriggerPrefill } from './workflowTriggerPrefill'
 
 export interface WorkflowLogicProps {
@@ -3140,6 +3141,7 @@ export const workflowLogic = kea<workflowLogicType>([
             {
                 loadWorkflow: async () => {
                     if (!props.id || props.id === 'new') {
+                        const tags = workflowTagContext({ tags: router.values.searchParams.tags })
                         if (props.editTemplateId) {
                             // Editing a template - load it and add a temporary status field for the editor
                             const templateWorkflow = await api.hogFlowTemplates.getHogFlowTemplate(props.editTemplateId)
@@ -3156,6 +3158,7 @@ export const workflowLogic = kea<workflowLogicType>([
                                 name: templateWorkflow.name,
                                 status: 'draft' as const,
                                 version: 1,
+                                tags,
                             }
                             delete (newWorkflow as any).id
                             delete (newWorkflow as any).team_id
@@ -3169,13 +3172,14 @@ export const workflowLogic = kea<workflowLogicType>([
                         if (triggerConfig) {
                             const prefilled: HogFlow = {
                                 ...NEW_WORKFLOW,
+                                tags,
                                 actions: NEW_WORKFLOW.actions.map((action) =>
                                     action.type === 'trigger' ? { ...action, config: triggerConfig } : action
                                 ),
                             }
                             return prefilled
                         }
-                        return { ...NEW_WORKFLOW }
+                        return { ...NEW_WORKFLOW, tags }
                     }
 
                     return api.hogFlows.getHogFlow(props.id)

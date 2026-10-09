@@ -4,6 +4,7 @@ import { router, urlToAction } from 'kea-router'
 
 import { lemonToast } from '@posthog/lemon-ui'
 
+import type { BulkTagAction, BulkUpdateTagsResult } from 'lib/components/BulkActions/BulkUpdateTagsForm'
 import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
 import { userLogic } from 'scenes/userLogic'
@@ -11,16 +12,20 @@ import { userLogic } from 'scenes/userLogic'
 import type { UserType } from '~/types'
 
 import {
+    messagingTemplatesList,
+    messagingTemplatesPartialUpdate,
+    messagingTemplatesBulkUpdateTagsCreate,
+} from 'products/messaging/frontend/generated/api'
+import type { MessageTemplateApi } from 'products/messaging/frontend/generated/api.schemas'
+import {
     hogFlowsCreate,
+    hogFlowsBulkUpdateTagsCreate,
+    hogFlowsPartialUpdate,
     hogFlowsMetricsGlobalRetrieve,
     hogFlowsRetrieve,
     hogFlowsSummariesList,
 } from 'products/workflows/frontend/generated/api'
-import type {
-    HogFlowListSummaryApi,
-    PaginatedHogFlowListSummaryListApi,
-    WorkflowStatsRowApi,
-} from 'products/workflows/frontend/generated/api.schemas'
+import type { HogFlowListSummaryApi, WorkflowStatsRowApi } from 'products/workflows/frontend/generated/api.schemas'
 
 import { prepareWorkflowDuplicate } from '../workflowDuplication'
 import {
@@ -51,7 +56,7 @@ import {
     TRIGGER_LABELS,
     TYPE_LABELS,
 } from './workflowListLabels'
-import { WorkflowListRow, buildWorkflowListRows } from './workflowListRows'
+import { WorkflowListRow, WorkflowLibraryRow, buildWorkflowListRows, buildEmailTemplateRows } from './workflowListRows'
 
 const WORKFLOWS_PAGE_TYPES = LIST_TYPES.join(',')
 const PAGE_LIMIT = 500
@@ -83,13 +88,13 @@ const LEGACY_VALUES: Record<string, (value: string) => boolean> = {
 const QUERY_FACETS = buildWorkflowListFacets([])
 
 /** Follows `next` to the end. Rows are keyed by id, because a row created mid-load shifts later offsets. */
-async function loadAllPages(
-    fetchPage: (offset: number | undefined) => Promise<PaginatedHogFlowListSummaryListApi>
-): Promise<HogFlowListSummaryApi[]> {
-    const byId = new Map<string, HogFlowListSummaryApi>()
+async function loadAllPages<T extends { id: string }>(
+    fetchPage: (offset: number | undefined) => Promise<{ results: T[]; next?: string | null }>
+): Promise<T[]> {
+    const byId = new Map<string, T>()
     let offset: number | undefined = undefined
     for (let pages = 0; pages < MAX_PAGES; pages++) {
-        const page: PaginatedHogFlowListSummaryListApi = await fetchPage(offset)
+        const page = await fetchPage(offset)
         for (const row of page.results) {
             byId.set(row.id, byId.get(row.id) ?? row)
         }
@@ -145,27 +150,33 @@ function legacyParamsToValue(searchParams: Record<string, unknown>): FacetSearch
 export interface workflowsListV2LogicValues {
     currentTeamId: number | null // teamLogic
     user: UserType | null // userLogic
-    facets: FacetDefinition<WorkflowListRow>[]
-    filteredRows: WorkflowListRow[]
+    bulkTagsResult: BulkUpdateTagsResult | null
+    bulkTagsResultLoading: boolean
+    emailTemplates: MessageTemplateApi[] | null
+    emailTemplatesLoadFailed: boolean
+    emailTemplatesLoading: boolean
+    facets: FacetDefinition<WorkflowLibraryRow>[]
+    filteredRows: WorkflowLibraryRow[]
+    hasHealthFilter: boolean
+    isUnfilteredAutomationView: boolean
     listLoaded: boolean
     loadFailed: boolean
-    matchesText: MatchesText<WorkflowListRow>
+    matchesText: MatchesText<WorkflowLibraryRow>
     metrics: WorkflowStatsRowApi[] | null
+    metricsLoaded: boolean
     metricsLoading: boolean
     pendingRowActions: Record<string, WorkflowRowAction>
     requestedSearchText: string | null
-    rows: WorkflowListRow[]
+    rows: WorkflowLibraryRow[]
     serverSearch: ServerSearchResult | null
     serverSearchLoading: boolean
     serverSearchStatus: ServerSearchStatus
     shownColumns: OptionalColumn[]
     templateTypeFilter: WorkflowTemplateTypeFilter
-    isUnfilteredAutomationView: boolean
-    hasHealthFilter: boolean
-    metricsLoaded: boolean
     value: FacetSearchValue
     visibleColumns: OptionalColumn[]
     workflows: HogFlowListSummaryApi[] | null
+    workflowsLoadFailed: boolean
     workflowsLoading: boolean
 }
 
@@ -173,6 +184,33 @@ export interface workflowsListV2LogicValues {
 export interface workflowsListV2LogicActions {
     archiveWorkflow: (row: WorkflowListRow) => {
         row: WorkflowListRow
+    }
+    bulkUpdateTags: ({ rows, action, tags }: { action: BulkTagAction; rows: WorkflowLibraryRow[]; tags: string[] }) => {
+        rows: WorkflowLibraryRow[]
+        action: BulkTagAction
+        tags: string[]
+    }
+    bulkUpdateTagsFailure: (
+        error: string,
+        errorObject?: any
+    ) => {
+        error: string
+        errorObject?: any
+    }
+    bulkUpdateTagsSuccess: (
+        bulkTagsResult: BulkUpdateTagsResult,
+        payload?: {
+            rows: WorkflowLibraryRow[]
+            action: BulkTagAction
+            tags: string[]
+        }
+    ) => {
+        bulkTagsResult: BulkUpdateTagsResult
+        payload?: {
+            rows: WorkflowLibraryRow[]
+            action: BulkTagAction
+            tags: string[]
+        }
     }
     clearFilters: () => {
         value: true
@@ -182,6 +220,21 @@ export interface workflowsListV2LogicActions {
     }
     duplicateWorkflow: (row: WorkflowListRow) => {
         row: WorkflowListRow
+    }
+    loadEmailTemplates: () => any
+    loadEmailTemplatesFailure: (
+        error: string,
+        errorObject?: any
+    ) => {
+        error: string
+        errorObject?: any
+    }
+    loadEmailTemplatesSuccess: (
+        emailTemplates: MessageTemplateApi[],
+        payload?: any
+    ) => {
+        emailTemplates: MessageTemplateApi[]
+        payload?: any
     }
     loadMetrics: () => {
         value: true
@@ -224,6 +277,13 @@ export interface workflowsListV2LogicActions {
         payload?: {
             value: true
         }
+    }
+    patchEmailTemplate: (
+        id: string,
+        patch: Partial<MessageTemplateApi>
+    ) => {
+        id: string
+        patch: Partial<MessageTemplateApi>
     }
     patchWorkflow: (
         id: string,
@@ -279,26 +339,38 @@ export interface workflowsListV2LogicActions {
     toggleWorkflowStatus: (row: WorkflowListRow) => {
         row: WorkflowListRow
     }
+    updateWorkflowTags: (
+        row: WorkflowLibraryRow,
+        tags: string[]
+    ) => {
+        row: WorkflowLibraryRow
+        tags: string[]
+    }
 }
 
 // Generated by kea-typegen. Update if you're an agent, ignore if you're human.
 export interface workflowsListV2LogicMeta {
     __keaTypeGenInternalSelectorTypes: {
-        templateTypeFilter: (value: FacetSearchValue) => WorkflowTemplateTypeFilter
-        isUnfilteredAutomationView: (value: FacetSearchValue) => boolean
+        loadFailed: (workflowsLoadFailed: any, emailTemplatesLoadFailed: any) => boolean
         hasHealthFilter: (value: FacetSearchValue) => boolean
         metricsLoaded: (metrics: WorkflowStatsRowApi[] | null) => boolean
-        rows: (workflows: HogFlowListSummaryApi[] | null, metrics: WorkflowStatsRowApi[] | null) => WorkflowListRow[]
-        listLoaded: (workflows: HogFlowListSummaryApi[] | null) => boolean
-        facets: (rows: WorkflowListRow[], user: UserType | null) => FacetDefinition<WorkflowListRow>[]
-        matchesText: (serverSearch: ServerSearchResult | null) => MatchesText<WorkflowListRow>
+        isUnfilteredAutomationView: (value: FacetSearchValue) => boolean
+        templateTypeFilter: (value: FacetSearchValue) => WorkflowTemplateTypeFilter
+        rows: (
+            workflows: HogFlowListSummaryApi[] | null,
+            metrics: WorkflowStatsRowApi[] | null,
+            emailTemplates: MessageTemplateApi[] | null
+        ) => WorkflowLibraryRow[]
+        listLoaded: (workflows: HogFlowListSummaryApi[] | null, emailTemplates: MessageTemplateApi[] | null) => boolean
+        facets: (rows: WorkflowLibraryRow[], user: UserType | null) => FacetDefinition<WorkflowLibraryRow>[]
+        matchesText: (serverSearch: ServerSearchResult | null) => MatchesText<WorkflowLibraryRow>
         serverSearchStatus: (value: FacetSearchValue, serverSearch: ServerSearchResult | null) => ServerSearchStatus
         filteredRows: (
-            rows: WorkflowListRow[],
+            rows: WorkflowLibraryRow[],
             value: FacetSearchValue,
-            facets: FacetDefinition<WorkflowListRow>[],
-            matchesText: MatchesText<WorkflowListRow>
-        ) => WorkflowListRow[]
+            facets: FacetDefinition<WorkflowLibraryRow>[],
+            matchesText: MatchesText<WorkflowLibraryRow>
+        ) => WorkflowLibraryRow[]
         shownColumns: (
             visibleColumns: ('created_by' | 'health' | 'last_7_days' | 'owner' | 'trigger' | 'type')[]
         ) => OptionalColumn[]
@@ -319,12 +391,14 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
     actions({
         loadWorkflows: true,
         loadMetrics: true,
+        updateWorkflowTags: (row: WorkflowLibraryRow, tags: string[]) => ({ row, tags }),
         setValue: (value: FacetSearchValue, fromUrl: boolean = false) => ({ value, fromUrl }),
         clearFilters: true,
         toggleColumn: (column: OptionalColumn) => ({ column }),
         resetColumns: true,
         setVisibleColumns: (columns: OptionalColumn[]) => ({ columns }),
         patchWorkflow: (id: string, patch: Partial<HogFlowListSummaryApi>) => ({ id, patch }),
+        patchEmailTemplate: (id: string, patch: Partial<MessageTemplateApi>) => ({ id, patch }),
         removeWorkflow: (id: string) => ({ id }),
         setRowActionPending: (id: string, action: WorkflowRowAction | null) => ({ id, action }),
         toggleWorkflowStatus: (row: WorkflowListRow) => ({ row }),
@@ -333,7 +407,7 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
         restoreWorkflow: (row: WorkflowListRow) => ({ row }),
         deleteWorkflow: (row: WorkflowListRow) => ({ row }),
     }),
-    loaders(({ values, cache }) => ({
+    loaders(({ values, actions, cache }) => ({
         workflows: [
             null as HogFlowListSummaryApi[] | null,
             {
@@ -345,6 +419,59 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
                     breakpoint()
                     return workflows
                 },
+            },
+        ],
+        bulkTagsResult: [
+            null as BulkUpdateTagsResult | null,
+            {
+                bulkUpdateTags: async ({
+                    rows,
+                    action,
+                    tags,
+                }: {
+                    rows: WorkflowLibraryRow[]
+                    action: BulkTagAction
+                    tags: string[]
+                }) => {
+                    const result: BulkUpdateTagsResult = { updated: [], skipped: [] }
+                    for (const kind of ['workflow', 'email_template'] as const) {
+                        const ids = rows.filter((row) => row.kind === kind).map((row) => row.id)
+                        if (!ids.length) {
+                            continue
+                        }
+                        const response =
+                            kind === 'workflow'
+                                ? await hogFlowsBulkUpdateTagsCreate(String(values.currentTeamId), {
+                                      ids,
+                                      action,
+                                      tags,
+                                  })
+                                : await messagingTemplatesBulkUpdateTagsCreate(String(values.currentTeamId), {
+                                      ids,
+                                      action,
+                                      tags,
+                                  })
+                        for (const updated of response.updated) {
+                            if (kind === 'workflow') {
+                                actions.patchWorkflow(updated.id, { tags: updated.tags })
+                            } else {
+                                actions.patchEmailTemplate(updated.id, { tags: updated.tags })
+                            }
+                        }
+                        result.updated.push(...response.updated)
+                        result.skipped.push(...response.skipped)
+                    }
+                    return result
+                },
+            },
+        ],
+        emailTemplates: [
+            null as MessageTemplateApi[] | null,
+            {
+                loadEmailTemplates: async () =>
+                    loadAllPages((offset) =>
+                        messagingTemplatesList(String(values.currentTeamId), { limit: PAGE_LIMIT, offset })
+                    ),
             },
         ],
         metrics: [
@@ -396,6 +523,7 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
         ],
     })),
     reducers({
+        bulkTagsResult: { bulkUpdateTags: () => null },
         value: [
             EMPTY_VALUE,
             {
@@ -411,12 +539,20 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
                 clearFilters: () => null,
             },
         ],
-        loadFailed: [
+        workflowsLoadFailed: [
             false,
             {
                 loadWorkflows: () => false,
                 loadWorkflowsSuccess: () => false,
                 loadWorkflowsFailure: () => true,
+            },
+        ],
+        emailTemplatesLoadFailed: [
+            false,
+            {
+                loadEmailTemplates: () => false,
+                loadEmailTemplatesSuccess: () => false,
+                loadEmailTemplatesFailure: () => true,
             },
         ],
         visibleColumns: [
@@ -445,6 +581,10 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
                 },
             },
         ],
+        emailTemplates: {
+            patchEmailTemplate: (state, { id, patch }) =>
+                state?.map((template) => (template.id === id ? { ...template, ...patch } : template)) ?? null,
+        },
         workflows: {
             patchWorkflow: (state, { id, patch }) =>
                 state && state.map((workflow) => (workflow.id === id ? { ...workflow, ...patch } : workflow)),
@@ -452,6 +592,10 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
         },
     }),
     selectors({
+        loadFailed: [
+            (s) => [s.workflowsLoadFailed, s.emailTemplatesLoadFailed],
+            (workflowsFailed: boolean, templatesFailed: boolean): boolean => workflowsFailed || templatesFailed,
+        ],
         hasHealthFilter: [
             (s) => [s.value],
             (value: FacetSearchValue): boolean => value.filters.some((filter) => filter.facet === 'health'),
@@ -479,14 +623,24 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
             },
         ],
         rows: [
-            (s) => [s.workflows, s.metrics],
-            (workflows: HogFlowListSummaryApi[] | null, metrics: WorkflowStatsRowApi[] | null): WorkflowListRow[] =>
-                workflows ? buildWorkflowListRows(workflows, metrics) : [],
+            (s) => [s.workflows, s.metrics, s.emailTemplates],
+            (
+                workflows: HogFlowListSummaryApi[] | null,
+                metrics: WorkflowStatsRowApi[] | null,
+                templates: MessageTemplateApi[] | null
+            ): WorkflowLibraryRow[] => [
+                ...buildWorkflowListRows(workflows ?? [], metrics),
+                ...buildEmailTemplateRows(templates ?? []),
+            ],
         ],
-        listLoaded: [(s) => [s.workflows], (workflows: HogFlowListSummaryApi[] | null): boolean => workflows !== null],
+        listLoaded: [
+            (s) => [s.workflows, s.emailTemplates],
+            (workflows: HogFlowListSummaryApi[] | null, templates: MessageTemplateApi[] | null): boolean =>
+                workflows !== null && templates !== null,
+        ],
         facets: [
             (s) => [s.rows, s.user],
-            (rows: WorkflowListRow[], user: UserType | null): FacetDefinition<WorkflowListRow>[] =>
+            (rows: WorkflowLibraryRow[], user: UserType | null): FacetDefinition<WorkflowLibraryRow>[] =>
                 buildWorkflowListFacets(rows).map((facet) =>
                     facet.key === 'created-by'
                         ? {
@@ -503,7 +657,7 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
         ],
         matchesText: [
             (s) => [s.serverSearch],
-            (serverSearch: ServerSearchResult | null): MatchesText<WorkflowListRow> => {
+            (serverSearch: ServerSearchResult | null): MatchesText<WorkflowLibraryRow> => {
                 const serverIds = new Set(serverSearch?.ids ?? [])
                 // The server also searches step names and email subjects and bodies, which the rows don't carry.
                 return (row, text) =>
@@ -526,11 +680,11 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
         filteredRows: [
             (s) => [s.rows, s.value, s.facets, s.matchesText],
             (
-                rows: WorkflowListRow[],
+                rows: WorkflowLibraryRow[],
                 value: FacetSearchValue,
-                facets: FacetDefinition<WorkflowListRow>[],
-                matchesText: MatchesText<WorkflowListRow>
-            ): WorkflowListRow[] => rows.filter(createFacetMatcher(value, facets, matchesText)),
+                facets: FacetDefinition<WorkflowLibraryRow>[],
+                matchesText: MatchesText<WorkflowLibraryRow>
+            ): WorkflowLibraryRow[] => rows.filter(createFacetMatcher(value, facets, matchesText)),
         ],
         shownColumns: [
             (s) => [s.visibleColumns],
@@ -542,7 +696,7 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
     listeners(({ actions, values }) => {
         /** Runs one network action per row at a time, so a second press can't send a second request. */
         const runRowAction = async (
-            row: WorkflowListRow,
+            row: WorkflowLibraryRow,
             action: WorkflowRowAction,
             run: () => Promise<void>
         ): Promise<void> => {
@@ -585,6 +739,25 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
                 if (values.metrics === null && !values.metricsLoading) {
                     actions.loadMetrics()
                 }
+            },
+            updateWorkflowTags: async ({ row, tags }) => {
+                await runRowAction(row, 'tags', async () => {
+                    try {
+                        if (row.kind === 'email_template') {
+                            const updated = await messagingTemplatesPartialUpdate(
+                                String(values.currentTeamId),
+                                row.id,
+                                { tags }
+                            )
+                            actions.patchEmailTemplate(row.id, { tags: updated.tags })
+                        } else {
+                            const updated = await hogFlowsPartialUpdate(String(values.currentTeamId), row.id, { tags })
+                            actions.patchWorkflow(row.id, { tags: updated.tags })
+                        }
+                    } catch (error) {
+                        lemonToast.error(`Could not save tags: ${workflowActionErrorDetail(error)}`)
+                    }
+                })
             },
             toggleWorkflowStatus: async ({ row }) => {
                 await runRowAction(row, 'toggle', async () => {
@@ -683,6 +856,7 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
         },
     })),
     afterMount(({ actions }) => {
+        actions.loadEmailTemplates()
         actions.loadWorkflows()
     }),
 ])

@@ -10,10 +10,11 @@ import { UserBasicType } from '~/types'
 import { WorkflowStatusTag } from '../WorkflowStatusTag'
 import { HEALTH_TAGS, OPTIONAL_COLUMN_TITLES, OptionalColumn, TRIGGER_LABELS, TYPE_LABELS } from './workflowListLabels'
 import { WorkflowListNameCell } from './WorkflowListNameCell'
-import { WorkflowListRow, WorkflowRunCounts } from './workflowListRows'
+import { WorkflowLibraryRow, WorkflowRunCounts, workflowLibraryObject } from './workflowListRows'
 import { WorkflowRowMenu } from './WorkflowRowMenu'
+import { WorkflowTagsCell } from './WorkflowTagsCell'
 
-type Column = LemonTableColumn<WorkflowListRow, keyof WorkflowListRow | undefined>
+type Column = LemonTableColumn<WorkflowLibraryRow, keyof WorkflowLibraryRow | undefined>
 
 const TYPE_TAGS = { messaging: 'completion', automation: 'default', loop: 'highlight' } as const
 
@@ -32,6 +33,9 @@ function MetricsPending({ metricsLoading }: { metricsLoading: boolean }): JSX.El
 function optionalRenderers(metricsLoading: boolean): Record<OptionalColumn, Column['render']> {
     return {
         type: (_, row) => {
+            if (row.kind === 'email_template') {
+                return <LemonTag type="default">Email template</LemonTag>
+            }
             if (row.workflow.type === 'broadcast') {
                 return null
             }
@@ -39,14 +43,16 @@ function optionalRenderers(metricsLoading: boolean): Record<OptionalColumn, Colu
             return row.workflow.type === 'loop' ? <Link to={urls.codeLoopLink(row.id)}>{tag}</Link> : tag
         },
         trigger: (_, row) =>
-            row.triggerType ? (
+            row.kind === 'workflow' && row.triggerType ? (
                 <LemonTag type="default">{TRIGGER_LABELS[row.triggerType] ?? row.triggerType}</LemonTag>
             ) : null,
         owner: (_, row) => (
-            <span className="whitespace-nowrap">{row.owners.map((owner) => `@${owner}`).join(', ')}</span>
+            <span className="whitespace-nowrap">
+                {row.kind === 'workflow' ? row.owners.map((owner) => `@${owner}`).join(', ') : null}
+            </span>
         ),
         created_by: (_, row) => {
-            const user = row.workflow.created_by
+            const user = workflowLibraryObject(row).created_by
             if (!user) {
                 return <span className="text-muted">Unknown</span>
             }
@@ -58,7 +64,7 @@ function optionalRenderers(metricsLoading: boolean): Record<OptionalColumn, Colu
             )
         },
         last_7_days: (_, row) =>
-            row.last7Days ? (
+            row.kind === 'email_template' ? null : row.last7Days ? (
                 <Link to={urls.workflow(row.id, 'metrics')} className="whitespace-nowrap">
                     {countsLabel(row.last7Days)}
                 </Link>
@@ -66,6 +72,9 @@ function optionalRenderers(metricsLoading: boolean): Record<OptionalColumn, Colu
                 <MetricsPending metricsLoading={metricsLoading} />
             ),
         health: (_, row) => {
+            if (row.kind === 'email_template') {
+                return null
+            }
             if (!row.last7Days) {
                 return <MetricsPending metricsLoading={metricsLoading} />
             }
@@ -95,14 +104,28 @@ export function buildWorkflowsListV2Columns(visibleColumns: OptionalColumn[], me
             // optional columns on a narrow scene it keeps a readable minimum and the table scrolls sideways.
             className: 'w-full max-w-0 min-w-40',
             sorter: (a, b) => a.name.localeCompare(b.name),
-            render: (_, row) => <WorkflowListNameCell row={row} />,
+            render: (_, row) =>
+                row.kind === 'workflow' ? (
+                    <WorkflowListNameCell row={row} />
+                ) : (
+                    <Link to={urls.workflowsLibraryTemplate(row.id)} className="block truncate">
+                        {row.name}
+                    </Link>
+                ),
+        },
+        {
+            title: 'Tags',
+            key: 'tags',
+            width: 128,
+            className: 'min-w-24',
+            render: (_, row) => <WorkflowTagsCell row={row} />,
         },
         ...(visibleColumns.includes('type') ? [optionalColumn('type')] : []),
         {
             title: 'Status',
             key: 'status',
             width: 0,
-            render: (_, row) => <WorkflowStatusTag status={row.workflow.status} />,
+            render: (_, row) => (row.kind === 'workflow' ? <WorkflowStatusTag status={row.workflow.status} /> : null),
         },
         ...visibleColumns.filter((column) => column !== 'type').map(optionalColumn),
         {
@@ -110,17 +133,18 @@ export function buildWorkflowsListV2Columns(visibleColumns: OptionalColumn[], me
             key: 'updated_at',
             width: 0,
             align: 'right',
-            sorter: (a, b) => Date.parse(a.workflow.updated_at) - Date.parse(b.workflow.updated_at),
+            sorter: (a, b) =>
+                Date.parse(workflowLibraryObject(a).updated_at) - Date.parse(workflowLibraryObject(b).updated_at),
             render: (_, row) => (
                 <div className="whitespace-nowrap text-right">
-                    <TZLabel time={row.workflow.updated_at} />
+                    <TZLabel time={workflowLibraryObject(row).updated_at} />
                 </div>
             ),
         },
         {
             key: 'actions',
             width: 0,
-            render: (_, row) => <WorkflowRowMenu row={row} />,
+            render: (_, row) => (row.kind === 'workflow' ? <WorkflowRowMenu row={row} /> : null),
         },
     ]
 }

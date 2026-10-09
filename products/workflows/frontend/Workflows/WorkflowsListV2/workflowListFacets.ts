@@ -1,6 +1,6 @@
 import type { FacetDefinition } from './FacetSearchBar/facetQuery'
 import { HEALTH_TAGS, STATUS_LABELS, TRIGGER_LABELS, TYPE_LABELS } from './workflowListLabels'
-import { WorkflowListRow } from './workflowListRows'
+import { WorkflowLibraryRow, workflowLibraryObject } from './workflowListRows'
 
 const HEALTH_LABELS: Record<string, string> = Object.fromEntries(
     Object.entries(HEALTH_TAGS).map(([health, { label }]) => [health, label])
@@ -12,7 +12,7 @@ const labelFrom =
         labels[value] ?? value
 
 /** Every word of the text must appear in the name or description. */
-export function matchesWorkflowListText(row: WorkflowListRow, text: string): boolean {
+export function matchesWorkflowListText(row: WorkflowLibraryRow, text: string): boolean {
     return text
         .toLowerCase()
         .split(/\s+/)
@@ -21,9 +21,10 @@ export function matchesWorkflowListText(row: WorkflowListRow, text: string): boo
 }
 
 /** `rows` supplies the names shown for creator uuids. */
-export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinition<WorkflowListRow>[] {
+export function buildWorkflowListFacets(rows: WorkflowLibraryRow[]): FacetDefinition<WorkflowLibraryRow>[] {
     const creatorNames = new Map<string, string>()
-    for (const { workflow } of rows) {
+    for (const row of rows) {
+        const workflow = workflowLibraryObject(row)
         if (workflow.created_by) {
             creatorNames.set(workflow.created_by.uuid, workflow.created_by.first_name || workflow.created_by.email)
         }
@@ -31,12 +32,21 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
 
     return [
         {
+            key: 'tag',
+            label: 'Tag',
+            description: 'Tags attached to the workflow',
+            showOnFocus: true,
+            order: 7,
+            getValues: (row) => workflowLibraryObject(row).tags ?? [],
+            formatValue: (value) => value,
+        },
+        {
             key: 'status',
             label: 'Status',
             description: 'Draft, active or archived',
             showOnFocus: true,
             order: 1,
-            getValues: (row) => [row.workflow.status],
+            getValues: (row) => (row.kind === 'workflow' ? [row.workflow.status] : []),
             formatValue: labelFrom(STATUS_LABELS),
         },
         {
@@ -45,8 +55,8 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
             description: 'Messaging, automation or loop',
             showOnFocus: true,
             order: 2,
-            getValues: (row) => [row.workflow.type],
-            formatValue: labelFrom(TYPE_LABELS),
+            getValues: (row) => [row.kind === 'workflow' ? row.workflow.type : 'email-template'],
+            formatValue: labelFrom({ ...TYPE_LABELS, 'email-template': 'Email template' }),
         },
         {
             key: 'trigger',
@@ -54,7 +64,7 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
             description: 'What starts the workflow',
             showOnFocus: true,
             order: 3,
-            getValues: (row) => (row.triggerType ? [row.triggerType] : []),
+            getValues: (row) => (row.kind === 'workflow' && row.triggerType ? [row.triggerType] : []),
             formatValue: labelFrom(TRIGGER_LABELS),
         },
         {
@@ -63,7 +73,7 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
             description: 'Owner: @name in the description, else the creator',
             showOnFocus: true,
             order: 4,
-            getValues: (row) => row.owners,
+            getValues: (row) => (row.kind === 'workflow' ? row.owners : []),
             formatValue: (value) => `@${value}`,
         },
         {
@@ -72,7 +82,7 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
             description: 'Failed runs in the last 7 days',
             showOnFocus: true,
             order: 5,
-            getValues: (row) => (row.last7Days === null ? [] : [row.health]),
+            getValues: (row) => (row.kind === 'workflow' && row.last7Days !== null ? [row.health] : []),
             formatValue: labelFrom(HEALTH_LABELS),
         },
         {
@@ -80,7 +90,8 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
             label: 'Created by',
             description: 'Who created it',
             order: 6,
-            getValues: (row) => (row.workflow.created_by ? [row.workflow.created_by.uuid] : []),
+            getValues: (row) =>
+                workflowLibraryObject(row).created_by ? [workflowLibraryObject(row).created_by!.uuid] : [],
             formatValue: (value) => creatorNames.get(value) ?? value,
         },
     ]

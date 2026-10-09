@@ -10,6 +10,7 @@ import { colorForString } from 'lib/utils/colors'
 
 interface ObjectTagsPropsBase {
     tags: string[]
+    tagType?: LemonTagType
     saving?: boolean
     style?: CSSProperties
     id?: string
@@ -65,6 +66,7 @@ const COLOR_OVERRIDES: Record<string, LemonTagType> = {
 
 export function ObjectTags({
     tags,
+    tagType,
     onChange, // Required unless `staticOnly`
     onEdit,
     onBlur,
@@ -125,6 +127,7 @@ export function ObjectTags({
                         onBlur?.()
                     }}
                     loading={saving}
+                    disabledReason={saving ? 'Saving tags' : undefined}
                     data-attr="new-tag-input"
                     placeholder={inputPlaceholder}
                     autoFocus
@@ -136,16 +139,28 @@ export function ObjectTags({
                     {showPlaceholder
                         ? '—'
                         : visibleTags.map((tag, index) => {
-                              return (
+                              const tagLabel = (
                                   <LemonTag
-                                      key={index}
-                                      type={COLOR_OVERRIDES[tag] || colorForString(tag)}
-                                      onClick={onTagClick ? () => onTagClick(tag) : undefined}
+                                      type={tagType ?? COLOR_OVERRIDES[tag] ?? colorForString(tag)}
                                       className={wrap ? 'max-w-full' : undefined}
                                       wrap={wrap}
                                   >
                                       {tag}
                                   </LemonTag>
+                              )
+                              return onTagClick ? (
+                                  <button
+                                      key={index}
+                                      type="button"
+                                      className={wrap ? 'inline-flex min-w-0 max-w-full' : 'inline-flex'}
+                                      onClick={() => onTagClick(tag)}
+                                  >
+                                      {tagLabel}
+                                  </button>
+                              ) : (
+                                  <span key={index} className={wrap ? 'inline-flex min-w-0 max-w-full' : 'inline-flex'}>
+                                      {tagLabel}
+                                  </span>
                               )
                           })}
                     {overflowTags.length > 0 && (
@@ -155,6 +170,7 @@ export function ObjectTags({
                             overlay={
                                 <ObjectTags
                                     tags={overflowTags}
+                                    tagType={tagType}
                                     staticOnly
                                     onTagClick={onTagClick}
                                     wrap
@@ -175,21 +191,25 @@ export function ObjectTags({
                         </Popover>
                     )}
                     {!staticOnly && onChange && saving !== undefined && (
-                        <span className="inline-flex font-normal">
+                        <button
+                            type="button"
+                            className="inline-flex font-normal"
+                            disabled={saving}
+                            onClick={() => {
+                                onEdit?.()
+                                setEditingTags(true)
+                            }}
+                            data-attr="button-add-tag"
+                        >
                             <LemonTag
                                 type="none"
-                                onClick={() => {
-                                    onEdit?.()
-                                    setEditingTags(true)
-                                }}
-                                data-attr="button-add-tag"
                                 icon={hasTags ? <IconPencil /> : <IconPlus />}
                                 className="border border-dashed"
                                 size={actionButtonSize}
                             >
                                 {hasTags ? editLabel : addLabel}
                             </LemonTag>
-                        </span>
+                        </button>
                     )}
                 </>
             )}

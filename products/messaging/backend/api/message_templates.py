@@ -15,9 +15,18 @@ from posthog.api.forbid_destroy_model import ForbidDestroyModel
 from posthog.api.routing import TeamAndOrgViewSetMixin
 from posthog.api.scoped_related_fields import TeamScopedPrimaryKeyRelatedField
 from posthog.api.shared import UserBasicSerializer
+from posthog.api.tagged_item import (
+    BULK_UPDATE_TAGS_SKIPPED_REASON,
+    BulkUpdateTagsUUIDRequestSerializer,
+    BulkUpdateTagsUUIDResponseSerializer,
+    TaggedItemSerializerMixin,
+    TaggedItemViewSetMixin,
+    apply_bulk_tag_changes,
+)
 from posthog.cdp.validation import build_html_wrap_design
 from posthog.event_usage import report_user_action
 
+from products.access_control.backend.facade.user_access_control import access_level_satisfied_for_resource
 from products.messaging.backend.api.design_operations import apply_design_operations
 from products.messaging.backend.api.design_validation import validate_design
 from products.messaging.backend.models.message_category import MessageCategory
@@ -104,7 +113,12 @@ class MessageTemplateContentSerializer(serializers.Serializer):
     )
 
 
-class MessageTemplateSerializer(serializers.ModelSerializer):
+class MessageTemplateSerializer(TaggedItemSerializerMixin, serializers.ModelSerializer):
+    tags = serializers.ListField(
+        child=serializers.CharField(max_length=255, allow_blank=False),
+        required=False,
+        help_text="Tags attached to the email template.",
+    )
     created_by = UserBasicSerializer(read_only=True)
     content = MessageTemplateContentSerializer(
         required=False,
@@ -123,6 +137,7 @@ class MessageTemplateSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
+            "tags",
             "created_at",
             "updated_at",
             "content",
@@ -177,7 +192,9 @@ class MessageTemplateSerializer(serializers.ModelSerializer):
         request = self.context["request"]
         team_id = self.context["team_id"]
 
+        tags = validated_data.pop("tags", None)
         instance = MessageTemplate.objects.create(**validated_data, team_id=team_id, created_by=request.user)
+        self._attempt_set_tags(tags, instance)
         return instance
 
 
@@ -196,16 +213,50 @@ class DesignPatchSerializer(serializers.Serializer):
 class MessageTemplatesViewSet(
     TeamAndOrgViewSetMixin,
     ForbidDestroyModel,
+    TaggedItemViewSetMixin,
     viewsets.ModelViewSet,
 ):
     scope_object = "hog_flow"
     permission_classes = [IsAuthenticated]
     # `design` is a custom write action; list it so programmatic callers (MCP/personal API key) get
     # hog_flow:write checked instead of being rejected as an action with no declared scope.
-    scope_object_write_actions = ["create", "update", "partial_update", "patch", "destroy", "design"]
+    scope_object_write_actions = [
+        "create",
+        "update",
+        "partial_update",
+        "patch",
+        "destroy",
+        "design",
+        "bulk_update_tags",
+    ]
 
     serializer_class = MessageTemplateSerializer
     queryset = MessageTemplate.objects.all()
+
+    @extend_schema(request=BulkUpdateTagsUUIDRequestSerializer, responses={200: BulkUpdateTagsUUIDResponseSerializer})
+    @action(methods=["POST"], detail=False)
+    def bulk_update_tags(self, request: Request, **kwargs: Any) -> Response:
+        serializer = BulkUpdateTagsUUIDRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        templates = list(self.prefetch_tagged_items_if_available(self.get_queryset().filter(id__in=data["ids"])))
+        level = self.user_access_control.access_level_for_resource("hog_flow")
+        if level is None or not access_level_satisfied_for_resource("hog_flow", level.access_level, "editor"):
+            templates = []
+        updated = apply_bulk_tag_changes(templates, data["action"], data["tags"])
+        found = {template.id for template in templates}
+        return Response(
+            BulkUpdateTagsUUIDResponseSerializer(
+                instance={
+                    "updated": updated,
+                    "skipped": [
+                        {"id": template_id, "reason": BULK_UPDATE_TAGS_SKIPPED_REASON}
+                        for template_id in data["ids"]
+                        if template_id not in found
+                    ],
+                }
+            ).data
+        )
 
     def safely_get_queryset(self, queryset):
         return (

@@ -70,6 +70,11 @@ from posthog.api.log_entries import LogEntryMixin
 from posthog.api.mixins import ValidatedRequest, validated_request
 from posthog.api.routing import TeamAndOrgViewSetMixin
 from posthog.api.shared import UserBasicSerializer
+from posthog.api.tagged_item import (
+    BulkUpdateTagsUUIDRequestSerializer,
+    BulkUpdateTagsUUIDResponseSerializer,
+    TaggedItemViewSetMixin,
+)
 from posthog.auth import InternalAPIAuthentication
 from posthog.cdp.filters import DATA_WAREHOUSE_SOURCES, compile_filters_expr
 from posthog.cdp.flag_gated_templates import FLAG_GATED_TEMPLATE_IDS, gated_template_enabled
@@ -2502,6 +2507,11 @@ class HogFlowLastRunSerializer(serializers.Serializer):
 
 
 class HogFlowMinimalSerializer(UserAccessControlSerializerMixin, serializers.Serializer):
+    tags = serializers.ListField(
+        child=serializers.CharField(max_length=255, allow_blank=False),
+        required=False,
+        help_text="Tags attached to the workflow.",
+    )
     # The fields the model used to supply. Each is read-only here; the full serializer declares the
     # writable ones again, so those are typed as any field.
     id = serializers.UUIDField(read_only=True)
@@ -2547,6 +2557,7 @@ class HogFlowMinimalSerializer(UserAccessControlSerializerMixin, serializers.Ser
             "id",
             "name",
             "description",
+            "tags",
             "version",
             "status",
             "origin_product",
@@ -2644,6 +2655,7 @@ class HogFlowSummarySerializer(HogFlowMinimalSerializer):
             "id",
             "name",
             "description",
+            "tags",
             "version",
             "status",
             "origin_product",
@@ -3058,6 +3070,7 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             "id",
             "name",
             "description",
+            "tags",
             "version",
             "status",
             "origin_product",
@@ -4333,9 +4346,20 @@ _LIST_FILTER_PARAMETERS: Final[list[OpenApiParameter]] = [
     ),
     list=extend_schema(parameters=LIST_QUERY_PARAMETERS),
 )
+@extend_schema_view(
+    bulk_update_tags=extend_schema(
+        request=BulkUpdateTagsUUIDRequestSerializer, responses={200: BulkUpdateTagsUUIDResponseSerializer}
+    )
+)
 class HogFlowViewSet(
-    TeamAndOrgViewSetMixin, AccessControlViewSetMixin, LogEntryMixin, AppMetricsMixin, viewsets.ModelViewSet
+    TeamAndOrgViewSetMixin,
+    AccessControlViewSetMixin,
+    TaggedItemViewSetMixin,
+    LogEntryMixin,
+    AppMetricsMixin,
+    viewsets.ModelViewSet,
 ):
+    bulk_update_tags_request_serializer_class = BulkUpdateTagsUUIDRequestSerializer
     scope_object = "hog_flow"
     scope_object_read_actions = [
         "list",
@@ -4358,6 +4382,7 @@ class HogFlowViewSet(
         "proposal_outcome",
     ]
     scope_object_write_actions = [
+        "bulk_update_tags",
         "create",
         "update",
         "partial_update",

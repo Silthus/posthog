@@ -5,7 +5,7 @@ import { LemonButton } from '@posthog/lemon-ui'
 
 import { Popover } from 'lib/lemon-ui/Popover'
 
-import { BulkTaggableResource, BulkUpdateTagsForm, BulkUpdateTagsResult } from './BulkUpdateTagsForm'
+import { BulkTagAction, BulkTaggableResource, BulkUpdateTagsForm, BulkUpdateTagsResult } from './BulkUpdateTagsForm'
 
 export type { BulkTagAction, BulkTaggableResource, BulkUpdateTagsResult } from './BulkUpdateTagsForm'
 
@@ -14,6 +14,7 @@ interface BulkUpdateTagsButtonProps {
     // Integer PKs for most resources; event definitions and tickets are keyed by UUID strings.
     selectedIds: ReadonlyArray<number | string>
     onSuccess?: (result: BulkUpdateTagsResult) => void
+    onSubmit?: (action: BulkTagAction, tags: string[]) => Promise<BulkUpdateTagsResult>
     /** Disables the trigger with an explanatory tooltip, for toolbars that render it before any selection exists. */
     disabledReason?: string
     /** Tooltip on the enabled trigger, e.g. a partial-selection warning. */
@@ -24,6 +25,7 @@ export function BulkUpdateTagsButton({
     resource,
     selectedIds,
     onSuccess,
+    onSubmit,
     disabledReason,
     tooltip,
 }: BulkUpdateTagsButtonProps): JSX.Element {
@@ -40,6 +42,7 @@ export function BulkUpdateTagsButton({
                         resource={resource}
                         selectedIds={selectedIds}
                         onSuccess={onSuccess}
+                        onSubmit={onSubmit}
                         onClose={() => setVisible(false)}
                     />
                 </div>

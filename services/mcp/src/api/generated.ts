@@ -53694,6 +53694,11 @@ export namespace Schemas {
       name?: string | null;
       /** Optional description. */
       description?: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version: number;
       /** draft (no execution), active (live), archived (disabled).
        *
@@ -53924,6 +53929,11 @@ export namespace Schemas {
       /** @nullable */
       readonly name: string | null;
       readonly description: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version: number;
       readonly status: HogFlowStateEnum;
       readonly origin_product: HogFlowOriginProductEnum | null;
@@ -53963,6 +53973,11 @@ export namespace Schemas {
       /** @nullable */
       readonly name: string | null;
       readonly description: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version: number;
       readonly status: HogFlowStateEnum;
       readonly origin_product: HogFlowOriginProductEnum | null;
@@ -54367,6 +54382,11 @@ export namespace Schemas {
       name?: string | null;
       /** Optional description. */
       description?: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version: number;
       /** draft (no execution), active (live), archived (disabled).
        *
@@ -65194,6 +65214,9 @@ export namespace Schemas {
       email?: EmailTemplate | null;
     }
 
+    /**
+     * Serializer mixin that handles tags for objects.
+     */
     export interface MessageTemplate {
       readonly id: string;
       /**
@@ -65203,6 +65226,11 @@ export namespace Schemas {
       name: string;
       /** What the template is for and when to use it. */
       description?: string;
+      /**
+         * Tags attached to the email template.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly created_at: string;
       readonly updated_at: string;
       /** Template content keyed by channel. Replaced as a whole on update, not merged. */
@@ -76012,6 +76040,7 @@ export namespace Schemas {
      * * `owner` - Owner
      * * `health` - Health
      * * `created-by` - Created By
+     * * `tag` - Tag
      */
     export type WorkflowViewFacetEnum = typeof WorkflowViewFacetEnum[keyof typeof WorkflowViewFacetEnum];
 
@@ -76023,6 +76052,7 @@ export namespace Schemas {
       Owner: 'owner',
       Health: 'health',
       CreatedBy: 'created-by',
+      Tag: 'tag',
     } as const;
 
     export interface WorkflowViewFilter {
@@ -76033,7 +76063,8 @@ export namespace Schemas {
        * * `trigger` - Trigger
        * * `owner` - Owner
        * * `health` - Health
-       * * `created-by` - Created By */
+       * * `created-by` - Created By
+       * * `tag` - Tag */
       facet: WorkflowViewFacetEnum;
       /**
          * Facet value; created-by accepts me for the current viewer.
@@ -79695,6 +79726,11 @@ export namespace Schemas {
       name?: string | null;
       /** Optional description. */
       description?: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version?: number;
       /** draft (no execution), active (live), archived (disabled).
        *
@@ -80714,6 +80750,9 @@ export namespace Schemas {
       deleted?: boolean;
     }
 
+    /**
+     * Serializer mixin that handles tags for objects.
+     */
     export interface PatchedMessageTemplate {
       readonly id?: string;
       /**
@@ -80723,6 +80762,11 @@ export namespace Schemas {
       name?: string;
       /** What the template is for and when to use it. */
       description?: string;
+      /**
+         * Tags attached to the email template.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly created_at?: string;
       readonly updated_at?: string;
       /** Template content keyed by channel. Replaced as a whole on update, not merged. */

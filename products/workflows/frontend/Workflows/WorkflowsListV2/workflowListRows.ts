@@ -1,3 +1,4 @@
+import type { MessageTemplateApi } from 'products/messaging/frontend/generated/api.schemas'
 import type {
     HogFlowListSummaryApi,
     UserBasicApi,
@@ -12,6 +13,7 @@ export interface WorkflowRunCounts {
 }
 
 export interface WorkflowListRow {
+    kind: 'workflow'
     id: string
     name: string
     workflow: HogFlowListSummaryApi
@@ -78,6 +80,7 @@ export function buildWorkflowListRows(
             const stats = countsById.get(workflow.id)
             const last7Days = metrics ? { succeeded: stats?.succeeded ?? 0, failed: stats?.failed ?? 0 } : null
             return {
+                kind: 'workflow',
                 id: workflow.id,
                 name: workflow.name ?? '',
                 workflow,
@@ -89,4 +92,28 @@ export function buildWorkflowListRows(
             }
         })
         .sort((a, b) => Date.parse(b.workflow.updated_at) - Date.parse(a.workflow.updated_at))
+}
+
+export interface EmailTemplateListRow {
+    kind: 'email_template'
+    id: string
+    name: string
+    template: MessageTemplateApi
+    searchText: string
+}
+
+export type WorkflowLibraryRow = WorkflowListRow | EmailTemplateListRow
+
+export function buildEmailTemplateRows(templates: MessageTemplateApi[]): EmailTemplateListRow[] {
+    return templates.map((template) => ({
+        kind: 'email_template',
+        id: template.id,
+        name: template.name,
+        template,
+        searchText: [template.name, template.description].filter(Boolean).join('\n').toLowerCase(),
+    }))
+}
+
+export function workflowLibraryObject(row: WorkflowLibraryRow): HogFlowListSummaryApi | MessageTemplateApi {
+    return row.kind === 'email_template' ? row.template : row.workflow
 }
