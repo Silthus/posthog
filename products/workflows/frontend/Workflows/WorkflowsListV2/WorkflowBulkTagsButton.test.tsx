@@ -2,6 +2,8 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expectLogic } from 'kea-test-utils'
 
+import { lemonToast } from '@posthog/lemon-ui'
+
 import { useMocks } from '~/mocks/jest'
 import { initKeaTests } from '~/test/init'
 
@@ -11,7 +13,9 @@ import { workflowsListV2Logic } from './workflowsListV2Logic'
 
 describe('bulk library tags', () => {
     afterEach(cleanup)
-    it('adds one tag to selected workflows and email templates', async () => {
+    it.each([false, true])('reports the outcome when template update fails: %s', async (templateFails) => {
+        const onSuccess = jest.fn()
+        const errorToast = jest.spyOn(lemonToast, 'error')
         const workflow = buildWorkflowRow({ id: 'wf-welcome', tags: ['welcome'] })
         const template = {
             id: 'email-welcome',
@@ -42,7 +46,9 @@ describe('bulk library tags', () => {
                         tags: ['onboarding'],
                     })
                     requests.push('template')
-                    return [200, { updated: [{ id: template.id, tags: ['onboarding'] }], skipped: [] }]
+                    return templateFails
+                        ? [500, { detail: 'Unavailable' }]
+                        : [200, { updated: [{ id: template.id, tags: ['onboarding'] }], skipped: [] }]
                 },
             },
         })
@@ -52,16 +58,28 @@ describe('bulk library tags', () => {
         try {
             await expectLogic(logic).toDispatchActions(['loadWorkflowsSuccess', 'loadEmailTemplatesSuccess'])
             const user = userEvent.setup()
-            render(<WorkflowBulkTagsButton rows={logic.values.rows} />)
+            render(<WorkflowBulkTagsButton rows={logic.values.rows} onSuccess={onSuccess} />)
             await user.click(screen.getByText('Update tags'))
             await user.type(screen.getByPlaceholderText('Enter tags...'), 'onboarding')
             await user.click(await screen.findByText('onboarding'))
             await user.click(screen.getByText('Add tags'))
             await waitFor(() => expect(requests.sort()).toEqual(['template', 'workflow']))
             logic.actions.setValue({ filters: [{ facet: 'tag', value: 'onboarding', negated: false }], text: '' })
-            await waitFor(() => expect(logic.values.filteredRows).toHaveLength(2))
+            await waitFor(() => expect(logic.values.filteredRows).toHaveLength(templateFails ? 1 : 2))
+            if (!templateFails) {
+                await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
+            }
+            if (templateFails) {
+                await waitFor(() => expect(errorToast).toHaveBeenCalledTimes(1))
+                await waitFor(() =>
+                    expect(errorToast).toHaveBeenCalledWith(
+                        'Could not update tags: Unavailable. Some items may have been updated; retry to finish.'
+                    )
+                )
+            }
         } finally {
             logic.unmount()
+            errorToast.mockRestore()
         }
     })
 })

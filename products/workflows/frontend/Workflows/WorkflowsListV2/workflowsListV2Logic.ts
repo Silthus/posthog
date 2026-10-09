@@ -175,6 +175,7 @@ function legacyParamsToValue(searchParams: Record<string, unknown>): FacetSearch
 export interface workflowsListV2LogicValues {
     currentTeamId: number | null // teamLogic
     user: UserType | null // userLogic
+    bulkTagsError: string
     bulkTagsResult: BulkUpdateTagsResult | null
     bulkTagsResultLoading: boolean
     emailTemplates: MessageTemplateApi[] | null
@@ -247,7 +248,9 @@ export interface workflowsListV2LogicActions {
     duplicateWorkflow: (row: WorkflowListRow) => {
         row: WorkflowListRow
     }
-    loadEmailTemplates: () => any
+    loadEmailTemplates: () => {
+        value: true
+    }
     loadEmailTemplatesFailure: (
         error: string,
         errorObject?: any
@@ -257,10 +260,14 @@ export interface workflowsListV2LogicActions {
     }
     loadEmailTemplatesSuccess: (
         emailTemplates: MessageTemplateApi[],
-        payload?: any
+        payload?: {
+            value: true
+        }
     ) => {
         emailTemplates: MessageTemplateApi[]
-        payload?: any
+        payload?: {
+            value: true
+        }
     }
     loadMetrics: () => {
         value: true
@@ -409,6 +416,7 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
     connect(() => ({ values: [teamLogic, ['currentTeamId'], userLogic, ['user']] })),
     actions({
         loadWorkflows: true,
+        loadEmailTemplates: true,
         loadMetrics: true,
         updateWorkflowTags: (row: WorkflowLibraryRow, tags: string[]) => ({ row, tags }),
         setValue: (value: FacetSearchValue) => ({ value }),
@@ -486,11 +494,14 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
         emailTemplates: [
             null as MessageTemplateApi[] | null,
             {
-                loadEmailTemplates: async () =>
-                    loadAllPages(
+                loadEmailTemplates: async (_, breakpoint) => {
+                    const templates = await loadAllPages(
                         (offset) => messagingTemplatesList(String(values.currentTeamId), { limit: PAGE_LIMIT, offset }),
                         'email templates'
-                    ),
+                    )
+                    breakpoint()
+                    return templates
+                },
             },
         ],
         metrics: [
@@ -543,6 +554,14 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
     })),
     reducers({
         bulkTagsResult: { bulkUpdateTags: () => null },
+        bulkTagsError: [
+            '',
+            {
+                bulkUpdateTags: () => '',
+                bulkUpdateTagsFailure: (_, { error, errorObject }) =>
+                    `Could not update tags: ${errorObject?.detail || error}. Some items may have been updated; retry to finish.`,
+            },
+        ],
         value: [
             EMPTY_VALUE,
             {
@@ -782,10 +801,10 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
                                 row.id,
                                 { tags }
                             )
-                            actions.patchEmailTemplate(row.id, { tags: updated.tags })
+                            actions.patchEmailTemplate(row.id, { tags: updated.tags, updated_at: updated.updated_at })
                         } else {
                             const updated = await hogFlowsPartialUpdate(String(values.currentTeamId), row.id, { tags })
-                            actions.patchWorkflow(row.id, { tags: updated.tags })
+                            actions.patchWorkflow(row.id, { tags: updated.tags, updated_at: updated.updated_at })
                         }
                     } catch (error) {
                         lemonToast.error(`Could not save tags: ${workflowActionErrorDetail(error)}`)

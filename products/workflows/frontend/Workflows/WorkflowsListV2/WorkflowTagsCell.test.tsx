@@ -40,7 +40,7 @@ describe('inline workflow tags', () => {
             patch: {
                 '/api/projects/:team_id/messaging_templates/:id/': async ({ request }) => {
                     savedTags = ((await request.json()) as { tags: string[] }).tags
-                    return [200, { ...template, tags: savedTags }]
+                    return [200, { ...template, tags: savedTags, updated_at: '2026-10-09T12:00:00Z' }]
                 },
             },
         })
@@ -57,6 +57,7 @@ describe('inline workflow tags', () => {
             await waitFor(() => expect(savedTags).toEqual(['onboarding']))
             logic.actions.setValue({ filters: [{ facet: 'tag', value: 'onboarding', negated: false }], text: '' })
             await waitFor(() => expect(logic.values.filteredRows.map((row) => row.name)).toEqual(['Reusable welcome']))
+            expect(logic.values.emailTemplates?.[0].updated_at).toBe('2026-10-09T12:00:00Z')
         } finally {
             logic.unmount()
         }

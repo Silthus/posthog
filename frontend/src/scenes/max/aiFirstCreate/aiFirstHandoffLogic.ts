@@ -180,13 +180,15 @@ export const aiFirstHandoffLogic: LogicWrapper<aiFirstHandoffLogicType> = kea<ai
             }
         },
         emitToolEvent: async ({ event }) => {
+            const callKey = JSON.stringify([event.streamKey, event.toolCallId])
+            const preparingCalls: Set<string> = (cache.preparingCreatedCalls ??= new Set<string>())
             if (
                 event.source !== 'live' ||
                 event.phase !== 'completed' ||
                 event.toolName !== props.toolName ||
                 event.streamKey !== values.activeCreation?.streamKey ||
                 cache.handedOff ||
-                cache.preparingCreatedStreamKey === event.streamKey
+                preparingCalls.has(callKey)
             ) {
                 return
             }
@@ -206,7 +208,7 @@ export const aiFirstHandoffLogic: LogicWrapper<aiFirstHandoffLogicType> = kea<ai
             if (
                 disposables.isDisposed ||
                 cache.handedOff ||
-                cache.preparingCreatedStreamKey === event.streamKey ||
+                preparingCalls.has(callKey) ||
                 event.streamKey !== values.activeCreation?.streamKey
             ) {
                 return
@@ -216,17 +218,19 @@ export const aiFirstHandoffLogic: LogicWrapper<aiFirstHandoffLogicType> = kea<ai
                 return
             }
             try {
-                cache.preparingCreatedStreamKey = event.streamKey
+                preparingCalls.add(callKey)
                 await props.prepareCreated?.(createdId)
             } catch {
-                if (!disposables.isDisposed && event.streamKey === values.activeCreation?.streamKey) {
+                if (
+                    !disposables.isDisposed &&
+                    !cache.handedOff &&
+                    event.streamKey === values.activeCreation?.streamKey
+                ) {
                     lemonToast.error(props.notOpenedMessage)
                 }
                 return
             } finally {
-                if (cache.preparingCreatedStreamKey === event.streamKey) {
-                    cache.preparingCreatedStreamKey = null
-                }
+                preparingCalls.delete(callKey)
             }
             if (disposables.isDisposed || cache.handedOff || event.streamKey !== values.activeCreation?.streamKey) {
                 return
