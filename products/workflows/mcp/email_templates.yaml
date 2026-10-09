@@ -145,3 +145,15 @@ tools:
             exclude:
                 - content
                 - created_by
+    workflows-update-email-template-tags:
+        operation: messaging_templates_bulk_update_tags_create
+        enabled: true
+        scopes:
+            - hog_flow:write
+        annotations:
+            readOnly: false
+            destructive: false
+            idempotent: true
+        title: Update email template tags
+        description: >
+            Add, remove, or replace tags on email templates in this project. Templates outside this project are skipped.

@@ -3,6 +3,8 @@ from dataclasses import fields as dataclass_fields
 from types import SimpleNamespace
 from typing import Any
 
+from django.db import transaction
+
 import structlog
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_field, extend_schema_view
@@ -16,10 +18,17 @@ from rest_framework.response import Response
 from posthog.api.forbid_destroy_model import ForbidDestroyModel
 from posthog.api.routing import TeamAndOrgViewSetMixin
 from posthog.api.shared import UserBasicSerializer
+from posthog.api.tagged_item import (
+    BULK_UPDATE_TAGS_SKIPPED_REASON,
+    BulkUpdateTagsUUIDRequestSerializer,
+    BulkUpdateTagsUUIDResponseSerializer,
+    TaggedItemViewSetMixin,
+)
 from posthog.cdp.validation import build_html_wrap_design
 from posthog.event_usage import report_user_action
 from posthog.models import User
 
+from products.access_control.backend.facade.user_access_control import access_level_satisfied_for_resource
 from products.messaging.backend.facade.api import (
     UnlayerNotConfiguredError,
     UnlayerRenderError,
@@ -31,6 +40,7 @@ from products.messaging.backend.facade.templates import (
     MessageCategoryNotInTeam,
     MessageTemplateMissing,
     MessageTemplateRow,
+    bulk_update_template_tags,
     create_template,
     edit_template_content,
     get_template,
@@ -146,6 +156,11 @@ class MessageTemplateCategoryField(serializers.Field):
 
 
 class MessageTemplateSerializer(serializers.Serializer):
+    tags = serializers.ListField(
+        child=serializers.CharField(max_length=255, allow_blank=False),
+        required=False,
+        help_text="Tags attached to the email template.",
+    )
     id = serializers.UUIDField(read_only=True)
     name = serializers.CharField(max_length=400, help_text="Human-readable template name shown in the library.")
     description = serializers.CharField(
@@ -240,15 +255,53 @@ TEMPLATE_ID_PARAMETER = OpenApiParameter(
 class MessageTemplatesViewSet(
     TeamAndOrgViewSetMixin,
     ForbidDestroyModel,
+    TaggedItemViewSetMixin,
     viewsets.ModelViewSet,
 ):
     scope_object = "hog_flow"
     permission_classes = [IsAuthenticated]
     # `design` is a custom write action; list it so programmatic callers (MCP/personal API key) get
     # hog_flow:write checked instead of being rejected as an action with no declared scope.
-    scope_object_write_actions = ["create", "update", "partial_update", "patch", "destroy", "design"]
+    scope_object_write_actions = [
+        "create",
+        "update",
+        "partial_update",
+        "patch",
+        "destroy",
+        "design",
+        "bulk_update_tags",
+    ]
 
     serializer_class = MessageTemplateSerializer
+
+    @extend_schema(request=BulkUpdateTagsUUIDRequestSerializer, responses={200: BulkUpdateTagsUUIDResponseSerializer})
+    @action(methods=["POST"], detail=False)
+    def bulk_update_tags(self, request: Request, **kwargs: Any) -> Response:
+        serializer = BulkUpdateTagsUUIDRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        level = self.user_access_control.access_level_for_resource("hog_flow")
+        editable = level is not None and access_level_satisfied_for_resource("hog_flow", level.access_level, "editor")
+        with transaction.atomic():
+            updated = (
+                bulk_update_template_tags(self.team_id, data["ids"], data["action"], data["tags"]) if editable else []
+            )
+            for row in updated:
+                if row["changed"]:
+                    self._emit_resource_edited(get_template(self.team_id, row["id"]))
+        found = {row["id"] for row in updated}
+        return Response(
+            BulkUpdateTagsUUIDResponseSerializer(
+                instance={
+                    "updated": updated,
+                    "skipped": [
+                        {"id": template_id, "reason": BULK_UPDATE_TAGS_SKIPPED_REASON}
+                        for template_id in data["ids"]
+                        if template_id not in found
+                    ],
+                }
+            ).data
+        )
 
     def dangerously_get_object(self) -> MessageTemplateRow:
         # Team scoping happens in the facade lookup, because the view has no queryset to filter.

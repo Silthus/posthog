@@ -415,7 +415,8 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
                 if (template.id === 'new') {
                     return api.messaging.createTemplate(template)
                 }
-                return api.messaging.updateTemplate(template.id, template)
+                const content = { ...template, tags: undefined }
+                return api.messaging.updateTemplate(template.id, content)
             },
         },
         message: {

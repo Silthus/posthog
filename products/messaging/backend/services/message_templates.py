@@ -4,7 +4,12 @@ from typing import Any
 from uuid import UUID
 
 from django.db import models, transaction
+from django.db.models import Prefetch
 from django.db.models.functions import Cast
+from django.utils import timezone
+
+from posthog.api.tagged_item import apply_bulk_tag_changes, cleanup_orphan_tags, current_tag_names, set_tags_on_object
+from posthog.models.tagged_item import TaggedItem
 
 from products.messaging.backend.models import MessageCategory, MessageTemplate
 
@@ -53,11 +58,17 @@ def rewrite_content(
 
 def team_templates(team_id: int) -> models.QuerySet[MessageTemplate]:
     # The pk tiebreak keeps pages stable, as the mixin ordering did for the queryset view.
-    return MessageTemplate.objects.filter(team_id=team_id, deleted=False).order_by("-created_at", "-pk")
+    return (
+        MessageTemplate.objects.filter(team_id=team_id, deleted=False)
+        .prefetch_related(
+            Prefetch("tagged_items", queryset=TaggedItem.objects.select_related("tag"), to_attr="prefetched_tags")
+        )
+        .order_by("-created_at", "-pk")
+    )
 
 
 def team_template(team_id: int, template_id: UUID | str) -> MessageTemplate:
-    return MessageTemplate.objects.get(team_id=team_id, deleted=False, pk=template_id)
+    return team_templates(team_id).get(pk=template_id)
 
 
 def category_id_for_team(team_id: int, category_id: Any) -> UUID:
@@ -67,20 +78,29 @@ def category_id_for_team(team_id: int, category_id: Any) -> UUID:
 
 def _apply_fields(template: MessageTemplate, fields: dict[str, Any]) -> None:
     for attr, value in fields.items():
+        if attr == "tags":
+            continue
         setattr(template, "message_category_id" if attr == "message_category" else attr, value)
 
 
 def create_template(team_id: int, created_by_id: int | None, fields: dict[str, Any]) -> MessageTemplate:
     template = MessageTemplate(team_id=team_id, created_by_id=created_by_id)
     _apply_fields(template, fields)
-    template.save(force_insert=True)
+    with transaction.atomic():
+        template.save(force_insert=True)
+        if "tags" in fields:
+            template.prefetched_tags = set_tags_on_object(fields["tags"], template)  # type: ignore[attr-defined]
     return template
 
 
 def update_template(team_id: int, template_id: UUID | str, fields: dict[str, Any]) -> MessageTemplate:
     template = team_template(team_id, template_id)
     _apply_fields(template, fields)
-    template.save()
+    with transaction.atomic():
+        template.save()
+        if "tags" in fields:
+            template.prefetched_tags = set_tags_on_object(fields["tags"], template)  # type: ignore[attr-defined]
+            cleanup_orphan_tags(team_id)
     return template
 
 
@@ -93,3 +113,18 @@ def edit_content_locked(
         locked.content = edit(deepcopy(locked.content or {}))
         locked.save()
     return locked
+
+
+def bulk_update_template_tags(
+    team_id: int, template_ids: list[UUID], tag_action: str, tags: list[str]
+) -> list[dict[str, Any]]:
+    with transaction.atomic():
+        templates = list(team_templates(team_id).filter(id__in=template_ids).order_by("pk").select_for_update())
+        previous_tags = {template.id: current_tag_names(template) for template in templates}
+        updated = apply_bulk_tag_changes(templates, tag_action, tags)
+        for row in updated:
+            row["changed"] = set(row["tags"]) != previous_tags[row["id"]]
+        team_templates(team_id).filter(id__in=[row["id"] for row in updated if row["changed"]]).update(
+            updated_at=timezone.now()
+        )
+    return updated

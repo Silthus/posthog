@@ -457,6 +457,8 @@ export const HogFlowTemplatesPartialUpdateBody = /* @__PURE__ */ zod
 export const hogFlowsCreateBodyNameMax = 400
 
 export const hogFlowsCreateBodyDescriptionDefault = ``
+export const hogFlowsCreateBodyTagsItemMax = 255
+
 export const hogFlowsCreateBodyTriggerMaskingOneTtlMin = 60
 export const hogFlowsCreateBodyTriggerMaskingOneTtlMax = 94608000
 
@@ -479,6 +481,10 @@ export const HogFlowsCreateBody = /* @__PURE__ */ zod
     .object({
         name: zod.string().max(hogFlowsCreateBodyNameMax).nullish().describe('Workflow name.'),
         description: zod.string().default(hogFlowsCreateBodyDescriptionDefault).describe('Optional description.'),
+        tags: zod
+            .array(zod.string().max(hogFlowsCreateBodyTagsItemMax))
+            .optional()
+            .describe('Tags attached to the workflow.'),
         status: zod
             .enum(['draft', 'active', 'archived'])
             .describe('\* `draft` - Draft\n\* `active` - Active\n\* `archived` - Archived')
@@ -862,6 +868,8 @@ export const HogFlowsCreateBody = /* @__PURE__ */ zod
 export const hogFlowsUpdateBodyNameMax = 400
 
 export const hogFlowsUpdateBodyDescriptionDefault = ``
+export const hogFlowsUpdateBodyTagsItemMax = 255
+
 export const hogFlowsUpdateBodyTriggerMaskingOneTtlMin = 60
 export const hogFlowsUpdateBodyTriggerMaskingOneTtlMax = 94608000
 
@@ -884,6 +892,10 @@ export const HogFlowsUpdateBody = /* @__PURE__ */ zod
     .object({
         name: zod.string().max(hogFlowsUpdateBodyNameMax).nullish().describe('Workflow name.'),
         description: zod.string().default(hogFlowsUpdateBodyDescriptionDefault).describe('Optional description.'),
+        tags: zod
+            .array(zod.string().max(hogFlowsUpdateBodyTagsItemMax))
+            .optional()
+            .describe('Tags attached to the workflow.'),
         status: zod
             .enum(['draft', 'active', 'archived'])
             .describe('\* `draft` - Draft\n\* `active` - Active\n\* `archived` - Archived')
@@ -1258,6 +1270,8 @@ export const HogFlowsUpdateBody = /* @__PURE__ */ zod
 export const hogFlowsPartialUpdateBodyNameMax = 400
 
 export const hogFlowsPartialUpdateBodyDescriptionDefault = ``
+export const hogFlowsPartialUpdateBodyTagsItemMax = 255
+
 export const hogFlowsPartialUpdateBodyTriggerMaskingOneTtlMin = 60
 export const hogFlowsPartialUpdateBodyTriggerMaskingOneTtlMax = 94608000
 
@@ -1285,6 +1299,10 @@ export const HogFlowsPartialUpdateBody = /* @__PURE__ */ zod
             .string()
             .default(hogFlowsPartialUpdateBodyDescriptionDefault)
             .describe('Optional description.'),
+        tags: zod
+            .array(zod.string().max(hogFlowsPartialUpdateBodyTagsItemMax))
+            .optional()
+            .describe('Tags attached to the workflow.'),
         status: zod
             .enum(['draft', 'active', 'archived'])
             .describe('\* `draft` - Draft\n\* `active` - Active\n\* `archived` - Archived')
@@ -1841,6 +1859,8 @@ export const HogFlowsGraphPartialUpdateBody = /* @__PURE__ */ zod.object({
 export const hogFlowsInvocationsCreateBodyConfigurationOneNameMax = 400
 
 export const hogFlowsInvocationsCreateBodyConfigurationOneDescriptionDefault = ``
+export const hogFlowsInvocationsCreateBodyConfigurationOneTagsItemMax = 255
+
 export const hogFlowsInvocationsCreateBodyConfigurationOneCreatedByOneDistinctIdMax = 200
 
 export const hogFlowsInvocationsCreateBodyConfigurationOneCreatedByOneFirstNameMax = 150
@@ -1886,6 +1906,10 @@ export const HogFlowsInvocationsCreateBody = /* @__PURE__ */ zod.object({
                 .string()
                 .default(hogFlowsInvocationsCreateBodyConfigurationOneDescriptionDefault)
                 .describe('Optional description.'),
+            tags: zod
+                .array(zod.string().max(hogFlowsInvocationsCreateBodyConfigurationOneTagsItemMax))
+                .optional()
+                .describe('Tags attached to the workflow.'),
             version: zod.number(),
             status: zod
                 .enum(['draft', 'active', 'archived'])
@@ -2742,6 +2766,8 @@ export const HogFlowsSchedulesPartialUpdateBody = /* @__PURE__ */ zod.object({
 export const hogFlowsBulkDeleteCreateBodyNameMax = 400
 
 export const hogFlowsBulkDeleteCreateBodyDescriptionDefault = ``
+export const hogFlowsBulkDeleteCreateBodyTagsItemMax = 255
+
 export const hogFlowsBulkDeleteCreateBodyTriggerMaskingOneTtlMin = 60
 export const hogFlowsBulkDeleteCreateBodyTriggerMaskingOneTtlMax = 94608000
 
@@ -2769,6 +2795,10 @@ export const HogFlowsBulkDeleteCreateBody = /* @__PURE__ */ zod
             .string()
             .default(hogFlowsBulkDeleteCreateBodyDescriptionDefault)
             .describe('Optional description.'),
+        tags: zod
+            .array(zod.string().max(hogFlowsBulkDeleteCreateBodyTagsItemMax))
+            .optional()
+            .describe('Tags attached to the workflow.'),
         status: zod
             .enum(['draft', 'active', 'archived'])
             .describe('\* `draft` - Draft\n\* `active` - Active\n\* `archived` - Archived')
@@ -3150,6 +3180,50 @@ export const HogFlowsBulkDeleteCreateBody = /* @__PURE__ */ zod
             .describe('Workflow vars (key, type, default). Total <5KB.'),
     })
     .describe('Mixin for serializers to add user access control fields')
+
+/**
+ * Bulk update tags on multiple objects.
+ *
+ * PAT access: this action has no ``required_scopes=`` on the decorator —
+ * inheriting viewsets must add ``"bulk_update_tags"`` to their
+ * ``scope_object_write_actions`` list to accept personal API keys.
+ * Without that opt-in, ``APIScopePermission`` rejects PAT requests with
+ * "This action does not support personal API key access". Done per-viewset
+ * so granting ``<scope>:write`` for one resource doesn't leak access to
+ * sibling resources that share this mixin.
+ *
+ * Accepts:
+ * - {"ids": [...], "action": "add"|"remove"|"set", "tags": ["tag1", "tag2"]}
+ *
+ * Actions:
+ * - "add": Add tags to existing tags on each object
+ * - "remove": Remove specific tags from each object
+ * - "set": Replace all tags on each object with the provided list
+ */
+export const hogFlowsBulkUpdateTagsCreateBodyIdsMax = 500
+
+export const hogFlowsBulkUpdateTagsCreateBodyTagsItemMax = 255
+
+export const hogFlowsBulkUpdateTagsCreateBodyTagsMax = 100
+
+export const HogFlowsBulkUpdateTagsCreateBody = /* @__PURE__ */ zod
+    .object({
+        ids: zod
+            .array(zod.uuid())
+            .max(hogFlowsBulkUpdateTagsCreateBodyIdsMax)
+            .describe('List of object UUIDs to update tags on.'),
+        action: zod
+            .enum(['add', 'remove', 'set'])
+            .describe('\* `add` - add\n\* `remove` - remove\n\* `set` - set')
+            .describe(
+                "'add' merges with existing tags, 'remove' deletes specific tags, 'set' replaces all tags.\n\n\* `add` - add\n\* `remove` - remove\n\* `set` - set"
+            ),
+        tags: zod
+            .array(zod.string().max(hogFlowsBulkUpdateTagsCreateBodyTagsItemMax))
+            .max(hogFlowsBulkUpdateTagsCreateBodyTagsMax)
+            .describe('Tag names to add, remove, or set (up to 100 per request, 255 characters each).'),
+    })
+    .describe('Variant of ``BulkUpdateTagsRequestSerializer`` for resources keyed by UUID (e.g. event definitions).')
 
 export const hogFlowsUserBlastRadiusCreateBodySendsEmailDefault = true
 

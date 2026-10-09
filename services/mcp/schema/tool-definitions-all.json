@@ -15675,12 +15675,40 @@
             "readOnlyHint": false
         }
     },
+    "workflows-update-email-template-tags": {
+        "description": "Add, remove, or replace tags on email templates in this project. Templates outside this project are skipped.",
+        "category": "Workflows",
+        "feature": "workflows",
+        "summary": "Update email template tags",
+        "title": "Update email template tags",
+        "required_scopes": ["hog_flow:write"],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": false
+        }
+    },
     "workflows-update-schedule": {
         "description": "Update a recurring schedule's RRULE, start time, timezone, or variable overrides. Changing the cadence reschedules the next run. Each firing re-broadcasts to the workflow's current trigger audience.",
         "category": "Workflows",
         "feature": "workflows",
         "summary": "Update workflow schedule",
         "title": "Update workflow schedule",
+        "required_scopes": ["hog_flow:write"],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": false
+        }
+    },
+    "workflows-update-tags": {
+        "description": "Add, remove, or replace tags on workflows in this project. Workflows without edit permission are skipped.",
+        "category": "Workflows",
+        "feature": "workflows",
+        "summary": "Update workflow tags",
+        "title": "Update workflow tags",
         "required_scopes": ["hog_flow:write"],
         "annotations": {
             "destructiveHint": false,

@@ -1,9 +1,10 @@
 from django.db import models
 
+from posthog.models.tagged_items_relation import Taggable
 from posthog.models.utils import UUIDTModel
 
 
-class MessageTemplate(UUIDTModel):
+class MessageTemplate(Taggable, UUIDTModel):  # nosemgrep: no-new-uuidt-models — preserves the existing primary key
     """
     A model for storing message templates used for email and eventually other messaging channels.
     """

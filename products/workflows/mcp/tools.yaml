@@ -474,3 +474,15 @@ tools:
             is not the sum of the versions - compare versions with each other, not with it. Set instance_id to the step
             you are reading, or several steps share one denominator.
         feature_flag: self-optimising-workflows
+    workflows-update-tags:
+        operation: hog_flows_bulk_update_tags_create
+        enabled: true
+        scopes:
+            - hog_flow:write
+        annotations:
+            readOnly: false
+            destructive: false
+            idempotent: true
+        title: Update workflow tags
+        description: >
+            Add, remove, or replace tags on workflows in this project. Workflows without edit permission are skipped.

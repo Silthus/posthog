@@ -16,6 +16,7 @@ from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.db import models, transaction
 from django.db.models import QuerySet
 from django.http import Http404, HttpResponse
+from django.utils import timezone
 
 import requests
 import structlog
@@ -69,6 +70,12 @@ from posthog.api.hog_invocation_results import (
 from posthog.api.log_entries import LogEntryMixin
 from posthog.api.routing import TeamAndOrgViewSetMixin
 from posthog.api.shared import UserBasicSerializer
+from posthog.api.tagged_item import (
+    BulkUpdateTagsUUIDRequestSerializer,
+    BulkUpdateTagsUUIDResponseSerializer,
+    TaggedItemViewSetMixin,
+    current_tag_names,
+)
 from posthog.auth import InternalAPIAuthentication
 from posthog.cdp.filters import DATA_WAREHOUSE_SOURCES, compile_filters_expr
 from posthog.cdp.flag_gated_templates import FLAG_GATED_TEMPLATE_IDS, gated_template_enabled
@@ -2481,6 +2488,11 @@ class HogFlowLastRunSerializer(serializers.Serializer):
 
 
 class HogFlowMinimalSerializer(UserAccessControlSerializerMixin, serializers.Serializer):
+    tags = serializers.ListField(
+        child=serializers.CharField(max_length=255, allow_blank=False),
+        required=False,
+        help_text="Tags attached to the workflow.",
+    )
     # The fields the model used to supply. Each is read-only here; the full serializer declares the
     # writable ones again, so those are typed as any field.
     id = serializers.UUIDField(read_only=True)
@@ -2526,6 +2538,7 @@ class HogFlowMinimalSerializer(UserAccessControlSerializerMixin, serializers.Ser
             "id",
             "name",
             "description",
+            "tags",
             "version",
             "status",
             "origin_product",
@@ -2623,6 +2636,7 @@ class HogFlowSummarySerializer(HogFlowMinimalSerializer):
             "id",
             "name",
             "description",
+            "tags",
             "version",
             "status",
             "origin_product",
@@ -2891,6 +2905,7 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             "id",
             "name",
             "description",
+            "tags",
             "version",
             "status",
             "origin_product",
@@ -4132,9 +4147,21 @@ class HogFlowVersionMetricsRequestSerializer(AppMetricsRequestSerializer):
         ]
     ),
 )
+@extend_schema_view(
+    bulk_update_tags=extend_schema(
+        request=BulkUpdateTagsUUIDRequestSerializer, responses={200: BulkUpdateTagsUUIDResponseSerializer}
+    )
+)
 class HogFlowViewSet(
-    TeamAndOrgViewSetMixin, AccessControlViewSetMixin, LogEntryMixin, AppMetricsMixin, viewsets.ModelViewSet
+    TeamAndOrgViewSetMixin,
+    AccessControlViewSetMixin,
+    TaggedItemViewSetMixin,
+    LogEntryMixin,
+    AppMetricsMixin,
+    viewsets.ModelViewSet,
 ):
+    bulk_update_tags_request_serializer_class = BulkUpdateTagsUUIDRequestSerializer
+    bulk_tag_activity_scope = "HogFlow"
     scope_object = "hog_flow"
     scope_object_read_actions = [
         "list",
@@ -4155,6 +4182,7 @@ class HogFlowViewSet(
         "proposal_outcome",
     ]
     scope_object_write_actions = [
+        "bulk_update_tags",
         "create",
         "update",
         "partial_update",
@@ -4294,10 +4322,36 @@ class HogFlowViewSet(
         return context
 
     def safely_get_queryset(self, queryset: QuerySet) -> QuerySet:
+        if self.action == "bulk_update_tags":
+            queryset = queryset.order_by("pk").select_for_update()
         trigger = self._trigger_filter()
         if trigger:
             queryset = queryset.filter(trigger__contains=trigger)
         return queryset
+
+    @action(methods=["POST"], detail=False)
+    def bulk_update_tags(self, request: Request, **kwargs: Any) -> Response:
+        serializer = self.bulk_update_tags_request_serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            objects = self.prefetch_tagged_items_if_available(
+                self.get_queryset().filter(id__in=serializer.validated_data["ids"])
+            )
+            previous_tags = {obj.id: current_tag_names(obj) for obj in objects}
+            response = super().bulk_update_tags(request, **kwargs)
+            if response.status_code != status.HTTP_200_OK:
+                return response
+            updated_ids = [
+                row["id"] for row in response.data["updated"] if set(row["tags"]) != previous_tags[row["id"]]
+            ]
+            self.get_queryset().filter(id__in=updated_ids).update(updated_at=timezone.now())
+            for workflow_id in updated_ids:
+                self._emit_resource_edited(
+                    get_workflow(
+                        team_id=self.team_id, workflow_id=workflow_id, user_access_control=None, required_level=None
+                    )
+                )
+        return response
 
     def _trigger_filter(self) -> Any:
         if not self.request.GET.get("trigger"):

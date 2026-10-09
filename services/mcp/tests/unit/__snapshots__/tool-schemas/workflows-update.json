@@ -175,6 +175,14 @@
             ],
             "description": "Workflow name."
         },
+        "tags": {
+            "description": "Tags attached to the workflow.",
+            "items": {
+                "maxLength": 255,
+                "type": "string"
+            },
+            "type": "array"
+        },
         "trigger_masking": {
             "anyOf": [
                 {
