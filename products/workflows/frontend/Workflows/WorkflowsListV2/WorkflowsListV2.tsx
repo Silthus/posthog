@@ -1,9 +1,12 @@
 import { useActions, useValues } from 'kea'
 
+import { IconFolder } from '@posthog/icons'
 import { LemonButton } from '@posthog/lemon-ui'
 
 import { useOnMountEffect } from 'lib/hooks/useOnMountEffect'
 import { LemonTable } from 'lib/lemon-ui/LemonTable'
+
+import { ProjectTree } from '~/layout/panel-layout/ProjectTree/ProjectTree'
 
 import { AutomationEmptyState } from '../../setupGuide/AutomationEmptyState'
 import { AutomationSuggestionBanner } from '../../setupGuide/AutomationSuggestionBanner'
@@ -11,6 +14,7 @@ import { MessagingSetupReminderBanner } from '../../setupGuide/MessagingSetupRem
 import { workflowLogic } from '../workflowLogic'
 import { serializeFacetQuery } from './FacetSearchBar/facetQuery'
 import { FacetSearchBar } from './FacetSearchBar/FacetSearchBar'
+import { workflowFoldersLogic } from './workflowFoldersLogic'
 import { buildWorkflowsListV2Columns } from './workflowsListV2Columns'
 import { workflowsListV2Logic } from './workflowsListV2Logic'
 
@@ -18,6 +22,7 @@ const PAGE_SIZE = 100
 
 export function WorkflowsListV2(): JSX.Element {
     const {
+        projectFilesEnabled,
         rows,
         filteredRows,
         facets,
@@ -33,8 +38,12 @@ export function WorkflowsListV2(): JSX.Element {
         isUnfilteredAutomationView,
         hasHealthFilter,
         metricsLoaded,
+        folderScopeLoading,
+        folderScopeFailed,
     } = useValues(workflowsListV2Logic)
-    const { setValue, loadWorkflows, loadMetrics, clearFilters } = useActions(workflowsListV2Logic)
+    const { setValue, loadWorkflows, loadMetrics, clearFilters, reloadFolderScope } = useActions(workflowsListV2Logic)
+    const { currentFolder } = useValues(workflowFoldersLogic)
+    const { openFolder } = useActions(workflowFoldersLogic)
 
     useOnMountEffect(() => {
         // Leaving the new-workflow scene keeps its logic mounted, so drop it here as WorkflowsTable does.
@@ -42,6 +51,16 @@ export function WorkflowsListV2(): JSX.Element {
     })
 
     const renderBody = (): JSX.Element => {
+        if (folderScopeFailed) {
+            return (
+                <div className="border rounded p-8 text-center">
+                    <span>Couldn't load this project folder</span>
+                    <LemonButton onClick={reloadFolderScope} loading={folderScopeLoading}>
+                        Retry
+                    </LemonButton>
+                </div>
+            )
+        }
         if (loadFailed) {
             return (
                 <div className="flex flex-col items-center gap-2 border rounded p-8 text-center">
@@ -79,10 +98,21 @@ export function WorkflowsListV2(): JSX.Element {
         if (listLoaded && filteredRows.length === 0 && isUnfilteredAutomationView && !searchPending) {
             return <AutomationEmptyState />
         }
-        if (listLoaded && rows.length > 0 && filteredRows.length === 0 && !searchPending && !healthPending) {
+        if (
+            listLoaded &&
+            rows.length > 0 &&
+            filteredRows.length === 0 &&
+            !searchPending &&
+            !healthPending &&
+            !folderScopeLoading
+        ) {
             return (
                 <div className="flex flex-col items-center gap-2 border rounded p-8 text-center">
-                    <span>No workflows match these filters</span>
+                    <span>
+                        {currentFolder === null
+                            ? 'No workflows match these filters'
+                            : 'No workflows in this folder match these filters'}
+                    </span>
                     <LemonButton
                         type="secondary"
                         size="small"
@@ -101,7 +131,7 @@ export function WorkflowsListV2(): JSX.Element {
                 size="small"
                 dataSource={filteredRows}
                 // Until the server search answers, a match in an email body can still add rows.
-                loading={!listLoaded || searchPending || healthPending}
+                loading={!listLoaded || searchPending || healthPending || folderScopeLoading}
                 rowKey="id"
                 columns={buildWorkflowsListV2Columns(shownColumns, metricsLoading)}
                 // Client-side pages stay out of the URL; `page` there is an old list param.
@@ -129,7 +159,35 @@ export function WorkflowsListV2(): JSX.Element {
                     Couldn't search step names and email content. Showing matches on name and description only.
                 </div>
             )}
-            {renderBody()}
+            {projectFilesEnabled ? (
+                <div className="flex flex-col gap-3 @min-[48rem]/main-content:flex-row min-w-0">
+                    <nav
+                        aria-label="Project files"
+                        className="border rounded p-2 @min-[48rem]/main-content:w-56 shrink-0 max-h-96 overflow-y-auto"
+                    >
+                        <LemonButton
+                            fullWidth
+                            icon={<IconFolder />}
+                            active={currentFolder === null}
+                            onClick={() => openFolder(null)}
+                            data-attr="workflows-project-root"
+                        >
+                            Project files
+                        </LemonButton>
+                        <ProjectTree
+                            onlyTree
+                            root="project://"
+                            logicKey="workflow-project-files"
+                            onFolderClicked={(folder) => openFolder(folder.record?.path ?? '')}
+                            showRecents={false}
+                            shareDragAndDropContext
+                        />
+                    </nav>
+                    <div className="min-w-0 flex-1">{renderBody()}</div>
+                </div>
+            ) : (
+                renderBody()
+            )}
             <AutomationSuggestionBanner />
         </div>
     )
