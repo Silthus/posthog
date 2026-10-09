@@ -448,6 +448,7 @@ class Workflow:
     email_sending_paused_by: str
     email_sending_resumed_at: datetime | None
     user_access_level: str | None
+    tags: list[str] = field(default_factory=list)
     # Read on list pages only, and ``workflow_type`` on summary pages only. A single-workflow read leaves
     # them None and fills ``schedules``.
     workflow_type: str | None = None

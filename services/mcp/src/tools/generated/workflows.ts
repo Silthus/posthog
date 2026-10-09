@@ -25,6 +25,9 @@ const broadcastsCreate = (): ToolBase<ReturnType<typeof BroadcastsCreateSchema>,
         if (params.description !== undefined) {
             body['description'] = params.description
         }
+        if (params.tags !== undefined) {
+            body['tags'] = params.tags
+        }
         if (params.status !== undefined) {
             body['status'] = params.status
         }
@@ -79,6 +82,9 @@ const workflowsCreate = (): ToolBase<ReturnType<typeof WorkflowsCreateSchema>, W
             }
             if (params.description !== undefined) {
                 body['description'] = params.description
+            }
+            if (params.tags !== undefined) {
+                body['tags'] = params.tags
             }
             if (params.status !== undefined) {
                 body['status'] = params.status
@@ -632,6 +638,9 @@ const workflowsUpdate = (): ToolBase<ReturnType<typeof WorkflowsUpdateSchema>, W
             if (params.description !== undefined) {
                 body['description'] = params.description
             }
+            if (params.tags !== undefined) {
+                body['tags'] = params.tags
+            }
             if (params.trigger_masking !== undefined) {
                 body['trigger_masking'] = params.trigger_masking
             }
@@ -728,6 +737,38 @@ const workflowsVersionStats = (): ToolBase<
     },
 })
 
+const WorkflowsUpdateTagsSchema = () => {
+    const HogFlowsBulkUpdateTagsCreateBody = orvalSchemas.HogFlowsBulkUpdateTagsCreateBody()
+    return HogFlowsBulkUpdateTagsCreateBody
+}
+
+const workflowsUpdateTags = (): ToolBase<
+    ReturnType<typeof WorkflowsUpdateTagsSchema>,
+    Schemas.BulkUpdateTagsUUIDResponse
+> => ({
+    name: 'workflows-update-tags',
+    schema: WorkflowsUpdateTagsSchema(),
+    handler: async (context: Context, params: z.infer<ReturnType<typeof WorkflowsUpdateTagsSchema>>) => {
+        const projectId = await context.stateManager.getProjectId()
+        const body: Record<string, unknown> = {}
+        if (params.ids !== undefined) {
+            body['ids'] = params.ids
+        }
+        if (params.action !== undefined) {
+            body['action'] = params.action
+        }
+        if (params.tags !== undefined) {
+            body['tags'] = params.tags
+        }
+        const result = await context.api.request<Schemas.BulkUpdateTagsUUIDResponse>({
+            method: 'POST',
+            path: `/api/projects/${encodeURIComponent(String(projectId))}/hog_flows/bulk_update_tags/`,
+            body,
+        })
+        return result
+    },
+})
+
 export const GENERATED_TOOLS: Record<string, () => ToolBase<ZodObjectAny>> = {
     'broadcasts-create': broadcastsCreate,
     'workflows-create': workflowsCreate,
@@ -753,4 +794,5 @@ export const GENERATED_TOOLS: Record<string, () => ToolBase<ZodObjectAny>> = {
     'workflows-update': workflowsUpdate,
     'workflows-update-schedule': workflowsUpdateSchedule,
     'workflows-version-stats': workflowsVersionStats,
+    'workflows-update-tags': workflowsUpdateTags,
 }

@@ -8,11 +8,14 @@ from uuid import UUID
 
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Count, F, OuterRef, Q, QuerySet, Subquery, Value
+from django.db.models import Count, F, OuterRef, Prefetch, Q, QuerySet, Subquery, Value
 from django.db.models.expressions import RawSQL
 from django.db.models.functions import Coalesce
 
 from django_filters import BooleanFilter, FilterSet
+
+from posthog.api.tagged_item import current_tag_names
+from posthog.models.tagged_item import TaggedItem
 
 from products.workflows.backend.facade.contracts import (
     Workflow,
@@ -95,7 +98,13 @@ def get_team_workflow_edit_state(
     """The team's workflow for an edit made outside a request, read once for the archived and access checks.
     An archived workflow raises WorkflowArchived before the access check, so every caller gets the same answer."""
     try:
-        flow = HogFlow.objects.select_related("created_by").get(team_id=team_id, pk=workflow_id)
+        flow = (
+            HogFlow.objects.select_related("created_by")
+            .prefetch_related(
+                Prefetch("tagged_items", queryset=TaggedItem.objects.select_related("tag"), to_attr="prefetched_tags")
+            )
+            .get(team_id=team_id, pk=workflow_id)
+        )
     except (HogFlow.DoesNotExist, ValidationError, ValueError):
         raise WorkflowNotFound()
     if flow.status == HogFlow.State.ARCHIVED:
@@ -172,7 +181,13 @@ def _checked_flow(
     *,
     created_by: bool,
 ) -> HogFlow:
-    queryset = HogFlow.objects.select_related("created_by") if created_by else HogFlow.objects.all()
+    queryset = (
+        HogFlow.objects.select_related("created_by").prefetch_related(
+            Prefetch("tagged_items", queryset=TaggedItem.objects.select_related("tag"), to_attr="prefetched_tags")
+        )
+        if created_by
+        else HogFlow.objects.all()
+    )
     try:
         flow = queryset.get(team_id=team_id, pk=workflow_id)
     except (HogFlow.DoesNotExist, ValidationError, ValueError):
@@ -235,7 +250,13 @@ def _list_queryset(
     user_access_control: "UserAccessControl | None",
     include_all_if_admin: bool,
 ) -> QuerySet:
-    queryset = HogFlow.objects.filter(team_id=team_id).select_related("created_by")
+    queryset = (
+        HogFlow.objects.filter(team_id=team_id)
+        .select_related("created_by")
+        .prefetch_related(
+            Prefetch("tagged_items", queryset=TaggedItem.objects.select_related("tag"), to_attr="prefetched_tags")
+        )
+    )
 
     pending = (
         WorkflowProposal.objects.filter(hog_flow=OuterRef("pk"), status=WorkflowProposalStatus.SUGGESTED)
@@ -385,6 +406,7 @@ def _to_workflow(
         email_sending_resumed_at=flow.email_sending_resumed_at,
         user_access_level=access_level,
         workflow_type=getattr(flow, "workflow_type", None),
+        tags=sorted(current_tag_names(flow)),
         pending_suggestions=getattr(flow, "pending_suggestions", None),
         suggestions_enabled=getattr(flow, "suggestions_enabled", None),
     )
