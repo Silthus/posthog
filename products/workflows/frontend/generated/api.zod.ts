@@ -477,6 +477,7 @@ export const hogFlowsCreateBodyActionsItemConfigTwoEventsItemFiltersOneSourceDef
 
 export const HogFlowsCreateBody = /* @__PURE__ */ zod
     .object({
+        _create_in_folder: zod.string().optional().describe('Project folder for a newly created workflow.'),
         name: zod.string().max(hogFlowsCreateBodyNameMax).nullish().describe('Workflow name.'),
         description: zod.string().default(hogFlowsCreateBodyDescriptionDefault).describe('Optional description.'),
         status: zod
@@ -882,6 +883,7 @@ export const hogFlowsUpdateBodyActionsItemConfigTwoEventsItemFiltersOneSourceDef
 
 export const HogFlowsUpdateBody = /* @__PURE__ */ zod
     .object({
+        _create_in_folder: zod.string().optional().describe('Project folder for a newly created workflow.'),
         name: zod.string().max(hogFlowsUpdateBodyNameMax).nullish().describe('Workflow name.'),
         description: zod.string().default(hogFlowsUpdateBodyDescriptionDefault).describe('Optional description.'),
         status: zod
@@ -1280,6 +1282,7 @@ export const hogFlowsPartialUpdateBodyActionsItemConfigTwoEventsItemFiltersOneSo
 
 export const HogFlowsPartialUpdateBody = /* @__PURE__ */ zod
     .object({
+        _create_in_folder: zod.string().optional().describe('Project folder for a newly created workflow.'),
         name: zod.string().max(hogFlowsPartialUpdateBodyNameMax).nullish().describe('Workflow name.'),
         description: zod
             .string()
@@ -1877,6 +1880,7 @@ export const HogFlowsInvocationsCreateBody = /* @__PURE__ */ zod.object({
     configuration: zod
         .object({
             id: zod.uuid(),
+            _create_in_folder: zod.string().optional().describe('Project folder for a newly created workflow.'),
             name: zod
                 .string()
                 .max(hogFlowsInvocationsCreateBodyConfigurationOneNameMax)
@@ -2764,6 +2768,7 @@ export const hogFlowsBulkDeleteCreateBodyActionsItemConfigTwoEventsItemFiltersOn
 
 export const HogFlowsBulkDeleteCreateBody = /* @__PURE__ */ zod
     .object({
+        _create_in_folder: zod.string().optional().describe('Project folder for a newly created workflow.'),
         name: zod.string().max(hogFlowsBulkDeleteCreateBodyNameMax).nullish().describe('Workflow name.'),
         description: zod
             .string()
