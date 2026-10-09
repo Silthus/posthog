@@ -30,9 +30,9 @@ import { WorkflowsOnboardingWizard } from './setupGuide/wizard/WorkflowsOnboardi
 import { newWorkflowLogic } from './Workflows/newWorkflowLogic'
 import { NewWorkflowModal } from './Workflows/NewWorkflowModal'
 import { workflowTemplatesLogic } from './Workflows/templates/workflowTemplatesLogic'
-import { workflowsLogic } from './Workflows/workflowsLogic'
 import { WorkflowsListV2 } from './Workflows/WorkflowsListV2/WorkflowsListV2'
 import { WorkflowsListV2ColumnsMenu } from './Workflows/WorkflowsListV2/WorkflowsListV2ColumnsMenu'
+import { workflowsLogic } from './Workflows/workflowsLogic'
 import { WorkflowsTable } from './Workflows/WorkflowsTable'
 import { templateTypeForListType } from './Workflows/workflowTypeFilters'
 import { WorkflowsTemplates } from './WorkflowsTemplates'
@@ -245,7 +245,7 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
                                 </LemonButton>
                             </AccessControlAction>
                         )}
-{currentTab === 'workflows' && listV2 && <WorkflowsListV2ColumnsMenu />}
+                        {currentTab === 'workflows' && listV2 && <WorkflowsListV2ColumnsMenu />}
                         {currentTab !== 'workflows' && currentTab !== 'templates' && (
                             <MessagingTabActions tab={currentTab} channelsUrl={urls.workflows('channels')} />
                         )}

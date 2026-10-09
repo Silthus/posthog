@@ -52,29 +52,37 @@ describe('WorkflowsScene', () => {
 
     afterEach(() => cleanup())
 
-    it('filters the list to active workflows from the keyboard and writes the pills to the URL', async () => {
-        featureFlagLogic.actions.setFeatureFlags([], { [FEATURE_FLAGS.WORKFLOWS_LIST_V2]: true })
-        const user = userEvent.setup()
-        render(
-            <Provider>
-                <WorkflowsScene />
-            </Provider>
-        )
+    it.each([false, true])(
+        'filters the list and writes pills to the URL with grouped navigation %s',
+        async (groupedNavigation) => {
+            featureFlagLogic.actions.setFeatureFlags([], {
+                [FEATURE_FLAGS.WORKFLOWS_LIST_V2]: true,
+                [FEATURE_FLAGS.WORKFLOWS_NEW_NAVIGATION]: groupedNavigation,
+                [FEATURE_FLAGS.WORKFLOWS_GUIDED_ONBOARDING]: groupedNavigation,
+                [FEATURE_FLAGS.WORKFLOWS_ONBOARDING_WIZARD]: groupedNavigation,
+            })
+            const user = userEvent.setup()
+            render(
+                <Provider>
+                    <WorkflowsScene />
+                </Provider>
+            )
 
-        await waitFor(() => expect(shownRowNames()).toContain('Welcome series'))
+            await waitFor(() => expect(shownRowNames()).toContain('Welcome series'))
 
-        const input = document.querySelector<HTMLInputElement>('input[data-attr="workflows-search"]')
-        expect(input).not.toBeNull()
-        await user.click(input!)
-        await user.keyboard('sta')
-        await user.keyboard('{Tab}')
-        expect(input).toHaveValue('status:')
-        await user.keyboard('{ArrowDown}{Enter}')
+            const input = document.querySelector<HTMLInputElement>('input[data-attr="workflows-search"]')
+            expect(input).not.toBeNull()
+            await user.click(input!)
+            await user.keyboard('sta')
+            await user.keyboard('{Tab}')
+            expect(input).toHaveValue('status:')
+            await user.keyboard('{ArrowDown}{Enter}')
 
-        await waitFor(() => expect(shownRowNames()).toEqual(['Welcome series']))
-        expect(router.values.searchParams.q).toEqual('status:active')
-        expect(input).toHaveValue('')
-    })
+            await waitFor(() => expect(shownRowNames()).toEqual(['Welcome series']))
+            expect(router.values.searchParams.q).toEqual('status:active')
+            expect(input).toHaveValue('')
+        }
+    )
 
     it('pages past the first 100 rows, and a new filter starts again on page one', async () => {
         workflows = Array.from({ length: 250 }, (_, i) =>
