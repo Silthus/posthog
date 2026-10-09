@@ -3,7 +3,7 @@
  * MCP service uses these Zod schemas for generated tool handlers.
  * To regenerate: hogli build:openapi
  *
- * PostHog API - MCP 5 enabled ops
+ * PostHog API - MCP 6 enabled ops
  * OpenAPI spec version: 1.0.0
  */
 import * as zod from 'zod'
@@ -29,12 +29,18 @@ export const MessagingTemplatesCreateParams = () => zod.object({
         ),
 })
 
+export const messagingTemplatesCreateBodyTagsItemMax = 255
+
 export const messagingTemplatesCreateBodyNameMax = 400
 
 export const messagingTemplatesCreateBodyContentOneTemplatingDefault = `liquid`
 export const messagingTemplatesCreateBodyTypeMax = 24
 
 export const MessagingTemplatesCreateBody = () => zod.object({
+    tags: zod
+        .array(zod.string().max(messagingTemplatesCreateBodyTagsItemMax))
+        .optional()
+        .describe('Tags attached to the email template.'),
     name: zod
         .string()
         .max(messagingTemplatesCreateBodyNameMax)
@@ -130,12 +136,18 @@ export const MessagingTemplatesPartialUpdateParams = () => zod.object({
         ),
 })
 
+export const messagingTemplatesPartialUpdateBodyTagsItemMax = 255
+
 export const messagingTemplatesPartialUpdateBodyNameMax = 400
 
 export const messagingTemplatesPartialUpdateBodyContentOneTemplatingDefault = `liquid`
 export const messagingTemplatesPartialUpdateBodyTypeMax = 24
 
 export const MessagingTemplatesPartialUpdateBody = () => zod.object({
+    tags: zod
+        .array(zod.string().max(messagingTemplatesPartialUpdateBodyTagsItemMax))
+        .optional()
+        .describe('Tags attached to the email template.'),
     name: zod
         .string()
         .max(messagingTemplatesPartialUpdateBodyNameMax)
@@ -284,3 +296,55 @@ export const MessagingTemplatesDesignPartialUpdateBody = () => zod.object({
             "Ordered edits applied atomically to a template's Unlayer design: the stored design is read, the ops are applied in order, the result is validated and re-rendered to HTML, and it's saved only if valid — otherwise the template is unchanged. Reference blocks by id so you never resend the whole design."
         ),
 })
+
+/**
+ * Bulk update tags on multiple objects.
+ *
+ * PAT access: this action has no ``required_scopes=`` on the decorator —
+ * inheriting viewsets must add ``"bulk_update_tags"`` to their
+ * ``scope_object_write_actions`` list to accept personal API keys.
+ * Without that opt-in, ``APIScopePermission`` rejects PAT requests with
+ * "This action does not support personal API key access". Done per-viewset
+ * so granting ``<scope>:write`` for one resource doesn't leak access to
+ * sibling resources that share this mixin.
+ *
+ * Accepts:
+ * - {"ids": [...], "action": "add"|"remove"|"set", "tags": ["tag1", "tag2"]}
+ *
+ * Actions:
+ * - "add": Add tags to existing tags on each object
+ * - "remove": Remove specific tags from each object
+ * - "set": Replace all tags on each object with the provided list
+ */
+export const MessagingTemplatesBulkUpdateTagsCreateParams = () => zod.object({
+    project_id: zod
+        .string()
+        .describe(
+            "Project ID of the project you're trying to access. To find the ID of the project, make a call to \/api\/projects\/."
+        ),
+})
+
+export const messagingTemplatesBulkUpdateTagsCreateBodyIdsMax = 500
+
+export const messagingTemplatesBulkUpdateTagsCreateBodyTagsItemMax = 255
+
+export const messagingTemplatesBulkUpdateTagsCreateBodyTagsMax = 100
+
+export const MessagingTemplatesBulkUpdateTagsCreateBody = () => zod
+    .object({
+        ids: zod
+            .array(zod.string())
+            .max(messagingTemplatesBulkUpdateTagsCreateBodyIdsMax)
+            .describe('List of object UUIDs to update tags on.'),
+        action: zod
+            .enum(['add', 'remove', 'set'])
+            .describe('\* `add` - add\n\* `remove` - remove\n\* `set` - set')
+            .describe(
+                "'add' merges with existing tags, 'remove' deletes specific tags, 'set' replaces all tags.\n\n\* `add` - add\n\* `remove` - remove\n\* `set` - set"
+            ),
+        tags: zod
+            .array(zod.string().max(messagingTemplatesBulkUpdateTagsCreateBodyTagsItemMax))
+            .max(messagingTemplatesBulkUpdateTagsCreateBodyTagsMax)
+            .describe('Tag names to add, remove, or set (up to 100 per request, 255 characters each).'),
+    })
+    .describe('Variant of ``BulkUpdateTagsRequestSerializer`` for resources keyed by UUID (e.g. event definitions).')
