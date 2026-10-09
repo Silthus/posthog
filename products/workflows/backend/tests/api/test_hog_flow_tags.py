@@ -57,3 +57,19 @@ class TestHogFlowTags(APIBaseTest):
         stale = self.client.patch(url, {"tags": loaded["tags"], "base_updated_at": loaded["updated_at"]}, format="json")
         assert stale.status_code == 409, stale.json()
         assert self.client.get(url).json()["tags"] == ["onboarding"]
+
+    def test_repeated_bulk_tag_does_not_invalidate_an_editor_save(self) -> None:
+        flow = HogFlow.objects.create(
+            team=self.team,
+            name="Welcome workflow",
+            actions=[{"id": "trigger", "name": "Trigger", "type": "trigger", "config": {"type": "event"}}],
+        )
+        url = f"/api/projects/{self.team.id}/hog_flows/{flow.id}/"
+        loaded = self.client.patch(url, {"tags": ["onboarding"]}).json()
+        response = self.client.post(
+            f"/api/projects/{self.team.id}/hog_flows/bulk_update_tags/",
+            {"ids": [str(flow.id)], "action": "add", "tags": ["onboarding"]},
+            format="json",
+        )
+        assert response.status_code == 200, response.json()
+        assert self.client.get(url).json()["updated_at"] == loaded["updated_at"]
