@@ -1,7 +1,7 @@
 import { useActions, useValues } from 'kea'
 
 import { IconDrag } from '@posthog/icons'
-import { LemonButton, Tooltip } from '@posthog/lemon-ui'
+import { LemonButton, LemonTag, Tooltip } from '@posthog/lemon-ui'
 
 import { FEATURE_FLAGS } from 'lib/constants'
 import { LemonTableLink } from 'lib/lemon-ui/LemonTable/LemonTableLink'
@@ -35,11 +35,30 @@ export function WorkflowListNameCell({ row }: { row: WorkflowListRow }): JSX.Ele
             </span>
         </Tooltip>
     ) : undefined
+    const title = (
+        <span className="flex items-center gap-2 flex-wrap min-w-0 w-full">
+            {name}
+            {featureFlags[FEATURE_FLAGS.SELF_OPTIMISING_WORKFLOWS] &&
+                row.workflow.status === 'active' &&
+                row.workflow.suggestions_enabled && (
+                    <LemonTag
+                        type={row.workflow.pending_suggestions ? 'completion' : 'option'}
+                        data-attr="workflow-list-suggestions"
+                    >
+                        {!row.workflow.pending_suggestions
+                            ? 'Self-driving'
+                            : row.workflow.pending_suggestions === 1
+                              ? '1 suggestion'
+                              : `${row.workflow.pending_suggestions} suggestions`}
+                    </LemonTag>
+                )}
+        </span>
+    )
     if (!enabled) {
         return (
             <LemonTableLink
                 to={archived ? undefined : urls.workflow(row.id, 'workflow')}
-                title={archived ? <Tooltip title="Restore this workflow to make changes">{name}</Tooltip> : name}
+                title={archived ? <Tooltip title="Restore this workflow to make changes">{name}</Tooltip> : title}
                 description={description}
                 truncateTitle
             />
@@ -67,7 +86,7 @@ export function WorkflowListNameCell({ row }: { row: WorkflowListRow }): JSX.Ele
             <div className="flex-1 min-w-0">
                 <LemonTableLink
                     to={archived ? undefined : urls.workflow(row.id, 'workflow')}
-                    title={archived ? <Tooltip title="Restore this workflow to make changes">{name}</Tooltip> : name}
+                    title={archived ? <Tooltip title="Restore this workflow to make changes">{name}</Tooltip> : title}
                     description={description}
                     truncateTitle
                 />

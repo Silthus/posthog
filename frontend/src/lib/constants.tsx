@@ -647,6 +647,7 @@ export const FEATURE_FLAGS = {
     WORKFLOWS_LIST_V2: 'workflows-list-v2', // owner: #team-workflows
     WORKFLOWS_PROJECT_FILES: 'workflows-project-files',
     WORKFLOWS_PUSH_NOTIFICATIONS: 'workflows-push-notifications', // owner: #team-workflows
+    WORKFLOWS_SAVED_VIEWS: 'workflows-saved-views',
     WORKFLOWS_TRIGGER_VOLUME_ESTIMATE: 'workflows-trigger-volume-estimate', // owner: @mayteio #team-workflows
     XAA_AUTHENTICATION: 'xaa-authentication', // owner: @reecejones #team-platform-features
 } as const

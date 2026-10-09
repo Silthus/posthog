@@ -88,7 +88,7 @@ export function buildWorkflowListFacets(
             description: 'Failed runs in the last 7 days',
             showOnFocus: true,
             order: 5,
-            getValues: (row) => [row.health],
+            getValues: (row) => (row.last7Days === null ? [] : [row.health]),
             formatValue: labelFrom(HEALTH_LABELS),
         },
         {
