@@ -29,6 +29,33 @@ const params = (html: string, text?: string, preheader?: string): CyclotronInvoc
 })
 
 describe('sandbox email content', () => {
+    it.each([
+        '<style>div{display:none}</style><p>Visible message</p>',
+        '<style>body{background:#101010;color:white;font:24px Arial}body p{background:#101010}</style><p>Visible message</p>',
+    ])('preserves template selectors and inherited presentation: %s', async (html) => {
+        const result = await sender.withIdentificationFooter(params(html), 'Example organization via PostHog', 1)
+        const root = parse(result.html!).childNodes.find(defaultTreeAdapter.isElementNode)!
+        const body = root.childNodes.filter(defaultTreeAdapter.isElementNode).find((node) => node.tagName === 'body')!
+        expect(body.childNodes.some((node) => defaultTreeAdapter.isElementNode(node) && node.tagName === 'p')).toBe(
+            true
+        )
+        for (const ancestor of [root, body]) {
+            expect(ancestor.attrs.find((attribute) => attribute.name === 'style')?.value).not.toContain('all:initial')
+        }
+    })
+    it('keeps escaped preview values as text inside noscript', async () => {
+        const result = await sender.withIdentificationFooter(
+            params(
+                '<table><tbody><tr><td>Hello</td></tr></tbody></table>',
+                undefined,
+                '<noscript>&lt;/noscript&gt;&lt;img src=x onerror=alert(1)&gt;</noscript>'
+            ),
+            'Example organization via PostHog',
+            1
+        )
+        expect(result.html).toContain('&lt;img')
+        expect(result.html).not.toContain('<img')
+    })
     it('normalizes route settings before sending', async () => {
         const paddedSender = new SandboxEmailSender(
             {
@@ -74,9 +101,8 @@ describe('sandbox email content', () => {
         const body = root.childNodes.filter(defaultTreeAdapter.isElementNode).find((node) => node.tagName === 'body')!
         for (const ancestor of [root, body]) {
             expect(ancestor.attrs.find((attribute) => attribute.name === 'style')?.value).toContain(
-                'all:initial!important'
+                'height:auto!important'
             )
-            expect(ancestor.attrs.find((attribute) => attribute.name === 'style')?.value).not.toContain('height:20px')
         }
         expect(result.html).toContain('Visible message')
         expect(body.childNodes.at(-1)).toMatchObject({ childNodes: [{ nodeName: '#text', value: footer }] })
@@ -138,11 +164,7 @@ describe('sandbox email content', () => {
             '<style></noscript><script></style>',
             null,
         ],
-        [
-            '<body style="background:#525252;color:white"><p>Hello</p></body>',
-            '<div style="background:#525252;color:white"><p>Hello</p>',
-            null,
-        ],
+        ['<body style="background:#525252;color:white"><p>Hello</p></body>', '<p>Hello</p>', null],
     ])('retains the footer outside template content: %s', async (html, expectedContent, preheader) => {
         const result = await sender.withIdentificationFooter(
             params(html, undefined, preheader ?? undefined),

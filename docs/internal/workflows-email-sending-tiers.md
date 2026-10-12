@@ -83,4 +83,5 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
 
 Sandbox email uses a fixed SES tenant, configuration set, and From address. Set `SES_SANDBOX_TENANT_NAME`, `SES_SANDBOX_CONFIGURATION_SET`, and `SES_SANDBOX_FROM_ADDRESS` on the worker. The From address must match Django's `WORKFLOWS_SANDBOX_SENDER_FROM_ADDRESS` and belong to the shared SES identity.
 Sandbox sends disable click tracking and unsubscribe headers because the complete stack restricts them to verified organization members for internal testing. Marketing delivery to external audiences requires a verified sender.
-HTML is parsed and normalized before the identification footer is appended. Template root formatting is isolated from the footer; malformed markup may render differently from an own-domain send. Preview text is parsed separately so escaped template values remain readable.
+HTML is parsed and normalized before the identification footer is appended. Root clipping and visibility styles are overridden while template typography is preserved; malformed markup may render differently from an own-domain send. Preview text is parsed separately so escaped template values remain readable.
+The visible footer is best effort across email clients and arbitrary template CSS. Signed message tracking headers retain sender attribution independently of the template.

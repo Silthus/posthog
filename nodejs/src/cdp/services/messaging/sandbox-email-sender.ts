@@ -38,34 +38,28 @@ function htmlBody(document: DefaultTreeAdapterMap['document']): DefaultTreeAdapt
     )
 }
 
-function isolateTemplateLayout(
+function protectFooterAncestors(
     document: DefaultTreeAdapterMap['document'],
     body: DefaultTreeAdapterMap['element']
 ): void {
     const root = document.childNodes.find(defaultTreeAdapter.isElementNode)!
-    const layout = defaultTreeAdapter.createElement('div', body.namespaceURI, [
-        {
-            name: 'style',
-            value: 'all:initial!important;display:flow-root!important;position:relative!important;contain:paint!important;isolation:isolate!important',
-        },
-    ])
-    let content = layout
+    const visibleLayout =
+        'display:block!important;position:static!important;overflow:visible!important;height:auto!important;max-height:none!important;clip:auto!important;clip-path:none!important;transform:none!important;opacity:1!important;visibility:visible!important;filter:none!important;contain:none!important;content-visibility:visible!important;zoom:1!important'
     for (const ancestor of [root, body]) {
-        const wrapper = defaultTreeAdapter.createElement('div', body.namespaceURI, ancestor.attrs)
-        ancestor.attrs = [{ name: 'style', value: 'all:initial!important;display:block!important' }]
-        defaultTreeAdapter.appendChild(content, wrapper)
-        content = wrapper
+        const style = ancestor.attrs.find((attribute) => attribute.name === 'style')
+        if (style) {
+            style.value = `${style.value};${visibleLayout}`
+        } else {
+            ancestor.attrs.push({ name: 'style', value: visibleLayout })
+        }
     }
-    for (const node of [...body.childNodes]) {
-        defaultTreeAdapter.detachNode(node)
-        defaultTreeAdapter.appendChild(content, node)
-    }
-    defaultTreeAdapter.appendChild(body, layout)
 }
 
 function appendHtmlFooter(html: string, footer: string, preheader?: string): string {
     const preheaderText = parseFragment(preheader ?? '', { scriptingEnabled: false })
-    const document = parse(maybeAddPreheaderToEmail(html, serialize(preheaderText)), { scriptingEnabled: false })
+    const document = parse(maybeAddPreheaderToEmail(html, serialize(preheaderText, { scriptingEnabled: false })), {
+        scriptingEnabled: false,
+    })
     const body = htmlBody(document)
     if (!body) {
         throw new Error('The sandbox email template must have an HTML body. Update the template and try again.')
@@ -87,7 +81,7 @@ function appendHtmlFooter(html: string, footer: string, preheader?: string): str
             }
         }
     }
-    isolateTemplateLayout(document, body)
+    protectFooterAncestors(document, body)
     const paragraph = defaultTreeAdapter.createElement('div', body.namespaceURI, [
         {
             name: 'style',
