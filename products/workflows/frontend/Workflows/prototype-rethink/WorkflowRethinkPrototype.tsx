@@ -206,8 +206,8 @@ function ProvenanceStrip({
                     ) : changeCount > 0 ? (
                         <span>
                             {' '}
-                            · {provenance.changedBy} changed {changeCount} step{changeCount === 1 ? '' : 's'} since you
-                            last looked
+                            · {provenance.changedBy} changed {changeCount} step{changeCount === 1 ? '' : 's'} on{' '}
+                            {provenance.changedOn}, after you last looked
                         </span>
                     ) : (
                         <span> · You haven't reviewed it yet</span>
@@ -325,6 +325,11 @@ function uniform(values: (string | null | undefined)[]): string | null {
     return present.length === values.length && new Set(present).size === 1 ? present[0] : null
 }
 
+function rulesRestateTitle(rules: string[], title: string): boolean {
+    const lowerTitle = title.toLowerCase()
+    return rules.every((rule) => lowerTitle.includes((rule.split(' is ').pop() ?? rule).toLowerCase()))
+}
+
 function groupWhenOf(paths: AudiencePath[]): (string | null)[] {
     const count = Math.max(0, ...paths.map((p) => emailsOf(p).length))
     return Array.from({ length: count }, (_, index) => uniform(paths.map((p) => emailsOf(p)[index]?.when)))
@@ -362,7 +367,9 @@ function Timeline({
         }
     })
     const earlyEnd = uniform(story.paths.map((p) => earlyEndsOf(p).join(', ') || null))
-    const gridTemplateColumns = `minmax(8rem, 11rem) repeat(${columnCount}, minmax(11rem, 1fr)) minmax(7rem, 10rem)`
+    const endsUniformly = !!earlyEnd || story.paths.every((p) => earlyEndsOf(p).length === 0)
+    const endsSummary = `Ends after the last email${earlyEnd ? `, or early on “${earlyEnd}”` : ''}.`
+    const gridTemplateColumns = `minmax(7rem, 9rem) repeat(${columnCount}, minmax(11rem, 1fr))${endsUniformly ? '' : ' minmax(7rem, 10rem)'}`
     const showPathColumn = story.paths.length > 1
 
     const renderRow = (
@@ -378,7 +385,9 @@ function Timeline({
             <div key={path.id} className="contents">
                 <div className="border-t px-4 py-3">
                     <div className="text-sm font-semibold">{showPathColumn ? title : 'Everyone'}</div>
-                    {rules.length > 0 && <div className="text-xs text-secondary">{rules.join(', ')}</div>}
+                    {rules.length > 0 && !rulesRestateTitle(rules, title) && (
+                        <div className="text-xs text-secondary">{rules.join(', ')}</div>
+                    )}
                     {path.share && <div className="text-xs text-secondary">{path.share} of people</div>}
                     {otherActions.map((m) => (
                         <button
@@ -409,17 +418,14 @@ function Timeline({
                         </div>
                     )
                 })}
-                <div className="flex flex-col justify-center gap-0.5 border-t px-3 py-3 text-xs">
-                    {!earlyEnd &&
-                        earlyEndsOf(path).map((event) => (
-                            <span key={event} className="text-success">
-                                “{event}” ends it early
-                            </span>
+                {!endsUniformly && (
+                    <div className="flex flex-col justify-center gap-0.5 border-t px-3 py-3 text-xs">
+                        {earlyEndsOf(path).map((event) => (
+                            <span key={event}>“{event}” ends it early</span>
                         ))}
-                    <span className="text-secondary">
-                        {emails.length ? `After email ${emails.length}` : 'Right away'}
-                    </span>
-                </div>
+                        <span className="text-secondary">After email {emails.length}</span>
+                    </div>
+                )}
             </div>
         )
     }
@@ -428,7 +434,9 @@ function Timeline({
         <section className="flex flex-col gap-2">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="m-0 text-lg font-semibold">Who gets which email, when</h2>
-                <span className="text-xs text-secondary">Click an email to read it or change it</span>
+                <span className="text-xs text-secondary">
+                    {endsUniformly ? `${endsSummary} ` : ''}Click an email to read or change it.
+                </span>
             </div>
             <div className="overflow-x-auto rounded-lg border bg-surface-primary">
                 <div className="grid min-w-fit" style={{ gridTemplateColumns }}>
@@ -440,14 +448,17 @@ function Timeline({
                             <div className="font-semibold uppercase tracking-wide text-secondary">
                                 Email {column.index + 1}
                             </div>
-                            <div className="font-semibold">{column.when ?? 'Varies by path'}</div>
-                            {column.condition && <div className="text-warning">{column.condition}</div>}
+                            <div className="font-semibold">
+                                {column.when ?? `Varies by ${story.splitBy[0] ?? 'path'}, see each group`}
+                            </div>
+                            {column.condition && <div className="text-secondary">{column.condition}</div>}
                         </div>
                     ))}
-                    <div className="px-3 py-2 text-xs">
-                        <div className="font-semibold uppercase tracking-wide text-secondary">Ends</div>
-                        {earlyEnd && <div className="font-semibold text-success">Early on “{earlyEnd}”</div>}
-                    </div>
+                    {!endsUniformly && (
+                        <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-secondary">
+                            Ends
+                        </div>
+                    )}
                     {grouped
                         ? groups.map(([key, paths]) => {
                               const isOpen = open.includes(key)
@@ -463,7 +474,7 @@ function Timeline({
                                           {isOpen ? <IconChevronDown /> : <IconChevronRight />}
                                           {key}
                                           <span className="font-normal text-secondary">
-                                              {paths[0].rules[0]} · {paths.length} paths
+                                              {paths.length} paths
                                               {groupWhenOf(paths).map((when, index) =>
                                                   when && !columns[index].when
                                                       ? ` · Email ${index + 1} ${lowerFirst(when)}`
@@ -521,14 +532,14 @@ function EmailCell({
                     {moment.when}
                 </span>
             )}
-            {showCondition && moment.condition && <span className="text-xs text-warning">{moment.condition}</span>}
+            {showCondition && moment.condition && <span className="text-xs text-secondary">{moment.condition}</span>}
             <span className="flex items-start gap-1.5 text-sm font-semibold leading-snug">
                 <IconLetter className="mt-0.5 shrink-0 text-accent" />
                 <span>{moment.email.subject}</span>
             </span>
             {changed && (
                 <LemonTag type="highlight" size="small" className="self-start">
-                    Changed since you last looked
+                    Changed
                 </LemonTag>
             )}
         </button>
@@ -588,21 +599,23 @@ function FollowOnePerson({
             <h2 className="m-0 text-lg font-semibold">Follow one person</h2>
             <div className="flex flex-col gap-4 rounded-lg border bg-surface-primary p-4 @[760px]:flex-row">
                 <div className="flex shrink-0 flex-col gap-3 @[760px]:w-64">
-                    <label className="flex flex-col gap-1 text-xs font-semibold text-secondary">
-                        This person is in
-                        <LemonSelect
-                            size="small"
-                            fullWidth
-                            value={pathId}
-                            onChange={(value) => setPathId(value)}
-                            options={[
-                                ...story.paths.map((p) => ({ value: p.id, label: p.title })),
-                                ...(story.leaversWithoutEmail.length
-                                    ? [{ value: LEAVER, label: `No path (${story.leaversWithoutEmail[0]})` }]
-                                    : []),
-                            ]}
-                        />
-                    </label>
+                    {(story.paths.length > 1 || story.leaversWithoutEmail.length > 0) && (
+                        <label className="flex flex-col gap-1 text-xs font-semibold text-secondary">
+                            This person is in
+                            <LemonSelect
+                                size="small"
+                                fullWidth
+                                value={pathId}
+                                onChange={(value) => setPathId(value)}
+                                options={[
+                                    ...story.paths.map((p) => ({ value: p.id, label: p.title })),
+                                    ...(story.leaversWithoutEmail.length
+                                        ? [{ value: LEAVER, label: `No path (${story.leaversWithoutEmail[0]})` }]
+                                        : []),
+                                ]}
+                            />
+                        </label>
+                    )}
                     {path?.moments
                         .filter((m): m is Extract<Moment, { kind: 'wait_for' }> => m.kind === 'wait_for')
                         .map((m) => (
@@ -634,7 +647,7 @@ function FollowOnePerson({
                                 {step.emailId ? (
                                     <button
                                         type="button"
-                                        className="text-left font-semibold text-accent hover:underline"
+                                        className="text-left font-semibold hover:underline"
                                         onClick={() => onOpenEmail(step.emailId!)}
                                     >
                                         Gets “{step.text}”
@@ -672,7 +685,7 @@ function BuiltWith({
                 <LemonButton size="small" type="secondary" icon={<IconPencil />} onClick={() => onOpenEditor(null)}>
                     Edit steps
                 </LemonButton>
-                <LemonButton size="small" type="tertiary" onClick={() => onOpenEditor(null, 'test')}>
+                <LemonButton size="small" type="secondary" onClick={() => onOpenEditor(null, 'test')}>
                     Test with a person
                 </LemonButton>
             </div>

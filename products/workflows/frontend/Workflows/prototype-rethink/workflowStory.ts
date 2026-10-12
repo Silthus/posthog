@@ -335,7 +335,7 @@ export function buildWorkflowStory(flow: HogFlow): WorkflowStory {
         leaversWithoutEmail: [...leavers],
         emailCountPerPerson: Math.max(0, ...emailsPerPath),
         uniqueEmails: uniqueSubjects.size,
-        firstEmailWhen: firstEmail && firstEmail.kind === 'email' ? firstEmail.when : null,
+        firstEmailWhen: firstEmailSummary(paths, splitBy) ?? (firstEmail?.kind === 'email' ? firstEmail.when : null),
         endings: [...endings],
         stepCount: flow.actions.length,
         variables: (flow.variables ?? []).map((v) => ({ key: v.key, label: v.label ?? v.key })),
@@ -369,4 +369,20 @@ function unsetVariableChecks(flow: HogFlow): string[] {
             const fallback = variable?.default === '' || variable?.default == null ? 'empty' : `“${variable.default}”`
             return `No step sets “${label}”, and it defaults to ${fallback}. Unless you set it when you run the send, everyone skips the emails and leaves.`
         })
+}
+
+function firstEmailSummary(paths: AudiencePath[], splitBy: Set<string>): string | null {
+    const firsts = paths.flatMap((p) => {
+        const email = p.moments.find((m) => m.kind === 'email')
+        return email?.kind === 'email' ? [email] : []
+    })
+    if (new Set(firsts.map((m) => m.when)).size <= 1) {
+        return null
+    }
+    const offsets = firsts.map((m) => m.offsetHours)
+    const [min, max] = [Math.min(...offsets), Math.max(...offsets)]
+    const range = min === max ? hoursSpan(min) : `${hoursSpan(min).split(' ')[0]}–${hoursSpan(max)}`
+    const by = [...splitBy][0] ?? 'path'
+    const windowPart = firsts[0].when.split(', then ')[1]
+    return `${range} after they enter, depending on ${by}${windowPart ? `, then ${windowPart}` : ''}`
 }
