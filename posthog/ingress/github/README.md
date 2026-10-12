@@ -62,6 +62,11 @@ GitHub's associations can include pull requests from other repositories in the f
 A suite without matching pull requests gets one event with `number` unset and `actor_access: read`.
 Matching pull requests carry `actor_access: write`, because their head branch is in this repository and pushing there requires write access.
 CI filters can use `action`, `conclusion`, `head_sha`, `branch`, `check_suite_id`, and `ci_app`.
+A completed suite that failed, timed out or failed to start also carries `labels`, the pull request's label names.
+The consumer reads them with one GitHub call per pull request, shared by every connected project.
+All lookups for one delivery share a 2 second deadline, and they use the stored installation token without a refresh or a retry.
+A failed or late lookup leaves `labels` out and logs `github_workflow_event_label_lookup_failed`, so a label filter does not match.
+Match one label with a HogQL filter such as `has(properties.labels, 'babysit')`; `icontains` would also match `babysitter`.
 Head commit messages are removed from the embedded payload, as they are for pushes.
 
 The [Endpoints table](../README.md#endpoints) lists the consumer names per event type.
