@@ -28,7 +28,7 @@ function emptyRouteSettings(config: SandboxEmailSenderConfig): string[] {
 
 type SandboxEmailOutcome =
     | { type: 'sent'; recipientCount: number }
-    | { type: 'blocked'; reason: 'switch_off'; blockedRecipientCount: number }
+    | { type: 'blocked'; reason: 'switch_off' | 'recipient_not_member' | 'check_failed'; blockedRecipientCount: number }
 
 function htmlBody(document: DefaultTreeAdapterMap['document']): DefaultTreeAdapterMap['element'] | undefined {
     const root = document.childNodes.find(defaultTreeAdapter.isElementNode)
