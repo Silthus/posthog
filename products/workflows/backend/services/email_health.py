@@ -216,7 +216,7 @@ def verified_email_domains(*, team_id: int) -> list[str]:
         dict.fromkeys(
             domain
             for domain in Integration.objects.filter(team_id=team_id, kind="email", config__verified=True)
-            .exclude(config__provider=SANDBOX_EMAIL_PROVIDER)
+            .exclude(config__contains={"provider": SANDBOX_EMAIL_PROVIDER})
             .order_by("id")
             .values_list("config__domain", flat=True)
             if domain

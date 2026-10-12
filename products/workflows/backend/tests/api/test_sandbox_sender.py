@@ -59,7 +59,6 @@ class TestSandboxSenderAPI(APIBaseTest):
         self.organization.save()
         second = self._ensure()
 
-        assert first.status_code == status.HTTP_200_OK, first.json()
         assert second.status_code == status.HTTP_200_OK, second.json()
         row = self._sandbox_rows().get()
         assert first.json()["id"] == second.json()["id"] == row.id

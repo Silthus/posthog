@@ -356,14 +356,19 @@ class TestEmailReputationAPI(APIBaseTest):
 
     @parameterized.expand(
         [
-            ("sibling verified on the same domain", True, ["mail.example.com"]),
-            ("sibling not verified yet", False, []),
+            ("sibling verified on the same domain", True, ["mail.example.com"], "ses"),
+            ("sibling not verified yet", False, [], "ses"),
+            ("legacy sender without a provider", True, ["mail.example.com"], None),
         ]
     )
     def test_reputation_endpoint_names_domains_a_sibling_project_also_sends_from(
-        self, _name: str, sibling_verified: bool, expected: list[str]
-    ):
+        self, _name: str, sibling_verified: bool, expected: list[str], provider: str | None
+    ) -> None:
         self._verify_sending_domain()
+        if provider is None:
+            Integration.objects.filter(team=self.team, kind="email", integration_id="mail.example.com").update(
+                config={"domain": "mail.example.com", "verified": True}
+            )
         sibling = Team.objects.create(organization=self.organization, name="Sibling")
         Integration.objects.create(
             team=sibling,
