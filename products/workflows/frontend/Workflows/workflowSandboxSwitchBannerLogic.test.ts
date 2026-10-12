@@ -285,9 +285,9 @@ describe('workflowSandboxSwitchBannerLogic', () => {
     })
 
     it.each([
-        ['active', 'Publish the changes to use this sender.'],
-        ['draft', 'Save your changes to use this sender.'],
-    ] as const)('explains what remains after switching a %s workflow', async (status, nextStep) => {
+        ['active', 'Updated 1\u00a0email step to hello@acme.example.com. Publish the changes to use this sender.'],
+        ['draft', 'Updated 1\u00a0email step to hello@acme.example.com.'],
+    ] as const)('explains what remains after switching a %s workflow', async (status, confirmation) => {
         await mountWith({
             steps: [emailStep('email_1', { integrationId: SANDBOX_SENDER_ID })],
             integrations: [SANDBOX_SENDER, OWN_SENDER],
@@ -296,7 +296,7 @@ describe('workflowSandboxSwitchBannerLogic', () => {
 
         logic.actions.switchToOwnSender(OWN_SENDER_ID)
 
-        expect(successToast).toHaveBeenCalledWith(`Updated 1\u00a0email step to hello@acme.example.com. ${nextStep}`)
+        expect(successToast).toHaveBeenCalledWith(confirmation)
     })
 
     it('lets the user pick the own sender when several are verified', async () => {
@@ -343,7 +343,7 @@ describe('workflowSandboxSwitchBannerLogic', () => {
         logic.actions.switchToOwnSender(OWN_SENDER_ID)
 
         expect(senderOf(workflow.values.workflow, 'email_1')).toEqual({ integrationId: SANDBOX_SENDER_ID })
-        expect(logic.values.switchDisabledReason).toBe('Wait for the workflow to finish loading')
+        expect(logic.values.switchDisabledReason).toBe('Wait for the workflow to finish syncing')
         expect(successToast).not.toHaveBeenCalled()
     })
 

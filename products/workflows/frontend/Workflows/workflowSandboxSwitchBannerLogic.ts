@@ -1934,7 +1934,7 @@ export const workflowSandboxSwitchBannerLogic = kea<workflowSandboxSwitchBannerL
                     AccessControlResourceType.Workflow,
                     AccessControlLevel.Editor,
                     workflowUserAccessLevel ?? undefined
-                ) || (workflowLoading || isSyncingExternalEdit ? 'Wait for the workflow to finish loading' : null),
+                ) || (workflowLoading || isSyncingExternalEdit ? 'Wait for the workflow to finish syncing' : null),
         ],
         verifiedOwnSenders: [
             (s) => [s.ownEmailIntegrations],
@@ -1982,12 +1982,9 @@ export const workflowSandboxSwitchBannerLogic = kea<workflowSandboxSwitchBannerL
             })
             actions.autoSaveWorkflow()
             posthog.capture('workflows sandbox sender switched', { email_step_count: sandboxEmailSteps.length })
-            const nextStep =
-                values.workflow.status === 'active'
-                    ? 'Publish the changes to use this sender.'
-                    : 'Save your changes to use this sender.'
+            const nextStep = values.workflow.status === 'active' ? ' Publish the changes to use this sender.' : ''
             lemonToast.success(
-                `Updated ${pluralize(sandboxEmailSteps.length, 'email step')} to ${sender.config.email ?? 'your own sender'}. ${nextStep}`
+                `Updated ${pluralize(sandboxEmailSteps.length, 'email step')} to ${sender.config.email ?? 'your own sender'}.${nextStep}`
             )
         },
     })),
