@@ -3,11 +3,14 @@ import posthog from 'posthog-js'
 
 import { FEATURE_FLAGS } from 'lib/constants'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
+import { lemonToast } from 'lib/lemon-ui/LemonToast'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 
 import { useMocks } from '~/mocks/jest'
 import { initKeaTests } from '~/test/init'
 import { AccessControlLevel } from '~/types'
+
+import { resourceEditedLogic } from 'products/notifications/frontend/resourceEditedLogic'
 
 import { HogFlow, HogFlowAction } from './hogflows/types'
 import { workflowLogic } from './workflowLogic'
@@ -105,6 +108,7 @@ const senderOf = (workflow: HogFlow, stepId: string): unknown => {
 describe('workflowSandboxSwitchBannerLogic', () => {
     let logic: ReturnType<typeof workflowSandboxSwitchBannerLogic.build>
     let capture: jest.SpyInstance
+    let successToast: jest.SpyInstance
     let savedWorkflow: HogFlow
     let integrationsPayload: unknown[]
 
@@ -120,13 +124,15 @@ describe('workflowSandboxSwitchBannerLogic', () => {
         integrations,
         flag = true,
         accessLevel = AccessControlLevel.Editor,
+        status = 'draft',
     }: {
         steps: HogFlowAction[]
         integrations: unknown[]
         flag?: boolean
         accessLevel?: AccessControlLevel
+        status?: HogFlow['status']
     }): Promise<void> => {
-        savedWorkflow = { ...makeWorkflow(steps), user_access_level: accessLevel }
+        savedWorkflow = { ...makeWorkflow(steps), user_access_level: accessLevel, status }
         integrationsPayload = integrations
         initKeaTests()
         featureFlagLogic.mount()
@@ -155,12 +161,14 @@ describe('workflowSandboxSwitchBannerLogic', () => {
             },
         })
         capture = jest.spyOn(posthog, 'capture').mockImplementation()
+        successToast = jest.spyOn(lemonToast, 'success').mockImplementation()
     })
 
     afterEach(() => {
         logic?.unmount()
         featureFlagLogic.actions.setFeatureFlags([], {})
         capture.mockRestore()
+        successToast.mockRestore()
     })
 
     it.each([
@@ -276,6 +284,21 @@ describe('workflowSandboxSwitchBannerLogic', () => {
         expect(capture.mock.calls.filter(([event]) => event === 'workflows sandbox sender switched')).toHaveLength(1)
     })
 
+    it.each([
+        ['active', 'Publish the changes to use this sender.'],
+        ['draft', 'Save your changes to use this sender.'],
+    ] as const)('explains what remains after switching a %s workflow', async (status, nextStep) => {
+        await mountWith({
+            steps: [emailStep('email_1', { integrationId: SANDBOX_SENDER_ID })],
+            integrations: [SANDBOX_SENDER, OWN_SENDER],
+            status,
+        })
+
+        logic.actions.switchToOwnSender(OWN_SENDER_ID)
+
+        expect(successToast).toHaveBeenCalledWith(`Updated 1\u00a0email step to hello@acme.example.com. ${nextStep}`)
+    })
+
     it('lets the user pick the own sender when several are verified', async () => {
         await mountWith({
             steps: [emailStep('email_1', { integrationId: SANDBOX_SENDER_ID })],
@@ -294,6 +317,34 @@ describe('workflowSandboxSwitchBannerLogic', () => {
         expect(senderOf(workflowLogic({ id: WORKFLOW_ID }).values.workflow, 'email_1')).toEqual({
             integrationId: SECOND_OWN_SENDER_ID,
         })
+    })
+
+    it('prevents switching while an external edit reloads the workflow', async () => {
+        await mountWith({
+            steps: [emailStep('email_1', { integrationId: SANDBOX_SENDER_ID })],
+            integrations: [SANDBOX_SENDER, OWN_SENDER],
+        })
+        useMocks({
+            get: {
+                '/api/environments/:team_id/hog_flows/:id/': () => new Promise(() => {}),
+            },
+        })
+        resourceEditedLogic.actions.resourceEdited({
+            notification_type: 'resource_edited',
+            team_id: 1,
+            resource_type: 'HogFlow',
+            resource_id: WORKFLOW_ID,
+            updated_at: '2026-06-01T00:00:00.000Z',
+            actor_user_id: 99,
+        })
+        const workflow = workflowLogic({ id: WORKFLOW_ID })
+        expect(workflow.values.isSyncingExternalEdit).toBe(true)
+
+        logic.actions.switchToOwnSender(OWN_SENDER_ID)
+
+        expect(senderOf(workflow.values.workflow, 'email_1')).toEqual({ integrationId: SANDBOX_SENDER_ID })
+        expect(logic.values.switchDisabledReason).toBe('Wait for the workflow to finish loading')
+        expect(successToast).not.toHaveBeenCalled()
     })
 
     it('leaves the workflow intact for a viewer', async () => {

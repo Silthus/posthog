@@ -37,11 +37,14 @@ const withSender = (step: EmailStep, integrationId: number): EmailStep => {
 export interface workflowSandboxSwitchBannerLogicValues {
     ownEmailIntegrations: IntegrationType[] // integrationsLogic
     sandboxEmailSender: IntegrationType | null // integrationsLogic
+    isSyncingExternalEdit: boolean // workflowLogic
     workflow: HogFlow // workflowLogic
+    workflowLoading: boolean // workflowLogic
     workflowUserAccessLevel: AccessControlLevel | null // workflowLogic
     bannerShownReported: boolean
     bannerVisible: boolean
     sandboxEmailSteps: EmailStep[]
+    switchDisabledReason: string | null
     verifiedOwnSenders: IntegrationType[]
 }
 
@@ -1813,6 +1816,11 @@ export interface workflowSandboxSwitchBannerLogicActions {
 export interface workflowSandboxSwitchBannerLogicMeta {
     key: string
     __keaTypeGenInternalSelectorTypes: {
+        switchDisabledReason: (
+            workflowUserAccessLevel: AccessControlLevel | null,
+            workflowLoading: boolean,
+            isSyncingExternalEdit: boolean
+        ) => string | null
         verifiedOwnSenders: (ownEmailIntegrations: IntegrationType[]) => IntegrationType[]
         sandboxEmailSteps: (workflow: HogFlow, sandboxEmailSender: IntegrationType | null) => EmailStep[]
         bannerVisible: (
@@ -1893,7 +1901,7 @@ export const workflowSandboxSwitchBannerLogic = kea<workflowSandboxSwitchBannerL
     connect((props: WorkflowLogicProps) => ({
         values: [
             workflowLogic(props),
-            ['workflow', 'workflowUserAccessLevel'],
+            ['workflow', 'workflowUserAccessLevel', 'workflowLoading', 'isSyncingExternalEdit'],
             integrationsLogic,
             ['ownEmailIntegrations', 'sandboxEmailSender'],
         ],
@@ -1915,6 +1923,19 @@ export const workflowSandboxSwitchBannerLogic = kea<workflowSandboxSwitchBannerL
         bannerShownReported: [false, { reportBannerShown: () => true }],
     }),
     selectors({
+        switchDisabledReason: [
+            (s) => [s.workflowUserAccessLevel, s.workflowLoading, s.isSyncingExternalEdit],
+            (
+                workflowUserAccessLevel: AccessControlLevel | null,
+                workflowLoading: boolean,
+                isSyncingExternalEdit: boolean
+            ): string | null =>
+                getAccessControlDisabledReason(
+                    AccessControlResourceType.Workflow,
+                    AccessControlLevel.Editor,
+                    workflowUserAccessLevel ?? undefined
+                ) || (workflowLoading || isSyncingExternalEdit ? 'Wait for the workflow to finish loading' : null),
+        ],
         verifiedOwnSenders: [
             (s) => [s.ownEmailIntegrations],
             (ownEmailIntegrations: IntegrationType[]): IntegrationType[] =>
@@ -1952,13 +1973,7 @@ export const workflowSandboxSwitchBannerLogic = kea<workflowSandboxSwitchBannerL
             if (sandboxEmailSteps.length === 0 || !sender) {
                 return
             }
-            if (
-                getAccessControlDisabledReason(
-                    AccessControlResourceType.Workflow,
-                    AccessControlLevel.Editor,
-                    values.workflowUserAccessLevel ?? undefined
-                )
-            ) {
+            if (values.switchDisabledReason) {
                 return
             }
             const switched = new Map(sandboxEmailSteps.map((step) => [step.id, withSender(step, integrationId)]))
@@ -1967,8 +1982,12 @@ export const workflowSandboxSwitchBannerLogic = kea<workflowSandboxSwitchBannerL
             })
             actions.autoSaveWorkflow()
             posthog.capture('workflows sandbox sender switched', { email_step_count: sandboxEmailSteps.length })
+            const nextStep =
+                values.workflow.status === 'active'
+                    ? 'Publish the changes to use this sender.'
+                    : 'Save your changes to use this sender.'
             lemonToast.success(
-                `Switched ${pluralize(sandboxEmailSteps.length, 'email step')} to ${sender?.config.email ?? 'your own sender'}`
+                `Updated ${pluralize(sandboxEmailSteps.length, 'email step')} to ${sender.config.email ?? 'your own sender'}. ${nextStep}`
             )
         },
     })),
