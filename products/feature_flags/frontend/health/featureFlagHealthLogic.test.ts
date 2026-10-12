@@ -81,12 +81,14 @@ describe('featureFlagHealthLogic', () => {
         logic.unmount()
     })
 
-    it('links to error tracking filtered to flag-on exceptions over the selected period', async () => {
+    it('links to error tracking filtered to flag-on exceptions over the selected period, whatever filters persist there', async () => {
         const logic = await mountWithSevenDayHealth(sevenDayResponse)
 
         const url = new URL(logic.values.errorTrackingUrl, 'https://app.example.com')
 
         expect(url.pathname).toBe('/error_tracking')
+        expect(url.searchParams.get('status')).toBe('all')
+        expect(url.searchParams.get('assignee')).toBe('')
         expect(JSON.parse(url.searchParams.get('dateRange')!)).toEqual({ date_from: '-7d', date_to: null })
         expect(JSON.stringify(JSON.parse(url.searchParams.get('filterGroup')!))).toContain(
             JSON.stringify({ key: '$feature/new-checkout', value: ['true'], operator: 'exact', type: 'event' })

@@ -14,6 +14,8 @@ const PERIOD_DESCRIPTIONS: Record<FeatureFlagHealthPeriod, string> = {
 
 export function featureFlagHealthErrorTrackingUrl(flagKey: string, period: FeatureFlagHealthPeriod): string {
     return urls.errorTracking({
+        status: 'all',
+        assignee: null,
         dateRange: { date_from: `-${period}`, date_to: null },
         filterGroup: {
             type: FilterLogicalOperator.And,
