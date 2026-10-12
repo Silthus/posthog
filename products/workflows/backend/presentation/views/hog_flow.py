@@ -860,6 +860,21 @@ def _has_exact_string_filter(filters: dict, key: str) -> bool:
     return False
 
 
+def _live_email_from_by_action(instance: WorkflowEditState) -> dict[str, dict]:
+    if instance.status != HogFlowState.ACTIVE:
+        return {}
+    result: dict[str, dict] = {}
+    for workflow_action in instance.actions or []:
+        if not isinstance(workflow_action, dict) or not workflow_action.get("id"):
+            continue
+        email_input = ((workflow_action.get("config") or {}).get("inputs") or {}).get("email")
+        value = email_input.get("value") if isinstance(email_input, dict) else None
+        from_value = value.get("from") if isinstance(value, dict) else None
+        if isinstance(from_value, dict):
+            result[workflow_action["id"]] = from_value
+    return result
+
+
 def _existing_email_values_by_action(instance: WorkflowEditState) -> dict[str, list[tuple[str | None, dict]]]:
     """Stored email inputs keyed by action id, live and draft variants both kept.
 
@@ -1672,6 +1687,8 @@ class HogFlowActionSerializer(serializers.Serializer):
                         # save time, while an unchanged stored value is grandfathered.
                         "get_team": self.context.get("get_team"),
                         "existing_email_from": [email["from"] for _, email in existing_emails],
+                        "require_verified_email_sender": not is_draft and not self.context.get("validates_test_run"),
+                        "live_email_from": (self.context.get("live_action_email_from") or {}).get(data.get("id")),
                     },
                 )
 
@@ -2817,6 +2834,8 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
     def _stages_draft(self) -> bool:
         # stage_draft rides the raw request body rather than being a serializer field, mirroring
         # base_updated_at (see perform_update, which does the actual draft routing off it).
+        if "writes_live" in self.context:
+            return not self.context["writes_live"]
         request = self.context.get("request")
         return bool(request is not None and getattr(request, "data", None) and request.data.get("stage_draft"))
 
@@ -2900,6 +2919,7 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             # newly written custom sender addresses to the verified-domain rule. Draft wins over
             # live for the same reason as secrets: it is the value the client last saw.
             self.context["existing_action_emails"] = _existing_email_values_by_action(instance)
+            self.context["live_action_email_from"] = _live_email_from_by_action(instance)
 
         # Warehouse-table triggers are row-scoped: step inputs may use the `{record.x}` alias for the
         # synced row. Flag it before child action validation so function-input compilation rewrites it.
@@ -4826,10 +4846,16 @@ class HogFlowViewSet(
             )
 
     def _validate_locked_content(
-        self, state: WorkflowEditState, data: dict, enforce_graph_structure: bool = False
+        self,
+        state: WorkflowEditState,
+        data: dict,
+        enforce_graph_structure: bool = False,
+        writes_live: bool = True,
     ) -> dict:
         # Runs inside the write's row lock, against the locked row the service passes in.
-        serializer = self.get_serializer(state, data=data, partial=True)
+        serializer = self.get_serializer(
+            state, data=data, partial=True, context={**self.get_serializer_context(), "writes_live": writes_live}
+        )
         if enforce_graph_structure:
             # The surgical endpoints are the paths where structural corruption would be newly introduced,
             # so they enforce graph validation as a hard error (unlike the lenient full-save path).
@@ -4853,7 +4879,10 @@ class HogFlowViewSet(
         def edit(state: WorkflowEditState, base_actions: list[dict], base_edges: list[dict]) -> dict:
             new_actions, new_edges = apply_graph_operations(base_actions, base_edges, operations)
             return self._validate_locked_content(
-                state, {"actions": new_actions, "edges": new_edges}, enforce_graph_structure=True
+                state,
+                {"actions": new_actions, "edges": new_edges},
+                enforce_graph_structure=True,
+                writes_live=not (self._is_mcp_request(request) and state.status == HogFlowState.ACTIVE),
             )
 
         try:
@@ -4921,7 +4950,12 @@ class HogFlowViewSet(
 
         def edit(state: WorkflowEditState, base_actions: list[dict], base_edges: list[dict]) -> dict:
             new_actions = _apply_action_email_edit(base_actions, action_id, email_patch, rendered)
-            return self._validate_locked_content(state, {"actions": new_actions}, enforce_graph_structure=True)
+            return self._validate_locked_content(
+                state,
+                {"actions": new_actions},
+                enforce_graph_structure=True,
+                writes_live=not (self._is_mcp_request(request) and state.status == HogFlowState.ACTIVE),
+            )
 
         # Same staleness and draft contract as /graph, but no action-redirect refresh or timing
         # reschedule: an email edit can't delete steps or change timing config.
@@ -5606,7 +5640,8 @@ class HogFlowViewSet(
             hog_flow = None
 
         serializer = HogFlowInvocationSerializer(
-            data=request.data, context={**self.get_serializer_context(), "instance": hog_flow}
+            data=request.data,
+            context={**self.get_serializer_context(), "instance": hog_flow, "validates_test_run": True},
         )
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)

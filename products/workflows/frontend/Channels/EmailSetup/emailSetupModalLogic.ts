@@ -79,6 +79,7 @@ export interface emailSetupModalLogicValues {
     emailSenderTouched: boolean
     emailSenderTouches: Record<string, boolean>
     emailSenderValidationErrors: DeepPartialMap<EmailSenderFormType, ValidationErrorType>
+    finishAfterSave: boolean
     isDomainVerified: boolean
     isEmailSenderSubmitting: boolean
     isEmailSenderValid: boolean
@@ -93,6 +94,9 @@ export interface emailSetupModalLogicActions {
     loadIntegrations: (_?: any) => any // integrationsLogic
     resetEmailSender: (values?: EmailSenderFormType) => {
         values?: EmailSenderFormType
+    }
+    saveAndFinish: () => {
+        value: true
     }
     setEmailSenderManualErrors: (errors: Record<string, any>) => {
         errors: Record<string, any>
@@ -180,8 +184,16 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
     actions({
         setSavedIntegration: (integration: IntegrationType | null) => ({ integration }),
         verifyDomain: true,
+        saveAndFinish: true,
     }),
     reducers({
+        finishAfterSave: [
+            false,
+            {
+                saveAndFinish: () => true,
+                submitEmailSenderFailure: () => false,
+            },
+        ],
         savedIntegration: [
             null as IntegrationType | null,
             {
@@ -280,12 +292,26 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
             },
         ],
     }),
-    listeners(({ actions }) => ({
+    listeners(({ actions, props, values }) => ({
         verifyDomainSuccess: ({ verification }) => {
             if (verification?.status === 'success') {
                 actions.loadIntegrations()
                 // Verifying the first sender makes it the project default on the server.
                 teamLogic.findMounted()?.actions.loadCurrentTeam()
+            }
+        },
+        saveAndFinish: () => {
+            actions.submitEmailSender()
+        },
+        submitEmailSenderSuccess: () => {
+            if (!values.finishAfterSave) {
+                return
+            }
+            const integrationId = values.savedIntegration?.id
+            if (values.isDomainVerified) {
+                props.onComplete(integrationId)
+            } else {
+                props.onClose(integrationId)
             }
         },
     })),

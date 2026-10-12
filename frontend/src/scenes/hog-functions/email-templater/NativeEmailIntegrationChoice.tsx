@@ -1,5 +1,6 @@
 import { useActions, useValues } from 'kea'
-import { ReactNode } from 'react'
+import posthog from 'posthog-js'
+import { ReactNode, useState } from 'react'
 
 import { IconExternal, IconPlus, IconX } from '@posthog/icons'
 import { LemonBanner, LemonButton, LemonInputSelect, LemonLabel, LemonSelect, LemonTag } from '@posthog/lemon-ui'
@@ -10,10 +11,13 @@ import { urls } from 'scenes/urls'
 
 import { IntegrationType } from '~/types'
 
+import { EmailSetupModal } from 'products/workflows/frontend/Channels/EmailSetup/EmailSetupModal'
+
 import { emailTemplaterLogic } from './emailTemplaterLogic'
 import { LiquidSupportedText } from './LiquidSupportedText'
 import { selectedSenderIds } from './selectSenders'
 import { EmailTemplateFrom, MAX_WORKFLOW_EMAIL_SENDERS } from './types'
+import { getEmailSenderAddress, getUnverifiedEmailSenders } from './unverifiedEmailSenders'
 
 export function NativeEmailIntegrationChoice({
     label,
@@ -36,6 +40,8 @@ export function NativeEmailIntegrationChoice({
     } = useValues(emailTemplaterLogic)
     const { chooseSenders, retrySenderIntegrations } = useActions(emailTemplaterLogic)
     const senderRotationEnabled = useFeatureFlag('WORKFLOWS_EMAIL_SENDER_ROTATION')
+    const [senderToVerify, setSenderToVerify] = useState<IntegrationType | null>(null)
+    const unverifiedSenders = getUnverifiedEmailSenders(value, senderIntegrations)
 
     // Presence of the override keys is what reveals the inputs, so a saved override is
     // visible again on reopen without any separate reveal state.
@@ -196,6 +202,31 @@ export function NativeEmailIntegrationChoice({
                     </LemonButton>
                 )}
             </div>
+            {unverifiedSenders.map((integration) => (
+                <LemonBanner
+                    key={integration.id}
+                    type="warning"
+                    className="m-1"
+                    action={{
+                        children: 'Verify sender',
+                        type: 'primary',
+                        onClick: () => {
+                            posthog.capture('workflows verify sender clicked', { source: 'sender_field' })
+                            setSenderToVerify(integration)
+                        },
+                        'data-attr': 'email-from-verify-sender',
+                    }}
+                >
+                    {`${getEmailSenderAddress(integration)} can't send until its domain is verified.`}
+                </LemonBanner>
+            ))}
+            {senderToVerify && (
+                <EmailSetupModal
+                    integration={senderToVerify}
+                    onComplete={() => setSenderToVerify(null)}
+                    onClose={() => setSenderToVerify(null)}
+                />
+            )}
             {overridesVisible && (
                 <>
                     <div className="flex gap-2 items-center border-t">
