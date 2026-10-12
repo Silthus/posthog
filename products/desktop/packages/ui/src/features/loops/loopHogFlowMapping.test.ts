@@ -251,13 +251,60 @@ describe("loopHogFlowMapping", () => {
     });
   });
 
-  it("drops the per-PR mask when a CI failed loop is switched to another event", () => {
+  it.each([
+    [
+      "drops the per-PR mask when a CI failed loop switches to another event",
+      undefined,
+      githubValues(),
+      null,
+    ],
+    [
+      "keeps a mask set in the workflow editor on a CI failed loop",
+      { hash: "{event.properties.head_sha}", ttl: 86400 },
+      ciFailedValues(),
+      undefined,
+    ],
+    [
+      "keeps a mask set in the workflow editor when a CI failed loop switches",
+      { hash: "{event.properties.head_sha}", ttl: 86400 },
+      githubValues(),
+      undefined,
+    ],
+  ])("%s", (_label, mask, values, expected) => {
     const existing = flowFromWrite(ciFailedValues());
-    const { flow } = formValuesToHogFlowWrite(githubValues(), {
+    if (mask) existing.trigger_masking = mask;
+    const { flow } = formValuesToHogFlowWrite(values, {
       enabled: true,
       existing,
     });
-    expect(flow.trigger_masking).toBeNull();
+    expect(flow.trigger_masking).toBe(expected);
+  });
+
+  it.each([
+    [
+      "a second label condition",
+      (properties: Record<string, unknown>[]) => [
+        ...properties,
+        { key: "has(properties.labels, 'approved')", type: "hogql" },
+      ],
+    ],
+    [
+      "a label literal the form does not write",
+      (properties: Record<string, unknown>[]) =>
+        properties.map((property) =>
+          property.type === "hogql"
+            ? { ...property, key: "has(properties.labels, 'baby\\0sit')" }
+            : property,
+        ),
+    ],
+  ])("marks a CI failed loop with %s as foreign", (_label, mutate) => {
+    const flow = flowFromWrite(ciFailedValues());
+    const trigger = (flow.actions as Array<Record<string, unknown>>)[0];
+    const filters = (trigger.config as Record<string, unknown>).filters as {
+      properties: Record<string, unknown>[];
+    };
+    filters.properties = mutate(filters.properties);
+    expect(isLoopShapedHogFlow(flow)).toBe(false);
   });
 
   it.each([

@@ -123,10 +123,15 @@ function labelFilter(label: string): Json {
   };
 }
 
+/** Reads back only the literal `labelFilter` writes. HogQL gives escapes
+ * like `\0` or `\x41` their own meaning, so any other spelling opens the
+ * loop read-only rather than being rewritten to a different label. */
 function labelFromFilter(filter: Json): string | null {
   if (typeof filter.key !== "string") return null;
   const match = LABEL_FILTER_PATTERN.exec(filter.key);
-  return match ? match[1].replace(/\\(.)/g, "$1") : null;
+  if (!match) return null;
+  const label = match[1].replace(/\\(.)/g, "$1");
+  return labelFilter(label).key === filter.key ? label : null;
 }
 
 function ciFailedFilters(config: LoopSchemas.LoopGithubTriggerConfig): Json[] {
@@ -306,30 +311,28 @@ const DEFAULT_EXIT_ACTION: LoopAction = {
   config: { reason: "Task created" },
 };
 
-/** A CI failed loop starts one fix task per pull request per window, keeping
- * a window set in the workflow editor. Leaving CI failed drops that mask,
- * which would otherwise throttle the new trigger per repository. Any other
- * mask is left as the workflow has it. */
+/** A CI failed loop starts one fix task per pull request per window. Leaving
+ * CI failed drops that per-PR mask, which would otherwise throttle the new
+ * trigger per repository. A mask set in the workflow editor is never touched:
+ * undefined leaves the workflow's mask as it is. */
 function triggerMaskingFor(
   ciFailed: boolean,
   existing: LoopHogFlowSource | undefined,
   existingWasCiFailed: boolean,
 ): Schemas.HogFlowMasking | null | undefined {
   const mask = existing?.trigger_masking;
+  const hasMask = isRecord(mask) && typeof mask.hash === "string";
   if (ciFailed) {
-    return isRecord(mask) && mask.hash === ONCE_PER_PULL_REQUEST_HASH
-      ? {
-          hash: ONCE_PER_PULL_REQUEST_HASH,
-          ttl: typeof mask.ttl === "number" ? mask.ttl : null,
-          threshold: typeof mask.threshold === "number" ? mask.threshold : null,
-        }
+    return hasMask
+      ? undefined
       : {
           hash: ONCE_PER_PULL_REQUEST_HASH,
           ttl: CI_FAILED_MASK_TTL_SECONDS,
           threshold: null,
         };
   }
-  return existingWasCiFailed ? null : undefined;
+  const ownsMask = hasMask && mask.hash === ONCE_PER_PULL_REQUEST_HASH;
+  return existingWasCiFailed && ownsMask ? null : undefined;
 }
 
 /**
@@ -517,6 +520,7 @@ function githubConfigFromTrigger(
   for (const property of Array.isArray(properties) ? properties : []) {
     if (!isRecord(property)) return null;
     if (property.type === "hogql") {
+      if (label !== null) return null;
       label = labelFromFilter(property);
       if (label === null) return null;
       continue;
