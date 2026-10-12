@@ -73,7 +73,7 @@
                                         "type": "string"
                                     },
                                     "index": {
-                                        "description": "Required for type=branch: which condition/cohort slot this branch matches (0-based).",
+                                        "description": "Required for a type=branch edge from a condition or cohort step: which slot this branch matches (0-based). Omit it on an outcome edge from a native step.",
                                         "maximum": 9007199254740991,
                                         "minimum": -9007199254740991,
                                         "type": "integer"
@@ -113,7 +113,7 @@
                                         "type": "string"
                                     },
                                     "index": {
-                                        "description": "Required for type=branch: which condition/cohort slot this branch matches (0-based).",
+                                        "description": "Required for a type=branch edge from a condition or cohort step: which slot this branch matches (0-based). Omit it on an outcome edge from a native step.",
                                         "maximum": 9007199254740991,
                                         "minimum": -9007199254740991,
                                         "type": "integer"
@@ -154,7 +154,7 @@
                                             "type": "string"
                                         },
                                         "index": {
-                                            "description": "Required for type=branch: which condition/cohort slot this branch matches (0-based).",
+                                            "description": "Required for a type=branch edge from a condition or cohort step: which slot this branch matches (0-based). Omit it on an outcome edge from a native step.",
                                             "maximum": 9007199254740991,
                                             "minimum": -9007199254740991,
                                             "type": "integer"

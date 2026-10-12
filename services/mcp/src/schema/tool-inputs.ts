@@ -1114,7 +1114,10 @@ const WorkflowGraphEdgeSchema = z.object({
         .number()
         .int()
         .optional()
-        .describe('Required for type=branch: which condition/cohort slot this branch matches (0-based).'),
+        .describe(
+            'Required for a type=branch edge from a condition or cohort step: which slot this branch matches ' +
+                '(0-based). Omit it on an outcome edge from a native step.'
+        ),
     outcome: z
         .string()
         .optional()

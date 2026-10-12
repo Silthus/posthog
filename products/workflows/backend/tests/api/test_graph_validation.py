@@ -134,6 +134,12 @@ class TestValidateGraph(TestCase):
             ("continue_type", _native("n"), [_edge("n", "x", outcome="failed")], "must be a 'branch' edge"),
             ("missing_outcome", _native("n"), [_edge("n", "x", "branch", index=0)], "missing 'outcome'"),
             (
+                "outcome_with_index",
+                _native("n"),
+                [_edge("n", "x", "branch", index=0, outcome="failed")],
+                "sets 'outcome', so it takes no 'index'",
+            ),
+            (
                 "duplicate_outcome",
                 _native("n"),
                 [_edge("n", "x", "branch", outcome="failed"), _edge("n", "x", "branch", outcome="failed")],

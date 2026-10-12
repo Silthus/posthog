@@ -292,7 +292,7 @@ from products.workflows.backend.presentation.views.message_assets import (
     MessageAssetSerializer,
     MessageAssetsRequestSerializer,
 )
-from products.workflows.backend.presentation.views.native_steps import validate_native_step
+from products.workflows.backend.presentation.views.native_steps import native_step_key, validate_native_step
 
 logger = structlog.get_logger(__name__)
 
@@ -1634,7 +1634,7 @@ class HogFlowActionSerializer(serializers.Serializer):
                     _apply_email_template_content(config, get_team(), strict, self.context)
             template = get_function_template_schema(template_id)
             gating_flag = FLAG_GATED_TEMPLATE_IDS.get(template_id)
-            already_stored = data.get("id") in (self.context.get("stored_gated_action_ids") or set())
+            already_stored = data.get("id") in (self.context.get("stored_gated_template_action_ids") or set())
             if template is not None and gating_flag is not None and not already_stored:
                 # Outside a request (internal re-saves, direct construction) there is no team to
                 # evaluate the flag against, and the flow was already allowed to hold this step.
@@ -2859,22 +2859,26 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             if isinstance(action, dict) and action.get("id") and action.get("type") == "conditional_branch"
         }
 
-        # Action ids already stored with a flag-gated template or as a native step, so the gate only polices new
+        # Action ids already stored with a flag-gated template, so the gate only polices new
         # adoption: a flow that was allowed to hold the step keeps validating after a flag
         # dial-down or eval blip (the gate fails closed), instead of becoming un-editable and
         # failing refresh_hog_flows. Only an active flow's steps count - active means the step
         # passed the gate at activation, whereas a draft can hold the step without ever passing
         # it (lenient web saves skip strict validation), so grandfathering a draft would let an
         # unflagged team activate the step.
-        self.context["stored_gated_action_ids"] = {
+        active_actions = (instance.actions if instance and instance.status == HogFlowState.ACTIVE else None) or []
+        self.context["stored_gated_template_action_ids"] = {
             action["id"]
-            for action in ((instance.actions if instance and instance.status == HogFlowState.ACTIVE else None) or [])
+            for action in active_actions
             if isinstance(action, dict)
             and action.get("id")
-            and (
-                action.get("type") == NATIVE_ACTION_TYPE
-                or (action.get("config") or {}).get("template_id") in FLAG_GATED_TEMPLATE_IDS
-            )
+            and "function" in str(action.get("type") or "")
+            and (action.get("config") or {}).get("template_id") in FLAG_GATED_TEMPLATE_IDS
+        }
+        self.context["stored_native_steps"] = {
+            action["id"]: native_step_key(action)
+            for action in active_actions
+            if isinstance(action, dict) and action.get("id") and action.get("type") == NATIVE_ACTION_TYPE
         }
 
         status = data.get("status")

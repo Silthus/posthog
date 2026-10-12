@@ -111,6 +111,8 @@ def _outcome_edge_errors(edge: dict, source: Optional[dict], seen_outcome_keys: 
         return [f"Outcome edge from '{src}' must be a 'branch' edge."]
     if outcome is None:
         return [f"Branch edge from native step '{src}' is missing 'outcome'."]
+    if edge.get("index") is not None:
+        return [f"Edge from '{src}' sets 'outcome', so it takes no 'index'."]
     config = source.get("config") or {}
     operation = find_operation_spec(config.get("node"), config.get("operation"))
     if operation is not None and outcome == operation.primary_outcome:
