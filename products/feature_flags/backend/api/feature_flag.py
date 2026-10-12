@@ -184,6 +184,8 @@ from products.surveys.backend.models import Survey
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
+    from posthog.models.user import User
+
 logger = logging.getLogger(__name__)
 # Dedicated logger name (not `__name__`) so the underlying stdlib logger is created
 # *after* Django applies `disable_existing_loggers: True`. Using `__name__` here
@@ -4440,7 +4442,7 @@ class FeatureFlagViewSet(
                 data["rollout_percentage"],
                 data["version"],
                 team=self.team,
-                user=request.user,
+                user=cast("User", request.user),
                 request=request,
             )
         except FlagRolloutDeletedFlag as error:
@@ -4502,7 +4504,7 @@ class FeatureFlagViewSet(
                 self.get_object(),
                 data["version"],
                 team=self.team,
-                user=request.user,
+                user=cast("User", request.user),
                 request=request,
                 deleted_hint="rolling it out to everyone",
                 transform=transform,
