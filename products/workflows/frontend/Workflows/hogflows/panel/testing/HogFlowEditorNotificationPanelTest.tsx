@@ -29,6 +29,7 @@ import { asDisplay } from 'products/persons/frontend/person-utils'
 import { renderWorkflowLogMessage } from '../../../logs/log-utils'
 import { TRIGGER_NODE_ID, workflowLogic } from '../../../workflowLogic'
 import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
+import { getHogFlowTestResultMessage } from './getHogFlowTestResultMessage'
 import { hogFlowEditorNotificationTestLogic } from './hogFlowEditorNotificationTestLogic'
 import { reorderGlobalsForEmailAction } from './hogFlowEditorNotificationTestLogic'
 
@@ -368,13 +369,7 @@ export function EmailActionTestContent(): JSX.Element | null {
                                           : 'error'
                                 }
                             >
-                                {testResult.status === 'success'
-                                    ? 'Success'
-                                    : testResult.status === 'skipped'
-                                      ? testResult.nextActionId
-                                          ? 'This step was skipped. See the logs for details.'
-                                          : 'Workflow was skipped because the event did not match the filter criteria'
-                                      : 'Error: ' + testResult.errors?.join(', ')}
+                                {getHogFlowTestResultMessage(testResult)}
                             </LemonBanner>
 
                             <div className="flex flex-col gap-2">
