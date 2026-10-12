@@ -333,6 +333,7 @@ export interface workflowsListV2LogicMeta {
             rows: WorkflowListRow[],
             itemsByRef: Record<string, FileSystemEntry>,
             projectFilesEnabled: boolean,
+            value: FacetSearchValue,
             user: UserType | null
         ) => FacetDefinition<WorkflowListRow>[]
         matchesText: (serverSearch: ServerSearchResult | null) => MatchesText<WorkflowListRow>
@@ -565,14 +566,19 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
         ],
         listLoaded: [(s) => [s.workflows], (workflows: HogFlowListSummaryApi[] | null): boolean => workflows !== null],
         facets: [
-            (s) => [s.rows, s.itemsByRef, s.projectFilesEnabled, s.user],
+            (s) => [s.rows, s.itemsByRef, s.projectFilesEnabled, s.value, s.user],
             (
                 rows: WorkflowListRow[],
                 itemsByRef: Record<string, FileSystemEntry>,
                 enabled: boolean,
+                value: FacetSearchValue,
                 user: UserType | null
             ): FacetDefinition<WorkflowListRow>[] =>
-                buildWorkflowListFacets(rows, itemsByRef)
+                buildWorkflowListFacets(
+                    rows,
+                    itemsByRef,
+                    !!value.text.trim() || value.filters.some((filter) => filter.facet !== 'in' || filter.negated)
+                )
                     .filter((facet) => enabled || facet.key !== 'in')
                     .map((facet) =>
                         facet.key === 'createdBy'
@@ -667,44 +673,8 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
             }
         }
         return {
-            reloadFolderScope: () => {
-                for (const filter of values.value.filters.filter(
-                    (filter) => values.projectFilesEnabled && filter.facet === 'in'
-                )) {
-                    projectTreeDataLogic.actions.loadFolder(filter.value, true)
-                }
-            },
-            [projectTreeDataLogic.actionTypes.pruneClosedFolders]: () => {
-                for (const filter of values.value.filters.filter(
-                    (filter) => values.projectFilesEnabled && filter.facet === 'in'
-                )) {
-                    if (!values.folderStates[filter.value]) {
-                        projectTreeDataLogic.actions.loadFolder(filter.value)
-                    }
-                }
-            },
-            [projectTreeDataLogic.actionTypes.loadFolderSuccess]: ({ folder }: { folder: string }) => {
-                if (
-                    values.value.filters.some((filter) => filter.facet === 'in' && filter.value === folder) &&
-                    projectTreeDataLogic.values.folderStates[folder] === 'has-more'
-                ) {
-                    projectTreeDataLogic.actions.loadFolder(folder)
-                }
-            },
-            [projectTreeDataLogic.actionTypes.loadUnfiledItemsSuccess]: () => {
-                for (const filter of values.value.filters.filter(
-                    (filter) => values.projectFilesEnabled && filter.facet === 'in'
-                )) {
-                    projectTreeDataLogic.actions.loadFolder(filter.value, true)
-                }
-            },
             clearFilters: writeUrl,
             setValue: ({ value }) => {
-                for (const filter of value.filters.filter(
-                    (filter) => values.projectFilesEnabled && filter.facet === 'in'
-                )) {
-                    projectTreeDataLogic.actions.loadFolder(filter.value)
-                }
                 writeUrl()
                 const text = value.text.trim()
                 if (text.length >= MIN_SERVER_SEARCH_LENGTH && values.requestedSearchText !== text) {

@@ -33,7 +33,7 @@ function newWorkflowFolderParams(
         parseFacetQuery(typeof searchParams.q === 'string' ? searchParams.q : '', buildWorkflowListFacets([])).find(
             (filter) => filter.facet === 'in' && !filter.negated
         )?.value
-    return folder ? { _create_in_folder: folder } : {}
+    return folder && folder !== 'Unfiled' ? { _create_in_folder: folder } : {}
 }
 
 /** The new-workflow URL for an entry that means "start from nothing", the only kind the composer answers. */

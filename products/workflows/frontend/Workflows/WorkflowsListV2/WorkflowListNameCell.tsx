@@ -1,6 +1,6 @@
 import { useActions, useValues } from 'kea'
 
-import { IconDrag } from '@posthog/icons'
+import { IconDecisionTree, IconDrag } from '@posthog/icons'
 import { LemonButton, LemonTag, Tooltip } from '@posthog/lemon-ui'
 
 import { FEATURE_FLAGS } from 'lib/constants'
@@ -12,6 +12,7 @@ import { urls } from 'scenes/urls'
 import { projectTreeDataLogic } from '~/layout/panel-layout/ProjectTree/projectTreeDataLogic'
 import { getItemId } from '~/layout/panel-layout/ProjectTree/utils'
 
+import { WorkflowFolderPath } from './WorkflowFolderPath'
 import { WorkflowListRow } from './workflowListRows'
 
 export function WorkflowListNameCell({ row }: { row: WorkflowListRow }): JSX.Element {
@@ -74,7 +75,7 @@ export function WorkflowListNameCell({ row }: { row: WorkflowListRow }): JSX.Ele
                 id={entry ? getItemId(entry) : row.id}
                 scope="workflow-project-files"
                 enableDragging={!!entry && canMove}
-                className="max-w-8 shrink-0"
+                className="max-w-8 shrink-0 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100"
             >
                 <LemonButton
                     size="small"
@@ -83,11 +84,12 @@ export function WorkflowListNameCell({ row }: { row: WorkflowListRow }): JSX.Ele
                     disabled={!entry || !canMove}
                 />
             </TreeNodeDraggable>
-            <div className="flex-1 min-w-0">
+            <div className="flex flex-1 gap-2 min-w-0 items-center">
+                <IconDecisionTree className="shrink-0 text-secondary" />
+                {entry && <WorkflowFolderPath path={entry.path} />}
                 <LemonTableLink
                     to={archived ? undefined : urls.workflow(row.id, 'workflow')}
                     title={archived ? <Tooltip title="Restore this workflow to make changes">{name}</Tooltip> : title}
-                    description={description}
                     truncateTitle
                 />
             </div>

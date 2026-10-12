@@ -138,34 +138,6 @@ describe('workflowsListV2Logic', () => {
         expect(shownIds(logic)).toEqual([workflow.id])
     })
 
-    it('keeps the folder scope after the project tree prunes collapsed folders', async () => {
-        const workflow = FIXTURE_WORKFLOWS[0]
-        useMocks({
-            get: {
-                '/api/projects/:team_id/file_system/': () => [
-                    200,
-                    {
-                        results: [
-                            { id: 'file-welcome', path: 'Campaigns/Welcome', type: 'hog_flow', ref: workflow.id },
-                        ],
-                        count: 1,
-                        users: [],
-                    },
-                ],
-            },
-        })
-        logic = workflowsListV2Logic()
-        logic.mount()
-        await expectLogic(logic).toFinishAllListeners()
-        logic.actions.setValue({ filters: [{ facet: 'in', value: 'Campaigns', negated: false }], text: '' })
-        await expectLogic(logic).toFinishAllListeners()
-        expect(shownIds(logic)).toEqual([workflow.id])
-        projectTreeDataLogic.actions.pruneClosedFolders([])
-        await expectLogic(logic).toFinishAllListeners()
-        expect(logic.values.folderScopeLoading).toBe(false)
-        expect(shownIds(logic)).toEqual([workflow.id])
-    })
-
     it('does not treat a shortcut-only folder as the workflow folder', async () => {
         logic = workflowsListV2Logic()
         logic.mount()

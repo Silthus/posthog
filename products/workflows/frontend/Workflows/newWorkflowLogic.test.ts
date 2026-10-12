@@ -43,6 +43,17 @@ describe('newWorkflowLogic', () => {
         logic.unmount()
     })
 
+    it('keeps the default workflow location when browsing Unfiled', async () => {
+        setFlags([FEATURE_FLAGS.WORKFLOWS_LIST_V2, FEATURE_FLAGS.WORKFLOWS_PROJECT_FILES])
+        const logic = newWorkflowLogic()
+        logic.mount()
+        router.actions.push('/workflows', { q: 'in:Unfiled' }, {})
+        await expectLogic(logic, () => logic.actions.startNewWorkflow()).toFinishAllListeners()
+        await expectLogic(logic, () => logic.actions.createEmptyWorkflow()).toFinishAllListeners()
+        expect(router.values.searchParams._create_in_folder).toBeUndefined()
+        logic.unmount()
+    })
+
     it('carries the open project folder through the new workflow picker', async () => {
         setFlags([FEATURE_FLAGS.WORKFLOWS_LIST_V2, FEATURE_FLAGS.WORKFLOWS_PROJECT_FILES])
         const logic = newWorkflowLogic()
