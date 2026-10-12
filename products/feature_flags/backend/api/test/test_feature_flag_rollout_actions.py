@@ -18,13 +18,12 @@ from posthog.models.utils import generate_random_token_personal, hash_key_value
 from products.approvals.backend.models import ApprovalPolicy, ChangeRequest
 from products.approvals.backend.services import ChangeRequestService
 from products.feature_flags.backend.api.feature_flag import (
-    FeatureFlagViewSet,
     FlagActionErrorSerializer,
     FlagApprovalConflictSerializer,
     FlagDeletedRejectionSerializer,
-    FlagRolloutWriteRequest,
 )
-from products.feature_flags.backend.facade.api import update_flag
+from products.feature_flags.backend.facade import api as flag_api
+from products.feature_flags.backend.facade.api import FlagRolloutWriteRequest, update_flag
 from products.feature_flags.backend.models.feature_flag import FeatureFlag
 
 # Deliberately wider than what either action writes: every one of these must survive a rollout call.
@@ -464,16 +463,16 @@ class TestFeatureFlagRolloutActions(APIBaseTest):
         # that landed since the read. Both actions run the same body, so one covers the window:
         # the delete lands between the pre-lock check and the lock.
         flag = self._flag()
-        original = FeatureFlagViewSet._rollout_precondition
+        original = flag_api._rollout_precondition
         fired: list[bool] = []
 
-        def precondition(view, feature_flag, version):
-            original(view, feature_flag, version)
+        def precondition(feature_flag, version):
+            original(feature_flag, version)
             if not fired:
                 fired.append(True)
                 FeatureFlag.objects.filter(pk=flag.pk).update(deleted=True)
 
-        with patch.object(FeatureFlagViewSet, "_rollout_precondition", precondition):
+        with patch.object(flag_api, "_rollout_precondition", precondition):
             response = self._act(
                 flag,
                 "set_release_condition_rollout",
@@ -491,16 +490,16 @@ class TestFeatureFlagRolloutActions(APIBaseTest):
         # already moved on; the decision has to be made against the locked row.
         flag = self._flag()
         stale_version = flag.version
-        original = FeatureFlagViewSet._rollout_precondition
+        original = flag_api._rollout_precondition
         fired: list[bool] = []
 
-        def precondition(view, feature_flag, version):
-            original(view, feature_flag, version)
+        def precondition(feature_flag, version):
+            original(feature_flag, version)
             if not fired:
                 fired.append(True)
                 FeatureFlag.objects.filter(pk=flag.pk).update(version=(flag.version or 0) + 1)
 
-        with patch.object(FeatureFlagViewSet, "_rollout_precondition", precondition):
+        with patch.object(flag_api, "_rollout_precondition", precondition):
             response = self._act(
                 flag,
                 "set_release_condition_rollout",
@@ -528,7 +527,7 @@ class TestFeatureFlagRolloutActions(APIBaseTest):
                 {"filters": {**TARGETING, "groups": [{"properties": [], "rollout_percentage": 100}]}},
                 team=self.team,
                 user=self.user,
-                request=FlagRolloutWriteRequest(drf_request, version=(flag.version or 0) + 5),
+                request=FlagRolloutWriteRequest(drf_request, version=(flag.version or 0) + 5, user=self.user),
             )
 
         flag.refresh_from_db()
