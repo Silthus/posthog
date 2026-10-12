@@ -105,9 +105,7 @@ function MockAiPanel({ id }: { id: string }): JSX.Element {
         <aside className="flex w-[420px] shrink-0 flex-col border-l bg-surface-secondary">
             <div className="border-b px-3 py-2 text-[13px] font-semibold">PostHog AI</div>
             <div className="flex flex-1 flex-col gap-3 overflow-hidden p-3 text-[13px]">
-                <div className="self-end rounded-lg bg-surface-primary px-3 py-2">
-                    {ask}
-                </div>
+                <div className="self-end rounded-lg bg-surface-primary px-3 py-2">{ask}</div>
                 <div className="rounded-lg px-1 py-1 leading-snug">{answer}</div>
             </div>
             <div className="m-3 rounded-md border bg-surface-primary px-3 py-2 text-[13px] text-tertiary">
