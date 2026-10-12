@@ -14,7 +14,7 @@ import { initKeaTests } from '~/test/init'
 import { AccessControlLevel } from '~/types'
 
 import type { WorkflowViewApi, WorkflowViewCreateApi } from '../../generated/api.schemas'
-import { createFacetCounter } from './FacetSearchBar/facetQuery'
+import { FacetFilter, createFacetCounter } from './FacetSearchBar/facetQuery'
 import { FIXTURE_METRICS, FIXTURE_USERS, FIXTURE_WORKFLOWS, paginated } from './workflowsListV2Fixtures'
 import { workflowsListV2Logic } from './workflowsListV2Logic'
 import { workflowsSavedViewsLogic } from './workflowsSavedViewsLogic'
@@ -92,6 +92,72 @@ describe('workflowsSavedViewsLogic', () => {
     })
 
     afterEach(() => logic?.unmount())
+
+    const status = (value: string, negated = false): FacetFilter => ({ facet: 'status', value, negated })
+    const eventTrigger: FacetFilter = { facet: 'trigger', value: 'event', negated: false }
+    const applyViewById = (id: string): void =>
+        logic.actions.applyView(logic.values.views.find((view) => view.id === id)!)
+
+    it.each([
+        [
+            'an addition on another facet sits beside the view filter',
+            [eventTrigger],
+            [status('active'), eventTrigger],
+            [status('active')],
+        ],
+        ["an addition on the same facet replaces the view's filter", [status('draft')], [status('draft')], []],
+        [
+            'a negated addition with another value sits beside the view filter',
+            [status('draft', true)],
+            [status('active'), status('draft', true)],
+            [status('active')],
+        ],
+        [
+            'a negated addition of the same value replaces the view filter',
+            [status('active', true)],
+            [status('active', true)],
+            [],
+        ],
+    ])('when switching views, %s', async (_, added, expected, fromView) => {
+        router.actions.push(urls.workflows(), { view: 'all' })
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+        workflowsListV2Logic.actions.setValue({ filters: added, text: '' })
+
+        applyViewById(VIEW_ID)
+
+        expect(workflowsListV2Logic.values.value.filters).toEqual(expected)
+        expect(logic.values.addedFilters).toEqual(added)
+        expect(logic.values.viewFilters).toEqual(fromView)
+    })
+
+    it('carries additions across views and shared links until reset', async () => {
+        router.actions.push(urls.workflows(), { view: 'drafts' })
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+        workflowsListV2Logic.actions.setValue({ filters: [status('draft'), eventTrigger], text: '' })
+        expect(logic.values.addedFilters).toEqual([eventTrigger])
+
+        applyViewById('needs-attention')
+        const sharedUrl = router.values.location.search
+        logic.unmount()
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+
+        expect(router.values.location.search).toEqual(sharedUrl)
+        expect(logic.values.addedFilters).toEqual([eventTrigger])
+        expect(workflowsListV2Logic.values.value.filters).toEqual([
+            { facet: 'health', value: 'failing', negated: false },
+            status('active'),
+            eventTrigger,
+        ])
+        logic.actions.resetView()
+        applyViewById('all')
+        expect(workflowsListV2Logic.values.value.filters).toEqual([])
+    })
 
     it('withholds health view counts when run metrics are unavailable', async () => {
         useMocks({
@@ -257,8 +323,9 @@ describe('workflowsSavedViewsLogic', () => {
     it('keeps local changes after a concurrent update until reset accepts the latest shared version', async () => {
         let latest = savedView
         let rejectUpdate = false
+        let rejectReset = false
         useMocks({
-            get: { '/api/projects/:team_id/workflow_views/:id/': () => [200, latest] },
+            get: { '/api/projects/:team_id/workflow_views/:id/': () => (rejectReset ? [500, {}] : [200, latest]) },
             patch: {
                 '/api/projects/:team_id/workflow_views/:id/': async ({ request }) => {
                     const body = (await request.json()) as { version: number; state: WorkflowViewApi['state'] }
@@ -293,13 +360,20 @@ describe('workflowsSavedViewsLogic', () => {
             state: { filters: [], text: 'remote', columns: ['trigger'] },
             version: 3,
         }
-        workflowsListV2Logic.actions.setValue({ filters: [], text: 'mine' })
+        workflowsListV2Logic.actions.setValue({
+            filters: [{ facet: 'trigger', value: 'event', negated: false }],
+            text: 'mine',
+        })
         await logic.asyncActions.updateActiveView()
         expect(workflowsListV2Logic.values.value.text).toEqual('mine')
         expect(logic.values.activeView.version).toEqual(2)
         expect(logic.values.sharedSaveDisabledReason).toBeTruthy()
         await logic.asyncActions.updateActiveView()
         expect(writes).toHaveLength(2)
+        rejectReset = true
+        await logic.asyncActions.resetView()
+        expect(logic.values.addedFilters).toEqual([{ facet: 'trigger', value: 'event', negated: false }])
+        rejectReset = false
         await logic.asyncActions.resetView()
         expect(workflowsListV2Logic.values.value.text).toEqual('remote')
         expect(workflowsListV2Logic.values.shownColumns).toEqual(['trigger'])

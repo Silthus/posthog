@@ -6,6 +6,7 @@ import { WorkflowSavedView } from './workflowSavedViews'
 export interface WorkflowSavedViewActionsProps {
     activeView: WorkflowSavedView
     isModified: boolean
+    hasAddedFilters: boolean
     canUpdateActiveView: boolean
     activeViewChanges: string[]
     saving: boolean
@@ -21,6 +22,7 @@ export interface WorkflowSavedViewActionsProps {
 export function WorkflowSavedViewActions({
     activeView,
     isModified,
+    hasAddedFilters,
     canUpdateActiveView,
     activeViewChanges,
     saving,
@@ -35,18 +37,20 @@ export function WorkflowSavedViewActions({
     const changed = activeViewChanges.join(', ')
     return (
         <div className="flex flex-wrap items-center gap-1 pb-2 shrink-0" data-attr="workflows-combined-view-actions">
+            {(isModified || hasAddedFilters) && (
+                <LemonButton
+                    size="small"
+                    type="tertiary"
+                    onClick={onReset}
+                    disabledReason={saving ? 'A view is being saved' : undefined}
+                    tooltip={`Discard your changes and go back to ${activeView.name}`}
+                    data-attr="workflows-combined-reset-view"
+                >
+                    Reset
+                </LemonButton>
+            )}
             {isModified && (
                 <>
-                    <LemonButton
-                        size="small"
-                        type="tertiary"
-                        onClick={onReset}
-                        disabledReason={saving ? 'A view is being saved' : undefined}
-                        tooltip={`Discard your changes and go back to ${activeView.name}`}
-                        data-attr="workflows-combined-reset-view"
-                    >
-                        Reset
-                    </LemonButton>
                     <LemonButton
                         size="small"
                         type={canUpdateActiveView ? 'secondary' : 'primary'}
@@ -61,19 +65,21 @@ export function WorkflowSavedViewActions({
                     >
                         Save as new view
                     </LemonButton>
-                    {canUpdateActiveView && (
-                        <LemonButton
-                            size="small"
-                            type="primary"
-                            onClick={onSave}
-                            loading={saving}
-                            disabledReason={sharedSaveDisabledReason ?? loadingReason}
-                            tooltip={`Update ${activeView.name} for everyone in this project. Changed: ${changed}.`}
-                            data-attr="workflows-combined-save-for-everyone"
-                        >
-                            Save for everyone
-                        </LemonButton>
-                    )}
+                    <LemonButton
+                        size="small"
+                        type="primary"
+                        onClick={onSave}
+                        loading={saving}
+                        disabledReason={
+                            !canUpdateActiveView
+                                ? "Built-in views can't be changed. Save as a new view instead."
+                                : (sharedSaveDisabledReason ?? loadingReason)
+                        }
+                        tooltip={`Update ${activeView.name} for everyone in this project. Changed: ${changed}.`}
+                        data-attr="workflows-combined-update-view"
+                    >
+                        Update view
+                    </LemonButton>
                 </>
             )}
             {canUpdateActiveView && (

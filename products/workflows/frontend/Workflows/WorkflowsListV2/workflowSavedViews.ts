@@ -1,6 +1,6 @@
 import type { WorkflowViewApi, WorkflowViewFilterApi, WorkflowViewStateApi } from '../../generated/api.schemas'
 import { WorkflowViewFacetEnumApi } from '../../generated/api.schemas'
-import { FacetFilter, FacetSearchValue, serializeFacetQuery } from './FacetSearchBar/facetQuery'
+import { FacetFilter, FacetSearchValue, facetFilterKey, serializeFacetQuery } from './FacetSearchBar/facetQuery'
 import { DEFAULT_COLUMNS, OPTIONAL_COLUMNS, OptionalColumn } from './workflowListLabels'
 
 export type WorkflowSavedView = Pick<WorkflowViewApi, 'id' | 'name' | 'state' | 'version' | 'default_key'> & {
@@ -81,4 +81,35 @@ export function workflowViewState(value: FacetSearchValue, columns: OptionalColu
         allowed.some((facet) => facet === filter.facet)
     )
     return { filters, text: value.text.trim(), columns }
+}
+
+function overrides(added: FacetFilter, viewFilter: FacetFilter): boolean {
+    const bothPositive = !added.negated && !viewFilter.negated
+    const sameValue = added.value.toLowerCase() === viewFilter.value.toLowerCase()
+    return added.facet === viewFilter.facet && (bothPositive || sameValue)
+}
+
+export function mergeAddedFilters(viewFilters: FacetFilter[], added: FacetFilter[]): FacetFilter[] {
+    const kept = viewFilters.filter((viewFilter) => !added.some((filter) => overrides(filter, viewFilter)))
+    return [...kept, ...added]
+}
+
+export function addedFiltersAfterEdit(
+    viewFilters: FacetFilter[],
+    previouslyAdded: FacetFilter[],
+    filters: FacetFilter[]
+): FacetFilter[] {
+    const viewKeys = new Set(viewFilters.map(facetFilterKey))
+    const addedKeys = new Set(previouslyAdded.map(facetFilterKey))
+    return filters.filter((filter) => addedKeys.has(facetFilterKey(filter)) || !viewKeys.has(facetFilterKey(filter)))
+}
+
+export function filtersFromView(
+    viewFilters: FacetFilter[],
+    added: FacetFilter[],
+    filters: FacetFilter[]
+): FacetFilter[] {
+    const viewKeys = new Set(viewFilters.map(facetFilterKey))
+    const addedKeys = new Set(added.map(facetFilterKey))
+    return filters.filter((filter) => viewKeys.has(facetFilterKey(filter)) && !addedKeys.has(facetFilterKey(filter)))
 }
