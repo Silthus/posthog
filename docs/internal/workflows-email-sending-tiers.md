@@ -74,6 +74,10 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
   A reached cap skips the send instead of delaying it. A limiter error or an empty or invalid cap value skips every sandbox send.
   Cap keys and the final membership check share one organization snapshot, valid for at most one minute. A stalled claim or member lookup that outlives that snapshot skips the send and returns the claim.
   SES throttle responses return the sandbox claim before the existing delivery retry. Returns are deduplicated, and Valkey ignores a return command that arrives more than five minutes after it was issued.
+  The SES tenant-state webhook and daily reconciliation mirror `SES_SANDBOX_TENANT_NAME` into `SandboxSenderTenantState` without emailing project admins.
+  Every sandbox send, including test sends, skips when that tenant's mirrored sending status is `DISABLED` or the pause lookup fails. A missing row allows sending, with SES enforcing its own state.
+  The worker rechecks pauses after the daily-cap claim and returns the claim when that recheck blocks delivery.
+  A committed state change reaches the workers through the `reload-sandbox-sender-state` message. Own-sender sends do not read this state.
   Test sends run inline in the CDP API, so the API reads the same `SES_RATE_LIMITER_VALKEY_*` settings as the email worker. Without them, every sandbox test send is skipped.
   CDP API opens the SES Valkey pool only when sandbox delivery is enabled; otherwise its MX validation uses the existing local cache and DNS.
   Deploy membership checks, daily caps, and the shared pause gate first. Configure the SES identity and Valkey pool, enable `WORKFLOWS_SANDBOX_SENDER_ENABLED`, then enable the UI flag.
