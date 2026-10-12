@@ -633,3 +633,36 @@ class EmailDesignRenderingNotConfigured(Exception):
 
 class EmailDesignRenderFailed(Exception):
     pass
+
+
+NODE_FAILED: Final = "failed"
+NODE_NOT_PERMITTED: Final = "not_permitted"
+
+
+@frozen
+class NodeRunClaims:
+    hog_flow_id: UUID
+    hog_flow_version: int
+    action_id: str
+    dispatch_key: str
+
+
+@frozen
+class NodeRunCall:
+    node: str
+    operation: str
+    inputs: dict[str, Any]
+
+
+@frozen
+class NodeOutcome:
+    outcome: str
+    result: dict[str, Any]
+
+    @classmethod
+    def failed(cls, reason: str) -> "NodeOutcome":
+        return cls(outcome=NODE_FAILED, result={"reason": reason})
+
+    @classmethod
+    def not_permitted(cls, *, missing_permission: str, reason: str) -> "NodeOutcome":
+        return cls(outcome=NODE_NOT_PERMITTED, result={"missing_permission": missing_permission, "reason": reason})

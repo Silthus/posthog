@@ -119,6 +119,7 @@ It is the one action that cannot return a 409: every gated action declines a cha
 `set_release_condition_rollout` changes one condition's percentage, while `roll_out_to_everyone` adds an unconditional release condition. Both require the row `version` from the caller's last read and share the guarded rollout path in `products/feature_flags/backend/facade/api.py`.
 
 The facade's `set_release_condition_rollout(flag, condition_index, rollout_percentage, version, team=team, user=user)` also works without an HTTP request. Callers must check editor access before invoking it, as with other facade writes. It raises typed errors from `facade/contracts.py` for a version conflict, unsupported configuration, missing condition or deleted flag. The API maps these to its existing responses; `ApprovalRequired` propagates unchanged.
+`facade/contracts.py` also re-exports `ApprovalRequired`, so a caller in another product, such as a workflow step, catches it from the facade.
 
 The version and no-op checks run against the row under `select_for_update`. A no-op writes nothing. A change goes through `update_flag` after leaving the transaction, so a pending approval request survives an `ApprovalRequired` exception. The serializer repeats the strict version check under its own row lock before saving.
 
