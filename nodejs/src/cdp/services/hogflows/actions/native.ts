@@ -60,7 +60,12 @@ export class NativeNodeHandler implements ActionHandler {
         }
 
         const { hogFlow } = invocation
-        const inputs = await this.hogFlowFunctionsService.renderNativeStepInputs(invocation, action)
+        let inputs: Record<string, unknown>
+        try {
+            inputs = await this.hogFlowFunctionsService.renderNativeStepInputs(invocation, action)
+        } catch (error) {
+            return failed(`The step inputs could not be rendered. ${String(error)}`)
+        }
         const response = await internalApiRequest({
             jwt: this.config.jwt,
             teamId: invocation.teamId,

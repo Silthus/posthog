@@ -30,7 +30,7 @@ import { HogExecutorExecuteAsyncOptions } from '../hog-executor-async.service'
 import { EmailValidationService } from '../messaging/email-validation.service'
 import { RecipientPreferencesService } from '../messaging/recipient-preferences.service'
 import { CdpUsageReporterService } from '../usage/cdp-usage-reporter.service'
-import { ActionHandler } from './actions/action.interface'
+import { ActionHandler, ActionHandlerResult } from './actions/action.interface'
 import { ConditionalBranchHandler } from './actions/conditional_branch'
 import { DelayHandler } from './actions/delay'
 import { ExitHandler } from './actions/exit.handler'
@@ -636,7 +636,7 @@ export class HogFlowExecutorService {
 
                 // Stored before the error so `on_error: continue` still sees what the step returned.
                 if (handlerResult.result) {
-                    this.trackActionResult(result, currentAction, handlerResult.result)
+                    this.trackActionResultUnlessRunEnds(result, currentAction, handlerResult)
                     result.execResult = handlerResult.result
                 }
 
@@ -913,6 +913,21 @@ export class HogFlowExecutorService {
             metric_name: metricName,
             count: 1,
         })
+    }
+
+    // A step that ends the run must still end it when its result does not fit the run variables.
+    private trackActionResultUnlessRunEnds(
+        result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFlow>,
+        action: HogFlowAction,
+        handlerResult: ActionHandlerResult
+    ): void {
+        try {
+            this.trackActionResult(result, action, handlerResult.result)
+        } catch (storeError) {
+            if (!(handlerResult.error instanceof RunEndingStepError)) {
+                throw storeError
+            }
+        }
     }
 
     private trackActionResult(

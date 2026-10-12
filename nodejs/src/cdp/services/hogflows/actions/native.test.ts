@@ -55,7 +55,15 @@ describe('native workflow steps', () => {
         )
     }
 
-    const buildFlow = (onError: HogFlowAction['on_error'] = 'continue'): HogFlow =>
+    const buildFlow = ({
+        onError = 'continue',
+        rolloutTemplate = '{{ variables.next_percentage }}',
+        wireFailed = false,
+    }: {
+        onError?: HogFlowAction['on_error']
+        rolloutTemplate?: string
+        wireFailed?: boolean
+    } = {}): HogFlow =>
         new FixtureHogFlowBuilder()
             .withWorkflow({
                 actions: {
@@ -70,7 +78,7 @@ describe('native workflow steps', () => {
                             inputs: {
                                 flag_key: { value: 'new-checkout' },
                                 rollout_percentage: {
-                                    value: '{{ variables.next_percentage }}',
+                                    value: rolloutTemplate,
                                     templating: 'liquid',
                                 },
                             },
@@ -78,11 +86,20 @@ describe('native workflow steps', () => {
                     },
                     after_done: { type: 'exit', config: {} },
                     after_changed_elsewhere: { type: 'exit', config: {} },
+                    after_failed: { type: 'exit', config: {} },
                 },
                 edges: [
                     { from: 'trigger', to: 'flag_step', type: 'continue' },
+                    {
+                        from: 'flag_step',
+                        to: 'after_changed_elsewhere',
+                        type: 'continue',
+                        outcome: 'changed_elsewhere',
+                    },
                     { from: 'flag_step', to: 'after_done', type: 'continue' },
-                    { from: 'flag_step', to: 'after_changed_elsewhere', type: 'branch', outcome: 'changed_elsewhere' },
+                    ...(wireFailed
+                        ? [{ from: 'flag_step', to: 'after_failed', type: 'branch' as const, outcome: 'failed' }]
+                        : []),
                 ],
             })
             .build()
@@ -97,9 +114,9 @@ describe('native workflow steps', () => {
         } as FetchResponse)
     }
 
-    const runFlow = async (hogFlow: HogFlow, signingKey = SIGNING_KEY) => {
+    const runFlow = async (hogFlow: HogFlow, signingKey = SIGNING_KEY, variables: Record<string, unknown> = {}) => {
         const invocation = createExampleHogFlowInvocation(hogFlow)
-        invocation.state.variables = { next_percentage: 25 }
+        invocation.state.variables = { next_percentage: 25, ...variables }
         const result = await buildExecutor(signingKey).execute(invocation)
         return { invocation, result }
     }
@@ -191,11 +208,29 @@ describe('native workflow steps', () => {
     })
 
     it('fails the step without calling Django when no signing key is configured', async () => {
-        const { result } = await runFlow(buildFlow('abort'), '')
+        const { result } = await runFlow(buildFlow({ onError: 'abort' }), '')
 
         expect(mockInternalFetch).not.toHaveBeenCalled()
         expect(result.finished).toBe(true)
         expect(result.invocation.state.currentAction?.id).toBe('flag_step')
         expect(result.error).toEqual(expect.stringContaining('WORKFLOW_NODES_RUN_JWT_SECRET'))
+    })
+
+    it('ends the run on an unwired outcome even when its result overflows the run variables', async () => {
+        respondWith(200, { status: 'outcome', outcome: 'not_permitted', result: { missing_permission: 'editor' } })
+
+        const { result } = await runFlow(buildFlow(), SIGNING_KEY, { notes: 'x'.repeat(5080) })
+
+        expect(result.finished).toBe(true)
+        expect(result.invocation.state.currentAction?.id).toBe('flag_step')
+        expect(result.error).toEqual(expect.stringContaining('not_permitted'))
+    })
+
+    it('follows a wired failed edge when the inputs cannot be rendered', async () => {
+        const { result } = await runFlow(buildFlow({ rolloutTemplate: '{% if %}', wireFailed: true }))
+
+        expect(mockInternalFetch).not.toHaveBeenCalled()
+        expect(result.invocation.state.currentAction?.id).toBe('after_failed')
+        expect(result.invocation.state.variables?.flag).toEqual({ reason: expect.stringContaining('render') })
     })
 })

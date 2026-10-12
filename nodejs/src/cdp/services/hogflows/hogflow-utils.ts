@@ -43,7 +43,7 @@ export const findNextAction = (hogFlow: HogFlow, currentActionId: string, edgeIn
     let nextActionId: string | undefined
 
     if (edgeIndex === undefined) {
-        nextActionId = edges.find((edge) => edge.type === 'continue')?.to
+        nextActionId = edges.find((edge) => edge.type === 'continue' && !edge.outcome)?.to
     } else {
         nextActionId = edges.find((edge) => edge.type === 'branch' && edge.index === edgeIndex)?.to
     }
