@@ -242,7 +242,6 @@ class HogFlow(UUIDTModel):
             update_fields -= {self._meta.get_field(attname).name for attname in deferred}
             kwargs["update_fields"] = update_fields
         if update_fields is None or not SEARCH_TEXT_SOURCE_FIELDS.isdisjoint(update_fields):
-            using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
             self.search_text = build_search_text(**self._search_text_sources(update_fields, using))
             if update_fields is not None:
                 kwargs["update_fields"] = update_fields | {"search_text"}
