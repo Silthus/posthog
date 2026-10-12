@@ -5,7 +5,9 @@ from typing import Any
 from posthog.test.base import APIBaseTest
 from unittest.mock import patch
 
+from django.db import connection
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 
 from parameterized import parameterized
 
@@ -14,7 +16,9 @@ from posthog.models.integration import Integration
 from products.cdp.backend.api.hog_function import HogFunctionInvocationSerializer
 from products.cdp.backend.models.hog_function_template import HogFunctionTemplate
 from products.workflows.backend.facade.api import ensure_sandbox_email_sender
+from products.workflows.backend.facade.workflows import get_workflow_edit_state
 from products.workflows.backend.models.hog_flow import HogFlow
+from products.workflows.backend.presentation.views.hog_flow import HogFlowInvocationSerializer
 
 
 @override_settings(
@@ -85,9 +89,15 @@ class TestSandboxSenderValidation(APIBaseTest):
             "inputs": {"email": {"value": self._email()}},
         }
 
-    def test_broadcast_cannot_select_the_sandbox_sender(self) -> None:
+    @parameterized.expand([("integer",), ("float",), ("malformed_rotation",)])
+    def test_broadcast_cannot_select_the_sandbox_sender(self, sender_shape: str) -> None:
         workflow = self._workflow()
         workflow["origin_product"] = "broadcasts"
+        sender = workflow["actions"][1]["config"]["inputs"]["email"]["value"]["from"]
+        if sender_shape == "float":
+            sender["integrationId"] = float(self.sender.id)
+        elif sender_shape == "malformed_rotation":
+            sender["integrationIds"] = self.sender.id
 
         response = self.client.post(f"/api/projects/{self.team.id}/hog_flows", workflow)
 
@@ -104,26 +114,6 @@ class TestSandboxSenderValidation(APIBaseTest):
         assert response.status_code == 400, response.json()
         assert "sandbox sender" in response.json()["detail"].lower()
         assert "workflow email steps and test sends" in response.json()["detail"].lower()
-
-    def test_broadcast_cannot_select_the_sandbox_sender_with_a_numeric_id(self) -> None:
-        workflow = self._workflow()
-        workflow["origin_product"] = "broadcasts"
-        workflow["actions"][1]["config"]["inputs"]["email"]["value"]["from"]["integrationId"] = float(self.sender.id)
-
-        response = self.client.post(f"/api/projects/{self.team.id}/hog_flows", workflow)
-
-        assert response.status_code == 400, response.json()
-        assert "broadcast" in response.json()["detail"].lower()
-
-    def test_broadcast_cannot_hide_the_sandbox_sender_in_malformed_rotation(self) -> None:
-        workflow = self._workflow()
-        workflow["origin_product"] = "broadcasts"
-        workflow["actions"][1]["config"]["inputs"]["email"]["value"]["from"]["integrationIds"] = self.sender.id
-
-        response = self.client.post(f"/api/projects/{self.team.id}/hog_flows", workflow)
-
-        assert response.status_code == 400, response.json()
-        assert "broadcast" in response.json()["detail"].lower()
 
     def test_generic_workflow_step_cannot_select_the_sandbox_sender_with_a_legacy_email_schema(self) -> None:
         template = HogFunctionTemplate.objects.get(template_id="template-email")
@@ -146,6 +136,28 @@ class TestSandboxSenderValidation(APIBaseTest):
             "integrationId": self.sender.id
         }
 
+    @parameterized.expand([("exit",), ("function",)])
+    def test_inert_email_data_is_not_an_existing_sandbox_sender(self, action_type: str) -> None:
+        workflow = self._workflow()
+        action = workflow["actions"][1]
+        action["type"] = action_type
+        action["config"]["template_id"] = "missing-template"
+        email = action["config"]["inputs"]["email"]["value"]
+        email["from"]["name"] = "New sender"
+        email["replyTo"] = "reply@example.com"
+        created = self.client.post(f"/api/projects/{self.team.id}/hog_flows", workflow)
+        assert created.status_code == 201, created.json()
+        action["type"] = "function_email"
+        action["config"].pop("template_id")
+
+        response = self.client.patch(
+            f"/api/projects/{self.team.id}/hog_flows/{created.json()['id']}",
+            {"actions": workflow["actions"]},
+        )
+
+        assert response.status_code == 400, response.json()
+        assert "fixed From address and name" in response.json()["detail"]
+
     def test_sandbox_sender_cannot_rotate_with_own_senders(self) -> None:
         own_sender = Integration.objects.create(
             team=self.team,
@@ -161,6 +173,17 @@ class TestSandboxSenderValidation(APIBaseTest):
 
         assert response.status_code == 400, response.json()
         assert "sandbox sender must be the only sender" in response.json()["detail"].lower()
+
+    def test_oversized_sender_rotation_is_rejected_before_looking_up_integrations(self) -> None:
+        workflow = self._workflow()
+        workflow["actions"][1]["config"]["inputs"]["email"]["value"]["from"]["integrationIds"] = list(range(100))
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.post(f"/api/projects/{self.team.id}/hog_flows", workflow)
+
+        assert response.status_code == 400, response.json()
+        assert "At most 10 email senders" in response.json()["detail"]
+        assert not [query for query in queries if 'FROM "posthog_integration"' in query["sql"]]
 
     @parameterized.expand(
         [
@@ -219,6 +242,32 @@ class TestSandboxSenderValidation(APIBaseTest):
         assert serializer.validated_data["configuration"]["inputs"]["email"]["value"]["from"] == {
             "integrationId": self.sender.id
         }
+
+    @parameterized.expand([("missing",), ("cleared",)])
+    def test_broadcast_test_cannot_clear_its_origin(self, origin: str) -> None:
+        workflow = self._workflow()
+        stored = HogFlow.objects.create(
+            team=self.team,
+            name="Broadcast",
+            origin_product="broadcasts",
+            actions=workflow["actions"],
+            edges=workflow["edges"],
+        )
+        if origin == "cleared":
+            workflow["origin_product"] = None
+        serializer = HogFlowInvocationSerializer(
+            data={"configuration": workflow},
+            context={
+                "get_team": lambda: self.team,
+                "view": SimpleNamespace(action="invocations"),
+                "instance": get_workflow_edit_state(
+                    team_id=self.team.id, workflow_id=stored.id, user_access_control=None, required_level=None
+                ),
+            },
+        )
+
+        assert not serializer.is_valid(), serializer.validated_data
+        assert "broadcast" in str(serializer.errors).lower()
 
     @parameterized.expand([("live",), ("draft",)])
     def test_unchanged_legacy_sender_survives_unrelated_edits(self, variant: str) -> None:

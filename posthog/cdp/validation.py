@@ -100,6 +100,9 @@ def _email_integrations(integration_ids: set[int], context: dict[str, Any]) -> d
 def validate_sandbox_email_sender(email_value: object, context: dict[str, Any]) -> None:
     if not isinstance(email_value, dict) or not isinstance(email_value.get("from"), dict):
         return
+    rotation = email_value["from"].get("integrationIds")
+    if isinstance(rotation, list) and len(rotation) > MAX_WORKFLOW_EMAIL_SENDERS:
+        raise serializers.ValidationError({"input": f"At most {MAX_WORKFLOW_EMAIL_SENDERS} email senders are allowed."})
     integration_ids = _sender_integration_ids(email_value["from"])
     get_team = context.get("get_team")
     if not integration_ids or get_team is None:

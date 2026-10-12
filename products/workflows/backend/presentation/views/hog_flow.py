@@ -860,14 +860,14 @@ def _has_exact_string_filter(filters: dict, key: str) -> bool:
     return False
 
 
-def _existing_email_values_by_action(instance: WorkflowEditState) -> dict[str, list[dict]]:
+def _existing_email_values_by_action(instance: WorkflowEditState) -> dict[str, list[tuple[str | None, dict]]]:
     """Stored email inputs keyed by action id, live and draft variants both kept.
 
     Which variant a save should be compared against depends on how the request routes (a
     builder save targets the draft, a raw API write targets live), so validation grandfathers
     a value matching either - both are values already stored on the workflow.
     """
-    result: dict[str, list[dict]] = {}
+    result: dict[str, list[tuple[str | None, dict]]] = {}
     draft = instance.draft if isinstance(instance.draft, dict) else {}
     for actions in (instance.actions, draft.get("actions")):
         for stored_action in actions or []:
@@ -877,7 +877,7 @@ def _existing_email_values_by_action(instance: WorkflowEditState) -> dict[str, l
             value = email_input.get("value") if isinstance(email_input, dict) else None
             from_value = value.get("from") if isinstance(value, dict) else None
             if isinstance(value, dict) and isinstance(from_value, dict):
-                result.setdefault(stored_action["id"], []).append(value)
+                result.setdefault(stored_action["id"], []).append((stored_action.get("type"), value))
     return result
 
 
@@ -1642,7 +1642,9 @@ class HogFlowActionSerializer(serializers.Serializer):
                 input_context = {
                     **self.context,
                     "workflow_action_type": data.get("type"),
-                    "existing_email_values": existing_emails,
+                    "existing_email_values": [
+                        email for action_type, email in existing_emails if action_type == "function_email"
+                    ],
                     "email_integration_cache": self.context.setdefault("_email_integration_cache", {}),
                     "sandbox_sender_enabled_cache": self.context.setdefault("_sandbox_sender_enabled_cache", {}),
                 }
@@ -1669,7 +1671,7 @@ class HogFlowActionSerializer(serializers.Serializer):
                         # sender address is checked against the integration's verified domain at
                         # save time, while an unchanged stored value is grandfathered.
                         "get_team": self.context.get("get_team"),
-                        "existing_email_from": [email["from"] for email in existing_emails],
+                        "existing_email_from": [email["from"] for _, email in existing_emails],
                     },
                 )
 
@@ -2822,9 +2824,7 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
         # When used as a nested field (the `configuration` override on test invocations) DRF never
         # binds `self.instance`, so fall back to the flow passed in via context so recovery still works.
         instance = cast(Optional[WorkflowEditState], self.instance) or self.context.get("instance")
-        self.context["workflow_origin_product"] = data.get(
-            "origin_product", instance.origin_product if instance else None
-        )
+        self.context["workflow_origin_product"] = instance.origin_product if instance else data.get("origin_product")
 
         # Who a "Create AI task" step runs as: the existing creator for an update, or the
         # requesting user for a brand-new flow (matches the `created_by` a create() actually
