@@ -286,6 +286,9 @@ export interface emailTemplaterLogicActions {
         value: true
     } // integrationsLogic
     loadIntegrations: (_?: any) => any // integrationsLogic
+    retrySandboxEmailSender: () => {
+        value: true
+    } // integrationsLogic
     applyTemplate: (template: MessageTemplate) => {
         template: MessageTemplate
     }
@@ -410,7 +413,7 @@ export interface emailTemplaterLogicMeta {
     __keaTypeGenInternalSelectorTypes: {
         senderIntegrationsError: (
             integrationsLoadError: string | null,
-            sandboxEmailSenderProvisionResult: any,
+            sandboxEmailSenderProvisionResult: SandboxEmailSenderProvisionResult | null,
             sandboxEmailSenderProvisionError: string | null,
             sandboxEmailSenderEnabled: boolean,
             arg: boolean
@@ -475,7 +478,7 @@ export const emailTemplaterLogic = kea<emailTemplaterLogicType>([
                 'sandboxEmailSenderEnabled',
             ],
         ],
-        actions: [integrationsLogic, ['ensureSandboxEmailSender', 'loadIntegrations']],
+        actions: [integrationsLogic, ['ensureSandboxEmailSender', 'retrySandboxEmailSender', 'loadIntegrations']],
     })),
     actions({
         retrySenderIntegrations: true,
@@ -604,7 +607,7 @@ export const emailTemplaterLogic = kea<emailTemplaterLogicType>([
                 sandboxAllowed: boolean
             ): string | null =>
                 loadError ||
-                (sandboxAllowed && sandboxEnabled && result === 'failed'
+                (sandboxAllowed && sandboxEnabled && (result === 'failed' || result === 'unavailable')
                     ? provisionError || 'Could not set up the sandbox sender.'
                     : null),
         ],
@@ -803,7 +806,7 @@ export const emailTemplaterLogic = kea<emailTemplaterLogicType>([
             }
             actions.loadIntegrations()
             if (props.sandboxSenderAllowed) {
-                actions.ensureSandboxEmailSender()
+                actions.retrySandboxEmailSender()
             }
         },
         chooseSenders: ({ integrationIds }) => {

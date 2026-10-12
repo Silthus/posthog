@@ -273,6 +273,26 @@ describe('emailTemplaterLogic', () => {
             expect(logic.values.senderIntegrationsLoading).toBe(false)
         })
 
+        it.each([404, 500])('exposes a sandbox setup failure (%s) beside available own senders', async (status) => {
+            featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER], {
+                [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,
+            })
+            useMocks({
+                get: { '/api/projects/:team_id/integrations/': { results: [OWN_SENDER] } },
+                post: {
+                    '/api/projects/:team_id/integrations/email_sandbox_sender/': () => [
+                        status,
+                        { detail: 'Sandbox setup is unavailable. Try again.' },
+                    ],
+                },
+            })
+            logic = emailTemplaterLogic(makeProps({ sandboxSenderAllowed: true }))
+            logic.mount()
+            await expectLogic(integrationsLogic).toFinishAllListeners()
+            expect(logic.values.senderIntegrationsError).toBe('Sandbox setup is unavailable. Try again.')
+            expect(logic.values.senderIntegrations.map((sender) => sender.id)).toEqual([5])
+        })
+
         it('offers no Reply-To while the sandbox sender is selected, since the sandbox sender does not support it', async () => {
             featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER], {
                 [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,

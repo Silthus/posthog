@@ -701,6 +701,9 @@ export interface integrationsLogicActions {
             kind: IntegrationKind
         }
     }
+    retrySandboxEmailSender: () => {
+        value: true
+    }
     setAccessRequestReason: (reason: string) => {
         reason: string
     }
@@ -859,6 +862,7 @@ export const integrationsLogic = kea<integrationsLogicType>([
         }),
         deleteIntegration: (id: number) => ({ id }),
         ensureSandboxEmailSender: true,
+        retrySandboxEmailSender: true,
         setSandboxEmailSenderProvisionError: (error: string | null) => ({ error }),
         provisionMissingSandboxEmailSender: true,
         invalidateGithubSuggestions: true,
@@ -913,6 +917,7 @@ export const integrationsLogic = kea<integrationsLogicType>([
             {
                 clearIntegrations: () => null,
                 provisionSandboxEmailSender: () => null,
+                retrySandboxEmailSender: () => null,
                 setSandboxEmailSenderProvisionError: (_, { error }) => error,
             },
         ],
@@ -921,6 +926,7 @@ export const integrationsLogic = kea<integrationsLogicType>([
             {
                 clearIntegrations: () => null,
                 ensureSandboxEmailSender: (state) => (state === 'failed' ? null : state),
+                retrySandboxEmailSender: () => null,
             },
         ],
         githubDisconnecting: [false, { setGithubDisconnecting: (_, { disconnecting }) => disconnecting }],
@@ -1257,6 +1263,7 @@ export const integrationsLogic = kea<integrationsLogicType>([
                 }
             }
         },
+        retrySandboxEmailSender: () => actions.ensureSandboxEmailSender(),
         ensureSandboxEmailSender: () => {
             cache.sandboxEmailSenderWanted = true
             if (values.integrations) {

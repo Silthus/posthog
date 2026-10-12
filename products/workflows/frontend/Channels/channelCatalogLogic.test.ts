@@ -16,8 +16,8 @@ describe('sandbox setup in the channel catalog', () => {
     beforeEach(() => initKeaTests())
     afterEach(() => logic?.unmount())
 
-    it('starts setup on mount and exposes a failed request for retry', async () => {
-        let status = 500
+    it.each([404, 500])('starts setup on mount and exposes a %s request for retry', async (failureStatus) => {
+        let status = failureStatus
         let requests = 0
         const sandbox = { id: 9, kind: 'email', config: { provider: 'sandbox', verified: true } }
         useMocks({
