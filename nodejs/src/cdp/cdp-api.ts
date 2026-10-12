@@ -864,6 +864,7 @@ export class CdpApi {
 
             res.json({
                 nextActionId: result.skipped ? null : result.invocation.state.currentAction?.id,
+                awaitingResume: result.invocation.state.currentAction?.awaitingResume ? true : undefined,
                 status: result.error ? 'error' : result.skipped ? 'skipped' : 'success',
                 errors: result.error ? [result.error] : [],
                 logs: [...result.logs, ...logs],

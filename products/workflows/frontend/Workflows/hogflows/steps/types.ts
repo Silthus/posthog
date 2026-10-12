@@ -459,6 +459,7 @@ export interface HogflowTestResult {
     status: 'success' | 'error' | 'skipped'
     logs?: LogEntry[]
     nextActionId: string | null
+    awaitingResume?: boolean
     errors?: string[]
     variables?: Record<string, any>
     execResult?: unknown

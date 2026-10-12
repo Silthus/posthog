@@ -18,7 +18,7 @@ import type { DeepPartial, DeepPartialMap, FieldName, ValidationErrorType } from
 import { loaders } from 'kea-loaders'
 import { subscriptions } from 'kea-subscriptions'
 
-import { lemonToast } from '@posthog/lemon-ui'
+import { LemonDialog, lemonToast } from '@posthog/lemon-ui'
 
 import api from 'lib/api'
 import { dayjs } from 'lib/dayjs'
@@ -46,7 +46,7 @@ import type { HogFlowEditorMode } from '../../hogFlowEditorLogic'
 import { isSlackMessageTriggerConfig } from '../../registry/triggers/slackTriggerFilters'
 import { HogflowTestResult } from '../../steps/types'
 import { createExampleEvent, createExampleEventForTrigger } from '../../testEventFactory'
-import type { HogFlow } from '../../types'
+import type { HogFlow, HogFlowAction } from '../../types'
 import { testEmailRecipientLogic } from './testEmailRecipientLogic'
 
 // Time range constants for event search
@@ -59,6 +59,96 @@ export interface HogflowTestInvocation {
     globals: string
     mock_async_functions: boolean
 }
+
+export type TestRunSource = 'workflow' | 'email'
+
+export interface TestRunStep {
+    actionId: string
+    result: HogflowTestResult
+    waitSkipped: boolean
+}
+
+// Guards against a graph that loops back on itself.
+const MAX_TEST_RUN_STEPS = 100
+
+interface TestStepRequest {
+    workflow: HogFlow
+    configuration: Record<string, any>
+    globalsJson: string
+    variables: Record<string, any>
+    mockAsyncFunctions: boolean
+    actionId: string | null
+}
+
+async function requestTestStep({
+    workflow,
+    configuration,
+    globalsJson,
+    variables,
+    mockAsyncFunctions,
+    actionId,
+}: TestStepRequest): Promise<HogflowTestResult> {
+    // nosemgrep: prefer-codegen-api-namespaced-workflows
+    const apiResponse = await api.hogFlows.createTestInvocation(workflow.id, {
+        configuration,
+        globals: { ...JSON.parse(globalsJson), variables },
+        mock_async_functions: mockAsyncFunctions,
+        current_action_id: actionId ?? undefined,
+    })
+
+    return {
+        ...apiResponse,
+        logs: apiResponse.logs?.map((log) => ({
+            ...log,
+            instanceId: 'test',
+            timestamp: dayjs(log.timestamp),
+        })),
+    }
+}
+
+const continueTarget = (workflow: HogFlow, actionId: string): string | null =>
+    workflow.edges.find((edge) => edge.from === actionId && edge.type === 'continue')?.to ?? null
+
+const nextTestRunStep = (workflow: HogFlow, actionId: string, result: HogflowTestResult): TestRunStep => {
+    const action = workflow.actions.find((candidate) => candidate.id === actionId)
+    const step = { actionId, result, waitSkipped: false }
+    if (result.status === 'skipped' || action?.type === 'exit') {
+        return { ...step, result: { ...result, nextActionId: null } }
+    }
+    if (result.nextActionId !== actionId) {
+        return step
+    }
+    if (result.status === 'error') {
+        return { ...step, result: { ...result, nextActionId: null } }
+    }
+    if (
+        action?.type === 'delay' ||
+        action?.type === 'wait_until_condition' ||
+        action?.type === 'wait_until_time_window' ||
+        result.awaitingResume === true
+    ) {
+        return { ...step, result: { ...result, nextActionId: continueTarget(workflow, actionId) }, waitSkipped: true }
+    }
+    return {
+        ...step,
+        result: {
+            ...result,
+            status: 'error',
+            nextActionId: null,
+            errors: [...(result.errors ?? []), 'This step did not finish. Check its logs and test it again.'],
+        },
+    }
+}
+
+// Native message steps stay mocked because sample contacts may belong to the workflow's audience.
+const NATIVE_MESSAGE_ACTION_TYPES: HogFlowAction['type'][] = ['function_email', 'function_sms', 'function_push']
+
+const failedRequestResult = (error: any): HogflowTestResult => ({
+    status: 'error',
+    nextActionId: null,
+    errors: [error?.detail ?? error?.message ?? 'The test request failed'],
+    logs: [],
+})
 
 // HogQL tuple columns appended to the events query so we can resolve each group type's
 // key + properties for the sample, mirroring real execution which resolves them from $groups.
@@ -183,6 +273,11 @@ export interface hogFlowEditorTestLogicValues {
     testInvocationValidationErrors: DeepPartialMap<HogflowTestInvocation, ValidationErrorType>
     testResult: HogflowTestResult | null
     testResultMode: 'diff' | 'raw'
+    testRunActionId: string | null
+    testRunSteps: TestRunStep[] | null
+    testRunStopped: boolean
+    testRunning: boolean
+    testVariables: Record<string, any>
     workflowVariableDefaults: Record<string, any>
 }
 
@@ -207,7 +302,16 @@ export interface hogFlowEditorTestLogicActions {
     openTestPane: () => {
         value: true
     } // workflowLogic
+    addTestRunStep: (step: TestRunStep) => {
+        step: TestRunStep
+    }
     cancelSampleGlobalsLoading: () => {
+        value: true
+    }
+    clearTestRun: () => {
+        value: true
+    }
+    finishTestRun: () => {
         value: true
     }
     loadSampleEventByName: (payload: { eventName: string; extendedSearch?: boolean }) => {
@@ -267,14 +371,31 @@ export interface hogFlowEditorTestLogicActions {
     reloadSampleGlobalsOrDefer: () => {
         value: true
     }
+    requestRunAllSteps: (
+        inputs: HogflowTestInvocation,
+        source?: TestRunSource
+    ) => {
+        inputs: HogflowTestInvocation
+        source: TestRunSource
+    }
     resetAccumulatedVariables: () => {
         value: true
     }
     resetTestInvocation: (values?: HogflowTestInvocation) => {
         values?: HogflowTestInvocation
     }
+    runAllSteps: (
+        inputs: HogflowTestInvocation,
+        source?: TestRunSource
+    ) => {
+        inputs: HogflowTestInvocation
+        source: TestRunSource
+    }
     runRequestedTestWhenReady: () => {
         value: true
+    }
+    runTestRunStep: (actionId: string) => {
+        actionId: string
     }
     setCanTryExtendedSearch: (canTryExtendedSearch: boolean) => {
         canTryExtendedSearch: boolean
@@ -318,6 +439,16 @@ export interface hogFlowEditorTestLogicActions {
     }
     setTestResultMode: (mode: 'diff' | 'raw') => {
         mode: 'diff' | 'raw'
+    }
+    startTestRun: (
+        inputs: HogflowTestInvocation,
+        source: TestRunSource
+    ) => {
+        inputs: HogflowTestInvocation
+        source: TestRunSource
+    }
+    stopTestRun: () => {
+        value: true
     }
     submitTestInvocation: () => {
         value: boolean
@@ -735,6 +866,10 @@ export interface hogFlowEditorTestLogicMeta {
                   } & Record<string, unknown>)
                 | null
         ) => PropertyGroupFilter
+        testVariables: (
+            workflowVariableDefaults: Record<string, any>,
+            accumulatedVariables: Record<string, any>
+        ) => Record<string, any>
         workflowVariableDefaults: (workflow: HogFlow) => Record<string, any>
     }
 }
@@ -795,8 +930,48 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
         setLastSearchedEventName: (eventName: string | null) => ({ eventName }),
         resetAccumulatedVariables: true,
         runRequestedTestWhenReady: true,
+        requestRunAllSteps: (inputs: HogflowTestInvocation, source: TestRunSource = 'workflow') => ({ inputs, source }),
+        runAllSteps: (inputs: HogflowTestInvocation, source: TestRunSource = 'workflow') => ({ inputs, source }),
+        startTestRun: (inputs: HogflowTestInvocation, source: TestRunSource) => ({ inputs, source }),
+        runTestRunStep: (actionId: string) => ({ actionId }),
+        stopTestRun: true,
+        addTestRunStep: (step: TestRunStep) => ({ step }),
+        finishTestRun: true,
+        clearTestRun: true,
     }),
     reducers({
+        testRunSteps: [
+            null as TestRunStep[] | null,
+            {
+                startTestRun: () => [],
+                addTestRunStep: (steps, { step }) => [...(steps ?? []), step],
+                clearTestRun: () => null,
+                submitTestInvocation: () => null,
+            },
+        ],
+        testRunStopped: [
+            false,
+            {
+                stopTestRun: () => true,
+                startTestRun: () => false,
+                clearTestRun: () => false,
+            },
+        ],
+        testRunActionId: [
+            null as string | null,
+            {
+                runTestRunStep: (_, { actionId }) => actionId,
+                clearTestRun: () => null,
+            },
+        ],
+        testRunning: [
+            false,
+            {
+                startTestRun: () => true,
+                stopTestRun: () => false,
+                finishTestRun: () => false,
+            },
+        ],
         testResult: [
             null as HogflowTestResult | null,
             {
@@ -848,6 +1023,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
             null as string | null,
             {
                 setNextActionId: (_, { nextActionId }) => nextActionId,
+                startTestRun: () => null,
             },
         ],
         sampleGlobals: [
@@ -1171,6 +1347,14 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
             },
             { resultEqualityCheck: equal },
         ],
+        // Merge order: defaults < accumulated (variables set by previous test steps take precedence)
+        testVariables: [
+            (s) => [s.workflowVariableDefaults, s.accumulatedVariables],
+            (defaults: Record<string, any>, accumulated: Record<string, any>): Record<string, any> => ({
+                ...defaults,
+                ...accumulated,
+            }),
+        ],
         workflowVariableDefaults: [
             (s) => [s.workflow],
             (workflow: import('../../types').HogFlow): Record<string, any> =>
@@ -1199,29 +1383,14 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
             },
             submit: async (testInvocation: HogflowTestInvocation) => {
                 try {
-                    // nosemgrep: prefer-codegen-api-namespaced-workflows
-                    const apiResponse = await api.hogFlows.createTestInvocation(values.workflow.id, {
+                    const result = await requestTestStep({
+                        workflow: values.workflow,
                         configuration: values.workflowSanitized,
-                        globals: {
-                            ...JSON.parse(testInvocation.globals),
-                            // Merge order: defaults < accumulated (variables set by previous test steps take precedence)
-                            variables: {
-                                ...values.workflowVariableDefaults,
-                                ...values.accumulatedVariables,
-                            },
-                        },
-                        mock_async_functions: testInvocation.mock_async_functions,
-                        current_action_id: values.selectedNodeId ?? undefined,
+                        globalsJson: testInvocation.globals,
+                        variables: values.testVariables,
+                        mockAsyncFunctions: testInvocation.mock_async_functions,
+                        actionId: values.selectedNodeId,
                     })
-
-                    const result: HogflowTestResult = {
-                        ...apiResponse,
-                        logs: apiResponse.logs?.map((log) => ({
-                            ...log,
-                            instanceId: 'test',
-                            timestamp: dayjs(log.timestamp),
-                        })),
-                    }
 
                     actions.setTestResult(result)
                     const nextActionId = result.nextActionId
@@ -1238,7 +1407,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
             },
         },
     })),
-    listeners(({ values, actions }) => ({
+    listeners(({ values, actions, asyncActions }) => ({
         runRequestedTestWhenReady: () => {
             const isTestingTrigger = values.mode === 'test' && values.selectedNodeId === values.triggerAction?.id
             const testEventReady = !!values.sampleGlobals && !values.sampleGlobalsLoading
@@ -1249,11 +1418,97 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
             }
         },
         openTestPane: () => actions.runRequestedTestWhenReady(),
+        requestRunAllSteps: ({ inputs, source }) => {
+            if (!values.testingV2Enabled || values.testRunning || values.isTestInvocationSubmitting) {
+                return
+            }
+            if (source === 'workflow' && !inputs.mock_async_functions) {
+                LemonDialog.open({
+                    title: 'Run workflow with real HTTP requests?',
+                    description:
+                        'Every HTTP step will run for real, including third-party email or SMS destinations. Built-in email, SMS and push steps stay mocked.',
+                    primaryButton: {
+                        children: 'Run with real requests',
+                        type: 'primary',
+                        onClick: () => actions.runAllSteps(inputs, source),
+                    },
+                    secondaryButton: { children: 'Cancel' },
+                })
+                return
+            }
+            actions.runAllSteps(inputs, source)
+        },
+        runAllSteps: ({ inputs, source }) => {
+            if (!values.testingV2Enabled || values.testRunning) {
+                return
+            }
+            actions.startTestRun(inputs, source)
+        },
+        startTestRun: async ({ inputs, source }, breakpoint) => {
+            actions.resetAccumulatedVariables()
+            const { mock_async_functions: mockAsyncFunctions } = inputs
+            let globalsJson = inputs.globals
+            if (source === 'email') {
+                if (values.shouldLoadSampleGlobals) {
+                    await asyncActions.loadSampleGlobals()
+                }
+                breakpoint()
+                if (!values.testRunning) {
+                    return
+                }
+                globalsJson = values.testInvocation.globals
+            }
+            const variables = { ...values.workflowVariableDefaults }
+            let actionId = values.triggerAction?.id ?? null
+            for (let stepCount = 0; actionId; stepCount++) {
+                if (stepCount === MAX_TEST_RUN_STEPS) {
+                    lemonToast.warning(
+                        `The test run stopped after ${MAX_TEST_RUN_STEPS} steps. Check the workflow for a loop.`
+                    )
+                    break
+                }
+                actions.runTestRunStep(actionId)
+                const action = values.workflow.actions.find((candidate) => candidate.id === actionId)
+                let result: HogflowTestResult
+                try {
+                    result = await requestTestStep({
+                        workflow: values.workflow,
+                        configuration: values.workflowSanitized,
+                        globalsJson,
+                        variables,
+                        mockAsyncFunctions:
+                            source === 'email' ||
+                            mockAsyncFunctions ||
+                            (!!action && NATIVE_MESSAGE_ACTION_TYPES.includes(action.type)),
+                        actionId,
+                    })
+                } catch (error: any) {
+                    result = failedRequestResult(error)
+                }
+                breakpoint()
+                if (!values.testRunning) {
+                    return
+                }
+
+                Object.assign(variables, result.variables)
+                const step = nextTestRunStep(values.workflow, actionId, result)
+                actions.setTestResult(step.result)
+                actions.addTestRunStep(step)
+                actionId = step.result.nextActionId
+            }
+            actions.finishTestRun()
+        },
+        runTestRunStep: ({ actionId }) => {
+            actions.setSelectedNodeId(actionId)
+        },
         setMode: ({ mode }) => {
             if (mode !== 'test' && values.testRunRequested) {
                 actions.clearTestRunRequest()
             }
             actions.runRequestedTestWhenReady()
+            if (mode !== 'test' && values.testRunning) {
+                actions.stopTestRun()
+            }
         },
         reloadSampleGlobalsOrDefer: () => {
             if (values.mode === 'test') {
@@ -1290,6 +1545,9 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
                 actions.clearTestRunRequest()
             }
             actions.runRequestedTestWhenReady()
+            if (values.testRunning && selectedNodeId !== values.testRunActionId) {
+                actions.stopTestRun()
+            }
             // When we switch back to a trigger node, reset the flags
             // so we can try loading again
             if (values.noMatchingEvents) {
