@@ -4,6 +4,7 @@ import { IconFolder } from '@posthog/icons'
 import { LemonButton, LemonInput, LemonMenu } from '@posthog/lemon-ui'
 
 import { AccessControlAction } from 'lib/components/AccessControlAction'
+import { TreeNodeDroppable } from 'lib/lemon-ui/LemonTree/LemonTreeUtils'
 import { addProductIntent } from 'lib/utils/product-intents'
 
 import { splitPath, joinPath } from '~/layout/panel-layout/ProjectTree/utils'
@@ -14,6 +15,7 @@ import { newWorkflowLogic } from '../newWorkflowLogic'
 import { workflowTemplatesLogic } from '../templates/workflowTemplatesLogic'
 import { workflowsLogic } from '../workflowsLogic'
 import { templateTypeForListType } from '../workflowTypeFilters'
+import { WORKFLOW_FOLDER_BREADCRUMBS_DROP_SCOPE } from './workflowFolderDragScopes'
 import { workflowFoldersLogic } from './workflowFoldersLogic'
 import { WorkflowNewFolderButton } from './WorkflowNewFolderButton'
 import { WorkflowsListV2ColumnsMenu } from './WorkflowsListV2ColumnsMenu'
@@ -105,19 +107,27 @@ export function WorkflowFolderToolbar(): JSX.Element {
                             </LemonButton>
                         </LemonMenu>
                     </span>
-                    <LemonButton size="xsmall" onClick={() => openFolder(null)} active={!currentFolder}>
-                        Project files
-                    </LemonButton>
+                    <TreeNodeDroppable id="project://" scope={WORKFLOW_FOLDER_BREADCRUMBS_DROP_SCOPE} isDroppable>
+                        <LemonButton size="xsmall" onClick={() => openFolder(null)} active={!currentFolder}>
+                            Project files
+                        </LemonButton>
+                    </TreeNodeDroppable>
                     {segments.map((segment, index) => (
                         <span key={index} className="flex items-center gap-1 min-w-0">
                             <span className="text-secondary">/</span>
-                            <LemonButton
-                                size="xsmall"
-                                active={index === segments.length - 1}
-                                onClick={() => openFolder(joinPath(segments.slice(0, index + 1)))}
+                            <TreeNodeDroppable
+                                id={`project://${joinPath(segments.slice(0, index + 1))}`}
+                                scope={WORKFLOW_FOLDER_BREADCRUMBS_DROP_SCOPE}
+                                isDroppable
                             >
-                                {segment}
-                            </LemonButton>
+                                <LemonButton
+                                    size="xsmall"
+                                    active={index === segments.length - 1}
+                                    onClick={() => openFolder(joinPath(segments.slice(0, index + 1)))}
+                                >
+                                    {segment}
+                                </LemonButton>
+                            </TreeNodeDroppable>
                         </span>
                     ))}
                     {browserReady && (

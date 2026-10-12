@@ -1,11 +1,10 @@
 import { useActions, useValues } from 'kea'
 
-import { IconDecisionTree, IconDrag } from '@posthog/icons'
-import { LemonButton, LemonTag, Tooltip } from '@posthog/lemon-ui'
+import { IconDecisionTree } from '@posthog/icons'
+import { LemonTag, Tooltip } from '@posthog/lemon-ui'
 
 import { FEATURE_FLAGS } from 'lib/constants'
 import { LemonTableLink } from 'lib/lemon-ui/LemonTable/LemonTableLink'
-import { TreeNodeDraggable } from 'lib/lemon-ui/LemonTree/LemonTreeUtils'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { urls } from 'scenes/urls'
 
@@ -13,6 +12,7 @@ import { projectTreeDataLogic } from '~/layout/panel-layout/ProjectTree/projectT
 import { getItemId } from '~/layout/panel-layout/ProjectTree/utils'
 
 import { WorkflowFolderPath } from './WorkflowFolderPath'
+import { WorkflowFolderRowIcon } from './WorkflowFolderRowIcon'
 import { WorkflowListRow } from './workflowListRows'
 
 export function WorkflowListNameCell({ row }: { row: WorkflowListRow }): JSX.Element {
@@ -67,32 +67,20 @@ export function WorkflowListNameCell({ row }: { row: WorkflowListRow }): JSX.Ele
     }
     return (
         <div
-            className="flex items-center min-w-0"
+            className="flex gap-2 items-center min-w-0"
             onMouseEnter={() => !entry && canMove && syncTypeAndRef('hog_flow', row.id)}
             onFocus={() => !entry && canMove && syncTypeAndRef('hog_flow', row.id)}
         >
-            <TreeNodeDraggable
-                id={entry ? getItemId(entry) : row.id}
-                scope="workflow-project-files"
-                enableDragging={!!entry && canMove}
-                className="max-w-8 shrink-0 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100"
-            >
-                <LemonButton
-                    size="small"
-                    icon={<IconDrag />}
-                    aria-label={`Drag workflow ${row.name}`}
-                    disabled={!entry || !canMove}
-                />
-            </TreeNodeDraggable>
-            <div className="flex flex-1 gap-2 min-w-0 items-center">
-                <IconDecisionTree className="shrink-0 text-secondary" />
-                {entry && <WorkflowFolderPath path={entry.path} />}
-                <LemonTableLink
-                    to={archived ? undefined : urls.workflow(row.id, 'workflow')}
-                    title={archived ? <Tooltip title="Restore this workflow to make changes">{name}</Tooltip> : title}
-                    truncateTitle
-                />
-            </div>
+            <WorkflowFolderRowIcon
+                icon={<IconDecisionTree />}
+                drag={entry && canMove ? { id: getItemId(entry), label: `Drag workflow ${row.name}` } : undefined}
+            />
+            {entry && <WorkflowFolderPath path={entry.path} />}
+            <LemonTableLink
+                to={archived ? undefined : urls.workflow(row.id, 'workflow')}
+                title={archived ? <Tooltip title="Restore this workflow to make changes">{name}</Tooltip> : title}
+                truncateTitle
+            />
         </div>
     )
 }

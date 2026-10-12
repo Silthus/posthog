@@ -48,7 +48,7 @@ export function WorkflowFolderActions({ path, count }: { path: string; count: nu
                                     </LemonField>
                                 ),
                                 errors: {
-                                    name: (next: string) =>
+                                    name: (next: string | undefined = '') =>
                                         !next.trim()
                                             ? 'Give the folder a name'
                                             : next.includes('/')

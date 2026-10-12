@@ -12,6 +12,7 @@ import { workflowLogic } from '../workflowLogic'
 import { serializeFacetQuery } from './FacetSearchBar/facetQuery'
 import { FacetSearchBar } from './FacetSearchBar/FacetSearchBar'
 import { WorkflowFolderContents } from './WorkflowFolderContents'
+import { WorkflowFolderDropMonitor } from './WorkflowFolderDropMonitor'
 import { workflowFoldersLogic } from './workflowFoldersLogic'
 import { WorkflowFolderToolbar } from './WorkflowFolderToolbar'
 import { WorkflowFolderTree } from './WorkflowFolderTree'
@@ -179,6 +180,7 @@ export function WorkflowsListV2(): JSX.Element {
                         <WorkflowFolderTree />
                     </nav>
                     <div className="min-w-0 flex-1 @container">
+                        <WorkflowFolderDropMonitor />
                         <WorkflowFolderToolbar />
                         {loadFailed || browserLoadFailed ? renderBody() : <WorkflowFolderContents />}
                     </div>

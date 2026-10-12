@@ -151,7 +151,6 @@ describe('workflowFoldersLogic', () => {
         logic.actions.openFolder('Billing')
         await logic.asyncActions.createFolder('Invoices')
         expect(logic.values.folderPaths).toContain('Billing/Invoices')
-        expect(logic.values.currentFolder).toBe('Billing/Invoices')
     })
 
     it('reports a failed folder creation and allows retry', async () => {
@@ -246,6 +245,66 @@ describe('workflowFoldersLogic', () => {
             text: '',
         })
         expect(logic.values.matchingTemplates.map((entry) => entry.ref)).toContain('template-receipt')
+    })
+
+    it.each([
+        [
+            'a parent folder in the sidebar or the up row',
+            'project/nested',
+            'project://Billing',
+            'nested',
+            'Billing/Renewal',
+        ],
+        ['the Project files breadcrumb', 'project/direct', 'project://', 'direct', 'Welcome'],
+        ['the tree background', 'project/direct', '', 'direct', 'Welcome'],
+    ])('drops a workflow onto %s', async (_, activeId, overId, fileId, expectedPath) => {
+        let movedPath: string | undefined
+        useMocks({
+            post: {
+                [`/api/projects/:team_id/file_system/${fileId}/move/`]: async ({ request }) => {
+                    const body = (await request.json()) as { new_path: string }
+                    movedPath = body.new_path
+                    return [200, { id: fileId, path: body.new_path, type: 'hog_flow' }]
+                },
+            },
+        })
+        await expectLogic(logic).toFinishAllListeners()
+        await logic.asyncActions.dropFile(activeId, overId)
+        await waitFor(() => expect(movedPath).toBe(expectedPath))
+    })
+
+    it('names a new subfolder inline and lists it in the open folder', async () => {
+        useMocks({
+            post: {
+                '/api/projects/:team_id/file_system/': async ({ request }) => [
+                    201,
+                    { id: 'new-folder', ...((await request.json()) as { path: string; type: string }) },
+                ],
+            },
+        })
+        await expectLogic(logic).toFinishAllListeners()
+        logic.actions.startFolderDraft('Billing')
+        expect(logic.values.currentFolder).toBe('Billing')
+        expect(logic.values.folderDraftError).toBe('Give the folder a name')
+        logic.actions.setFolderDraftName('cards')
+        expect(logic.values.folderDraftError).toBe('A folder with this name already exists')
+        logic.actions.setFolderDraftName('Invoices')
+        expect(logic.values.folderDraftError).toBeNull()
+        await logic.asyncActions.submitFolderDraft()
+        expect(logic.values.folderDraft).toBeNull()
+        expect(logic.values.currentFolder).toBe('Billing')
+        expect(logic.values.childFolders.map((folder) => folder.path)).toContain('Billing/Invoices')
+        expect(logic.values.expandedFolders).toContain('project://Billing')
+    })
+
+    it('keeps the inline folder name when creation fails', async () => {
+        useMocks({ post: { '/api/projects/:team_id/file_system/': () => [500, { detail: 'Unavailable' }] } })
+        await expectLogic(logic).toFinishAllListeners()
+        logic.actions.startFolderDraft('Billing')
+        logic.actions.setFolderDraftName('Invoices')
+        await logic.asyncActions.submitFolderDraft()
+        expect(logic.values.folderDraft).toEqual({ parent: 'Billing', name: 'Invoices' })
+        expect(logic.values.creatingFolder).toBe(false)
     })
 
     it('keeps folder scope and counts after the shared tree prunes its collapsed cache', async () => {

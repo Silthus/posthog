@@ -7,13 +7,14 @@ import { LemonTree, TreeDataItem } from 'lib/lemon-ui/LemonTree/LemonTree'
 import { projectTreeDataLogic } from '~/layout/panel-layout/ProjectTree/projectTreeDataLogic'
 import { convertFileSystemEntryToTreeDataItem } from '~/layout/panel-layout/ProjectTree/utils'
 
+import { WORKFLOW_FILES_DRAG_SCOPE } from './workflowFolderDragScopes'
 import { workflowFoldersLogic } from './workflowFoldersLogic'
 import { WorkflowNewFolderButton } from './WorkflowNewFolderButton'
 
 export function WorkflowFolderTree(): JSX.Element {
     const { folderPaths, folderCounts, browserReady, browserReadyLoading, currentFolder, expandedFolders } =
         useValues(workflowFoldersLogic)
-    const { openFolder, selectTreeFolder, setExpandedFolders, dropFile } = useActions(workflowFoldersLogic)
+    const { openFolder, selectTreeFolder, setExpandedFolders } = useActions(workflowFoldersLogic)
     const { savedItems } = useValues(projectTreeDataLogic)
     const folders = folderPaths.map(
         (path) => savedItems.find((entry) => entry.type === 'folder' && entry.path === path) ?? { path, type: 'folder' }
@@ -64,12 +65,9 @@ export function WorkflowFolderTree(): JSX.Element {
             defaultNodeIcon={<IconFolder />}
             disableScroll
             enableDragAndDrop
-            dragAndDropScope="workflow-project-files"
+            dragAndDropScope={WORKFLOW_FILES_DRAG_SCOPE}
             isItemDraggable={() => false}
             isItemDroppable={() => true}
-            onDragEnd={(event) => {
-                dropFile(String(event.active.id), event.over ? String(event.over.id) : null)
-            }}
         />
     )
 }
