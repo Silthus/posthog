@@ -18,7 +18,7 @@ from posthog.models.scoping import team_scope
 from posthog.models.team.team import Team
 
 from products.access_control.backend.models.access_control import AccessControl
-from products.approvals.backend.exceptions import PolicyConflict
+from products.approvals.backend.exceptions import ApprovalDetectionFailed, PolicyConflict
 from products.approvals.backend.models import ApprovalPolicy, ChangeRequest
 from products.feature_flags.backend.facade.api import user_can_edit_flag
 from products.feature_flags.backend.models.feature_flag import FeatureFlag
@@ -137,19 +137,31 @@ class TestWorkflowNodeRunsAPI(APIBaseTest):
         self.flag.refresh_from_db()
         assert self.flag.version == version_after_first_write
 
-    def test_a_concurrent_retry_that_loses_the_race_to_the_target_is_done(self) -> None:
+    @parameterized.expand(
+        [
+            ("retry_reached_the_target", [{"properties": [], "rollout_percentage": 25}], "done"),
+            (
+                "condition_added",
+                [{"properties": [], "rollout_percentage": 10}, {"properties": [], "rollout_percentage": 5}],
+                "failed",
+            ),
+        ]
+    )
+    def test_a_concurrent_write_after_the_read_decides_the_outcome(
+        self, _name: str, concurrent_groups: list[dict[str, Any]], expected_outcome: str
+    ) -> None:
         def concurrent_write_lands_after_the_read(flag: FeatureFlag, **kwargs: Any) -> bool:
             FeatureFlag.objects.filter(id=flag.id).update(
-                filters={"groups": [{"properties": [], "rollout_percentage": 25}]}, version=(flag.version or 0) + 1
+                filters={"groups": concurrent_groups}, version=(flag.version or 0) + 1
             )
             return user_can_edit_flag(flag, **kwargs)
 
         with patch(_CAN_EDIT_FLAG, side_effect=concurrent_write_lands_after_the_read):
             response = self._run()
 
-        assert response.json()["outcome"] == "done", response.content
+        assert response.json()["outcome"] == expected_outcome, response.content
         self.flag.refresh_from_db()
-        assert response.json()["result"]["version"] == self.flag.version
+        assert self.flag.get_filters()["groups"] == concurrent_groups
 
     def test_a_stale_expected_version_is_changed_elsewhere_and_writes_nothing(self) -> None:
         stale_version = self.flag.version or 0
@@ -207,13 +219,29 @@ class TestWorkflowNodeRunsAPI(APIBaseTest):
 
     @parameterized.expand(
         [
-            ("deny_policy", PermissionDenied("This action is not allowed by approval policy."), "not_permitted"),
-            ("policy_conflict", PolicyConflict([], "This change matches multiple approval policies", ""), "failed"),
-            ("gate_error", APIException("Failed to create approval request"), "failed"),
+            (
+                "deny_policy",
+                PermissionDenied("This action is not allowed by approval policy."),
+                "not_permitted",
+                "approval_policy",
+            ),
+            (
+                "policy_conflict",
+                PolicyConflict([], "This change matches multiple approval policies", ""),
+                "failed",
+                None,
+            ),
+            (
+                "undetectable_approval",
+                ApprovalDetectionFailed("Could not determine whether this change needs approval."),
+                "failed",
+                None,
+            ),
+            ("gate_error", APIException("Failed to create approval request"), "failed", None),
         ]
     )
     def test_an_approval_gate_refusal_answers_with_an_outcome(
-        self, _name: str, refusal: Exception, expected_outcome: str
+        self, _name: str, refusal: Exception, expected_outcome: str, missing_permission: str | None
     ) -> None:
         with patch(_SET_ROLLOUT, side_effect=refusal):
             response = self._run()
@@ -221,6 +249,7 @@ class TestWorkflowNodeRunsAPI(APIBaseTest):
         assert response.status_code == status.HTTP_200_OK, response.content
         assert response.json()["outcome"] == expected_outcome
         assert response.json()["result"]["reason"]
+        assert response.json()["result"].get("missing_permission") == missing_permission
 
     def test_a_publisher_without_editor_access_to_the_flag_is_not_permitted(self) -> None:
         self.organization.available_product_features = [
@@ -261,6 +290,7 @@ class TestWorkflowNodeRunsAPI(APIBaseTest):
         [
             ("unknown_flag", {"flag_key": "missing-flag"}, None),
             ("percentage_out_of_range", {"rollout_percentage": 150}, None),
+            ("malformed_release_condition", {}, {"groups": [None]}),
             (
                 "two_release_conditions",
                 {},
@@ -272,15 +302,14 @@ class TestWorkflowNodeRunsAPI(APIBaseTest):
         self, _name: str, inputs: dict[str, Any], filters: dict[str, Any] | None
     ) -> None:
         if filters is not None:
-            self.flag.filters = filters
-            self.flag.save()
+            FeatureFlag.objects.filter(id=self.flag.id).update(filters=filters)
+        stored_filters = FeatureFlag.objects.get(id=self.flag.id).get_filters()
 
         response = self._run(inputs)
 
         assert response.json()["outcome"] == "failed", response.content
         assert response.json()["result"]["reason"]
-        self.flag.refresh_from_db()
-        assert self.flag.conditions[0]["rollout_percentage"] == 10
+        assert FeatureFlag.objects.get(id=self.flag.id).get_filters() == stored_filters
 
     def test_a_token_for_an_older_flow_version_fails_without_writing(self) -> None:
         response = self._run(token=self._token(hog_flow_version=self.hog_flow.version - 1))

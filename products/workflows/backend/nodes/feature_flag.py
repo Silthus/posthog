@@ -66,9 +66,7 @@ def set_rollout_percentage(context: NodeRunContext, inputs: SetRolloutPercentage
             flag, 0, inputs.rollout_percentage, expected_version, team=context.team, user=context.actor
         )
     except FlagRolloutVersionConflict:
-        current = _current_result(flag)
-        reached_target = current["rollout_percentage"] == inputs.rollout_percentage
-        return NodeOutcome(outcome=DONE if reached_target else CHANGED_ELSEWHERE, result=current)
+        return _outcome_after_concurrent_change(flag, inputs.rollout_percentage)
     except ApprovalRequired as approval:
         return NodeOutcome(
             outcome=NEEDS_APPROVAL,
@@ -96,25 +94,26 @@ def _only_condition_rollout(flag: FeatureFlag) -> float:
         raise _UnsupportedFlag(
             f"The feature flag {flag.key} uses a configuration format this step cannot change yet."
         ) from None
-    if len(conditions) != 1:
+    if not isinstance(conditions, list) or len(conditions) != 1 or not isinstance(conditions[0], dict):
         raise _UnsupportedFlag(
-            f"The feature flag {flag.key} has {len(conditions)} release conditions. "
+            f"The feature flag {flag.key} does not have exactly one release condition. "
             "This step only changes flags with exactly one."
         )
     percentage = conditions[0].get("rollout_percentage")
     return 100 if percentage is None else percentage
 
 
-def _current_result(flag: FeatureFlag) -> dict[str, Any]:
+def _outcome_after_concurrent_change(flag: FeatureFlag, target_percentage: float) -> NodeOutcome:
     flag.refresh_from_db()
     try:
-        percentage: float | None = _only_condition_rollout(flag)
-    except _UnsupportedFlag:
-        percentage = None
-    return _flag_result(flag, percentage)
+        current_percentage = _only_condition_rollout(flag)
+    except _UnsupportedFlag as error:
+        return NodeOutcome.failed(str(error))
+    outcome = DONE if current_percentage == target_percentage else CHANGED_ELSEWHERE
+    return NodeOutcome(outcome=outcome, result=_flag_result(flag, current_percentage))
 
 
-def _flag_result(flag: FeatureFlag, rollout_percentage: float | None) -> dict[str, Any]:
+def _flag_result(flag: FeatureFlag, rollout_percentage: float) -> dict[str, Any]:
     return {
         "flag_id": flag.id,
         "flag_key": flag.key,
