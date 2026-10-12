@@ -1477,6 +1477,58 @@ describe('EmailService', () => {
                     }
                 })
 
+                it('skips when a pause invalidates a pending state read', async () => {
+                    await setTenantStatus('ENABLED')
+                    service = createSandboxService(true, { tenantName: tenantName() })
+                    let snapshotLoaded!: () => void
+                    let releaseRead!: () => void
+                    const snapshot = new Promise<void>((resolve) => {
+                        snapshotLoaded = resolve
+                    })
+                    const heldRead = new Promise<void>((resolve) => {
+                        releaseRead = resolve
+                    })
+                    let acknowledgeReload!: () => void
+                    const reload = new Promise<void>((resolve) => {
+                        acknowledgeReload = resolve
+                    })
+                    hub.pubSub.on<{ tenantName: string }>('reload-sandbox-sender-state', ({ tenantName: name }) => {
+                        if (name === tenantName()) {
+                            acknowledgeReload()
+                        }
+                    })
+                    const query = hub.postgres.query.bind(hub.postgres)
+                    let held = false
+                    const delayedRead = jest.spyOn(hub.postgres, 'query').mockImplementation(async (...args) => {
+                        const result = await query(...args)
+                        if (args[3] === 'fetch-sandbox-sender-state' && !held) {
+                            held = true
+                            snapshotLoaded()
+                            await heldRead
+                        }
+                        return result
+                    })
+                    try {
+                        const pendingSend = service.executeSendEmail(invocation)
+                        await snapshot
+                        await setTenantStatus('DISABLED')
+                        await hub.pubSub.publish(
+                            'reload-sandbox-sender-state',
+                            JSON.stringify({ tenantName: tenantName() })
+                        )
+                        await reload
+                        releaseRead()
+                        const result = await pendingSend
+                        expect(result).toMatchObject({ finished: true, skipped: true, metrics: [] })
+                        expect(result.error).toBeUndefined()
+                        expect(result.logs).toContainEqual(expect.objectContaining({ message: pausedMessage }))
+                        expect(sendEmailSpy).not.toHaveBeenCalled()
+                    } finally {
+                        releaseRead()
+                        delayedRead.mockRestore()
+                    }
+                })
+
                 it('picks up a pause announced while the state is cached', async () => {
                     await setTenantStatus('ENABLED')
                     service = createSandboxService(true, { tenantName: tenantName() })
