@@ -30,8 +30,8 @@ import { SaveAsTemplateModal } from './templates/SaveAsTemplateModal'
 import { workflowTemplateLogic } from './templates/workflowTemplateLogic'
 import { workflowLogic } from './workflowLogic'
 import { WorkflowSceneLogicProps } from './workflowSceneLogic'
-import { parseWorkflowTriggerPrefill, TRIGGER_PREFILL_PARAM } from './workflowTriggerPrefill'
 import { WorkflowTestButton } from './WorkflowTestButton'
+import { parseWorkflowTriggerPrefill, TRIGGER_PREFILL_PARAM } from './workflowTriggerPrefill'
 
 export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.Element => {
     const {
