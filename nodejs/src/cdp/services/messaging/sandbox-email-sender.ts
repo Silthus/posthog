@@ -51,11 +51,23 @@ export type SandboxDailyCapClaim =
 
 type SandboxEmailOutcome =
     | { type: 'sent'; recipientCount: number }
+    | { type: 'delivered' }
     | {
           type: 'blocked'
           reason: 'switch_off' | 'recipient_not_member' | 'check_failed' | 'cap_reached' | 'paused'
           blockedRecipientCount: number
       }
+
+function outcomeProperties(outcome: SandboxEmailOutcome, isTest: boolean): Record<string, unknown> {
+    switch (outcome.type) {
+        case 'sent':
+            return { recipient_count: outcome.recipientCount, source: isTest ? 'test' : 'workflow' }
+        case 'blocked':
+            return { reason: outcome.reason, blocked_recipient_count: outcome.blockedRecipientCount }
+        case 'delivered':
+            return {}
+    }
+}
 
 function dailyBucket(key: string, requested: number, capacity: number): ClaimRequest {
     return { key, requested, capacity, refillPerSecond: capacity / SECONDS_PER_DAY, ttlSeconds: DAILY_CAP_TTL_SECONDS }
@@ -286,11 +298,10 @@ export class SandboxEmailSender {
             }
             const team = await this.teamManager.getTeam(teamId)
             if (team) {
-                const properties =
-                    outcome.type === 'sent'
-                        ? { recipient_count: outcome.recipientCount, source: isTest ? 'test' : 'workflow' }
-                        : { reason: outcome.reason, blocked_recipient_count: outcome.blockedRecipientCount }
-                captureTeamEvent(team, `workflows sandbox email ${outcome.type}`, { ...properties, is_test: isTest })
+                captureTeamEvent(team, `workflows sandbox email ${outcome.type}`, {
+                    ...outcomeProperties(outcome, isTest),
+                    is_test: isTest,
+                })
             }
         } catch (error) {
             logger.warn('Could not capture sandbox email event', { teamId, error })
