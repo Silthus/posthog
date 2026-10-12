@@ -160,7 +160,9 @@ describe('workflowsListV2Logic', () => {
         logic.mount()
 
         await expectLogic(logic).toDispatchActions(['loadWorkflowsFailure'])
-        expect(logic.values.loadFailed).toBe(true)
+        expect(logic.values.loadErrorDetail).toEqual(
+            "The server sent a next page link that doesn't move forward, so loading stopped after 2 workflows."
+        )
         expect(requests).toEqual(2)
     })
 
@@ -206,8 +208,16 @@ describe('workflowsListV2Logic', () => {
         )
     })
 
-    it('shows a load error instead of an empty list', async () => {
-        useMocks({ get: { '/api/projects/:team_id/hog_flows/summaries/': () => [500, { detail: 'Boom' }] } })
+    it.each([
+        ['a server error', 500, { detail: 'Boom' }, 'Boom'],
+        [
+            'missing access',
+            403,
+            { type: 'authentication_error', code: 'permission_denied', detail: 'You do not have permission.' },
+            'You need at least viewer access to workflows in this project. Ask a project admin for it.',
+        ],
+    ])('shows a load error that says why for %s', async (_, status, body, detail) => {
+        useMocks({ get: { '/api/projects/:team_id/hog_flows/summaries/': () => [status, body] } })
         router.actions.push(urls.workflows())
         logic = workflowsListV2Logic()
         logic.mount()
@@ -215,6 +225,7 @@ describe('workflowsListV2Logic', () => {
         await expectLogic(logic).toDispatchActions(['loadWorkflowsFailure'])
         expect(logic.values.loadFailed).toBe(true)
         expect(logic.values.listLoaded).toBe(false)
+        expect(logic.values.loadErrorDetail).toEqual(detail)
     })
 
     it('shows the list before the metrics arrive, then fills in health', async () => {

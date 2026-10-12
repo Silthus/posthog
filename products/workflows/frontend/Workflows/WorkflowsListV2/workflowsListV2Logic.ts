@@ -104,11 +104,21 @@ async function loadAllPages(
             return [...byId.values()]
         }
         if (!(nextOffset > offset)) {
-            throw new Error(`The next page link went back to offset ${nextOffset}`)
+            throw new Error(
+                `The server sent a next page link that doesn't move forward, so loading stopped after ${byId.size} workflows.`
+            )
         }
         offset = nextOffset
         page = await fetchPage(offset)
     }
+}
+
+function loadErrorDetailOf(error: string, errorObject: unknown): string {
+    const failure = errorObject as { status?: number; detail?: string; message?: string } | undefined
+    if (failure?.status === 403) {
+        return 'You need at least viewer access to workflows in this project. Ask a project admin for it.'
+    }
+    return failure?.detail || failure?.message || error
 }
 
 /** Reads a param as written. kea-router turns number-like values such as `007` into numbers. */
@@ -158,6 +168,7 @@ export interface workflowsListV2LogicValues {
     filteredRows: WorkflowListRow[]
     listLoaded: boolean
     loadFailed: boolean
+    loadErrorDetail: string | null
     matchesText: MatchesText<WorkflowListRow>
     metrics: WorkflowStatsRowApi[] | null
     metricsLoading: boolean
@@ -418,6 +429,14 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
                 loadWorkflows: () => false,
                 loadWorkflowsSuccess: () => false,
                 loadWorkflowsFailure: () => true,
+            },
+        ],
+        loadErrorDetail: [
+            null as string | null,
+            {
+                loadWorkflows: () => null,
+                loadWorkflowsSuccess: () => null,
+                loadWorkflowsFailure: (_, { error, errorObject }) => loadErrorDetailOf(error, errorObject),
             },
         ],
         visibleColumns: [

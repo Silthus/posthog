@@ -30,6 +30,7 @@ export function WorkflowsListV2(): JSX.Element {
         listLoaded,
         workflowsLoading,
         loadFailed,
+        loadErrorDetail,
         shownColumns,
         metricsLoading,
         serverSearchStatus,
@@ -50,6 +51,7 @@ export function WorkflowsListV2(): JSX.Element {
             return (
                 <div className="flex flex-col items-center gap-2 border rounded p-8 text-center">
                     <span className="font-semibold">Couldn't load workflows</span>
+                    {loadErrorDetail && <span className="text-secondary">{loadErrorDetail}</span>}
                     <LemonButton
                         type="secondary"
                         size="small"
