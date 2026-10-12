@@ -78,6 +78,33 @@ See [API write ownership](api-writes.md) for the call path and transaction bound
 | `POST` | `.../feature_flags/{pk}/archive/`                       | Set `archived: true`, disabling the flag in the same write when needed          |
 | `POST` | `.../feature_flags/{pk}/unarchive/`                     | Set `archived: false` only, leaving the flag disabled                           |
 
+### Health query
+
+`POST /api/projects/{id}/query/` accepts `FeatureFlagHealthQuery` with a `flagKey`.
+API tokens need both `query:read` and `feature_flag:read`.
+
+```json
+{ "query": { "kind": "FeatureFlagHealthQuery", "flagKey": "example-flag" } }
+```
+
+The response contains one object in `results`: `verdict`, `reason`, `on` and `off`
+counts, rates and confidence bounds, `excessBounds`, `crossovers`,
+`exceptionsWithoutFlagState`, `window`, and `thresholds`.
+The query counts browser users with explicit boolean flag values and exceptions
+at or after their first exposure. Users seen in both arms are excluded.
+
+The default window starts 24 hours ago, is capped at seven days, and ends at
+least five minutes before the current time. Optional thresholds are
+`toleratedExcess` (default 0.01), `minExposedPerArm` (300), and `alpha` (0.05).
+Exact Clopper-Pearson intervals split `alpha` across both arms.
+
+`harm` means the lower excess bound exceeds tolerance. `pass` requires both arms
+to reach the minimum and the upper excess bound to be within tolerance.
+Other statistical outcomes are `insufficient_data`, including a missing arm.
+`telemetry_failure` indicates a missing or unsupported flag, no boolean browser
+exposures, or apparently disabled exception capture. Query errors remain errors.
+Multivariate and group-aggregated flags and backend exceptions are unsupported.
+
 ### Organization endpoints
 
 | Method | URL                                                 | Description                                     |

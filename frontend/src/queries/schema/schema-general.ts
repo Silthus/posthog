@@ -209,6 +209,7 @@ export enum NodeKind {
     MCPToolTopUsersQuery = 'MCPToolTopUsersQuery',
     MCPToolFailuresQuery = 'MCPToolFailuresQuery',
     MCPToolFailureOccurrencesQuery = 'MCPToolFailureOccurrencesQuery',
+    FeatureFlagHealthQuery = 'FeatureFlagHealthQuery',
     MCPToolStatsQuery = 'MCPToolStatsQuery',
     MCPToolDailyStatsQuery = 'MCPToolDailyStatsQuery',
     MCPToolQualityRowsQuery = 'MCPToolQualityRowsQuery',
@@ -299,6 +300,7 @@ export type AnyDataNode =
     | MCPToolTopUsersQuery
     | MCPToolFailuresQuery
     | MCPToolFailureOccurrencesQuery
+    | FeatureFlagHealthQuery
     | MCPToolStatsQuery
     | MCPToolDailyStatsQuery
     | MCPToolQualityRowsQuery
@@ -437,6 +439,7 @@ export type QuerySchema =
     | MCPToolTopUsersQuery
     | MCPToolFailuresQuery
     | MCPToolFailureOccurrencesQuery
+    | FeatureFlagHealthQuery
     | MCPToolStatsQuery
     | MCPToolDailyStatsQuery
     | MCPToolQualityRowsQuery
@@ -9561,3 +9564,63 @@ export interface PropertyValuesQueryResponse extends AnalyticsQueryResponseBase 
 }
 
 export type CachedPropertyValuesQueryResponse = CachedQueryResponse<PropertyValuesQueryResponse>
+
+export interface FeatureFlagHealthBounds {
+    lower: number
+    upper: number
+}
+
+export interface FeatureFlagHealthArm {
+    exposed: integer
+    affected: integer
+    rate: number | null
+    bounds: FeatureFlagHealthBounds
+}
+
+export enum FeatureFlagHealthVerdict {
+    Pass = 'pass',
+    Harm = 'harm',
+    InsufficientData = 'insufficient_data',
+    TelemetryFailure = 'telemetry_failure',
+}
+
+export interface FeatureFlagHealthAssessment {
+    verdict: FeatureFlagHealthVerdict
+    reason: string
+    on: FeatureFlagHealthArm
+    off: FeatureFlagHealthArm
+    excessBounds: FeatureFlagHealthBounds
+}
+
+export interface FeatureFlagHealthThresholds {
+    toleratedExcess: number
+    minExposedPerArm: integer
+    alpha: number
+}
+
+export interface FeatureFlagHealthWindow {
+    date_from: string
+    date_to: string
+}
+
+export interface FeatureFlagHealthResult extends FeatureFlagHealthAssessment {
+    crossovers: integer
+    exceptionsWithoutFlagState: integer
+    window: FeatureFlagHealthWindow
+    thresholds: FeatureFlagHealthThresholds
+}
+
+export interface FeatureFlagHealthQueryResponse extends AnalyticsQueryResponseBase {
+    results: FeatureFlagHealthResult[]
+}
+
+export interface FeatureFlagHealthQuery extends DataNode<FeatureFlagHealthQueryResponse> {
+    kind: NodeKind.FeatureFlagHealthQuery
+    flagKey: string
+    dateRange?: DateRange
+    toleratedExcess?: number
+    minExposedPerArm?: positive_integer
+    alpha?: number
+}
+
+export type CachedFeatureFlagHealthQueryResponse = CachedQueryResponse<FeatureFlagHealthQueryResponse>

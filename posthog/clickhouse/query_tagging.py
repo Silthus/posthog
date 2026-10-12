@@ -194,6 +194,8 @@ def kind_fallback_tags(kind: NodeKind) -> FallbackTags | None:
     """Exhaustive — `assert_never(kind)` makes pyright/mypy fail when a new NodeKind has no
     case arm. Return `None` for kinds that exist but shouldn't drive product attribution."""
     match kind:
+        case NodeKind.FEATURE_FLAG_HEALTH_QUERY:
+            return {"product": Product.FEATURE_FLAGS}
         case (
             NodeKind.TRENDS_QUERY
             | NodeKind.FUNNELS_QUERY

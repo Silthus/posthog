@@ -1838,6 +1838,9 @@
                     "$ref": "#/definitions/MCPToolFailureOccurrencesQuery"
                 },
                 {
+                    "$ref": "#/definitions/FeatureFlagHealthQuery"
+                },
+                {
                     "$ref": "#/definitions/MCPToolStatsQuery"
                 },
                 {
@@ -9527,6 +9530,110 @@
                 "significant",
                 "timezone",
                 "variants"
+            ],
+            "type": "object"
+        },
+        "CachedFeatureFlagHealthQueryResponse": {
+            "additionalProperties": false,
+            "properties": {
+                "cache_key": {
+                    "type": "string"
+                },
+                "cache_target_age": {
+                    "format": "date-time",
+                    "type": "string"
+                },
+                "calculation_trigger": {
+                    "description": "What triggered the calculation of the query, leave empty if user/immediate",
+                    "type": "string"
+                },
+                "error": {
+                    "description": "Query error. Returned only if 'explain' or `modifiers.debug` is true. Throws an error otherwise.",
+                    "type": "string"
+                },
+                "hogql": {
+                    "description": "Generated HogQL query.",
+                    "type": "string"
+                },
+                "is_cached": {
+                    "type": "boolean"
+                },
+                "last_refresh": {
+                    "format": "date-time",
+                    "type": "string"
+                },
+                "modifiers": {
+                    "$ref": "#/definitions/HogQLQueryModifiers",
+                    "description": "Modifiers used when performing the query"
+                },
+                "next_allowed_client_refresh": {
+                    "format": "date-time",
+                    "type": "string"
+                },
+                "query_metadata": {
+                    "type": "object"
+                },
+                "query_scan": {
+                    "$ref": "#/definitions/QueryScanSummary",
+                    "description": "The rows and time of the run that produced these results, with its analysis once it is stored."
+                },
+                "query_status": {
+                    "$ref": "#/definitions/QueryStatus",
+                    "description": "Query status indicates whether next to the provided data, a query is still running."
+                },
+                "resolved_compare_date_range": {
+                    "$ref": "#/definitions/ResolvedDateRangeResponse",
+                    "description": "The resolved previous/comparison period date range, when comparing against another period"
+                },
+                "resolved_date_range": {
+                    "$ref": "#/definitions/ResolvedDateRangeResponse",
+                    "description": "The date range used for the query"
+                },
+                "results": {
+                    "items": {
+                        "$ref": "#/definitions/FeatureFlagHealthResult"
+                    },
+                    "type": "array"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "timings": {
+                    "description": "Measured timings for different parts of the query generation process",
+                    "items": {
+                        "$ref": "#/definitions/QueryTiming"
+                    },
+                    "type": "array"
+                },
+                "used_data_warehouse_sources": {
+                    "description": "Connector-synced data warehouse sources referenced by this query, if any.",
+                    "items": {
+                        "$ref": "#/definitions/DataWarehouseSourceUsage"
+                    },
+                    "type": "array"
+                },
+                "warnings": {
+                    "description": "Warnings about data warehouse sources referenced by the query whose latest sync failed, is paused, hit a billing limit, or is otherwise stale. Results may not reflect current source data. Accumulated across every HogQL execution that contributes to this response — so insights backed by warehouse tables (Trends, Funnels, etc.) receive the same warnings as raw HogQL queries. Also carries access control warnings when a system-table query filters out objects the user can't access.",
+                    "items": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/definitions/DataWarehouseSyncWarning"
+                            },
+                            {
+                                "$ref": "#/definitions/AccessControlFilterWarning"
+                            }
+                        ]
+                    },
+                    "type": "array"
+                }
+            },
+            "required": [
+                "cache_key",
+                "is_cached",
+                "last_refresh",
+                "next_allowed_client_refresh",
+                "results",
+                "timezone"
             ],
             "type": "object"
         },
@@ -27680,6 +27787,242 @@
             },
             "type": "object"
         },
+        "FeatureFlagHealthArm": {
+            "additionalProperties": false,
+            "properties": {
+                "affected": {
+                    "$ref": "#/definitions/integer"
+                },
+                "bounds": {
+                    "$ref": "#/definitions/FeatureFlagHealthBounds"
+                },
+                "exposed": {
+                    "$ref": "#/definitions/integer"
+                },
+                "rate": {
+                    "type": ["number", "null"]
+                }
+            },
+            "required": ["exposed", "affected", "rate", "bounds"],
+            "type": "object"
+        },
+        "FeatureFlagHealthAssessment": {
+            "additionalProperties": false,
+            "properties": {
+                "excessBounds": {
+                    "$ref": "#/definitions/FeatureFlagHealthBounds"
+                },
+                "off": {
+                    "$ref": "#/definitions/FeatureFlagHealthArm"
+                },
+                "on": {
+                    "$ref": "#/definitions/FeatureFlagHealthArm"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "verdict": {
+                    "$ref": "#/definitions/FeatureFlagHealthVerdict"
+                }
+            },
+            "required": ["verdict", "reason", "on", "off", "excessBounds"],
+            "type": "object"
+        },
+        "FeatureFlagHealthBounds": {
+            "additionalProperties": false,
+            "properties": {
+                "lower": {
+                    "type": "number"
+                },
+                "upper": {
+                    "type": "number"
+                }
+            },
+            "required": ["lower", "upper"],
+            "type": "object"
+        },
+        "FeatureFlagHealthQuery": {
+            "additionalProperties": false,
+            "properties": {
+                "alpha": {
+                    "type": "number"
+                },
+                "dateRange": {
+                    "$ref": "#/definitions/DateRange"
+                },
+                "flagKey": {
+                    "type": "string"
+                },
+                "kind": {
+                    "const": "FeatureFlagHealthQuery",
+                    "type": "string"
+                },
+                "minExposedPerArm": {
+                    "$ref": "#/definitions/positive_integer"
+                },
+                "modifiers": {
+                    "$ref": "#/definitions/HogQLQueryModifiers",
+                    "description": "Modifiers used when performing the query"
+                },
+                "response": {
+                    "$ref": "#/definitions/FeatureFlagHealthQueryResponse"
+                },
+                "tags": {
+                    "$ref": "#/definitions/QueryLogTags"
+                },
+                "toleratedExcess": {
+                    "type": "number"
+                },
+                "version": {
+                    "description": "version of the node, used for schema migrations",
+                    "type": "number"
+                }
+            },
+            "required": ["flagKey", "kind"],
+            "type": "object"
+        },
+        "FeatureFlagHealthQueryResponse": {
+            "additionalProperties": false,
+            "properties": {
+                "error": {
+                    "description": "Query error. Returned only if 'explain' or `modifiers.debug` is true. Throws an error otherwise.",
+                    "type": "string"
+                },
+                "hogql": {
+                    "description": "Generated HogQL query.",
+                    "type": "string"
+                },
+                "modifiers": {
+                    "$ref": "#/definitions/HogQLQueryModifiers",
+                    "description": "Modifiers used when performing the query"
+                },
+                "query_status": {
+                    "$ref": "#/definitions/QueryStatus",
+                    "description": "Query status indicates whether next to the provided data, a query is still running."
+                },
+                "resolved_compare_date_range": {
+                    "$ref": "#/definitions/ResolvedDateRangeResponse",
+                    "description": "The resolved previous/comparison period date range, when comparing against another period"
+                },
+                "resolved_date_range": {
+                    "$ref": "#/definitions/ResolvedDateRangeResponse",
+                    "description": "The date range used for the query"
+                },
+                "results": {
+                    "items": {
+                        "$ref": "#/definitions/FeatureFlagHealthResult"
+                    },
+                    "type": "array"
+                },
+                "timings": {
+                    "description": "Measured timings for different parts of the query generation process",
+                    "items": {
+                        "$ref": "#/definitions/QueryTiming"
+                    },
+                    "type": "array"
+                },
+                "used_data_warehouse_sources": {
+                    "description": "Connector-synced data warehouse sources referenced by this query, if any.",
+                    "items": {
+                        "$ref": "#/definitions/DataWarehouseSourceUsage"
+                    },
+                    "type": "array"
+                },
+                "warnings": {
+                    "description": "Warnings about data warehouse sources referenced by the query whose latest sync failed, is paused, hit a billing limit, or is otherwise stale. Results may not reflect current source data. Accumulated across every HogQL execution that contributes to this response — so insights backed by warehouse tables (Trends, Funnels, etc.) receive the same warnings as raw HogQL queries. Also carries access control warnings when a system-table query filters out objects the user can't access.",
+                    "items": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/definitions/DataWarehouseSyncWarning"
+                            },
+                            {
+                                "$ref": "#/definitions/AccessControlFilterWarning"
+                            }
+                        ]
+                    },
+                    "type": "array"
+                }
+            },
+            "required": ["results"],
+            "type": "object"
+        },
+        "FeatureFlagHealthResult": {
+            "additionalProperties": false,
+            "properties": {
+                "crossovers": {
+                    "$ref": "#/definitions/integer"
+                },
+                "exceptionsWithoutFlagState": {
+                    "$ref": "#/definitions/integer"
+                },
+                "excessBounds": {
+                    "$ref": "#/definitions/FeatureFlagHealthBounds"
+                },
+                "off": {
+                    "$ref": "#/definitions/FeatureFlagHealthArm"
+                },
+                "on": {
+                    "$ref": "#/definitions/FeatureFlagHealthArm"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "thresholds": {
+                    "$ref": "#/definitions/FeatureFlagHealthThresholds"
+                },
+                "verdict": {
+                    "$ref": "#/definitions/FeatureFlagHealthVerdict"
+                },
+                "window": {
+                    "$ref": "#/definitions/FeatureFlagHealthWindow"
+                }
+            },
+            "required": [
+                "crossovers",
+                "exceptionsWithoutFlagState",
+                "excessBounds",
+                "off",
+                "on",
+                "reason",
+                "thresholds",
+                "verdict",
+                "window"
+            ],
+            "type": "object"
+        },
+        "FeatureFlagHealthThresholds": {
+            "additionalProperties": false,
+            "properties": {
+                "alpha": {
+                    "type": "number"
+                },
+                "minExposedPerArm": {
+                    "$ref": "#/definitions/integer"
+                },
+                "toleratedExcess": {
+                    "type": "number"
+                }
+            },
+            "required": ["toleratedExcess", "minExposedPerArm", "alpha"],
+            "type": "object"
+        },
+        "FeatureFlagHealthVerdict": {
+            "enum": ["pass", "harm", "insufficient_data", "telemetry_failure"],
+            "type": "string"
+        },
+        "FeatureFlagHealthWindow": {
+            "additionalProperties": false,
+            "properties": {
+                "date_from": {
+                    "type": "string"
+                },
+                "date_to": {
+                    "type": "string"
+                }
+            },
+            "required": ["date_from", "date_to"],
+            "type": "object"
+        },
         "FeaturePropertyFilter": {
             "additionalProperties": false,
             "properties": {
@@ -40333,6 +40676,7 @@
                 "MCPToolTopUsersQuery",
                 "MCPToolFailuresQuery",
                 "MCPToolFailureOccurrencesQuery",
+                "FeatureFlagHealthQuery",
                 "MCPToolStatsQuery",
                 "MCPToolDailyStatsQuery",
                 "MCPToolQualityRowsQuery",
@@ -50094,6 +50438,71 @@
                             "description": "The date range used for the query"
                         },
                         "results": {
+                            "items": {
+                                "$ref": "#/definitions/FeatureFlagHealthResult"
+                            },
+                            "type": "array"
+                        },
+                        "timings": {
+                            "description": "Measured timings for different parts of the query generation process",
+                            "items": {
+                                "$ref": "#/definitions/QueryTiming"
+                            },
+                            "type": "array"
+                        },
+                        "used_data_warehouse_sources": {
+                            "description": "Connector-synced data warehouse sources referenced by this query, if any.",
+                            "items": {
+                                "$ref": "#/definitions/DataWarehouseSourceUsage"
+                            },
+                            "type": "array"
+                        },
+                        "warnings": {
+                            "description": "Warnings about data warehouse sources referenced by the query whose latest sync failed, is paused, hit a billing limit, or is otherwise stale. Results may not reflect current source data. Accumulated across every HogQL execution that contributes to this response — so insights backed by warehouse tables (Trends, Funnels, etc.) receive the same warnings as raw HogQL queries. Also carries access control warnings when a system-table query filters out objects the user can't access.",
+                            "items": {
+                                "anyOf": [
+                                    {
+                                        "$ref": "#/definitions/DataWarehouseSyncWarning"
+                                    },
+                                    {
+                                        "$ref": "#/definitions/AccessControlFilterWarning"
+                                    }
+                                ]
+                            },
+                            "type": "array"
+                        }
+                    },
+                    "required": ["results"],
+                    "type": "object"
+                },
+                {
+                    "additionalProperties": false,
+                    "properties": {
+                        "error": {
+                            "description": "Query error. Returned only if 'explain' or `modifiers.debug` is true. Throws an error otherwise.",
+                            "type": "string"
+                        },
+                        "hogql": {
+                            "description": "Generated HogQL query.",
+                            "type": "string"
+                        },
+                        "modifiers": {
+                            "$ref": "#/definitions/HogQLQueryModifiers",
+                            "description": "Modifiers used when performing the query"
+                        },
+                        "query_status": {
+                            "$ref": "#/definitions/QueryStatus",
+                            "description": "Query status indicates whether next to the provided data, a query is still running."
+                        },
+                        "resolved_compare_date_range": {
+                            "$ref": "#/definitions/ResolvedDateRangeResponse",
+                            "description": "The resolved previous/comparison period date range, when comparing against another period"
+                        },
+                        "resolved_date_range": {
+                            "$ref": "#/definitions/ResolvedDateRangeResponse",
+                            "description": "The date range used for the query"
+                        },
+                        "results": {
                             "description": "Zero or one row; empty when the tool had no calls in the window.",
                             "items": {
                                 "$ref": "#/definitions/MCPToolStatsItem"
@@ -51262,6 +51671,9 @@
                 },
                 {
                     "$ref": "#/definitions/MCPToolFailureOccurrencesQuery"
+                },
+                {
+                    "$ref": "#/definitions/FeatureFlagHealthQuery"
                 },
                 {
                     "$ref": "#/definitions/MCPToolStatsQuery"

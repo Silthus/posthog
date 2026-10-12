@@ -133,6 +133,7 @@ from posthog.schema_enums import (
     ExperimentStatsValidationFailure as ExperimentStatsValidationFailure,
     ExternalQueryErrorCode as ExternalQueryErrorCode,
     ExternalQueryStatus as ExternalQueryStatus,
+    FeatureFlagHealthVerdict as FeatureFlagHealthVerdict,
     FileSystemIconType as FileSystemIconType,
     FilterLogicalOperator as FilterLogicalOperator,
     FunnelAggregateByHogQL as FunnelAggregateByHogQL,
@@ -1688,6 +1689,22 @@ class FailureMessage(BaseModel):
     id: str | None = None
     parent_tool_call_id: str | None = None
     type: Literal["ai/failure"] = "ai/failure"
+
+
+class FeatureFlagHealthBounds(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    lower: float
+    upper: float
+
+
+class FeatureFlagHealthWindow(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    date_from: str
+    date_to: str
 
 
 class FileSystemEntry(BaseModel):
@@ -5905,6 +5922,36 @@ class ExternalQueryError(BaseModel):
     )
     code: ExternalQueryErrorCode
     detail: str
+
+
+class FeatureFlagHealthArm(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    affected: int
+    bounds: FeatureFlagHealthBounds
+    exposed: int
+    rate: float | None = None
+
+
+class FeatureFlagHealthAssessment(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    excessBounds: FeatureFlagHealthBounds
+    off: FeatureFlagHealthArm
+    on: FeatureFlagHealthArm
+    reason: str
+    verdict: FeatureFlagHealthVerdict
+
+
+class FeatureFlagHealthThresholds(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    alpha: float
+    minExposedPerArm: int
+    toleratedExcess: float
 
 
 class FeaturePropertyFilter(BaseModel):
@@ -18671,6 +18718,21 @@ class ExperimentBreakdownResult(BaseModel):
     )
 
 
+class FeatureFlagHealthResult(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    crossovers: int
+    exceptionsWithoutFlagState: int
+    excessBounds: FeatureFlagHealthBounds
+    off: FeatureFlagHealthArm
+    on: FeatureFlagHealthArm
+    reason: str
+    thresholds: FeatureFlagHealthThresholds
+    verdict: FeatureFlagHealthVerdict
+    window: FeatureFlagHealthWindow
+
+
 class FunnelCorrelationResponse(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -25119,10 +25181,7 @@ class QueryResponseAlternative104(BaseModel):
     resolved_date_range: ResolvedDateRangeResponse | None = Field(
         default=None, description="The date range used for the query"
     )
-    results: list[MCPToolStatsItem] = Field(
-        ...,
-        description="Zero or one row; empty when the tool had no calls in the window.",
-    )
+    results: list[FeatureFlagHealthResult]
     timings: list[QueryTiming] | None = Field(
         default=None,
         description=("Measured timings for different parts of the query generation process"),
@@ -25169,7 +25228,10 @@ class QueryResponseAlternative105(BaseModel):
     resolved_date_range: ResolvedDateRangeResponse | None = Field(
         default=None, description="The date range used for the query"
     )
-    results: list[MCPToolDailyStatItem]
+    results: list[MCPToolStatsItem] = Field(
+        ...,
+        description="Zero or one row; empty when the tool had no calls in the window.",
+    )
     timings: list[QueryTiming] | None = Field(
         default=None,
         description=("Measured timings for different parts of the query generation process"),
@@ -25194,6 +25256,53 @@ class QueryResponseAlternative105(BaseModel):
 
 
 class QueryResponseAlternative106(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    error: str | None = Field(
+        default=None,
+        description=(
+            "Query error. Returned only if 'explain' or `modifiers.debug` is true. Throws an error otherwise."
+        ),
+    )
+    hogql: str | None = Field(default=None, description="Generated HogQL query.")
+    modifiers: HogQLQueryModifiers | None = Field(default=None, description="Modifiers used when performing the query")
+    query_status: QueryStatus | None = Field(
+        default=None,
+        description=("Query status indicates whether next to the provided data, a query is still running."),
+    )
+    resolved_compare_date_range: ResolvedDateRangeResponse | None = Field(
+        default=None,
+        description=("The resolved previous/comparison period date range, when comparing against another period"),
+    )
+    resolved_date_range: ResolvedDateRangeResponse | None = Field(
+        default=None, description="The date range used for the query"
+    )
+    results: list[MCPToolDailyStatItem]
+    timings: list[QueryTiming] | None = Field(
+        default=None,
+        description=("Measured timings for different parts of the query generation process"),
+    )
+    used_data_warehouse_sources: list[DataWarehouseSourceUsage] | None = Field(
+        default=None,
+        description=("Connector-synced data warehouse sources referenced by this query, if any."),
+    )
+    warnings: list[DataWarehouseSyncWarning | AccessControlFilterWarning] | None = Field(
+        default=None,
+        description=(
+            "Warnings about data warehouse sources referenced by the query whose"
+            " latest sync failed, is paused, hit a billing limit, or is otherwise"
+            " stale. Results may not reflect current source data. Accumulated"
+            " across every HogQL execution that contributes to this response — so"
+            " insights backed by warehouse tables (Trends, Funnels, etc.) receive"
+            " the same warnings as raw HogQL queries. Also carries access control"
+            " warnings when a system-table query filters out objects the user can't"
+            " access."
+        ),
+    )
+
+
+class QueryResponseAlternative107(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -25255,7 +25364,7 @@ class QueryResponseAlternative106(BaseModel):
     )
 
 
-class QueryResponseAlternative107(BaseModel):
+class QueryResponseAlternative108(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -25302,7 +25411,7 @@ class QueryResponseAlternative107(BaseModel):
     )
 
 
-class QueryResponseAlternative108(BaseModel):
+class QueryResponseAlternative109(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -25349,7 +25458,7 @@ class QueryResponseAlternative108(BaseModel):
     )
 
 
-class QueryResponseAlternative109(BaseModel):
+class QueryResponseAlternative110(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -25396,7 +25505,7 @@ class QueryResponseAlternative109(BaseModel):
     )
 
 
-class QueryResponseAlternative110(BaseModel):
+class QueryResponseAlternative111(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -25443,7 +25552,7 @@ class QueryResponseAlternative110(BaseModel):
     )
 
 
-class QueryResponseAlternative111(BaseModel):
+class QueryResponseAlternative112(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -25490,7 +25599,7 @@ class QueryResponseAlternative111(BaseModel):
     )
 
 
-class QueryResponseAlternative112(BaseModel):
+class QueryResponseAlternative113(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -25537,7 +25646,7 @@ class QueryResponseAlternative112(BaseModel):
     )
 
 
-class QueryResponseAlternative113(BaseModel):
+class QueryResponseAlternative114(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -25584,7 +25693,7 @@ class QueryResponseAlternative113(BaseModel):
     )
 
 
-class QueryResponseAlternative114(BaseModel):
+class QueryResponseAlternative115(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -25632,7 +25741,7 @@ class QueryResponseAlternative114(BaseModel):
     )
 
 
-class QueryResponseAlternative115(BaseModel):
+class QueryResponseAlternative116(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -27143,6 +27252,68 @@ class CachedErrorTrackingQueryResponse(BaseModel):
     )
 
 
+class CachedFeatureFlagHealthQueryResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    cache_key: str
+    cache_target_age: AwareDatetime | None = None
+    calculation_trigger: str | None = Field(
+        default=None,
+        description=("What triggered the calculation of the query, leave empty if user/immediate"),
+    )
+    error: str | None = Field(
+        default=None,
+        description=(
+            "Query error. Returned only if 'explain' or `modifiers.debug` is true. Throws an error otherwise."
+        ),
+    )
+    hogql: str | None = Field(default=None, description="Generated HogQL query.")
+    is_cached: bool
+    last_refresh: AwareDatetime
+    modifiers: HogQLQueryModifiers | None = Field(default=None, description="Modifiers used when performing the query")
+    next_allowed_client_refresh: AwareDatetime
+    query_metadata: dict[str, Any] | None = None
+    query_scan: QueryScanSummary | None = Field(
+        default=None,
+        description=("The rows and time of the run that produced these results, with its analysis once it is stored."),
+    )
+    query_status: QueryStatus | None = Field(
+        default=None,
+        description=("Query status indicates whether next to the provided data, a query is still running."),
+    )
+    resolved_compare_date_range: ResolvedDateRangeResponse | None = Field(
+        default=None,
+        description=("The resolved previous/comparison period date range, when comparing against another period"),
+    )
+    resolved_date_range: ResolvedDateRangeResponse | None = Field(
+        default=None, description="The date range used for the query"
+    )
+    results: list[FeatureFlagHealthResult]
+    timezone: str
+    timings: list[QueryTiming] | None = Field(
+        default=None,
+        description=("Measured timings for different parts of the query generation process"),
+    )
+    used_data_warehouse_sources: list[DataWarehouseSourceUsage] | None = Field(
+        default=None,
+        description=("Connector-synced data warehouse sources referenced by this query, if any."),
+    )
+    warnings: list[DataWarehouseSyncWarning | AccessControlFilterWarning] | None = Field(
+        default=None,
+        description=(
+            "Warnings about data warehouse sources referenced by the query whose"
+            " latest sync failed, is paused, hit a billing limit, or is otherwise"
+            " stale. Results may not reflect current source data. Accumulated"
+            " across every HogQL execution that contributes to this response — so"
+            " insights backed by warehouse tables (Trends, Funnels, etc.) receive"
+            " the same warnings as raw HogQL queries. Also carries access control"
+            " warnings when a system-table query filters out objects the user can't"
+            " access."
+        ),
+    )
+
+
 class CachedInsightActorsQueryOptionsResponse(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -28136,6 +28307,53 @@ class FeatureFlagGroupType(BaseModel):
     sort_key: str | None = None
     users_affected: float | None = None
     variant: str | None = None
+
+
+class FeatureFlagHealthQueryResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    error: str | None = Field(
+        default=None,
+        description=(
+            "Query error. Returned only if 'explain' or `modifiers.debug` is true. Throws an error otherwise."
+        ),
+    )
+    hogql: str | None = Field(default=None, description="Generated HogQL query.")
+    modifiers: HogQLQueryModifiers | None = Field(default=None, description="Modifiers used when performing the query")
+    query_status: QueryStatus | None = Field(
+        default=None,
+        description=("Query status indicates whether next to the provided data, a query is still running."),
+    )
+    resolved_compare_date_range: ResolvedDateRangeResponse | None = Field(
+        default=None,
+        description=("The resolved previous/comparison period date range, when comparing against another period"),
+    )
+    resolved_date_range: ResolvedDateRangeResponse | None = Field(
+        default=None, description="The date range used for the query"
+    )
+    results: list[FeatureFlagHealthResult]
+    timings: list[QueryTiming] | None = Field(
+        default=None,
+        description=("Measured timings for different parts of the query generation process"),
+    )
+    used_data_warehouse_sources: list[DataWarehouseSourceUsage] | None = Field(
+        default=None,
+        description=("Connector-synced data warehouse sources referenced by this query, if any."),
+    )
+    warnings: list[DataWarehouseSyncWarning | AccessControlFilterWarning] | None = Field(
+        default=None,
+        description=(
+            "Warnings about data warehouse sources referenced by the query whose"
+            " latest sync failed, is paused, hit a billing limit, or is otherwise"
+            " stale. Results may not reflect current source data. Accumulated"
+            " across every HogQL execution that contributes to this response — so"
+            " insights backed by warehouse tables (Trends, Funnels, etc.) receive"
+            " the same warnings as raw HogQL queries. Also carries access control"
+            " warnings when a system-table query filters out objects the user can't"
+            " access."
+        ),
+    )
 
 
 class FunnelExclusionActionsNode(BaseModel):
@@ -30590,6 +30808,22 @@ class ExperimentHoldoutType(BaseModel):
     )
 
 
+class FeatureFlagHealthQuery(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    alpha: float | None = None
+    dateRange: DateRange | None = None
+    flagKey: str
+    kind: Literal["FeatureFlagHealthQuery"] = "FeatureFlagHealthQuery"
+    minExposedPerArm: conint(ge=1) | None = None
+    modifiers: HogQLQueryModifiers | None = Field(default=None, description="Modifiers used when performing the query")
+    response: FeatureFlagHealthQueryResponse | None = None
+    tags: QueryLogTags | None = None
+    toleratedExcess: float | None = None
+    version: float | None = Field(default=None, description="version of the node, used for schema migrations")
+
+
 class FunnelsFilter(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -32438,6 +32672,7 @@ class QueryResponseAlternative(
         | QueryResponseAlternative113
         | QueryResponseAlternative114
         | QueryResponseAlternative115
+        | QueryResponseAlternative116
     ]
 ):
     root: (
@@ -32553,6 +32788,7 @@ class QueryResponseAlternative(
         | QueryResponseAlternative113
         | QueryResponseAlternative114
         | QueryResponseAlternative115
+        | QueryResponseAlternative116
     )
 
 
@@ -33678,6 +33914,7 @@ class HogQLAutocomplete(BaseModel):
         | MCPToolTopUsersQuery
         | MCPToolFailuresQuery
         | MCPToolFailureOccurrencesQuery
+        | FeatureFlagHealthQuery
         | MCPToolStatsQuery
         | MCPToolDailyStatsQuery
         | MCPToolQualityRowsQuery
@@ -33814,6 +34051,7 @@ class HogQLMetadata(BaseModel):
         | MCPToolTopUsersQuery
         | MCPToolFailuresQuery
         | MCPToolFailureOccurrencesQuery
+        | FeatureFlagHealthQuery
         | MCPToolStatsQuery
         | MCPToolDailyStatsQuery
         | MCPToolQualityRowsQuery
@@ -33964,6 +34202,7 @@ class MaxInsightContext(BaseModel):
         | MCPToolTopUsersQuery
         | MCPToolFailuresQuery
         | MCPToolFailureOccurrencesQuery
+        | FeatureFlagHealthQuery
         | MCPToolStatsQuery
         | MCPToolDailyStatsQuery
         | MCPToolQualityRowsQuery
@@ -34110,6 +34349,7 @@ class QueryRequest(BaseModel):
         | MCPToolTopUsersQuery
         | MCPToolFailuresQuery
         | MCPToolFailureOccurrencesQuery
+        | FeatureFlagHealthQuery
         | MCPToolStatsQuery
         | MCPToolDailyStatsQuery
         | MCPToolQualityRowsQuery
@@ -34248,6 +34488,7 @@ class QuerySchemaRoot(
         | MCPToolTopUsersQuery
         | MCPToolFailuresQuery
         | MCPToolFailureOccurrencesQuery
+        | FeatureFlagHealthQuery
         | MCPToolStatsQuery
         | MCPToolDailyStatsQuery
         | MCPToolQualityRowsQuery
@@ -34356,6 +34597,7 @@ class QuerySchemaRoot(
         | MCPToolTopUsersQuery
         | MCPToolFailuresQuery
         | MCPToolFailureOccurrencesQuery
+        | FeatureFlagHealthQuery
         | MCPToolStatsQuery
         | MCPToolDailyStatsQuery
         | MCPToolQualityRowsQuery
@@ -34469,6 +34711,7 @@ class QueryUpgradeRequest(BaseModel):
         | MCPToolTopUsersQuery
         | MCPToolFailuresQuery
         | MCPToolFailureOccurrencesQuery
+        | FeatureFlagHealthQuery
         | MCPToolStatsQuery
         | MCPToolDailyStatsQuery
         | MCPToolQualityRowsQuery
@@ -34582,6 +34825,7 @@ class QueryUpgradeResponse(BaseModel):
         | MCPToolTopUsersQuery
         | MCPToolFailuresQuery
         | MCPToolFailureOccurrencesQuery
+        | FeatureFlagHealthQuery
         | MCPToolStatsQuery
         | MCPToolDailyStatsQuery
         | MCPToolQualityRowsQuery
@@ -34740,6 +34984,7 @@ class VisualizationArtifactContent(BaseModel):
         | MCPToolTopUsersQuery
         | MCPToolFailuresQuery
         | MCPToolFailureOccurrencesQuery
+        | FeatureFlagHealthQuery
         | MCPToolStatsQuery
         | MCPToolDailyStatsQuery
         | MCPToolQualityRowsQuery
