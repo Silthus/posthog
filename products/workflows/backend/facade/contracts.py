@@ -448,7 +448,8 @@ class Workflow:
     email_sending_paused_by: str
     email_sending_resumed_at: datetime | None
     user_access_level: str | None
-    # Read on the list only. A single-workflow read leaves both None and ``schedules`` filled.
+    # Read on list pages only, and ``workflow_type`` on summary pages only. A single-workflow read leaves
+    # them None and fills ``schedules``.
     workflow_type: str | None = None
     pending_suggestions: int | None = None
     suggestions_enabled: bool | None = None
