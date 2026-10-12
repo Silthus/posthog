@@ -1,11 +1,16 @@
-import { Tooltip } from '@posthog/lemon-ui'
+import { useValues } from 'kea'
 
+import { LemonTag, Tooltip } from '@posthog/lemon-ui'
+
+import { FEATURE_FLAGS } from 'lib/constants'
 import { LemonTableLink } from 'lib/lemon-ui/LemonTable/LemonTableLink'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { urls } from 'scenes/urls'
 
 import { WorkflowListRow } from './workflowListRows'
 
 export function WorkflowListNameCell({ row }: { row: WorkflowListRow }): JSX.Element {
+    const { featureFlags } = useValues(featureFlagLogic)
     const archived = row.workflow.status === 'archived'
     const name = (
         <span data-attr="workflows-list-v2-name" className={archived ? 'truncate text-muted' : 'truncate'}>
@@ -19,10 +24,29 @@ export function WorkflowListNameCell({ row }: { row: WorkflowListRow }): JSX.Ele
             </span>
         </Tooltip>
     ) : undefined
+    const title = (
+        <span className="flex items-center gap-2 flex-wrap min-w-0 w-full">
+            {name}
+            {featureFlags[FEATURE_FLAGS.SELF_OPTIMISING_WORKFLOWS] &&
+                row.workflow.status === 'active' &&
+                row.workflow.suggestions_enabled && (
+                    <LemonTag
+                        type={row.workflow.pending_suggestions ? 'completion' : 'option'}
+                        data-attr="workflow-list-suggestions"
+                    >
+                        {!row.workflow.pending_suggestions
+                            ? 'Self-driving'
+                            : row.workflow.pending_suggestions === 1
+                              ? '1 suggestion'
+                              : `${row.workflow.pending_suggestions} suggestions`}
+                    </LemonTag>
+                )}
+        </span>
+    )
     return (
         <LemonTableLink
             to={archived ? undefined : urls.workflow(row.id, 'workflow')}
-            title={archived ? <Tooltip title="Restore this workflow to make changes">{name}</Tooltip> : name}
+            title={archived ? <Tooltip title="Restore this workflow to make changes">{name}</Tooltip> : title}
             description={description}
             truncateTitle
         />

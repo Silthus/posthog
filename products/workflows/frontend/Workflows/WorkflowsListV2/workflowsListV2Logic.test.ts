@@ -75,6 +75,21 @@ describe('workflowsListV2Logic', () => {
 
     afterEach(() => logic?.unmount())
 
+    it.each(['messaging', 'automation'])('opens templates for the active %s facet', (type) => {
+        logic = workflowsListV2Logic()
+        logic.mount()
+        logic.actions.setValue({ filters: [{ facet: 'type', value: type, negated: false }], text: '' })
+        expect(logic.values.templateTypeFilter).toBe(type)
+        logic.actions.setValue({
+            filters: [
+                { facet: 'type', value: 'messaging', negated: false },
+                { facet: 'type', value: 'automation', negated: false },
+            ],
+            text: '',
+        })
+        expect(logic.values.templateTypeFilter).toBe('all')
+    })
+
     it('loads every page of workflows, newest first', async () => {
         router.actions.push(urls.workflows())
         logic = workflowsListV2Logic()
@@ -184,7 +199,7 @@ describe('workflowsListV2Logic', () => {
         await expectLogic(logic).toDispatchActions(['loadWorkflowsSuccess', 'loadMetrics'])
         await metricsSent
         expect(logic.values.metricsLoading).toBe(true)
-        expect(shownIds(logic)).toEqual(['wf-welcome', 'wf-page-two', 'wf-renewal', 'wf-sync', 'wf-old-promo'])
+        expect(shownIds(logic)).toEqual([])
 
         answerMetrics()
         await expectLogic(logic).toDispatchActions(['loadMetricsSuccess'])

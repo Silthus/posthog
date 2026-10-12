@@ -2,9 +2,14 @@ import { useActions, useValues } from 'kea'
 
 import { LemonButton } from '@posthog/lemon-ui'
 
+import { FEATURE_FLAGS } from 'lib/constants'
 import { useOnMountEffect } from 'lib/hooks/useOnMountEffect'
 import { LemonTable } from 'lib/lemon-ui/LemonTable'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 
+import { AutomationEmptyState } from '../../setupGuide/AutomationEmptyState'
+import { AutomationSuggestionBanner } from '../../setupGuide/AutomationSuggestionBanner'
+import { MessagingSetupReminderBanner } from '../../setupGuide/MessagingSetupReminderBanner'
 import { workflowLogic } from '../workflowLogic'
 import { serializeFacetQuery } from './FacetSearchBar/facetQuery'
 import { FacetSearchBar } from './FacetSearchBar/FacetSearchBar'
@@ -14,6 +19,8 @@ import { workflowsListV2Logic } from './workflowsListV2Logic'
 const PAGE_SIZE = 100
 
 export function WorkflowsListV2(): JSX.Element {
+    const { featureFlags } = useValues(featureFlagLogic)
+    const guidedOnboardingEnabled = !!featureFlags[FEATURE_FLAGS.WORKFLOWS_GUIDED_ONBOARDING]
     const {
         rows,
         filteredRows,
@@ -26,8 +33,12 @@ export function WorkflowsListV2(): JSX.Element {
         shownColumns,
         metricsLoading,
         serverSearchStatus,
+        isUnfilteredAutomationView,
+        hasHealthFilter,
+        metricsLoaded,
     } = useValues(workflowsListV2Logic)
-    const { setValue, loadWorkflows, clearFilters } = useActions(workflowsListV2Logic)
+    const { setValue, loadWorkflows, loadMetrics, clearFilters } = useActions(workflowsListV2Logic)
+    const showAutomationEmptyState = guidedOnboardingEnabled && isUnfilteredAutomationView
 
     useOnMountEffect(() => {
         // Leaving the new-workflow scene keeps its logic mounted, so drop it here as WorkflowsTable does.
@@ -52,7 +63,26 @@ export function WorkflowsListV2(): JSX.Element {
             )
         }
         const searchPending = serverSearchStatus === 'pending'
-        if (listLoaded && rows.length > 0 && filteredRows.length === 0 && !searchPending) {
+        const healthPending = hasHealthFilter && !metricsLoaded
+        if (listLoaded && healthPending && !metricsLoading) {
+            return (
+                <div className="flex flex-col items-center gap-2 border rounded p-8 text-center">
+                    <span>Couldn't load run metrics for these health filters</span>
+                    <LemonButton
+                        type="secondary"
+                        size="small"
+                        onClick={loadMetrics}
+                        data-attr="workflows-list-v2-metrics-retry"
+                    >
+                        Retry
+                    </LemonButton>
+                </div>
+            )
+        }
+        if (listLoaded && filteredRows.length === 0 && showAutomationEmptyState && !searchPending) {
+            return <AutomationEmptyState />
+        }
+        if (listLoaded && rows.length > 0 && filteredRows.length === 0 && !searchPending && !healthPending) {
             return (
                 <div className="flex flex-col items-center gap-2 border rounded p-8 text-center">
                     <span>No workflows match these filters</span>
@@ -74,7 +104,7 @@ export function WorkflowsListV2(): JSX.Element {
                 size="small"
                 dataSource={filteredRows}
                 // Until the server search answers, a match in an email body can still add rows.
-                loading={!listLoaded || searchPending}
+                loading={!listLoaded || searchPending || healthPending}
                 rowKey="id"
                 columns={buildWorkflowsListV2Columns(shownColumns, metricsLoading)}
                 // Client-side pages stay out of the URL; `page` there is an old list param.
@@ -87,6 +117,7 @@ export function WorkflowsListV2(): JSX.Element {
 
     return (
         <div className="flex flex-col gap-3 min-w-0" data-attr="workflows-list-v2">
+            {guidedOnboardingEnabled && <MessagingSetupReminderBanner />}
             <FacetSearchBar
                 facets={facets}
                 items={rows}
@@ -102,6 +133,7 @@ export function WorkflowsListV2(): JSX.Element {
                 </div>
             )}
             {renderBody()}
+            {guidedOnboardingEnabled && <AutomationSuggestionBanner />}
         </div>
     )
 }

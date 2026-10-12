@@ -52,29 +52,69 @@ describe('WorkflowsScene', () => {
 
     afterEach(() => cleanup())
 
-    it('filters the list to active workflows from the keyboard and writes the pills to the URL', async () => {
+    it('offers a metrics retry instead of an empty health result when metrics fail', async () => {
+        useMocks({
+            get: { '/api/projects/:team_id/hog_flows/metrics/global/': () => [500, { detail: 'Unavailable' }] },
+        })
         featureFlagLogic.actions.setFeatureFlags([], { [FEATURE_FLAGS.WORKFLOWS_LIST_V2]: true })
-        const user = userEvent.setup()
+        router.actions.push(urls.workflows(), { q: 'health:failing' })
         render(
             <Provider>
                 <WorkflowsScene />
             </Provider>
         )
-
-        await waitFor(() => expect(shownRowNames()).toContain('Welcome series'))
-
-        const input = document.querySelector<HTMLInputElement>('input[data-attr="workflows-search"]')
-        expect(input).not.toBeNull()
-        await user.click(input!)
-        await user.keyboard('sta')
-        await user.keyboard('{Tab}')
-        expect(input).toHaveValue('status:')
-        await user.keyboard('{ArrowDown}{Enter}')
-
-        await waitFor(() => expect(shownRowNames()).toEqual(['Welcome series']))
-        expect(router.values.searchParams.q).toEqual('status:active')
-        expect(input).toHaveValue('')
+        await waitFor(() =>
+            expect(document.querySelector('[data-attr="workflows-list-v2-metrics-retry"]')).not.toBeNull()
+        )
+        expect(document.body).not.toHaveTextContent('No workflows match these filters')
     })
+
+    it('keeps guided automation setup on an empty automation view', async () => {
+        workflows = FIXTURE_WORKFLOWS.filter((workflow) => workflow.type === 'messaging')
+        featureFlagLogic.actions.setFeatureFlags([], {
+            [FEATURE_FLAGS.WORKFLOWS_LIST_V2]: true,
+            [FEATURE_FLAGS.WORKFLOWS_GUIDED_ONBOARDING]: true,
+        })
+        router.actions.push(urls.workflows(), { q: 'type:automation' })
+        render(
+            <Provider>
+                <WorkflowsScene />
+            </Provider>
+        )
+        await waitFor(() =>
+            expect(document.querySelector('[data-attr="workflows-automation-empty-state-guided-setup"]')).not.toBeNull()
+        )
+    })
+
+    it.each([false, true])(
+        'filters the list and writes pills to the URL with guided onboarding %s',
+        async (guidedOnboarding) => {
+            featureFlagLogic.actions.setFeatureFlags([], {
+                [FEATURE_FLAGS.WORKFLOWS_LIST_V2]: true,
+                [FEATURE_FLAGS.WORKFLOWS_GUIDED_ONBOARDING]: guidedOnboarding,
+            })
+            const user = userEvent.setup()
+            render(
+                <Provider>
+                    <WorkflowsScene />
+                </Provider>
+            )
+
+            await waitFor(() => expect(shownRowNames()).toContain('Welcome series'))
+
+            const input = document.querySelector<HTMLInputElement>('input[data-attr="workflows-search"]')
+            expect(input).not.toBeNull()
+            await user.click(input!)
+            await user.keyboard('sta')
+            await user.keyboard('{Tab}')
+            expect(input).toHaveValue('status:')
+            await user.keyboard('{ArrowDown}{Enter}')
+
+            await waitFor(() => expect(shownRowNames()).toEqual(['Welcome series']))
+            expect(router.values.searchParams.q).toEqual('status:active')
+            expect(input).toHaveValue('')
+        }
+    )
 
     it('pages past the first 100 rows, and a new filter starts again on page one', async () => {
         workflows = Array.from({ length: 250 }, (_, i) =>
