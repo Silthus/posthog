@@ -280,7 +280,7 @@ export function ActionCard({
                     {Step?.icon}
                 </div>
                 <div className="min-w-0 flex-1">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color }}>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider" style={{ color }}>
                         {kicker}
                     </div>
                     <div className="break-words text-[14px] font-semibold leading-tight">{action.name}</div>

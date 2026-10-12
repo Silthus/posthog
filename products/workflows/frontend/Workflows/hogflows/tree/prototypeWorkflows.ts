@@ -306,7 +306,7 @@ const regionalSeasonOpener = (): HogFlow => {
 
     REGIONS.forEach((region, regionIndex) => {
         const tierBranchId = `${region}_by_tier`
-        actions.push(personPropertyBranchAction(tierBranchId, `${region}: route by tier`, 'tier', TIERS))
+        actions.push(personPropertyBranchAction(tierBranchId, `${labelFor(region)}: route by tier`, 'tier', TIERS))
         edges.push(
             { from: 'by_region', to: tierBranchId, type: 'branch', index: regionIndex },
             { from: tierBranchId, to: EXIT_ID, type: 'continue' }
@@ -317,7 +317,7 @@ const regionalSeasonOpener = (): HogFlow => {
             actions.push(
                 personPropertyBranchAction(
                     interestBranchId,
-                    `${region} ${tier}: route by interest`,
+                    `${labelFor(region)} ${tier}: route by interest`,
                     'interest',
                     INTERESTS
                 )

@@ -58,7 +58,7 @@ const PANEL_WIDTH = 460
 const FRAME_PAD = 14
 const FRAME_HEADER = 30
 const COLLAPSE_ALL_ABOVE_STEPS = 30
-const MIN_READABLE_ZOOM = 0.72
+const MIN_READABLE_ZOOM = 0.66
 
 type ViewState = {
     workflow: HogFlow
@@ -344,12 +344,20 @@ function MeasureLayer({
 }): JSX.Element {
     const ref = useRef<HTMLDivElement>(null)
     useLayoutEffect(() => {
-        const sizes: Record<string, { width: number; height: number }> = {}
-        ref.current?.querySelectorAll<HTMLElement>('[data-measure-id]').forEach((el) => {
-            const child = el.firstElementChild as HTMLElement
-            sizes[el.dataset.measureId!] = { width: child.offsetWidth, height: child.offsetHeight }
-        })
-        onMeasured(sizes)
+        const measure = (): void => {
+            const sizes: Record<string, { width: number; height: number }> = {}
+            ref.current?.querySelectorAll<HTMLElement>('[data-measure-id]').forEach((el) => {
+                const child = el.firstElementChild as HTMLElement
+                sizes[el.dataset.measureId!] = { width: child.offsetWidth, height: child.offsetHeight }
+            })
+            onMeasured(sizes)
+        }
+        measure()
+        let cancelled = false
+        void document.fonts.ready.then(() => !cancelled && measure())
+        return () => {
+            cancelled = true
+        }
     }, [nodes, metrics, previews]) // eslint-disable-line react-hooks/exhaustive-deps
     return (
         <div ref={ref} aria-hidden className="pointer-events-none invisible absolute left-[-20000px] top-0">
@@ -530,6 +538,7 @@ function GraphFirstCanvas(): JSX.Element {
     }, [graph.edges, groups, collapsed])
     const trace = useMemo(() => (traceOn ? computeTrace(workflow, choices) : null), [traceOn, workflow, choices])
     const metrics = useMemo(() => (showMetrics ? sampleMetrics(workflow) : null), [showMetrics, workflow])
+    const sideOpen = panelOpen || !!trace
 
     useEffect(() => {
         if (panelWidth === null) {
@@ -635,13 +644,14 @@ function GraphFirstCanvas(): JSX.Element {
         [graph.edges, layout, labels, tick]
     )
 
-    const fitWidth = (): void => {
+    const fitWidth = (onlyIds?: string[]): void => {
         const width = wrapperRef.current?.clientWidth
-        if (!width || !rfNodes.length) {
+        const nodesToFit = onlyIds ? rfNodes.filter((n) => onlyIds.includes(n.id)) : rfNodes
+        if (!width || !nodesToFit.length) {
             return
         }
         const height = wrapperRef.current?.clientHeight ?? 800
-        const edgePoints = Object.values(layout?.edgePoints ?? {}).flatMap((e) => [
+        const edgePoints = (onlyIds ? [] : Object.values(layout?.edgePoints ?? {})).flatMap((e) => [
             ...e.points,
             ...(e.labelBox
                 ? [
@@ -651,11 +661,14 @@ function GraphFirstCanvas(): JSX.Element {
                 : []),
         ])
         const xs = [
-            ...rfNodes.flatMap((n) => [n.position.x, n.position.x + ((n as any).width ?? sizes?.[n.id]?.width ?? 260)]),
+            ...nodesToFit.flatMap((n) => [
+                n.position.x,
+                n.position.x + ((n as any).width ?? sizes?.[n.id]?.width ?? 260),
+            ]),
             ...edgePoints.map((p) => p.x),
         ]
         const ys = [
-            ...rfNodes.flatMap((n) => [
+            ...nodesToFit.flatMap((n) => [
                 n.position.y,
                 n.position.y + ((n as any).height ?? sizes?.[n.id]?.height ?? 80),
             ]),
@@ -674,6 +687,23 @@ function GraphFirstCanvas(): JSX.Element {
     useEffect(() => {
         fitWidth()
     }, [layout]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (panelOpen && selectedNodeId) {
+            return
+        }
+        const pathIds = trace
+            ? graph.nodes
+                  .filter((n) =>
+                      n.kind === 'action'
+                          ? trace.nodeIds.includes(n.id)
+                          : n.group.memberIds.some((id) => trace.nodeIds.includes(id))
+                  )
+                  .map((n) => n.id)
+            : undefined
+        const timer = setTimeout(() => fitWidth(pathIds), 30)
+        return () => clearTimeout(timer)
+    }, [sideOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent): void => {
@@ -751,32 +781,36 @@ function GraphFirstCanvas(): JSX.Element {
                             >
                                 Add step
                             </LemonButton>
-                            <LemonButton
-                                size="small"
-                                onClick={() => openPanel('variables')}
-                                active={panelOpen && mode === 'variables'}
-                                sideIcon={
-                                    variablesCount ? (
-                                        <LemonBadge.Number count={variablesCount} size="small" status="muted" />
-                                    ) : undefined
-                                }
-                            >
-                                Variables
-                            </LemonButton>
-                            <LemonButton
-                                size="small"
-                                onClick={() => openPanel('test')}
-                                active={panelOpen && mode === 'test'}
-                            >
-                                Test
-                            </LemonButton>
-                            <LemonButton
-                                size="small"
-                                onClick={() => openPanel('logs')}
-                                active={panelOpen && mode === 'logs'}
-                            >
-                                Logs
-                            </LemonButton>
+                            {!sideOpen && (
+                                <>
+                                    <LemonButton
+                                        size="small"
+                                        onClick={() => openPanel('variables')}
+                                        active={panelOpen && mode === 'variables'}
+                                        sideIcon={
+                                            variablesCount ? (
+                                                <LemonBadge.Number count={variablesCount} size="small" status="muted" />
+                                            ) : undefined
+                                        }
+                                    >
+                                        Variables
+                                    </LemonButton>
+                                    <LemonButton
+                                        size="small"
+                                        onClick={() => openPanel('test')}
+                                        active={panelOpen && mode === 'test'}
+                                    >
+                                        Test
+                                    </LemonButton>
+                                    <LemonButton
+                                        size="small"
+                                        onClick={() => openPanel('logs')}
+                                        active={panelOpen && mode === 'logs'}
+                                    >
+                                        Logs
+                                    </LemonButton>
+                                </>
+                            )}
                             <div className="mx-1 h-5 w-px bg-border" />
                             <LemonButton
                                 size="small"
@@ -797,7 +831,7 @@ function GraphFirstCanvas(): JSX.Element {
                                     ['Workflow note', showNote, setShowNote],
                                 ]}
                             />
-                            {groups.length > 0 && (
+                            {groups.length > 0 && !sideOpen && (
                                 <LemonButton
                                     size="small"
                                     onClick={() => setCollapsed(new Set(allCollapsed ? [] : groups.map((g) => g.id)))}
@@ -805,7 +839,7 @@ function GraphFirstCanvas(): JSX.Element {
                                     {allCollapsed ? 'Open all paths' : 'Collapse paths'}
                                 </LemonButton>
                             )}
-                            <LemonButton size="small" onClick={fitWidth}>
+                            <LemonButton size="small" onClick={() => fitWidth()}>
                                 Fit
                             </LemonButton>
                         </div>
@@ -836,13 +870,13 @@ function GraphFirstCanvas(): JSX.Element {
                     style={{ width: panelWidth ?? PANEL_WIDTH }}
                 >
                     <HogFlowEditorPanel />
-                    <div className="absolute -left-4 top-3 z-20">
+                    <div className="absolute bottom-3 right-3 z-20">
                         <LemonButton
                             size="small"
                             type="secondary"
                             icon={<IconX />}
                             tooltip="Close panel (Esc)"
-                            className="rounded-full bg-surface-primary"
+                            className="bg-surface-primary"
                             onClick={() => {
                                 setPanelOpen(false)
                                 setSelectedNodeId(null)

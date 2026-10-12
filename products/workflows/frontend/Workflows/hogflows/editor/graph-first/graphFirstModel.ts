@@ -314,6 +314,9 @@ export function foldWaits(graph: { nodes: VisibleNode[]; edges: VisibleEdge[] })
     }
 }
 
+const withExitHint = (label: string | undefined, toExit: boolean): string | undefined =>
+    label && toExit ? `${label} → Exit` : label
+
 export function visibleGraph(
     workflow: HogFlow,
     groups: BranchGroup[],
@@ -372,7 +375,9 @@ export function visibleGraph(
             target,
             portIndex: 0,
             portCount: 1,
-            label: sourceIsSummary ? undefined : edgeLabel(workflow, edge),
+            label: sourceIsSummary
+                ? undefined
+                : withExitHint(edgeLabel(workflow, edge), byId[edge.to]?.type === 'exit'),
             original: sourceIsSummary || target !== edge.to ? undefined : edge,
             originalKeys: [edgeKey(edge)],
         })
@@ -427,7 +432,7 @@ export function computeTrace(workflow: HogFlow, choices: Record<string, string>)
                 nodeId: current,
                 question:
                     action.type === 'wait_until_condition'
-                        ? `Did they ${configOf(action).condition?.name ?? 'match'} in time?`
+                        ? `${configOf(action).condition?.name ?? 'The event'} within ${humanDuration(configOf(action).max_wait_duration)}?`
                         : action.name,
                 options: outgoing.map((edge) => ({
                     key: choiceKey(edge),
