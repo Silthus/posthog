@@ -29,9 +29,22 @@ APPROVAL_POLICY = "approval_policy"
 class SetRolloutPercentageInputs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    flag_key: str = Field(min_length=1)
-    rollout_percentage: float = Field(ge=0, le=100)
-    expected_version: int | None = None
+    flag_key: str = Field(min_length=1, title="Flag key", description="Key of the feature flag to change.")
+    rollout_percentage: float = Field(
+        ge=0,
+        le=100,
+        title="Rollout percentage",
+        description="Target percentage from 0 to 100, for example 25. Fractions are allowed.",
+    )
+    expected_version: int | None = Field(
+        default=None,
+        title="Expected flag version",
+        description=(
+            "The flag version this step expects, usually {variables.<output>.version} from an earlier step. "
+            "A different version means someone else changed the flag, and the step answers changed_elsewhere. "
+            "Leave empty to change the current version."
+        ),
+    )
 
     @field_validator("expected_version", mode="before")
     @classmethod
@@ -125,6 +138,11 @@ def _flag_result(flag: FeatureFlag, rollout_percentage: float) -> dict[str, Any]
 SET_ROLLOUT_PERCENTAGE = NodeOperation(
     key="set_rollout_percentage",
     name="Set rollout percentage",
+    description=(
+        "Sets the rollout percentage of a flag with exactly one release condition. done: the flag is at the "
+        "target. changed_elsewhere: the flag is not at expected_version. needs_approval: a change request "
+        "is open, and the flag is unchanged. The result is {flag_id, flag_key, rollout_percentage, version}."
+    ),
     inputs=SetRolloutPercentageInputs,
     outcomes=(DONE, CHANGED_ELSEWHERE, NEEDS_APPROVAL),
     run=set_rollout_percentage,

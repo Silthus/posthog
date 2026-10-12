@@ -7,6 +7,7 @@ import { CyclotronJobInvocationHogFlow, MinimalLogEntry } from '~/cdp/types'
 import { ScopedServiceJwt } from '~/cdp/utils/scoped-service-jwt'
 import { buildWorkflowStepDispatchKey } from '~/cdp/utils/workflow-step-dispatch-key'
 
+import { HogExecutorExecuteAsyncOptions } from '../../hog-executor-async.service'
 import { HogFlowFunctionsService } from '../hogflow-functions.service'
 import { RunEndingStepError, actionIdForLogging, findActionById, findNextAction } from '../hogflow-utils'
 import { ActionHandler, ActionHandlerOptions, ActionHandlerResult } from './action.interface'
@@ -32,13 +33,30 @@ type OperationAnswer = Pick<z.infer<typeof OperationAnswerSchema>, 'outcome' | '
 
 const failed = (reason: string): OperationAnswer => ({ outcome: FAILED_OUTCOME, result: { reason } })
 
+const asyncFunctionsAreMocked = (options?: HogExecutorExecuteAsyncOptions): boolean =>
+    options?.asyncFunctionsNames?.length === 0
+
 export class NativeNodeHandler implements ActionHandler {
     constructor(
         private hogFlowFunctionsService: HogFlowFunctionsService,
         private config: NativeStepsConfig
     ) {}
 
-    async execute({ invocation, action, result }: ActionHandlerOptions<Action>): Promise<ActionHandlerResult> {
+    async execute({
+        invocation,
+        action,
+        result,
+        hogExecutorOptions,
+    }: ActionHandlerOptions<Action>): Promise<ActionHandlerResult> {
+        if (asyncFunctionsAreMocked(hogExecutorOptions)) {
+            result.logs.push({
+                level: 'info',
+                timestamp: DateTime.now(),
+                message: `${actionIdForLogging(action)} Skipped ${action.config.node}.${action.config.operation}: async functions are mocked, so the step changed nothing`,
+            })
+            return { nextAction: findNextAction(invocation.hogFlow, action.id) }
+        }
+
         const answer = await this.runOperation(invocation, action, result.logs)
         result.logs.push({
             level: 'info',

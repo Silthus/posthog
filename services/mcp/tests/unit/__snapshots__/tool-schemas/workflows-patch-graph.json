@@ -78,12 +78,16 @@
                                         "minimum": -9007199254740991,
                                         "type": "integer"
                                     },
+                                    "outcome": {
+                                        "description": "Required for type=branch from a native step, instead of index: the outcome this edge handles, from the operation's outcomes in the workflow nodes catalog. The primary outcome (done) uses the continue edge.",
+                                        "type": "string"
+                                    },
                                     "to": {
                                         "description": "Target action id.",
                                         "type": "string"
                                     },
                                     "type": {
-                                        "description": "'continue' = fall-through (sequential or no-match path); 'branch' = a condition/cohort branch (needs index).",
+                                        "description": "'continue' = fall-through (sequential or no-match path); 'branch' = a condition/cohort branch (needs index) or a native step outcome (needs outcome).",
                                         "enum": ["continue", "branch"],
                                         "type": "string"
                                     }
@@ -102,7 +106,7 @@
                     {
                         "properties": {
                             "edge": {
-                                "description": "The edge to remove (matched on from/to/type/index).",
+                                "description": "The edge to remove (matched on from/to/type/index/outcome).",
                                 "properties": {
                                     "from": {
                                         "description": "Source action id.",
@@ -114,12 +118,16 @@
                                         "minimum": -9007199254740991,
                                         "type": "integer"
                                     },
+                                    "outcome": {
+                                        "description": "Required for type=branch from a native step, instead of index: the outcome this edge handles, from the operation's outcomes in the workflow nodes catalog. The primary outcome (done) uses the continue edge.",
+                                        "type": "string"
+                                    },
                                     "to": {
                                         "description": "Target action id.",
                                         "type": "string"
                                     },
                                     "type": {
-                                        "description": "'continue' = fall-through (sequential or no-match path); 'branch' = a condition/cohort branch (needs index).",
+                                        "description": "'continue' = fall-through (sequential or no-match path); 'branch' = a condition/cohort branch (needs index) or a native step outcome (needs outcome).",
                                         "enum": ["continue", "branch"],
                                         "type": "string"
                                     }
@@ -151,12 +159,16 @@
                                             "minimum": -9007199254740991,
                                             "type": "integer"
                                         },
+                                        "outcome": {
+                                            "description": "Required for type=branch from a native step, instead of index: the outcome this edge handles, from the operation's outcomes in the workflow nodes catalog. The primary outcome (done) uses the continue edge.",
+                                            "type": "string"
+                                        },
                                         "to": {
                                             "description": "Target action id.",
                                             "type": "string"
                                         },
                                         "type": {
-                                            "description": "'continue' = fall-through (sequential or no-match path); 'branch' = a condition/cohort branch (needs index).",
+                                            "description": "'continue' = fall-through (sequential or no-match path); 'branch' = a condition/cohort branch (needs index) or a native step outcome (needs outcome).",
                                             "enum": ["continue", "branch"],
                                             "type": "string"
                                         }

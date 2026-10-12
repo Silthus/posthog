@@ -3,12 +3,15 @@ from typing import Optional
 
 from rest_framework import serializers
 
+from products.workflows.backend.facade.nodes import NATIVE_ACTION_TYPE, find_operation_spec
+
 # Action types that fan out via `branch` edges, and the config array each branch `index` points into.
 # A branch edge's `index` must fall in [0, branch_count). Types not listed support no branch edges.
 # Mirrors the frontend branch-edge model (getBranchLabel / StepConditionalBranch / StepRandomCohortBranch
 # in products/workflows/frontend/Workflows/hogflows): conditional_branch has one branch per condition,
 # random_cohort_branch one per cohort, wait_until_condition exactly one (the condition-met path, index 0),
-# each alongside a single `continue` fall-through/timeout edge.
+# each alongside a single `continue` fall-through/timeout edge. A native step branches by outcome
+# instead of by index: see _outcome_edge_errors.
 
 
 def _branch_slot_count(action: dict) -> int:
@@ -45,6 +48,7 @@ def validate_graph(actions: list[dict], edges: list[dict], abort_action: Optiona
 
     # Every edge endpoint references a real action.
     seen_branch_keys: set[tuple] = set()
+    seen_outcome_keys: set[tuple] = set()
     for edge in edges:
         src, dst, edge_type = edge.get("from"), edge.get("to"), edge.get("type")
         if src not in actions_by_id:
@@ -52,7 +56,12 @@ def validate_graph(actions: list[dict], edges: list[dict], abort_action: Optiona
         if dst not in actions_by_id:
             errors.append(f"Edge references unknown target action '{dst}'.")
 
-        if edge_type == "branch":
+        source = actions_by_id.get(src)
+        if edge.get("outcome") is not None or (
+            source and source.get("type") == NATIVE_ACTION_TYPE and edge_type == "branch"
+        ):
+            errors.extend(_outcome_edge_errors(edge, source, seen_outcome_keys))
+        elif edge_type == "branch":
             index = edge.get("index")
             if index is None:
                 errors.append(f"Branch edge from '{src}' is missing 'index'.")
@@ -90,6 +99,30 @@ def validate_graph(actions: list[dict], edges: list[dict], abort_action: Optiona
         raise serializers.ValidationError({"graph": errors})
 
     return _reachability_warnings(action_ids, actions_by_id, edges, trigger_ids)
+
+
+def _outcome_edge_errors(edge: dict, source: Optional[dict], seen_outcome_keys: set[tuple]) -> list[str]:
+    src, outcome = edge.get("from"), edge.get("outcome")
+    if source is None:
+        return []
+    if source.get("type") != NATIVE_ACTION_TYPE:
+        return [f"Edge from '{src}' sets 'outcome', but only native steps have outcomes."]
+    if edge.get("type") != "branch":
+        return [f"Outcome edge from '{src}' must be a 'branch' edge."]
+    if outcome is None:
+        return [f"Branch edge from native step '{src}' is missing 'outcome'."]
+    config = source.get("config") or {}
+    operation = find_operation_spec(config.get("node"), config.get("operation"))
+    if operation is not None and outcome == operation.primary_outcome:
+        return [f"Outcome '{outcome}' of '{src}' follows the continue edge, so it needs no outcome edge."]
+    if operation is None or outcome not in operation.edge_outcomes:
+        valid = ", ".join(operation.edge_outcomes) if operation else "none"
+        return [f"Native step '{src}' has no outcome '{outcome}'. Its outcomes for edges: {valid}."]
+    key = (src, outcome)
+    if key in seen_outcome_keys:
+        return [f"Duplicate outcome edge from '{src}' for outcome '{outcome}'."]
+    seen_outcome_keys.add(key)
+    return []
 
 
 def _reachability_warnings(

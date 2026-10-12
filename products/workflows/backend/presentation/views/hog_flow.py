@@ -189,6 +189,7 @@ from products.workflows.backend.facade.enums import (
 )
 from products.workflows.backend.facade.message_assets import fetch_message_asset_html, fetch_message_assets
 from products.workflows.backend.facade.models import HogFlow
+from products.workflows.backend.facade.nodes import NATIVE_ACTION_TYPE
 from products.workflows.backend.facade.proposals import (
     HOG_FLOW_VERSION_APP_SOURCE,
     PROPOSAL_MERGE_BY_ID_FIELDS,
@@ -291,6 +292,7 @@ from products.workflows.backend.presentation.views.message_assets import (
     MessageAssetSerializer,
     MessageAssetsRequestSerializer,
 )
+from products.workflows.backend.presentation.views.native_steps import validate_native_step
 
 logger = structlog.get_logger(__name__)
 
@@ -1009,7 +1011,7 @@ class HogFlowEdgeSerializer(serializers.Serializer):
         choices=HogFlowEdgeType.choices,
         help_text=(
             "continue: fall-through (sequential or the no-match path of conditional_branch). "
-            "branch: requires 'index' matching config.conditions[index]."
+            "branch: requires 'index' matching config.conditions[index], or 'outcome' on a native step."
         ),
     )
     index = serializers.IntegerField(
@@ -1019,6 +1021,15 @@ class HogFlowEdgeSerializer(serializers.Serializer):
             "random_cohort_branch: index into config.cohorts[index]. "
             "wait_until_condition: use index:0 — it advances via the index:0 branch edge when it "
             "resolves (a condition match or an events entry firing)."
+        ),
+    )
+    outcome = serializers.CharField(
+        required=False,
+        max_length=100,
+        help_text=(
+            "Only on a type='branch' edge from a native step, instead of 'index'. The run follows this edge "
+            "when the step ends with this outcome. The primary outcome (done) follows the step's continue "
+            "edge. An outcome with no edge ends the run with an error, except failed, which follows on_error."
         ),
     )
 
@@ -1251,6 +1262,9 @@ class HogFlowActionSerializer(serializers.Serializer):
             "must target at least one event or action. On resolution (a condition match or any events "
             "entry firing) it advances via the 'branch' edge with index:0; the max_wait_duration timeout "
             "falls through the 'continue' edge. "
+            "native: {node, operation, inputs: {<key>: {value: <str>}}}, an operation from the workflow nodes "
+            "catalog. Every input is a hog template string ('25', '{variables.flag.version}'). Wire each outcome "
+            "other than done with a 'branch' edge that sets 'outcome'. "
             "exit: {reason}."
         ),
     )
@@ -1620,7 +1634,7 @@ class HogFlowActionSerializer(serializers.Serializer):
                     _apply_email_template_content(config, get_team(), strict, self.context)
             template = get_function_template_schema(template_id)
             gating_flag = FLAG_GATED_TEMPLATE_IDS.get(template_id)
-            already_stored = data.get("id") in (self.context.get("stored_gated_template_action_ids") or set())
+            already_stored = data.get("id") in (self.context.get("stored_gated_action_ids") or set())
             if template is not None and gating_flag is not None and not already_stored:
                 # Outside a request (internal re-saves, direct construction) there is no team to
                 # evaluate the flag against, and the flow was already allowed to hold this step.
@@ -1813,6 +1827,9 @@ class HogFlowActionSerializer(serializers.Serializer):
 
         if data.get("type") == "delay":
             self._validate_delay(data, strict)
+
+        if data.get("type") == NATIVE_ACTION_TYPE:
+            validate_native_step(data, strict=strict, context=self.context)
 
         return data
 
@@ -2712,9 +2729,10 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
         child=HogFlowEdgeSerializer(),
         required=False,
         help_text=(
-            "Graph edges: [{from, to, type: 'continue'|'branch', index?}]. 'continue' = fall-through "
+            "Graph edges: [{from, to, type: 'continue'|'branch', index?, outcome?}]. 'continue' = fall-through "
             "(sequential, or no-match path of conditional_branch). 'branch' requires 'index': matches "
-            "config.conditions[index] on conditional_branch / wait_until_condition. Every non-exit action "
+            "config.conditions[index] on conditional_branch / wait_until_condition, or 'outcome' on a native "
+            "step. Every non-exit action "
             "needs a reachable next action ('No next action found' otherwise)."
         ),
     )
@@ -2841,19 +2859,22 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             if isinstance(action, dict) and action.get("id") and action.get("type") == "conditional_branch"
         }
 
-        # Action ids already stored with a flag-gated template, so the gate only polices new
+        # Action ids already stored with a flag-gated template or as a native step, so the gate only polices new
         # adoption: a flow that was allowed to hold the step keeps validating after a flag
         # dial-down or eval blip (the gate fails closed), instead of becoming un-editable and
         # failing refresh_hog_flows. Only an active flow's steps count - active means the step
         # passed the gate at activation, whereas a draft can hold the step without ever passing
         # it (lenient web saves skip strict validation), so grandfathering a draft would let an
         # unflagged team activate the step.
-        self.context["stored_gated_template_action_ids"] = {
+        self.context["stored_gated_action_ids"] = {
             action["id"]
             for action in ((instance.actions if instance and instance.status == HogFlowState.ACTIVE else None) or [])
             if isinstance(action, dict)
             and action.get("id")
-            and (action.get("config") or {}).get("template_id") in FLAG_GATED_TEMPLATE_IDS
+            and (
+                action.get("type") == NATIVE_ACTION_TYPE
+                or (action.get("config") or {}).get("template_id") in FLAG_GATED_TEMPLATE_IDS
+            )
         }
 
         status = data.get("status")

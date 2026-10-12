@@ -18,6 +18,7 @@ def _edges_match(a: dict, b: dict) -> bool:
         and a.get("to") == b.get("to")
         and a.get("type") == b.get("type")
         and a.get("index") == b.get("index")
+        and a.get("outcome") == b.get("outcome")
     )
 
 
