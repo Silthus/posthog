@@ -24,7 +24,9 @@ export function HogFlowRunAllStepsButton({
 }: HogFlowRunAllStepsButtonProps): JSX.Element | null {
     const { logicProps } = useValues(workflowLogic)
     const { featureFlags } = useValues(featureFlagLogic)
-    const { runAllSteps } = useActions(hogFlowEditorTestLogic(logicProps))
+    const { requestRunAllSteps } = useActions(hogFlowEditorTestLogic(logicProps))
+
+    const { testRunning } = useValues(hogFlowEditorTestLogic(logicProps))
 
     if (featureFlags[FEATURE_FLAGS.WORKFLOWS_TESTING_V2] !== true) {
         return null
@@ -35,15 +37,16 @@ export function HogFlowRunAllStepsButton({
             type="secondary"
             icon={<IconPlay />}
             data-attr="run-all-workflow-test-steps"
-            onClick={() => runAllSteps(testInvocation, source)}
+            onClick={() => requestRunAllSteps(testInvocation, source)}
+            loading={testRunning}
             disabledReason={
                 !hasTestData
                     ? 'Load test data to run the steps'
-                    : isTestInvocationSubmitting
+                    : isTestInvocationSubmitting || testRunning
                       ? 'Wait for the current test to finish'
                       : undefined
             }
-            tooltip="Run every step from the trigger to the end. Emails, texts and push notifications are not sent in a full run. Test a message step on its own to send it."
+            tooltip="Run every step from the trigger to the end. Built-in email, SMS and push steps stay mocked. Other HTTP steps follow the request setting."
             size="small"
         >
             Run all steps

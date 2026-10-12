@@ -18,7 +18,7 @@ import type { DeepPartial, DeepPartialMap, FieldName, ValidationErrorType } from
 import { loaders } from 'kea-loaders'
 import { subscriptions } from 'kea-subscriptions'
 
-import { lemonToast } from '@posthog/lemon-ui'
+import { LemonDialog, lemonToast } from '@posthog/lemon-ui'
 
 import api from 'lib/api'
 import { dayjs } from 'lib/dayjs'
@@ -139,9 +139,8 @@ const nextTestRunStep = (workflow: HogFlow, actionId: string, result: HogflowTes
     }
 }
 
-// A full run reaches every message step with the sample person's contact details, so it never
-// delivers one. Each step's own test pane can still send a real message.
-const MESSAGE_ACTION_TYPES: HogFlowAction['type'][] = ['function_email', 'function_sms', 'function_push']
+// Native message steps stay mocked because sample contacts may belong to the workflow's audience.
+const NATIVE_MESSAGE_ACTION_TYPES: HogFlowAction['type'][] = ['function_email', 'function_sms', 'function_push']
 
 const failedRequestResult = (error: any): HogflowTestResult => ({
     status: 'error',
@@ -370,6 +369,13 @@ export interface hogFlowEditorTestLogicActions {
     }
     reloadSampleGlobalsOrDefer: () => {
         value: true
+    }
+    requestRunAllSteps: (
+        inputs: HogflowTestInvocation,
+        source?: TestRunSource
+    ) => {
+        inputs: HogflowTestInvocation
+        source: TestRunSource
     }
     resetAccumulatedVariables: () => {
         value: true
@@ -916,6 +922,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
         setLastSearchedEventName: (eventName: string | null) => ({ eventName }),
         resetAccumulatedVariables: true,
         runRequestedTestWhenReady: true,
+        requestRunAllSteps: (inputs: HogflowTestInvocation, source: TestRunSource = 'workflow') => ({ inputs, source }),
         runAllSteps: (inputs: HogflowTestInvocation, source: TestRunSource = 'workflow') => ({ inputs, source }),
         runTestRunStep: (actionId: string) => ({ actionId }),
         stopTestRun: true,
@@ -1402,6 +1409,26 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
             }
         },
         openTestPane: () => actions.runRequestedTestWhenReady(),
+        requestRunAllSteps: ({ inputs, source }) => {
+            if (!values.testingV2Enabled || values.testRunning || values.isTestInvocationSubmitting) {
+                return
+            }
+            if (source === 'workflow' && !inputs.mock_async_functions) {
+                LemonDialog.open({
+                    title: 'Run workflow with real HTTP requests?',
+                    description:
+                        'Every HTTP step will run for real, including third-party email or SMS destinations. Built-in email, SMS and push steps stay mocked.',
+                    primaryButton: {
+                        children: 'Run with real requests',
+                        type: 'primary',
+                        onClick: () => actions.runAllSteps(inputs, source),
+                    },
+                    secondaryButton: { children: 'Cancel' },
+                })
+                return
+            }
+            actions.runAllSteps(inputs, source)
+        },
         runAllSteps: async ({ inputs, source }, breakpoint) => {
             if (!values.testingV2Enabled) {
                 actions.stopTestRun()
@@ -1431,7 +1458,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
                         mockAsyncFunctions:
                             source === 'email' ||
                             mockAsyncFunctions ||
-                            (!!action && MESSAGE_ACTION_TYPES.includes(action.type)),
+                            (!!action && NATIVE_MESSAGE_ACTION_TYPES.includes(action.type)),
                         actionId,
                     })
                 } catch (error: any) {

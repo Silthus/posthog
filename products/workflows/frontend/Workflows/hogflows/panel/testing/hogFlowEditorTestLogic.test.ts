@@ -737,13 +737,16 @@ describe('hogFlowEditorTestLogic', () => {
             expect(hogFlowEditorLogic({ id: 'test-workflow' }).values.selectedNodeId).toEqual('exit_node')
         })
 
-        it('fails a function parked for retry without running downstream steps', async () => {
+        it.each([
+            ['retry', 'HTTP 503, retry scheduled'],
+            ['the five-async-call budget', 'Exceeded maximum number of async steps: 5'],
+        ])('fails a function parked for %s without running downstream steps', async (_, message) => {
             await runToTheEnd({
                 ...COMPLETE_RUN,
                 function_node: {
                     status: 'success',
                     nextActionId: 'function_node',
-                    logs: [{ level: 'warn', message: 'HTTP 503, retry scheduled', timestamp: '2026-01-01T00:00:00Z' }],
+                    logs: [{ level: 'warn', message, timestamp: '2026-01-01T00:00:00Z' }],
                 },
             })
 
@@ -751,7 +754,7 @@ describe('hogFlowEditorTestLogic', () => {
             expect(logic.values.testRunSteps?.[1]).toMatchObject({
                 actionId: 'function_node',
                 waitSkipped: false,
-                result: { status: 'error', nextActionId: null, logs: [{ message: 'HTTP 503, retry scheduled' }] },
+                result: { status: 'error', nextActionId: null, logs: [{ message }] },
             })
             expect(logic.values.testResult?.status).toBe('error')
         })
