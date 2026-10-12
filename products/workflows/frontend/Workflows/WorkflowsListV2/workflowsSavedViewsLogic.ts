@@ -514,9 +514,22 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                 throw error
             }
         }
+        const rememberFiltersAddedWhileSaving = (previous: FacetFilter[], next: FacetFilter[]): void => {
+            const previousKeys = new Set(previous.map(facetFilterKey))
+            for (const filter of next) {
+                if (!previousKeys.has(facetFilterKey(filter))) {
+                    cache.filterKeysAddedWhileSaving?.add(facetFilterKey(filter))
+                }
+            }
+        }
         const keepAdditionsMadeWhileSaving = (saved: WorkflowViewApi): void => {
+            const addedWhileSaving: Set<string> = cache.filterKeysAddedWhileSaving ?? new Set()
             actions.setAddedFilters(
-                addedFiltersAfterEdit(workflowViewValue(saved.state).filters, [], values.value.filters)
+                addedFiltersAfterEdit(
+                    workflowViewValue(saved.state).filters,
+                    values.value.filters.filter((filter) => addedWhileSaving.has(facetFilterKey(filter))),
+                    values.value.filters
+                )
             )
         }
         const forgetDeletedView = (id: string): void => {
@@ -550,6 +563,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                 return null
             }
             actions.setPendingAction(action)
+            cache.filterKeysAddedWhileSaving = new Set<string>()
             const teamId = values.currentTeamId
             const generation = cache.contextGeneration ?? 0
             const stillCurrent = (): boolean =>
@@ -586,13 +600,13 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
             setValue: ({ value, fromUrl }, _, __, previousState) => {
                 if (!fromUrl) {
                     if (values.available && !cache.applyingView && !cache.syncingUrl) {
+                        const previousFilters = workflowsListV2Logic.selectors.value(previousState).filters
                         actions.setAddedFilters(
-                            addedFiltersAfterEdit(
-                                workflowsListV2Logic.selectors.value(previousState).filters,
-                                values.addedFilters,
-                                value.filters
-                            )
+                            addedFiltersAfterEdit(previousFilters, values.addedFilters, value.filters)
                         )
+                        if (values.saving) {
+                            rememberFiltersAddedWhileSaving(previousFilters, value.filters)
+                        }
                     }
                     writeUrl()
                 }

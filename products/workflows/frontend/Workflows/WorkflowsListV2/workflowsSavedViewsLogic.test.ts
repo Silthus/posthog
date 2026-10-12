@@ -154,18 +154,39 @@ describe('workflowsSavedViewsLogic', () => {
         expect(logic.values.addedFilters).toEqual([status('draft')])
     })
 
-    it('keeps a filter added while an update is saving as an addition', async () => {
+    const addAnotherPill = (): void =>
+        workflowsListV2Logic.actions.setValue({ filters: [status('active'), eventTrigger, adaOwns], text: '' })
+    const removeAndReaddSubmittedPill = (): void => {
+        workflowsListV2Logic.actions.setValue({ filters: [status('active')], text: '' })
+        workflowsListV2Logic.actions.setValue({ filters: [status('active'), eventTrigger], text: '' })
+    }
+
+    it.each([
+        ['an update', 'a new pill', addAnotherPill, [adaOwns], [status('active'), eventTrigger]],
+        ['an update', 'a re-added submitted pill', removeAndReaddSubmittedPill, [eventTrigger], [status('active')]],
+        ['a new view', 'a re-added submitted pill', removeAndReaddSubmittedPill, [eventTrigger], [status('active')]],
+    ])('keeps %s saving from taking over %s', async (save, _, edit, added, fromView) => {
         let release: () => void = () => {}
         const pending = new Promise<void>((resolve) => {
             release = resolve
         })
+        const savedWith = async (request: Request, id: string): Promise<WorkflowViewApi> => {
+            const body = (await request.json()) as { state: WorkflowViewApi['state'] }
+            await pending
+            return { ...savedView, id, state: body.state, version: 2 }
+        }
         useMocks({
             patch: {
-                '/api/projects/:team_id/workflow_views/:id/': async ({ request }) => {
-                    const body = (await request.json()) as { state: WorkflowViewApi['state'] }
-                    await pending
-                    return [200, { ...savedView, state: body.state, version: 2 }]
-                },
+                '/api/projects/:team_id/workflow_views/:id/': async ({ request }) => [
+                    200,
+                    await savedWith(request, VIEW_ID),
+                ],
+            },
+            post: {
+                '/api/projects/:team_id/workflow_views/': async ({ request }) => [
+                    201,
+                    await savedWith(request, '00000000-0000-4000-8000-000000000003'),
+                ],
             },
         })
         router.actions.push(urls.workflows(), { view: VIEW_ID })
@@ -173,14 +194,15 @@ describe('workflowsSavedViewsLogic', () => {
         logic.mount()
         await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
         workflowsListV2Logic.actions.setValue({ filters: [status('active'), eventTrigger], text: '' })
-        const saving = logic.asyncActions.updateActiveView()
-        workflowsListV2Logic.actions.setValue({ filters: [status('active'), eventTrigger, adaOwns], text: '' })
+        const saving =
+            save === 'an update' ? logic.asyncActions.updateActiveView() : logic.asyncActions.saveViewAs('Mine')
+        edit()
 
         release()
         await saving
 
-        expect(logic.values.addedFilters).toEqual([adaOwns])
-        expect(logic.values.viewFilters).toEqual([status('active'), eventTrigger])
+        expect(logic.values.addedFilters).toEqual(added)
+        expect(logic.values.viewFilters).toEqual(fromView)
     })
 
     it('keeps additions when the user returns to a view whose update conflicted', async () => {
