@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 
 import { LemonTag } from '@posthog/lemon-ui'
 
+import { compareOutgoingEdges } from '../hogFlowEdges'
 import { hogFlowEditorLogic } from '../hogFlowEditorLogic'
 import { HogFlowEdge } from '../types'
 import { MINIMUM_EDGE_SPACING } from './constants'
@@ -47,16 +48,9 @@ export function getSmartStepPath({
 
         if (conflictingEdges.length > 0) {
             // Sort edges by source handle position to ensure consistent ordering
-            const sortedEdges = conflictingEdges.sort((a, b) => {
-                const aEdgeData = a.data!.edge as HogFlowEdge
-                const bEdgeData = b.data!.edge as HogFlowEdge
-
-                if (aEdgeData.type === 'branch' && bEdgeData.type === 'branch') {
-                    return (aEdgeData.index || 0) - (bEdgeData.index || 0)
-                }
-
-                return aEdgeData.type === 'continue' ? 1 : -1
-            })
+            const sortedEdges = conflictingEdges.sort((a, b) =>
+                compareOutgoingEdges(a.data!.edge as HogFlowEdge, b.data!.edge as HogFlowEdge)
+            )
             const edgeIndex = sortedEdges.findIndex((edge) => edge.id === currentEdgeId)
             const totalEdges = sortedEdges.length
 

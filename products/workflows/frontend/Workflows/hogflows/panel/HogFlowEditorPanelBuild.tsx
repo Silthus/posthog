@@ -93,6 +93,14 @@ const RUN_SCOUT_ACTION_NODE: CreateActionType = {
     output_variable: { key: 'scout_run', result_path: null, label: 'Scout run' },
 }
 
+const FEATURE_FLAG_ACTION_NODE: CreateActionType = {
+    type: 'native',
+    name: 'Feature flag',
+    description: "Change a feature flag's rollout percentage.",
+    config: { node: 'feature_flag', operation: 'set_rollout_percentage', inputs: {} },
+    output_variable: { key: 'flag', result_path: null, label: 'Feature flag' },
+}
+
 export const DELAY_NODES_TO_SHOW: CreateActionType[] = [
     {
         type: 'delay',
@@ -444,6 +452,18 @@ export function HogFlowEditorPanelBuild({
                         onActionSelect={onActionSelect}
                     />
                 ))}
+                {featureFlags[FEATURE_FLAGS.WORKFLOWS_NATIVE_STEPS] && (
+                    <HogFlowEditorToolbarNode
+                        key="feature-flag"
+                        action={FEATURE_FLAG_ACTION_NODE}
+                        onActionSelect={onActionSelect}
+                    >
+                        <span className="inline-flex items-center gap-1.5">
+                            {FEATURE_FLAG_ACTION_NODE.name}
+                            <LemonTag type="completion">Beta</LemonTag>
+                        </span>
+                    </HogFlowEditorToolbarNode>
+                )}
             </HogFlowEditorToolbarSection>
 
             {registeredCategories.map((cat) => (

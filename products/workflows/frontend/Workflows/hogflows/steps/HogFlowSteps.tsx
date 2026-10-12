@@ -16,6 +16,7 @@ import {
     IconPeople,
     IconPercentage,
     IconTarget,
+    IconToggle,
     IconWebhooks,
 } from '@posthog/icons'
 
@@ -32,6 +33,7 @@ import { StepDelayConfiguration } from './StepDelay'
 import { getDelayDescription } from './stepDelayLogic'
 import { StepExitConfiguration } from './StepExit'
 import { StepFunctionConfiguration } from './StepFunction'
+import { StepNativeConfiguration } from './StepNative'
 import { StepRandomCohortBranchConfiguration } from './StepRandomCohortBranch'
 import { StepTriggerConfiguration } from './StepTrigger'
 import { StepWaitUntilConditionConfiguration } from './StepWaitUntilCondition'
@@ -119,6 +121,15 @@ function getFunctionPreviews(
     return [{ label: destination ? `${templateName} · ${destination}` : templateName }]
 }
 
+function getNativePreviews(action: Extract<HogFlowAction, { type: 'native' }>): HogFlowStepPreview[] {
+    const flagKey = action.config.inputs.flag_key?.value
+    const rolloutPercentage = action.config.inputs.rollout_percentage?.value
+    if (!flagKey) {
+        return [{ label: 'Feature flag' }]
+    }
+    return [{ label: rolloutPercentage ? `${flagKey} to ${rolloutPercentage}%` : String(flagKey) }]
+}
+
 const HogFlowStepConfigs: Partial<{
     [K in HogFlowAction['type']]: HogFlowStepBuilder<K>
 }> = {
@@ -147,6 +158,14 @@ const HogFlowStepConfigs: Partial<{
         renderConfiguration: (node) => <StepExitConfiguration key={node.id} node={node} />,
     },
 
+    native: {
+        type: 'native',
+        icon: () => <IconToggle />,
+        // --color-product-feature-flags-light as hex, because step colors take a hex alpha suffix.
+        color: () => '#30ABC6',
+        getPreviews: getNativePreviews,
+        renderConfiguration: (node) => <StepNativeConfiguration key={node.id} action={node.data} />,
+    },
     random_cohort_branch: {
         type: 'random_cohort_branch',
         icon: () => <IconPercentage />,

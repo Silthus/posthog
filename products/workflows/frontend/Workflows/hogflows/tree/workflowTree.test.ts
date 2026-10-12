@@ -443,6 +443,27 @@ describe('buildWorkflowTree', () => {
         expect(getWorkflowBranchLabel(cohortAction, edge('split', 'next', edgeType, 0))).toBe(label)
     })
 
+    it('shows one labelled path per wired outcome of a native step, primary outcome last', () => {
+        const tree = buildWorkflowTree(
+            workflow(
+                [action('trigger', 'trigger'), action('flag', 'native'), action('notify'), action('exit', 'exit')],
+                [
+                    edge('trigger', 'flag'),
+                    edge('flag', 'exit'),
+                    { from: 'flag', to: 'notify', type: 'branch', outcome: 'needs_approval' },
+                    { from: 'flag', to: 'exit', type: 'branch', outcome: 'changed_elsewhere' },
+                    edge('notify', 'exit'),
+                ]
+            )
+        )
+
+        expect(tree.nodes[1].branches.map((branch) => [branch.label, branch.edge.to])).toEqual([
+            ['Changed elsewhere', 'exit'],
+            ['Needs approval', 'notify'],
+            ['Done', 'exit'],
+        ])
+    })
+
     it('moves a branching action with all of its paths', () => {
         const workflowWithJoin = workflow(
             [

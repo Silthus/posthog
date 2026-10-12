@@ -14,6 +14,8 @@ const HogFlowEdgeSchema = z.object({
     to: z.string(),
     type: z.enum(['continue', 'branch']),
     index: z.number().optional(),
+    // A native step's primary outcome follows its continue edge, never an outcome edge.
+    outcome: z.string().optional(),
 })
 
 export const HogFlowSchema = z.object({
