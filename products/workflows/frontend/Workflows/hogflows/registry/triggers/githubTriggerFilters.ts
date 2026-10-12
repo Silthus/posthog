@@ -104,7 +104,11 @@ function values(entry: Record<string, any> | undefined): string[] {
 }
 
 function isOnlyFailuresFilter(property: Record<string, any> | undefined): boolean {
-    if (property?.key !== 'conclusion' || property.operator !== PropertyOperator.Exact) {
+    if (
+        property?.key !== 'conclusion' ||
+        property.operator !== PropertyOperator.Exact ||
+        property.type !== PropertyFilterType.Event
+    ) {
         return false
     }
     const conclusions = values(property)

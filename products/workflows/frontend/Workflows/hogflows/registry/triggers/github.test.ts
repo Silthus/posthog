@@ -83,6 +83,16 @@ describe('github event trigger', () => {
                 eventTypes: ['check_suite'],
                 custom: { key: 'conclusion', value: ['success'], operator: PropertyOperator.Exact, type: 'event' },
             },
+            {
+                name: 'failing conclusions on a person property',
+                eventTypes: ['check_suite'],
+                custom: {
+                    key: 'conclusion',
+                    value: ['failure', 'timed_out', 'action_required'],
+                    operator: PropertyOperator.Exact,
+                    type: 'person',
+                },
+            },
         ])('keeps $name, which the native controls do not own', ({ eventTypes, custom }) => {
             const encoded = encodeGithubFilters({
                 repository: 'PostHog/posthog',
@@ -149,7 +159,12 @@ describe('github event trigger', () => {
                 properties: [
                     { key: 'repository', value: ['PostHog/posthog'] },
                     { key: 'event_type', value: ['check_suite'] },
-                    { key: 'conclusion', value: ['failure', 'timed_out', 'action_required'], operator: 'exact' },
+                    {
+                        key: 'conclusion',
+                        value: ['failure', 'timed_out', 'action_required'],
+                        operator: 'exact',
+                        type: 'event',
+                    },
                 ],
                 valid: true,
             },
@@ -159,7 +174,12 @@ describe('github event trigger', () => {
                 properties: [
                     { key: 'repository', value: ['PostHog/posthog'] },
                     { key: 'event_type', value: ['issues', 'check_suite'] },
-                    { key: 'conclusion', value: ['failure', 'timed_out', 'action_required'], operator: 'exact' },
+                    {
+                        key: 'conclusion',
+                        value: ['failure', 'timed_out', 'action_required'],
+                        operator: 'exact',
+                        type: 'event',
+                    },
                 ],
                 valid: false,
             },
