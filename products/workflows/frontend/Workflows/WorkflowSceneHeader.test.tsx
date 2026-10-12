@@ -167,8 +167,7 @@ describe('WorkflowSceneHeader', () => {
         useMocks({
             post: {
                 '/api/environments/:team_id/hog_flows/:id/invocations': async ({ request }) => {
-                    const body = (await request.json()) as { current_action_id: string; testing_v2: boolean }
-                    expect(body.testing_v2).toBe(true)
+                    const body = (await request.json()) as { current_action_id: string }
                     testedSteps.push(body.current_action_id)
                     return [200, { status: 'success', nextActionId: 'exit_node', logs: [] }]
                 },

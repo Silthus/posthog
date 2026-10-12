@@ -1211,7 +1211,6 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
                             },
                         },
                         mock_async_functions: testInvocation.mock_async_functions,
-                        testing_v2: values.testingV2Enabled,
                         current_action_id: values.selectedNodeId ?? undefined,
                     })
 

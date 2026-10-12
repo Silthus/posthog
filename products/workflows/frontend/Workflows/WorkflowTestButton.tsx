@@ -3,19 +3,20 @@ import { useActions, useValues } from 'kea'
 import { IconTestTube } from '@posthog/icons'
 import { LemonButton } from '@posthog/lemon-ui'
 
+import { FEATURE_FLAGS } from 'lib/constants'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { getAccessControlDisabledReason } from 'lib/utils/accessControlUtils'
 
 import { AccessControlLevel, AccessControlResourceType } from '~/types'
 
-import { testEmailRecipientLogic } from './hogflows/panel/testing/testEmailRecipientLogic'
 import { workflowLogic } from './workflowLogic'
 
 export function WorkflowTestButton(): JSX.Element | null {
     const { workflow, hasUnsavedChanges, workflowUserAccessLevel, logicProps } = useValues(workflowLogic)
-    const { testingV2Enabled } = useValues(testEmailRecipientLogic)
+    const { featureFlags } = useValues(featureFlagLogic)
     const { openTestPane } = useActions(workflowLogic)
 
-    if (!testingV2Enabled) {
+    if (featureFlags[FEATURE_FLAGS.WORKFLOWS_TESTING_V2] !== true) {
         return null
     }
 
