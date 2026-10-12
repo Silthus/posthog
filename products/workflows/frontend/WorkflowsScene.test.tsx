@@ -11,9 +11,11 @@ import { urls } from 'scenes/urls'
 
 import { useMocks } from '~/mocks/jest'
 import { initKeaTests } from '~/test/init'
+import { AccessControlLevel } from '~/types'
 
 import type { HogFlowListSummaryApi } from 'products/workflows/frontend/generated/api.schemas'
 
+import { workflowTemplatesLogic } from './Workflows/templates/workflowTemplatesLogic'
 import {
     FIXTURE_METRICS,
     FIXTURE_WORKFLOWS,
@@ -21,6 +23,7 @@ import {
     paginated,
 } from './Workflows/WorkflowsListV2/workflowsListV2Fixtures'
 import { workflowsListV2Logic } from './Workflows/WorkflowsListV2/workflowsListV2Logic'
+import { workflowsLogic } from './Workflows/workflowsLogic'
 import { WorkflowsScene } from './WorkflowsScene'
 
 const shownRowNames = (): string[] =>
@@ -168,6 +171,55 @@ describe('WorkflowsScene', () => {
             (th) => th.textContent
         )
         expect(headers).toEqual(expectedHeaders)
+    })
+
+    it.each([
+        ['the type facet', true, { q: 'type:messaging' }],
+        ['the old list type tab', false, { type: 'messaging' }],
+    ])('opens the template chooser on %s', async (_, listV2, searchParams) => {
+        window.POSTHOG_APP_CONTEXT = {
+            ...window.POSTHOG_APP_CONTEXT!,
+            resource_access_control: {
+                ...window.POSTHOG_APP_CONTEXT!.resource_access_control!,
+                hog_flow: AccessControlLevel.Editor,
+            },
+        }
+        featureFlagLogic.actions.setFeatureFlags([], { [FEATURE_FLAGS.WORKFLOWS_LIST_V2]: listV2 })
+        router.actions.push(urls.workflows(), searchParams)
+        const user = userEvent.setup()
+        render(
+            <Provider>
+                <WorkflowsScene />
+            </Provider>
+        )
+
+        await waitFor(() => expect(document.querySelector('[data-attr="new-workflow"]')).not.toBeNull())
+        await user.click(document.querySelector('[data-attr="new-workflow"]')!)
+        expect(workflowTemplatesLogic.values.typeFilter).toEqual('messaging')
+    })
+
+    it('turns an old filter link into pills without loading the old list', async () => {
+        const oldListRequests: string[] = []
+        useMocks({
+            get: {
+                '/api/projects/:team_id/hog_flows/': ({ request }) => {
+                    oldListRequests.push(request.url)
+                    return [200, paginated([])]
+                },
+            },
+        })
+        featureFlagLogic.actions.setFeatureFlags([], { [FEATURE_FLAGS.WORKFLOWS_LIST_V2]: true })
+        router.actions.push(urls.workflows(), { type: 'messaging' })
+        render(
+            <Provider>
+                <WorkflowsScene />
+            </Provider>
+        )
+
+        await waitFor(() => expect(shownRowNames()).toEqual(['Welcome series', 'Renewal reminder', 'Spring promo']))
+        expect(router.values.searchParams).toEqual({ q: 'type:messaging' })
+        expect(workflowsLogic.findMounted()).toBeNull()
+        expect(oldListRequests).toEqual([])
     })
 
     it('keeps the old list when the flag is off and never asks for the v2 list', async () => {

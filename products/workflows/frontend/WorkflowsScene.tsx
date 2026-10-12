@@ -182,7 +182,6 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
     const listV2 = !!featureFlags[FEATURE_FLAGS.WORKFLOWS_LIST_V2]
     const { startNewWorkflow } = useActions(newWorkflowLogic)
     const { setTypeFilter } = useActions(workflowTemplatesLogic)
-    const { filters } = useValues(workflowsLogic)
 
     const workflowsTab = {
         label: 'Workflows',
@@ -228,7 +227,9 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
                                             currentTab === 'workflows'
                                                 ? listV2
                                                     ? workflowsListV2Logic.values.templateTypeFilter
-                                                    : templateTypeForListType(filters.type)
+                                                    : templateTypeForListType(
+                                                          workflowsLogic.findMounted()?.values.filters.type ?? 'all'
+                                                      )
                                                 : 'all'
                                         )
                                         startNewWorkflow()
