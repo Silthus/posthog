@@ -3,11 +3,14 @@ from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING, Any, Optional, cast
 from uuid import UUID
 
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Prefetch, Q, QuerySet, prefetch_related_objects
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import pagination, response, serializers, status, viewsets
+from rest_framework.request import Request
 from rest_framework.viewsets import GenericViewSet
 
 from posthog.api.routing import TeamAndOrgViewSetMixin
@@ -16,6 +19,8 @@ from posthog.helpers.impersonation import is_impersonated
 from posthog.models import Tag, TaggedItem
 from posthog.models.activity_logging.activity_log import Change, Detail, LogActivityEntry, bulk_log_activity
 from posthog.models.tag import tagify
+from posthog.models.tagged_item_registry import TAGGABLE_MODELS, content_type_for_entry
+from posthog.permissions import OrganizationAdminWritePermissions
 
 from products.access_control.backend.facade.user_access_control import access_level_satisfied_for_resource
 
@@ -448,10 +453,73 @@ class TaggedItemSerializer(serializers.Serializer):
         return obj.tag.name
 
 
+class RenameTagRequestSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255, help_text="Existing team tag name to rename.")
+    new_name = serializers.CharField(max_length=255, help_text="New tag name. Existing names merge their references.")
+
+    def validate_name(self, value: str) -> str:
+        return tagify(value)
+
+    def validate_new_name(self, value: str) -> str:
+        return tagify(value)
+
+
+class RenameTagResponseSerializer(serializers.Serializer):
+    name = serializers.CharField(help_text="Normalized name of the renamed or merged tag.")
+
+
+def rename_team_tag(team_id: int, name: str, new_name: str) -> str:
+    with transaction.atomic():
+        source = get_object_or_404(Tag, team_id=team_id, name=name)
+        if name == new_name:
+            return source.name
+        parents: list[QuerySet] = []
+        for entry in sorted(TAGGABLE_MODELS, key=lambda entry: entry.model_label):
+            model = content_type_for_entry(entry).model_class()
+            if model is None:
+                continue
+            objects = model._default_manager.filter(tagged_items__team_id=team_id, tagged_items__tag_id=source.id)
+            ids = list(objects.order_by("pk").select_for_update().values_list("pk", flat=True))
+            if ids and any(field.name == "updated_at" for field in model._meta.fields):
+                parents.append(model._default_manager.filter(pk__in=ids))
+        list(Tag.objects.filter(team_id=team_id, name__in=[name, new_name]).order_by("name").select_for_update())
+        target = Tag.objects.filter(team_id=team_id, name=new_name).first()
+        if target is None:
+            source.name = new_name
+            source.save(update_fields=["name"])
+        else:
+            for item in source.tagged_items.filter(team_id=team_id):
+                TaggedItem.objects.get_or_create(
+                    tag=target,
+                    content_type_id=item.content_type_id,
+                    object_id=item.object_id,
+                    object_uuid=item.object_uuid,
+                    team_id=team_id,
+                )
+            source.delete()
+        for objects in parents:
+            objects.update(updated_at=timezone.now())
+    return new_name
+
+
 class TaggedItemViewSet(TeamAndOrgViewSetMixin, GenericViewSet):
     scope_object = "INTERNAL"
     serializer_class = TaggedItemSerializer
     queryset = Tag.objects.none()
+
+    @extend_schema(extensions={"x-product": "core"})
+    @action(
+        methods=["POST"],
+        detail=False,
+        permission_classes=[OrganizationAdminWritePermissions],
+        request=RenameTagRequestSerializer,
+        responses={200: RenameTagResponseSerializer},
+    )
+    def rename(self, request: Request, **kwargs: object) -> response.Response:
+        serializer = RenameTagRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        return response.Response({"name": rename_team_tag(self.team_id, data["name"], data["new_name"])})
 
     @extend_schema(
         parameters=[

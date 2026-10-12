@@ -94,6 +94,8 @@ import type {
     ProjectSecretAPIKeyApi,
     ProjectSecretApiKeysListParams,
     PropertyDefinitionsListParams,
+    RenameTagRequestApi,
+    RenameTagResponseApi,
     RevokeOtherSessionsResponseApi,
     SCIMTokenResponseApi,
     SearchIntentRequestApi,
@@ -2645,6 +2647,23 @@ export const sessionRecordingsSharingRefreshCreate = async (
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...options?.headers },
         body: JSON.stringify(sharingConfigurationApi),
+    })
+}
+
+export const getTagsRenameCreateUrl = (projectId: string) => {
+    return `/api/projects/${projectId}/tags/rename/`
+}
+
+export const tagsRenameCreate = async (
+    projectId: string,
+    renameTagRequestApi: RenameTagRequestApi,
+    options?: RequestInit
+): Promise<RenameTagResponseApi> => {
+    return apiMutator<RenameTagResponseApi>(getTagsRenameCreateUrl(projectId), {
+        ...options,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        body: JSON.stringify(renameTagRequestApi),
     })
 }
 

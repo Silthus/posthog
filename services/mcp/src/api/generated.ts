@@ -94658,6 +94658,24 @@ export namespace Schemas {
       category_key?: string;
     }
 
+    export interface RenameTagRequest {
+      /**
+         * Existing team tag name to rename.
+         * @maxLength 255
+         */
+      name: string;
+      /**
+         * New tag name. Existing names merge their references.
+         * @maxLength 255
+         */
+      new_name: string;
+    }
+
+    export interface RenameTagResponse {
+      /** Normalized name of the renamed or merged tag. */
+      name: string;
+    }
+
     export interface ReorderTilesRequest {
       /**
          * Array of tile IDs in the desired display order (top to bottom, left to right).
