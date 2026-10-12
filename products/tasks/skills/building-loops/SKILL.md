@@ -4,8 +4,9 @@ description: >-
   Build a Loop for PostHog Desktop: a workflow that creates an AI task each time its trigger fires,
   optionally followed by a Slack or email notification with the task's result. Use when asked to
   create, set up, or change a loop, a recurring agent, a scheduled task, or an automation that runs
-  an AI task when a GitHub, Slack, or PostHog event happens. Covers the exact graph, trigger configs,
-  schedule presets, the notify step, structured output, and the test-run steps.
+  an AI task when a GitHub, Slack, or PostHog event happens, including one that fixes failing CI on
+  labelled pull requests. Covers the exact graph, trigger configs, schedule presets, the notify step,
+  structured output, and the test-run steps.
 ---
 
 # Building loops
@@ -101,7 +102,7 @@ GitHub event, one repository, one event type:
       { "key": "repository", "value": ["<owner/name>"], "operator": "exact", "type": "event" },
       {
         "key": "event_type",
-        "value": ["<issues | issue_comment | pull_request | push>"],
+        "value": ["<issues | issue_comment | pull_request | push | check_suite>"],
         "operator": "exact",
         "type": "event"
       },
@@ -119,6 +120,9 @@ Keep the `actor_access` filter. It stops people without write access to the repo
 | `pull_request`  | `opened`, `reopened`, `closed`, `synchronize`, `edited`, `ready_for_review`, `converted_to_draft`, `review_requested`, `review_request_removed`, `labeled`, `unlabeled`, `assigned`, `unassigned` |
 | `issue_comment` | `created`, `edited`, `deleted`                                                                                                                                                                    |
 | `push`          | none, `push` has no actions                                                                                                                                                                       |
+| `check_suite`   | `completed`, `requested`, `rerequested`                                                                                                                                                           |
+
+A `check_suite` event is one CI run finishing on a commit, sent once for each pull request the commit belongs to. To act on red CI, use the recipe in [Fix red CI on a pull request](#fix-red-ci-on-a-pull-request).
 
 Slack message in one or more channels. `channel` is required and takes channel IDs. Resolve a name to its id with `integrations-channels-retrieve` for the project's Slack integration (`integrations-list`, kind `slack`). Never guess an id:
 
@@ -220,6 +224,82 @@ Email: set the step's `type` to `function_email` instead of `function`. `from` i
 }
 ```
 
+## Fix red CI on a pull request
+
+Use this when the user wants an agent to fix failing CI on their pull requests. The loop starts a fix task when CI fails on a pull request that carries a label, and posts in Slack that the task started. Removing the label stops it. Ask for the repository, the label (`babysit` when the user names none), and the Slack channel, then build the graph above with these parts.
+
+Trigger, with `trigger_masking` beside `actions` and `edges`:
+
+```json
+{
+  "type": "internal-event",
+  "filters": {
+    "source": "internal-events",
+    "events": [{ "id": "$github_event_received", "type": "events" }],
+    "properties": [
+      { "key": "repository", "value": ["<owner/name>"], "operator": "exact", "type": "event" },
+      { "key": "event_type", "value": ["check_suite"], "operator": "exact", "type": "event" },
+      { "key": "action", "value": ["completed"], "operator": "exact", "type": "event" },
+      {
+        "key": "conclusion",
+        "value": ["failure", "timed_out", "startup_failure"],
+        "operator": "exact",
+        "type": "event"
+      },
+      { "key": "actor_access", "value": ["write"], "operator": "exact", "type": "event" },
+      { "key": "has(properties.labels, '<label>')", "type": "hogql" }
+    ]
+  }
+}
+```
+
+```json
+"trigger_masking": { "hash": "{event.properties.repository}#{event.properties.number}", "ttl": 7200 }
+```
+
+- `labels` holds the pull request's label names. Only a failing check suite on a pull request carries it, and when the label lookup fails the event comes without it, so the loop does not start. It is a list, so filter it with `has()` as above: `exact` never matches a list, and `icontains` also matches `babysitter`.
+- One push starts a check suite per CI workflow, so one red push can fail several suites. The mask lets one fix task start per pull request every 2 hours. Change `ttl` only when the user asks.
+- `actor_access` is `write` only for a branch in the repository itself, so a pull request from a fork never starts a task.
+
+Task step: set `repository` to `<owner/name>` and use this prompt, with your values in the angle brackets:
+
+> CI failed on a pull request labelled `<label>` in `<owner/name>`. Read the pull request number from the `number` property of the triggering event, its head branch from `branch`, and the failing commit from `head_sha`.
+>
+> Check out that head branch and push your fix to it. Never open a new pull request. If the branch head is no longer `head_sha`, someone pushed after this failure: check the current checks first, and stop if they pass or are still running.
+>
+> Fix only the failing required checks; `gh pr checks <number> --required` lists them. Never rerun a check to make it pass. When a failure looks flaky, read its logs: fix it when it is a real failure, and report it as flaky when it is not.
+>
+> Never change the pull request's draft or ready state, never merge it, and never enable auto-merge. Stay within the pull request's intent: do not change `.github/workflows/**` or dependencies unless a failing required check needs it.
+>
+> Finish with a short report: which checks failed, what you changed and pushed, and which failures you left alone and why. Link the pull request.
+
+Slack step, with this text:
+
+```json
+"text": { "value": "Started a fix task for red CI on <owner/name> pull request #{event.properties.number}" }
+```
+
+The text announces the start, so it reads right whether or not the workflow waits for the task to finish. The task's report is in the task itself.
+
+To test it, send this sample as the event in step 1 of [Test run](#test-run), with the user's values. Then send it again with `conclusion` set to `success`, and with `labels` set to `["<label>-extra"]`. Both must come back `skipped`.
+
+```json
+{
+  "event": "$github_event_received",
+  "properties": {
+    "repository": "<owner/name>",
+    "event_type": "check_suite",
+    "action": "completed",
+    "conclusion": "failure",
+    "actor_access": "write",
+    "labels": ["<label>"],
+    "number": 123,
+    "branch": "fix-the-thing",
+    "head_sha": "0000000000000000000000000000000000000000"
+  }
+}
+```
+
 ## Structured output
 
 When the notify step or the user needs a specific field from the task, such as a verdict or a count, ask the task for it instead of parsing prose. Add an output variable per field with `result_path` `output.<name>` and a matching `variables` entry with the type (`string`, `number`, `boolean`). The task is told which fields to return, and `{variables.<name>}` holds the value afterwards. Skip this when `final_message` is enough.
@@ -230,7 +310,7 @@ Test the draft before you schedule or enable it. `workflows-test-run` runs one s
 
 1. Run with no `current_action_id` and `globals` `{ "event": { "event": "$scheduled", "properties": {} } }` for a schedule loop. For a GitHub or Slack loop, send the trigger's event name with properties that match the filters, and no person. For a PostHog event loop, send that event with a person.
 2. Expect `nextActionId` = `create_task`. Run again with `current_action_id: "create_task"`.
-3. Expect the mocked task call and `nextActionId` = `notify` (or `exit`). Continue until the exit step.
+3. Expect the mocked task call and `nextActionId` = `notify` (or `exit`). Continue until the exit step. When the step waits for the task, its `nextActionId` stays `create_task`: run `notify` next with `current_action_id`.
 
 A `status=skipped` on step 1 means the sample event does not match the trigger filters. Fix the sample, not the trigger.
 
