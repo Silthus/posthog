@@ -48,8 +48,9 @@ SEARCH_TEXT_SOURCE_FIELDS: Final[frozenset[str]] = frozenset({"name", "descripti
 # rejects a term that contains it, so a term never spans two fields.
 SEARCH_TEXT_SEPARATOR: Final = "﷐"
 
-# The characters that Postgres counts as `\s` under a glibc UTF-8 locale, so the step matcher finds the text that
-# the row search matched. RE2's `\s` is ASCII only and omits the vertical tab. No-break spaces are not in the set.
+# The characters that Postgres counts as `\s` under a musl UTF-8 locale, as in the Alpine image that dev and CI run,
+# so the step matcher finds the text that the row search matched. A glibc locale swaps U+0085 for U+1680. RE2's `\s`
+# is ASCII only and omits the vertical tab. No-break spaces are not in the set.
 _STEP_MATCH_SPACE: Final = r"[\t\n\v\f\r \x{85}\x{2000}-\x{2006}\x{2008}-\x{200A}\x{2028}\x{2029}\x{205F}\x{3000}\-_]*"
 
 _STYLE_OPEN = re.compile(r"<style", re.IGNORECASE | re.ASCII)
