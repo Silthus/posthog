@@ -74,16 +74,32 @@ describe('workflow first-run sender', () => {
         })
     })
 
-    it('assigns the sandbox sender before a new template loads into the editor', async () => {
+    it.each([
+        ['function_email', false],
+        ['function', false],
+        ['function', true],
+    ] as const)('loads a %s template with an eligible first-run sender (own sender=%s)', async (type, ownSender) => {
+        action = { ...emailAction(), type } as HogFlowAction
+        if (ownSender) {
+            integrations = [
+                { id: 5, kind: 'email', config: { verified: true, provider: 'ses', email: 'own@example.com' } },
+            ]
+        }
         const logic = workflowLogic({ id: 'new', templateId: 'first-run-example' })
         logic.mount()
         await expectLogic(logic).toDispatchActions(['loadWorkflowSuccess'])
-        expect(logic.values.workflow.actions.find((step) => step.id === 'email')).toMatchObject({
+        const email = logic.values.workflow.actions.find((step) => step.id === 'email')
+        expect(email).toMatchObject({
+            type,
             config: {
                 inputs: {
                     email: {
                         value: {
-                            from: { integrationId: SANDBOX.id },
+                            from: ownSender
+                                ? { integrationId: 5 }
+                                : type === 'function_email'
+                                  ? { integrationId: SANDBOX.id }
+                                  : {},
                             subject: 'Welcome',
                             html: '<p>Your account is ready.</p>',
                         },
@@ -92,7 +108,12 @@ describe('workflow first-run sender', () => {
                 },
             },
         })
-        expect(ensureCalls).toBe(1)
+        const from =
+            email?.type === 'function_email' || email?.type === 'function'
+                ? email.config.inputs?.email?.value?.from
+                : undefined
+        expect(from?.integrationId).toBe(ownSender ? 5 : type === 'function_email' ? SANDBOX.id : undefined)
+        expect(ensureCalls).toBe(ownSender ? 0 : 1)
         logic.unmount()
     })
 

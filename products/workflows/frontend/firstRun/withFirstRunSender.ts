@@ -19,7 +19,10 @@ export function withFirstRunSender(actions: HogFlowAction[], sender: DefaultEmai
         if (!needsFirstRunSender(action)) {
             return action
         }
-        if (sender.reason === 'sandbox_sender' && action.config.inputs?.email?.value?.replyTo) {
+        if (
+            sender.reason === 'sandbox_sender' &&
+            (action.type !== 'function_email' || action.config.inputs?.email?.value?.replyTo)
+        ) {
             return action
         }
         const inputs = {
@@ -32,9 +35,8 @@ export function withFirstRunSender(actions: HogFlowAction[], sender: DefaultEmai
                 },
             },
         }
-        if (action.type === 'function_email') {
-            return { ...action, config: { ...action.config, inputs } }
-        }
-        return { ...action, config: { ...action.config, inputs } }
+        const updated: typeof action = { ...action }
+        updated.config = { ...action.config, inputs }
+        return updated
     })
 }
