@@ -1,4 +1,4 @@
-import { type DefaultTreeAdapterMap, defaultTreeAdapter, parse, serialize } from 'parse5'
+import { type DefaultTreeAdapterMap, defaultTreeAdapter, parse, parseFragment, serialize } from 'parse5'
 
 import { CyclotronInvocationQueueParametersEmailType } from '~/cdp/schema/cyclotron'
 import { logger } from '~/common/utils/logger'
@@ -38,9 +38,33 @@ function htmlBody(document: DefaultTreeAdapterMap['document']): DefaultTreeAdapt
     )
 }
 
+function isolateTemplateLayout(
+    document: DefaultTreeAdapterMap['document'],
+    body: DefaultTreeAdapterMap['element']
+): void {
+    const root = document.childNodes.find(defaultTreeAdapter.isElementNode)!
+    const layout = defaultTreeAdapter.createElement('div', body.namespaceURI, [
+        {
+            name: 'style',
+            value: 'all:initial!important;display:flow-root!important;position:relative!important;contain:paint!important;isolation:isolate!important',
+        },
+    ])
+    let content = layout
+    for (const ancestor of [root, body]) {
+        const wrapper = defaultTreeAdapter.createElement('div', body.namespaceURI, ancestor.attrs)
+        ancestor.attrs = [{ name: 'style', value: 'all:initial!important;display:block!important' }]
+        defaultTreeAdapter.appendChild(content, wrapper)
+        content = wrapper
+    }
+    for (const node of [...body.childNodes]) {
+        defaultTreeAdapter.detachNode(node)
+        defaultTreeAdapter.appendChild(content, node)
+    }
+    defaultTreeAdapter.appendChild(body, layout)
+}
+
 function appendHtmlFooter(html: string, footer: string, preheader?: string): string {
-    const preheaderText = defaultTreeAdapter.createDocumentFragment()
-    defaultTreeAdapter.insertText(preheaderText, preheader ?? '')
+    const preheaderText = parseFragment(preheader ?? '', { scriptingEnabled: false })
     const document = parse(maybeAddPreheaderToEmail(html, serialize(preheaderText)), { scriptingEnabled: false })
     const body = htmlBody(document)
     if (!body) {
@@ -63,6 +87,7 @@ function appendHtmlFooter(html: string, footer: string, preheader?: string): str
             }
         }
     }
+    isolateTemplateLayout(document, body)
     const paragraph = defaultTreeAdapter.createElement('div', body.namespaceURI, [
         {
             name: 'style',
@@ -99,6 +124,12 @@ export class SandboxEmailSender {
         public readonly config: SandboxEmailSenderConfig,
         private teamManager: TeamManager
     ) {
+        this.config = {
+            ...config,
+            tenantName: config.tenantName.trim(),
+            configurationSetName: config.configurationSetName.trim(),
+            fromAddress: config.fromAddress.trim(),
+        }
         const emptySettings = emptyRouteSettings(config)
         if (config.enabled && emptySettings.length) {
             logger.error('The sandbox sender is switched on with empty route settings, so it skips every send', {

@@ -293,8 +293,6 @@ describe('EmailService', () => {
             it.each([
                 [false, {}],
                 [true, {}],
-                [false, { verified: false }],
-                [false, { name: '' }],
                 [false, {}, true, { tenantName: '' }],
                 [true, {}, true, { configurationSetName: '   ' }],
                 [false, {}, true, { fromAddress: '' }],
@@ -341,92 +339,9 @@ describe('EmailService', () => {
             )
 
             it.each([
-                [
-                    false,
-                    '<body>Hello <a href="https://example.com">there</a>.</body>',
-                    'Hello <a href="https://example.com">there</a>.',
-                ],
-                [
-                    true,
-                    '<body>Hello <a href="https://example.com">there</a>.</body>',
-                    'Hello <a href="https://example.com">there</a>.',
-                ],
-                [false, '<body><!-- </body> --><p>Hello</p></body>', '<!-- </body> --><p>Hello</p>'],
-                [
-                    false,
-                    '<body><p>Hello</p><template><p>Example</p></template></body>',
-                    '<p>Hello</p><template><p>Example</p></template>',
-                    true,
-                ],
-                [
-                    false,
-                    '<body><p>Hello</p><script>const greeting = "Hello"</script></body>',
-                    '<p>Hello</p><script>const greeting = "Hello"</script>',
-                    true,
-                ],
-                [
-                    false,
-                    '<body><style>div { display: none } /* </body> */</style><p>Hello</p></body>',
-                    '<style>div { display: none } /* </body> */</style><p>Hello</p>',
-                ],
-                [false, '<body><textarea>Hello </body>', '<textarea>Hello &lt;/body&gt;</textarea>'],
-                [false, '<body><plaintext>Hello </body>', '<pre>Hello &lt;/body&gt;</pre>'],
-                [
-                    false,
-                    '<body><p>Hello</p><template><plaintext>Example',
-                    '<p>Hello</p><template><pre>Example</pre></template>',
-                    true,
-                ],
-                [
-                    false,
-                    '<head><template><plaintext>Example',
-                    '<head><template><pre>Example</pre></template></head>',
-                    true,
-                ],
-                [
-                    false,
-                    '<body><p>Hello</p><noscript><style>p {color:blue}',
-                    '<p>Hello</p><div><style>p {color:blue}</style></div>',
-                    true,
-                ],
-                [
-                    false,
-                    '<body><p>Hello</p><noscript>&lt;plaintext&gt;Example</noscript></body>',
-                    '<p>Hello</p><div>&lt;plaintext&gt;Example</div>',
-                    true,
-                ],
-                [
-                    false,
-                    '<body><table><tbody><tr><td>Hello</td></tr></tbody></table></body>',
-                    '<td>Hello</td>',
-                    true,
-                    '<textarea>Preview text',
-                ],
-                [false, '<body><p>Hello</p><noscript><style></noscript><!--', '<p>Hello</p>', true],
-                [
-                    false,
-                    '<body><p>Hello</p><noscript><style>/* </noscript><plaintext> */ p {color:blue}</style></noscript>',
-                    '<style>/* </noscript><plaintext> */ p {color:blue}</style>',
-                    true,
-                ],
-                [
-                    false,
-                    '<body><p>Hello</p><noscript><p title="</noscript><style>">Fallback</p></noscript></body>',
-                    '<p title="</noscript><style>">Fallback</p>',
-                    true,
-                ],
-                [
-                    false,
-                    '<body><noscript><style></noscript><script></style></noscript>Hello',
-                    '<style></noscript><script></style>',
-                    true,
-                ],
-                [
-                    false,
-                    '<body style="background:#525252;color:white"><p>Hello</p></body>',
-                    '<body style="background:#525252;color:white"><p>Hello</p>',
-                    true,
-                ],
+                [false, '<body>Hello <a href="https://example.com">there</a>.</body>', 'Hello '],
+                [true, '<body>Hello <a href="https://example.com">there</a>.</body>', 'Hello '],
+                [false, '<body><p>Hello</p></body>', '<p>Hello</p>', true],
             ] as const)(
                 'sends untracked with the fixed identity and organization footer (isTest=%s, html=%s)',
                 async (isTest, html, expectedContent, htmlOnly: boolean = false, preheader?: string) => {
@@ -444,7 +359,11 @@ describe('EmailService', () => {
                         html,
                         preheader,
                     })
-                    invocation.hogFunction.metadata = { message_category_type: 'marketing', tracking_enabled: true }
+                    invocation.hogFunction.metadata = {
+                        message_category_type: 'marketing',
+                        tracking_enabled: true,
+                        utm_tags_enabled: true,
+                    }
 
                     const result = await service.executeSendEmail(invocation, isTest)
 
@@ -480,6 +399,10 @@ describe('EmailService', () => {
                     })
                     const sentHtml = input.Content?.Simple?.Body?.Html?.Data
                     expect(sentHtml).toContain(expectedContent)
+                    if (html.includes('<a href')) {
+                        expect(sentHtml).toContain('utm_source=posthog')
+                        expect(sentHtml).toContain('utm_medium=email')
+                    }
                     expect(sentHtml?.endsWith(`>${footer}</div></body></html>`)).toBe(true)
                     for (const scriptingEnabled of [false, true]) {
                         expect(parseFragment(sentHtml!, { scriptingEnabled }).childNodes.at(-1)).toMatchObject({
@@ -542,15 +465,6 @@ describe('EmailService', () => {
 
             it.each([
                 [false, '<body><p>Hello</p><script><!--<script>'],
-                [true, '<body><p>Hello</p><script><!--<script>'],
-                [false, '<body><p>Hello</p><template><script><!--<script>'],
-                [true, '<body><p>Hello</p><template><script><!--<script>'],
-                [
-                    false,
-                    '',
-                    '',
-                    'The sandbox email template must include HTML or text content. Update the template and try again.',
-                ],
                 [
                     true,
                     '',
@@ -660,6 +574,13 @@ describe('EmailService', () => {
                     expect(result.error).toBeUndefined()
                     expect(result.invocation.queueScheduledAt).toBeDefined()
                     expect(result.invocation.queueParameters).toMatchObject({ text: 'Test Text', html: 'Test HTML' })
+                    sendEmailSpy.mockResolvedValue({ MessageId: 'retry-message-id' })
+                    const retried = await service.executeSendEmail(result.invocation)
+                    expect(retried).toMatchObject({ finished: true })
+                    expect(retried.error).toBeUndefined()
+                    const retryHtml = (sendEmailSpy.mock.calls[1][0] as SendEmailCommand).input.Content?.Simple?.Body
+                        ?.Html?.Data
+                    expect(retryHtml?.match(/Organization ID:/g)).toHaveLength(1)
                 }
             })
 

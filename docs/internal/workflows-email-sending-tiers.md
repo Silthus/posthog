@@ -78,3 +78,9 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
   A send denied because the limiter itself failed keeps the shorter token bucket cadence, at most 5 to 10 minutes.
 - Gmail provides no per-message feedback loop, so complaint rates (ours and AWS's) cannot see Gmail complaints at all.
 - The `HOGFLOW_BATCH_TRIGGER_ELEVATED_TEAM_IDS` allowlist elevates a team to the top tier in Django only: the UI, the admin, and the batch audience cap show top-tier numbers, but the worker's send-time buckets read the stored tier. An allowlisted team below the top tier is therefore throttled at its stored tier while being told otherwise, and its shadow-mode delay counts overstate real impact. Before enforcing, pin each allowlisted team at the top tier from the Django admin and empty the allowlist, rather than plumbing the list into the worker.
+
+### Sandbox delivery
+
+Sandbox email uses a fixed SES tenant, configuration set, and From address. Set `SES_SANDBOX_TENANT_NAME`, `SES_SANDBOX_CONFIGURATION_SET`, and `SES_SANDBOX_FROM_ADDRESS` on the worker. The From address must match Django's `WORKFLOWS_SANDBOX_SENDER_FROM_ADDRESS` and belong to the shared SES identity.
+Sandbox sends disable click tracking and unsubscribe headers because the complete stack restricts them to verified organization members for internal testing. Marketing delivery to external audiences requires a verified sender.
+HTML is parsed and normalized before the identification footer is appended. Template root formatting is isolated from the footer; malformed markup may render differently from an own-domain send. Preview text is parsed separately so escaped template values remain readable.
