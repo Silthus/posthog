@@ -20,8 +20,10 @@ from posthog.models.team.team import Team
 from products.access_control.backend.models.access_control import AccessControl
 from products.approvals.backend.exceptions import ApprovalDetectionFailed, PolicyConflict
 from products.approvals.backend.models import ApprovalPolicy, ChangeRequest
+from products.feature_flags.backend.api.feature_flag import REQUIRE_TAGS_ON_CREATE_ERROR
 from products.feature_flags.backend.facade.api import user_can_edit_flag
 from products.feature_flags.backend.models.feature_flag import FeatureFlag
+from products.feature_flags.backend.models.team_feature_flag_policy_config import TeamFeatureFlagPolicyConfig
 from products.workflows.backend.models import HogFlow
 from products.workflows.backend.models.hog_flow_revision import HogFlowRevision
 
@@ -33,18 +35,13 @@ _SET_ROLLOUT = "products.workflows.backend.nodes.feature_flag.set_release_condit
 
 
 @override_settings(WORKFLOW_NODES_RUN_JWT_SECRETS=[SECRET])
-class TestWorkflowNodeRunsAPI(APIBaseTest):
+class WorkflowNodeRunTestBase(APIBaseTest):
+    operation = "set_rollout_percentage"
+    default_inputs: dict[str, Any] = {}
+
     def setUp(self) -> None:
         super().setUp()
         self.client.logout()
-        self.flag = FeatureFlag.objects.create(
-            team=self.team,
-            created_by=self.user,
-            key="new-checkout",
-            name="New checkout",
-            active=True,
-            filters={"groups": [{"properties": [], "rollout_percentage": 10}]},
-        )
         self.hog_flow = HogFlow.objects.create(
             team=self.team,
             name="Staged rollout",
@@ -57,8 +54,8 @@ class TestWorkflowNodeRunsAPI(APIBaseTest):
                     "type": "native",
                     "config": {
                         "node": "feature_flag",
-                        "operation": "set_rollout_percentage",
-                        "inputs": {"flag_key": {"value": "new-checkout"}, "rollout_percentage": {"value": 25}},
+                        "operation": self.operation,
+                        "inputs": {key: {"value": value} for key, value in self.default_inputs.items()},
                     },
                 }
             ],
@@ -86,18 +83,53 @@ class TestWorkflowNodeRunsAPI(APIBaseTest):
     def _run(self, inputs: dict[str, Any] | None = None, token: str | None = None) -> Any:
         return self.client.post(
             f"/api/projects/{self.team.id}/internal/workflow_nodes/run/",
-            {
-                "node": "feature_flag",
-                "operation": "set_rollout_percentage",
-                "inputs": {
-                    "flag_key": "new-checkout",
-                    "rollout_percentage": 25,
-                    "expected_version": "",
-                    **(inputs or {}),
-                },
-            },
+            {"node": "feature_flag", "operation": self.operation, "inputs": {**self.default_inputs, **(inputs or {})}},
             format="json",
             HTTP_AUTHORIZATION=f"Bearer {token or self._token()}",
+        )
+
+    def _require_approval_for(self, action_key: str) -> None:
+        self.organization.available_product_features = [
+            {"key": AvailableFeature.APPROVALS, "name": AvailableFeature.APPROVALS}
+        ]
+        self.organization.save()
+        ApprovalPolicy.objects.create(
+            organization=self.organization,
+            team=self.team,
+            action_key=action_key,
+            conditions={},
+            approver_config={"quorum": 1, "users": [self.user.id]},
+            created_by=self.user,
+        )
+
+    def _limit_publisher_to_flag_viewer(self, resource_id: str | None = None) -> None:
+        self.organization.available_product_features = [
+            {"key": AvailableFeature.ACCESS_CONTROL, "name": AvailableFeature.ACCESS_CONTROL}
+        ]
+        self.organization.save()
+        self.organization_membership.level = OrganizationMembership.Level.MEMBER
+        self.organization_membership.save()
+        AccessControl.objects.create(
+            team=self.team,
+            resource="feature_flag",
+            resource_id=resource_id,
+            access_level="viewer",
+            organization_member=self.organization_membership,
+        )
+
+
+class TestWorkflowNodeRunsAPI(WorkflowNodeRunTestBase):
+    default_inputs = {"flag_key": "new-checkout", "rollout_percentage": 25, "expected_version": ""}
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.flag = FeatureFlag.objects.create(
+            team=self.team,
+            created_by=self.user,
+            key="new-checkout",
+            name="New checkout",
+            active=True,
+            filters={"groups": [{"properties": [], "rollout_percentage": 10}]},
         )
 
     def test_sets_the_rollout_percentage_as_the_workflow_publisher(self) -> None:
@@ -186,18 +218,7 @@ class TestWorkflowNodeRunsAPI(APIBaseTest):
 
     @patch("products.approvals.backend.decorators._is_approvals_enabled", return_value=True)
     def test_an_approval_policy_answers_needs_approval_and_keeps_the_change_request(self, _approvals_enabled) -> None:
-        self.organization.available_product_features = [
-            {"key": AvailableFeature.APPROVALS, "name": AvailableFeature.APPROVALS}
-        ]
-        self.organization.save()
-        ApprovalPolicy.objects.create(
-            organization=self.organization,
-            team=self.team,
-            action_key="feature_flag.update",
-            conditions={},
-            approver_config={"quorum": 1, "users": [self.user.id]},
-            created_by=self.user,
-        )
+        self._require_approval_for("feature_flag.update")
 
         response = self._run()
 
@@ -252,21 +273,9 @@ class TestWorkflowNodeRunsAPI(APIBaseTest):
         assert response.json()["result"].get("missing_permission") == missing_permission
 
     def test_a_publisher_without_editor_access_to_the_flag_is_not_permitted(self) -> None:
-        self.organization.available_product_features = [
-            {"key": AvailableFeature.ACCESS_CONTROL, "name": AvailableFeature.ACCESS_CONTROL}
-        ]
-        self.organization.save()
-        self.organization_membership.level = OrganizationMembership.Level.MEMBER
-        self.organization_membership.save()
         self.flag.created_by = self._create_user("flag-owner@example.com")
         self.flag.save()
-        AccessControl.objects.create(
-            team=self.team,
-            resource="feature_flag",
-            resource_id=str(self.flag.id),
-            access_level="viewer",
-            organization_member=self.organization_membership,
-        )
+        self._limit_publisher_to_flag_viewer(str(self.flag.id))
 
         response = self._run()
 
@@ -346,3 +355,92 @@ class TestWorkflowNodeRunsAPI(APIBaseTest):
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         self.flag.refresh_from_db()
         assert self.flag.conditions[0]["rollout_percentage"] == 10
+
+
+class TestCreateFeatureFlagNodeRunAPI(WorkflowNodeRunTestBase):
+    operation = "create_flag"
+    default_inputs = {"flag_key": "new-checkout", "name": "New checkout", "tags": "rollout, checkout"}
+
+    def test_creates_an_active_flag_at_zero_percent_as_the_workflow_publisher(self) -> None:
+        response = self._run()
+
+        assert response.status_code == status.HTTP_200_OK, response.content
+        flag = FeatureFlag.objects.get(team=self.team, key="new-checkout")
+        assert response.json() == {
+            "status": "outcome",
+            "outcome": "done",
+            "result": {"flag_id": flag.id, "flag_key": "new-checkout", "rollout_percentage": 0, "version": 1},
+        }
+        assert flag.active is True
+        assert flag.name == "New checkout"
+        assert [(condition["properties"], condition["rollout_percentage"]) for condition in flag.conditions] == [
+            ([], 0)
+        ]
+        assert sorted(tag.tag.name for tag in flag.tagged_items.all()) == ["checkout", "rollout"]
+        assert flag.created_by == self.user
+        log = ActivityLog.objects.get(scope="FeatureFlag", item_id=str(flag.id), activity="created")
+        assert log.detail is not None
+        assert log.detail["trigger"] == {
+            "job_type": "hog_flow",
+            "job_id": str(self.hog_flow.id),
+            "payload": {"run": DISPATCH_KEY, "action": ACTION_ID},
+        }
+
+    def test_an_existing_key_is_already_exists_with_that_flags_result_and_creates_nothing(self) -> None:
+        existing = FeatureFlag.objects.create(
+            team=self.team,
+            created_by=self.user,
+            key="new-checkout",
+            filters={"groups": [{"properties": [], "rollout_percentage": 40}]},
+            version=3,
+        )
+
+        response = self._run()
+
+        assert response.json() == {
+            "status": "outcome",
+            "outcome": "already_exists",
+            "result": {"flag_id": existing.id, "flag_key": "new-checkout", "rollout_percentage": 40, "version": 3},
+        }
+        assert FeatureFlag.objects.filter(team=self.team).count() == 1
+
+    @patch("products.approvals.backend.decorators._is_approvals_enabled", return_value=True)
+    def test_an_approval_policy_on_enabling_answers_needs_approval_without_a_flag(self, _approvals_enabled) -> None:
+        self._require_approval_for("feature_flag.enable")
+
+        response = self._run()
+
+        change_request = ChangeRequest.objects.get(team=self.team)
+        assert response.json() == {
+            "status": "outcome",
+            "outcome": "needs_approval",
+            "result": {
+                "flag_id": None,
+                "flag_key": "new-checkout",
+                "rollout_percentage": 0,
+                "version": None,
+                "change_request_id": str(change_request.id),
+            },
+        }
+        assert not FeatureFlag.objects.filter(team=self.team).exists()
+
+    def test_a_publisher_who_cannot_create_flags_is_not_permitted(self) -> None:
+        self._limit_publisher_to_flag_viewer()
+
+        response = self._run()
+
+        assert response.json()["outcome"] == "not_permitted", response.content
+        assert response.json()["result"]["missing_permission"] == "feature_flag:editor"
+        assert not FeatureFlag.objects.filter(team=self.team).exists()
+
+    def test_a_project_that_requires_tags_fails_an_untagged_create_with_the_policy_message(self) -> None:
+        TeamFeatureFlagPolicyConfig.objects.create(team=self.team, require_tags=True)
+
+        response = self._run({"tags": ""})
+
+        assert response.json() == {
+            "status": "outcome",
+            "outcome": "failed",
+            "result": {"reason": f"The feature flag rejected the change: {REQUIRE_TAGS_ON_CREATE_ERROR}"},
+        }
+        assert not FeatureFlag.objects.filter(team=self.team).exists()

@@ -343,6 +343,16 @@ class FeatureFlag(Taggable, FileSystemSyncMixin, ModelActivityMixin, RootTeamMix
         require_v1_config(filters)
         return filters
 
+    # A constructor argument, so a create can carry its trigger into the first save, which
+    # writes the "created" activity log entry.
+    @property
+    def activity_trigger(self) -> "Trigger | None":
+        return self._activity_trigger
+
+    @activity_trigger.setter
+    def activity_trigger(self, trigger: "Trigger | None") -> None:
+        self._activity_trigger = trigger
+
     @property
     def conditions(self):
         "Each feature flag can have multiple conditions to match, they are OR-ed together."

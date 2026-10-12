@@ -207,13 +207,25 @@ class TestNativeStepsAPI(APIBaseTest):
 
         assert response.status_code == status.HTTP_200_OK, response.json()
         [node] = response.json()
-        [operation] = node["operations"]
-        assert (node["key"], operation["key"]) == ("feature_flag", "set_rollout_percentage")
-        assert operation["outcomes"] == ["done", "changed_elsewhere", "needs_approval", "failed", "not_permitted"]
-        assert [(item["key"], item["required"], item["templating"]) for item in operation["inputs_schema"]] == [
-            ("flag_key", True, "hog"),
-            ("rollout_percentage", True, "hog"),
-            ("expected_version", False, "hog"),
+        assert node["key"] == "feature_flag"
+        assert [
+            (
+                operation["key"],
+                operation["outcomes"],
+                [(item["key"], item["required"], item["templating"]) for item in operation["inputs_schema"]],
+            )
+            for operation in node["operations"]
+        ] == [
+            (
+                "set_rollout_percentage",
+                ["done", "changed_elsewhere", "needs_approval", "failed", "not_permitted"],
+                [("flag_key", True, "hog"), ("rollout_percentage", True, "hog"), ("expected_version", False, "hog")],
+            ),
+            (
+                "create_flag",
+                ["done", "already_exists", "needs_approval", "failed", "not_permitted"],
+                [("flag_key", True, "hog"), ("name", False, "hog"), ("tags", False, "hog")],
+            ),
         ]
 
     def test_catalog_is_hidden_while_the_flag_is_off(self):
