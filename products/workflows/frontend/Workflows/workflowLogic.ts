@@ -261,6 +261,7 @@ export interface workflowLogicValues {
     schedules: HogFlowSchedule[]
     showDraftActions: boolean
     showWorkflowErrors: boolean
+    testRunRequested: boolean
     triggerAction: TriggerAction | null
     workflow: HogFlow
     workflowAllErrors: Record<string, any>
@@ -290,6 +291,9 @@ export interface workflowLogicActions {
         value: true
     }
     clearAutoSavePending: () => {
+        value: true
+    }
+    clearTestRunRequest: () => {
         value: true
     }
     confirmDiscardDraft: () => {
@@ -2073,6 +2077,9 @@ export interface workflowLogicActions {
     markSaveAttempted: (actionIds: string[]) => {
         actionIds: string[]
     }
+    openTestPane: () => {
+        value: true
+    }
     partialSetWorkflowActionConfig: (
         actionId: string,
         config: Partial<HogFlowAction['config']>
@@ -3118,6 +3125,8 @@ export const workflowLogic = kea<workflowLogicType>([
         }),
         discardChanges: true,
         duplicate: true,
+        openTestPane: true,
+        clearTestRunRequest: true,
         autoSaveWorkflow: true,
         markAutoSave: (isAutoSave: boolean) => ({ isAutoSave }),
         setAutoSaveEnabled: (enabled: boolean) => ({ enabled }),
@@ -3381,6 +3390,13 @@ export const workflowLogic = kea<workflowLogicType>([
         },
     })),
     reducers({
+        testRunRequested: [
+            false,
+            {
+                openTestPane: () => true,
+                clearTestRunRequest: () => false,
+            },
+        ],
         schedules: [
             [] as HogFlowSchedule[],
             {
@@ -4371,6 +4387,13 @@ export const workflowLogic = kea<workflowLogicType>([
 
             actions.markAutoSave(true)
             actions.saveWorkflow(values.workflow)
+        },
+        openTestPane: () => {
+            router.actions.push(urls.workflow(props.id || 'new', 'workflow'), {
+                ...router.values.searchParams,
+                mode: 'test',
+                node: values.triggerAction?.id ?? null,
+            })
         },
         duplicate: async () => {
             const workflow = values.originalWorkflow
