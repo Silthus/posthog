@@ -1,3 +1,14 @@
+from products.approvals.backend.exceptions import ApprovalRequired
+
+__all__ = [
+    "ApprovalRequired",
+    "FlagRolloutConditionNotFound",
+    "FlagRolloutDeletedFlag",
+    "FlagRolloutUnsupportedConfig",
+    "FlagRolloutVersionConflict",
+]
+
+
 class FlagRolloutVersionConflict(ValueError):
     def __init__(
         self, message: str, *, expected_version: int | None = None, current_version: int | None = None
