@@ -1,9 +1,16 @@
 import { expectLogic } from 'kea-test-utils'
+import posthog from 'posthog-js'
 
 import api from 'lib/api'
 
-import { FeatureFlagHealthQueryResponse, FeatureFlagHealthVerdict } from '~/queries/schema/schema-general'
+import { sidePanelStateLogic } from '~/layout/navigation-3000/sidepanel/sidePanelStateLogic'
+import {
+    FeatureFlagHealthQueryResponse,
+    FeatureFlagHealthResult,
+    FeatureFlagHealthVerdict,
+} from '~/queries/schema/schema-general'
 import { initKeaTests } from '~/test/init'
+import { SidePanelTab } from '~/types'
 
 import { featureFlagHealthLogic } from './featureFlagHealthLogic'
 
@@ -33,8 +40,90 @@ const sevenDayResponse = {
     ],
 } as FeatureFlagHealthQueryResponse
 
+function responseWith(verdict: FeatureFlagHealthVerdict): FeatureFlagHealthQueryResponse {
+    return { results: [{ ...sevenDayResponse.results[0], verdict }] } as FeatureFlagHealthQueryResponse
+}
+
+async function mountWithSevenDayHealth(
+    response: FeatureFlagHealthQueryResponse
+): Promise<ReturnType<typeof featureFlagHealthLogic>> {
+    jest.spyOn(api, 'query').mockResolvedValue(response as any)
+    initKeaTests()
+    sidePanelStateLogic.mount()
+    const logic = featureFlagHealthLogic({ flagKey: 'new-checkout' })
+    logic.mount()
+    logic.actions.setPeriod('7d')
+    await expectLogic(logic).toFinishAllListeners()
+    return logic
+}
+
 describe('featureFlagHealthLogic', () => {
     afterEach(() => jest.restoreAllMocks())
+
+    it.each([
+        [FeatureFlagHealthVerdict.Harm, true],
+        [FeatureFlagHealthVerdict.Pass, true],
+        [FeatureFlagHealthVerdict.InsufficientData, true],
+        [FeatureFlagHealthVerdict.TelemetryFailure, false],
+    ])('offers investigation for a %s verdict: %s', async (verdict, expected) => {
+        const logic = await mountWithSevenDayHealth(responseWith(verdict))
+
+        expect(logic.values.canInvestigate).toBe(expected)
+        logic.unmount()
+    })
+
+    it('offers no investigation without a health result', async () => {
+        const logic = await mountWithSevenDayHealth({
+            results: [] as FeatureFlagHealthResult[],
+        } as FeatureFlagHealthQueryResponse)
+
+        expect(logic.values.canInvestigate).toBe(false)
+        logic.unmount()
+    })
+
+    it('links to error tracking filtered to flag-on exceptions over the selected period, whatever filters persist there', async () => {
+        const logic = await mountWithSevenDayHealth(sevenDayResponse)
+
+        const url = new URL(logic.values.errorTrackingUrl, 'https://app.example.com')
+
+        expect(url.pathname).toBe('/error_tracking')
+        expect(url.searchParams.get('status')).toBe('all')
+        expect(url.searchParams.get('assignee')).toBe('')
+        expect(JSON.parse(url.searchParams.get('dateRange')!)).toEqual({ date_from: '-7d', date_to: null })
+        expect(JSON.stringify(JSON.parse(url.searchParams.get('filterGroup')!))).toContain(
+            JSON.stringify({ key: '$feature/new-checkout', value: ['true'], operator: 'exact', type: 'event' })
+        )
+        logic.unmount()
+    })
+
+    it('captures a usage event when someone views the errors', async () => {
+        const capture = jest.spyOn(posthog, 'capture')
+        const logic = await mountWithSevenDayHealth(sevenDayResponse)
+
+        logic.actions.viewErrors()
+
+        expect(capture).toHaveBeenCalledWith('feature flag health errors viewed', { period: '7d', verdict: 'pass' })
+        logic.unmount()
+    })
+
+    it('opens PostHog AI with a prompt that carries the flag, period, verdict and both arms', async () => {
+        const capture = jest.spyOn(posthog, 'capture')
+        const logic = await mountWithSevenDayHealth(sevenDayResponse)
+
+        logic.actions.investigateWithAI()
+
+        expect(sidePanelStateLogic.values.selectedTab).toBe(SidePanelTab.Max)
+        const prompt = sidePanelStateLogic.values.selectedTabOptions as string
+        expect(prompt.startsWith('!')).toBe(true)
+        for (const fact of ['new-checkout', 'last 7 days', 'Healthy', '2 of 900', '0.2%', '3 of 880', '0.3%']) {
+            expect(prompt).toContain(fact)
+        }
+        expect(capture).toHaveBeenCalledWith('feature flag health ai investigation started', {
+            period: '7d',
+            verdict: 'pass',
+        })
+        logic.unmount()
+    })
 
     it('shows the newer window result when the superseded request fails afterwards', async () => {
         const twentyFourHour = deferred<FeatureFlagHealthQueryResponse>()
