@@ -2,7 +2,7 @@ import { useActions, useValues } from 'kea'
 import { ReactNode } from 'react'
 
 import { IconExternal, IconPlus, IconX } from '@posthog/icons'
-import { LemonButton, LemonInputSelect, LemonLabel, LemonSelect, LemonTag } from '@posthog/lemon-ui'
+import { LemonBanner, LemonButton, LemonInputSelect, LemonLabel, LemonSelect, LemonTag } from '@posthog/lemon-ui'
 
 import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
 import { SANDBOX_EMAIL_SENDER_NOTE } from 'lib/integrations/utils'
@@ -25,9 +25,16 @@ export function NativeEmailIntegrationChoice({
     onChange: (value: EmailTemplateFrom) => void
     value?: EmailTemplateFrom
 }): JSX.Element {
-    const { logicProps, senderIntegrations, sandboxSenderId, isSandboxSenderSelected, senderIntegrationsLoading } =
-        useValues(emailTemplaterLogic)
-    const { chooseSenders } = useActions(emailTemplaterLogic)
+    const {
+        logicProps,
+        senderIntegrations,
+        sandboxSenderId,
+        isSandboxSenderSelected,
+        senderIntegrationsLoading,
+        senderIntegrationsError,
+        hasCustomSenderDetails,
+    } = useValues(emailTemplaterLogic)
+    const { chooseSenders, retrySenderIntegrations } = useActions(emailTemplaterLogic)
     const senderRotationEnabled = useFeatureFlag('WORKFLOWS_EMAIL_SENDER_ROTATION')
 
     // Presence of the override keys is what reveals the inputs, so a saved override is
@@ -53,6 +60,24 @@ export function NativeEmailIntegrationChoice({
         </>
     )
 
+    const errorBanner = senderIntegrationsError ? (
+        <LemonBanner
+            type="error"
+            className="break-words"
+            action={{ children: 'Try again', onClick: retrySenderIntegrations, loading: senderIntegrationsLoading }}
+        >
+            {senderIntegrationsError}
+        </LemonBanner>
+    ) : null
+
+    if (!senderIntegrationsLoading && senderIntegrations.length === 0 && errorBanner) {
+        return (
+            <div className="flex flex-col gap-2">
+                {label}
+                {errorBanner}
+            </div>
+        )
+    }
     if (!senderIntegrationsLoading && senderIntegrations.length === 0) {
         return (
             <div className="flex gap-2 justify-between items-center">
@@ -76,6 +101,7 @@ export function NativeEmailIntegrationChoice({
 
     return (
         <div className="flex flex-col">
+            {errorBanner}
             <div className="flex gap-2 items-center">
                 {label}
                 {senderRotationEnabled ? (
@@ -106,7 +132,7 @@ export function NativeEmailIntegrationChoice({
                         <span className="px-2 pb-1 text-xs text-muted">
                             {isSandboxSenderSelected
                                 ? SANDBOX_EMAIL_SENDER_NOTE
-                                : `Choose up to ${MAX_WORKFLOW_EMAIL_SENDERS} senders. Each workflow run uses one sender.${sandboxSenderId !== undefined ? ' Choosing the sandbox sender replaces the selection and removes custom sender and Reply-To.' : ''}`}
+                                : `Choose up to ${MAX_WORKFLOW_EMAIL_SENDERS} senders. Each workflow run uses one sender.${sandboxSenderId !== undefined && hasCustomSenderDetails ? ' Choosing the sandbox sender replaces the selection and removes custom sender and Reply-To.' : ''}`}
                         </span>
                     </div>
                 ) : (
@@ -144,7 +170,7 @@ export function NativeEmailIntegrationChoice({
                         {isSandboxSenderSelected && (
                             <span className="px-2 pb-1 text-xs text-muted">{SANDBOX_EMAIL_SENDER_NOTE}</span>
                         )}
-                        {!isSandboxSenderSelected && sandboxSenderId !== undefined && (
+                        {!isSandboxSenderSelected && sandboxSenderId !== undefined && hasCustomSenderDetails && (
                             <span className="px-2 pb-1 text-xs text-muted">
                                 Choosing the sandbox sender removes custom sender and Reply-To.
                             </span>

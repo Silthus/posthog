@@ -207,12 +207,38 @@ describe('integrationsLogic', () => {
 
                 expect(ensureCalls).toBe(1)
                 expect(logic.values.sandboxEmailSender).toBeNull()
+                expect(logic.values.sandboxEmailSenderProvisionError).toBe(
+                    'The sandbox sender is not available for this project.'
+                )
                 if (status === 404) {
                     await expectLogic(logic, () => logic.actions.ensureSandboxEmailSender()).toFinishAllListeners()
                     expect(ensureCalls).toBe(1)
                 }
             }
         )
+
+        it('retains an integrations load error without treating the unresolved list as empty', async () => {
+            useMocks({
+                get: {
+                    '/api/projects/:team_id/integrations/': () => [
+                        500,
+                        { detail: 'Could not load senders. Try again.' },
+                    ],
+                },
+            })
+            logic.actions.clearIntegrations()
+            await expectLogic(logic, () => logic.actions.loadIntegrations()).toDispatchActions([
+                'loadIntegrationsFailure',
+            ])
+            expect(logic.values.integrations).toBeNull()
+            expect(logic.values.integrationsLoadError).toBe('Could not load senders. Try again.')
+
+            useMocks({ get: { '/api/projects/:team_id/integrations/': { results: [] } } })
+            await expectLogic(logic, () => logic.actions.loadIntegrations()).toDispatchActions([
+                'loadIntegrationsSuccess',
+            ])
+            expect(logic.values.integrationsLoadError).toBeNull()
+        })
 
         it('retries a failed provision when a surface explicitly asks again', async () => {
             enableFlag()

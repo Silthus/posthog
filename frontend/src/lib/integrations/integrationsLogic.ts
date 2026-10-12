@@ -48,19 +48,24 @@ import type { AvailableSetupTaskIdsEnumApi } from '../../generated/core/api.sche
 import type { PreflightStatus, UserBasicType } from '../../types'
 import { ICONS, getIntegrationNameFromKind, isSandboxEmailSender } from './utils'
 
-type SandboxEmailSenderProvisionResult = 'provisioned' | 'unavailable' | 'failed'
+export type SandboxEmailSenderProvisionResult = 'provisioned' | 'unavailable' | 'failed'
 
 const INTEGRATIONS_POLL_INTERVAL_MS = 30_000
 const SANDBOX_ENSURE_TIMEOUT_MS = 15_000
 
-async function requestSandboxEmailSender(projectId: string): Promise<SandboxEmailSenderProvisionResult> {
+async function requestSandboxEmailSender(
+    projectId: string
+): Promise<{ result: SandboxEmailSenderProvisionResult; error: string | null }> {
     try {
         await integrationsEmailSandboxSenderCreate(projectId, {
             signal: AbortSignal.timeout(SANDBOX_ENSURE_TIMEOUT_MS),
         })
-        return 'provisioned'
+        return { result: 'provisioned', error: null }
     } catch (error) {
-        return error instanceof ApiError && error.status === 404 ? 'unavailable' : 'failed'
+        return {
+            result: error instanceof ApiError && error.status === 404 ? 'unavailable' : 'failed',
+            error: error instanceof ApiError ? error.detail : null,
+        }
     }
 }
 
@@ -181,6 +186,7 @@ export interface integrationsLogicValues {
     githubRepositoriesTotal: Record<number, number>
     githubSuggestionSubscribers: number
     integrations: IntegrationType[] | null
+    integrationsLoadError: string | null
     integrationsLoading: boolean
     linearIntegrations: IntegrationType[]
     linkedGithubInstallation: IntegrationConfigApi | null
@@ -192,6 +198,7 @@ export interface integrationsLogicValues {
     requestedAccessKinds: IntegrationKind[]
     sandboxEmailSender: IntegrationType | null
     sandboxEmailSenderEnabled: boolean
+    sandboxEmailSenderProvisionError: string | null
     sandboxEmailSenderProvisionResult: SandboxEmailSenderProvisionResult | null
     sandboxEmailSenderProvisionResultLoading: boolean
     selectedIntegration: IntegrationType | null
@@ -709,6 +716,9 @@ export interface integrationsLogicActions {
         projectId: number | string
         response: GitHubAvailableInstallationsResponseApi | null
     }
+    setSandboxEmailSenderProvisionError: (error: string | null) => {
+        error: string | null
+    }
     startPolling: () => {
         value: true
     }
@@ -849,6 +859,7 @@ export const integrationsLogic = kea<integrationsLogicType>([
         }),
         deleteIntegration: (id: number) => ({ id }),
         ensureSandboxEmailSender: true,
+        setSandboxEmailSenderProvisionError: (error: string | null) => ({ error }),
         provisionMissingSandboxEmailSender: true,
         invalidateGithubSuggestions: true,
         setGithubDisconnecting: (disconnecting: boolean) => ({ disconnecting }),
@@ -885,6 +896,26 @@ export const integrationsLogic = kea<integrationsLogicType>([
     }),
     reducers({
         integrations: [null as IntegrationType[] | null, { clearIntegrations: () => null }],
+        integrationsLoadError: [
+            null as string | null,
+            {
+                loadIntegrations: () => null,
+                loadIntegrationsSuccess: () => null,
+                clearIntegrations: () => null,
+                loadIntegrationsFailure: (_, { errorObject }) =>
+                    errorObject instanceof ApiError && errorObject.detail
+                        ? errorObject.detail
+                        : 'Could not load email senders.',
+            },
+        ],
+        sandboxEmailSenderProvisionError: [
+            null as string | null,
+            {
+                clearIntegrations: () => null,
+                provisionSandboxEmailSender: () => null,
+                setSandboxEmailSenderProvisionError: (_, { error }) => error,
+            },
+        ],
         sandboxEmailSenderProvisionResult: [
             null as SandboxEmailSenderProvisionResult | null,
             {
@@ -1164,10 +1195,11 @@ export const integrationsLogic = kea<integrationsLogicType>([
                     if (values.currentProjectId !== projectId) {
                         return values.sandboxEmailSenderProvisionResult
                     }
-                    if (result === 'provisioned') {
+                    actions.setSandboxEmailSenderProvisionError(result.error)
+                    if (result.result === 'provisioned') {
                         actions.loadIntegrations()
                     }
-                    return result
+                    return result.result
                 },
             },
         ],
