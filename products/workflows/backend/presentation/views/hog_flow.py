@@ -4084,7 +4084,7 @@ LIST_QUERY_PARAMETERS: Final[list[OpenApiParameter]] = [
     OpenApiParameter(
         "origin_product",
         OpenApiTypes.STR,
-        enum=HogFlow.OriginProduct.values,
+        enum=HogFlowOriginProduct.values,
         description="Filter to workflows owned by a product surface, e.g. `loops` for Desktop loops.",
     ),
     OpenApiParameter(
