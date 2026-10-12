@@ -105,7 +105,7 @@ async function loadAllPages(
         }
         if (!(nextOffset > offset)) {
             throw new Error(
-                `The server sent a next page link that doesn't move forward, so loading stopped after ${byId.size} workflows.`
+                `Loading stopped after ${byId.size} workflows because the server kept sending the same page. Try again.`
             )
         }
         offset = nextOffset

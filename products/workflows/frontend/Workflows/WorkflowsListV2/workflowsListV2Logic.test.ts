@@ -195,7 +195,7 @@ describe('workflowsListV2Logic', () => {
 
         await expectLogic(logic).toDispatchActions(['loadWorkflowsFailure'])
         expect(logic.values.loadErrorDetail).toEqual(
-            "The server sent a next page link that doesn't move forward, so loading stopped after 2 workflows."
+            'Loading stopped after 2 workflows because the server kept sending the same page. Try again.'
         )
         expect(requests).toEqual(2)
     })
