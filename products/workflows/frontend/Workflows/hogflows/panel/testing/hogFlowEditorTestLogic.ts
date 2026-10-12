@@ -1407,7 +1407,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
             },
         },
     })),
-    listeners(({ values, actions }) => ({
+    listeners(({ values, actions, asyncActions }) => ({
         runRequestedTestWhenReady: () => {
             const isTestingTrigger = values.mode === 'test' && values.selectedNodeId === values.triggerAction?.id
             const testEventReady = !!values.sampleGlobals && !values.sampleGlobalsLoading
@@ -1446,7 +1446,18 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
         },
         startTestRun: async ({ inputs, source }, breakpoint) => {
             actions.resetAccumulatedVariables()
-            const { globals: globalsJson, mock_async_functions: mockAsyncFunctions } = inputs
+            const { mock_async_functions: mockAsyncFunctions } = inputs
+            let globalsJson = inputs.globals
+            if (source === 'email') {
+                if (values.shouldLoadSampleGlobals) {
+                    await asyncActions.loadSampleGlobals()
+                }
+                breakpoint()
+                if (!values.testRunning) {
+                    return
+                }
+                globalsJson = values.testInvocation.globals
+            }
             const variables = { ...values.workflowVariableDefaults }
             let actionId = values.triggerAction?.id ?? null
             for (let stepCount = 0; actionId; stepCount++) {

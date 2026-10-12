@@ -649,7 +649,13 @@ describe('hogFlowEditorTestLogic', () => {
             exit_node: { status: 'success', nextActionId: 'exit_node' },
         }
         let stepResponses: Record<string, StepResponse> = {}
-        let requests: { step: string; mocked: boolean; variables: Record<string, string>; personId?: string }[] = []
+        let requests: {
+            step: string
+            mocked: boolean
+            variables: Record<string, string>
+            personId?: string
+            eventName?: string
+        }[] = []
         let holdFirstStep = false
         let firstStepReceived = (): void => {}
         let releaseFirstStep = (): void => {}
@@ -664,17 +670,25 @@ describe('hogFlowEditorTestLogic', () => {
                         const body = (await request.json()) as {
                             current_action_id: string
                             mock_async_functions: boolean
-                            globals: { variables: Record<string, string>; person?: { id: string } }
+                            globals: {
+                                variables: Record<string, string>
+                                person?: { id: string }
+                                event?: { event: string }
+                            }
                         }
                         requests.push({
                             step: body.current_action_id,
                             mocked: body.mock_async_functions,
                             variables: body.globals.variables,
                             personId: body.globals.person?.id,
+                            eventName: body.globals.event?.event,
                         })
                         if (holdFirstStep && requests.length === 1) {
                             firstStepReceived()
                             await new Promise<void>((resolve) => (releaseFirstStep = resolve))
+                        }
+                        if (body.current_action_id === 'trigger_node' && body.globals.event?.event === '$identify') {
+                            return [200, { status: 'skipped', nextActionId: null, logs: [] }]
                         }
                         const response = stepResponses[body.current_action_id]
                         return response === 'request fails'
@@ -775,10 +789,19 @@ describe('hogFlowEditorTestLogic', () => {
             expect(logic.values.testRunning).toBe(false)
         })
 
-        it('keeps the email pane person and mocks every request in its full run', async () => {
+        it('runs past the trigger when the email pane person’s newest event does not match', async () => {
             await mountWithRealRequests(COMPLETE_RUN)
+            await workflowLogic({ id: 'test-workflow' }).asyncActions.setWorkflowActionConfig('trigger_node', {
+                type: 'event',
+                filters: { events: [{ id: '$pageview', type: 'events' }] },
+            })
+            const triggerGlobals = createExampleEventForTrigger({ type: 'event' }, 1, 'wf')
+            ;(performWideEventsQueryInTwoPhases as jest.Mock).mockResolvedValue({
+                results: [[triggerGlobals.event, { id: 'workflow-pane-person', properties: {} }]],
+            })
             const emailPaneGlobals = {
-                ...createExampleEventForTrigger({ type: 'event' }, 1, 'wf'),
+                ...triggerGlobals,
+                event: { ...triggerGlobals.event, event: '$identify' },
                 person: { id: 'email-pane-person', name: 'Email pane person', url: '', properties: {} },
             }
 
@@ -789,8 +812,9 @@ describe('hogFlowEditorTestLogic', () => {
                 )
             ).toDispatchActions(['finishTestRun'])
 
-            expect(requests.map(({ mocked, personId }) => ({ mocked, personId }))).toEqual(
-                COMPLETE_STEPS.map(() => ({ mocked: true, personId: 'email-pane-person' }))
+            expect(requests.map(({ step }) => step)).toEqual(COMPLETE_STEPS)
+            expect(requests.map(({ mocked, personId, eventName }) => ({ mocked, personId, eventName }))).toEqual(
+                COMPLETE_STEPS.map(() => ({ mocked: true, personId: 'workflow-pane-person', eventName: '$pageview' }))
             )
         })
 
