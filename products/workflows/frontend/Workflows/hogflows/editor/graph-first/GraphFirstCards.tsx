@@ -63,7 +63,13 @@ function Row({ label, children }: { label: string; children: React.ReactNode }):
     )
 }
 
-function MetricsStrip({ action, metrics }: { action: HogFlowAction; metrics: SampleMetrics }): JSX.Element | null {
+export function MetricsStrip({
+    action,
+    metrics,
+}: {
+    action: HogFlowAction
+    metrics: SampleMetrics
+}): JSX.Element | null {
     const entered = metrics.enteredByNode[action.id]
     if (entered === undefined) {
         return null
@@ -200,7 +206,7 @@ function CardBody({
     }
 }
 
-function StepActionsMenu({ action }: { action: HogFlowAction }): JSX.Element | null {
+export function StepActionsMenu({ action }: { action: HogFlowAction }): JSX.Element | null {
     const { nodesById, selectedNodeCanBeDeleted, selectedNodeCanBeCopiedOrMoved } = useValues(hogFlowEditorLogic)
     const { startCopyingNode, startMovingNode, onNodesDelete, duplicateNodeBelow, setSelectedNodeId } =
         useActions(hogFlowEditorLogic)

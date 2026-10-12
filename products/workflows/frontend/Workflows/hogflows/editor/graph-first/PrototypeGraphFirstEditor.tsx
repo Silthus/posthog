@@ -34,7 +34,7 @@ import { hogFlowEditorLogic, HogFlowEditorMode } from '../../hogFlowEditorLogic'
 import { HogFlowEditorPanel } from '../../panel/HogFlowEditorPanel'
 import { HogFlowEditorPanelBuild } from '../../panel/HogFlowEditorPanelBuild'
 import type { HogFlow } from '../../types'
-import { ActionCard, GroupFrameHeader, NoteCard, SummaryCard } from './GraphFirstCards'
+import { GroupFrameHeader, NoteCard, SummaryCard } from './GraphFirstCards'
 import { LABEL_HEIGHT, labelWidth, layoutGraph, LayoutResult, Point } from './graphFirstLayout'
 import {
     actionById,
@@ -53,6 +53,7 @@ import {
     VisibleNode,
     visibleGraph,
 } from './graphFirstModel'
+import { NODE_STYLES, NodeStyle, StepNode } from './GraphFirstNodeStyles'
 
 const PANEL_WIDTH = 460
 const FRAME_PAD = 14
@@ -66,6 +67,7 @@ type ViewState = {
     trace: Trace | null
     metrics: SampleMetrics | null
     previews: boolean
+    nodeStyle: NodeStyle
     selectedNodeId: string | null
     openStep: (nodeId: string) => void
     expand: (groupId: string) => void
@@ -94,7 +96,7 @@ function CardNode({ data }: NodeProps): JSX.Element {
         <div>
             <Handle type="target" position={Position.Top} className="!opacity-0" isConnectable={false} />
             {vnode.kind === 'action' ? (
-                <ActionCard action={vnode.action} workflow={view.workflow} state={state} />
+                <StepNode action={vnode.action} workflow={view.workflow} state={state} style={view.nodeStyle} />
             ) : (
                 <SummaryCard
                     group={vnode.group}
@@ -334,12 +336,14 @@ function MeasureLayer({
     workflow,
     metrics,
     previews,
+    nodeStyle,
     onMeasured,
 }: {
     nodes: VisibleNode[]
     workflow: HogFlow
     metrics: SampleMetrics | null
     previews: boolean
+    nodeStyle: NodeStyle
     onMeasured: (sizes: Record<string, { width: number; height: number }>) => void
 }): JSX.Element {
     const ref = useRef<HTMLDivElement>(null)
@@ -358,13 +362,18 @@ function MeasureLayer({
         return () => {
             cancelled = true
         }
-    }, [nodes, metrics, previews]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [nodes, metrics, previews, nodeStyle]) // eslint-disable-line react-hooks/exhaustive-deps
     return (
         <div ref={ref} aria-hidden className="pointer-events-none invisible absolute left-[-20000px] top-0">
             {nodes.map((vnode) => (
                 <div key={vnode.id} data-measure-id={vnode.id} className="w-max">
                     {vnode.kind === 'action' ? (
-                        <ActionCard action={vnode.action} workflow={workflow} state={{ metrics, previews }} />
+                        <StepNode
+                            action={vnode.action}
+                            workflow={workflow}
+                            state={{ metrics, previews }}
+                            style={nodeStyle}
+                        />
                     ) : (
                         <SummaryCard group={vnode.group} workflow={workflow} />
                     )}
@@ -497,7 +506,7 @@ function ViewMenu({ toggles }: { toggles: [string, boolean, (value: boolean) => 
     )
 }
 
-function GraphFirstCanvas(): JSX.Element {
+function GraphFirstCanvas({ initialNodeStyle }: { initialNodeStyle: NodeStyle }): JSX.Element {
     const { isDarkModeOn } = useValues(themeLogic)
     const { workflow, selectedNodeId, mode, panelWidth, isMovingNode, isCopyingNode } = useValues(hogFlowEditorLogic)
     const { setSelectedNodeId, setMode, setPanelWidth, handlePaneClick, stopMovingNode, stopCopyingNode } =
@@ -517,6 +526,7 @@ function GraphFirstCanvas(): JSX.Element {
     const [previews, setPreviews] = useState(
         () => workflow.actions.filter((action) => emailContent(action)).length <= 3
     )
+    const [nodeStyle, setNodeStyle] = useState<NodeStyle>(initialNodeStyle)
     const [panelOpen, setPanelOpen] = useState(false)
     const [sizes, setSizes] = useState<Record<string, { width: number; height: number }> | null>(null)
     const [layout, setLayout] = useState<LayoutResult | null>(null)
@@ -568,6 +578,7 @@ function GraphFirstCanvas(): JSX.Element {
         trace,
         metrics,
         previews,
+        nodeStyle,
         selectedNodeId: panelOpen ? selectedNodeId : null,
         openStep: (nodeId) => openPanel('build', nodeId),
         expand: (id) => setCollapsed((prev) => new Set([...prev].filter((g) => g !== id))),
@@ -578,7 +589,7 @@ function GraphFirstCanvas(): JSX.Element {
         },
     }
     ViewContext.current = view
-    const tick = useMemo(() => ({}), [trace, metrics, previews, selectedNodeId, panelOpen, workflow]) // eslint-disable-line react-hooks/exhaustive-deps
+    const tick = useMemo(() => ({}), [trace, metrics, previews, nodeStyle, selectedNodeId, panelOpen, workflow]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const rfNodes = useMemo(() => {
         if (!layout || !sizes) {
@@ -746,6 +757,7 @@ function GraphFirstCanvas(): JSX.Element {
                 workflow={workflow}
                 metrics={metrics}
                 previews={previews}
+                nodeStyle={nodeStyle}
                 onMeasured={setSizes}
             />
             <div ref={wrapperRef} className="flex min-h-0 min-w-0 grow">
@@ -844,6 +856,17 @@ function GraphFirstCanvas(): JSX.Element {
                             </LemonButton>
                         </div>
                     </Panel>
+                    <Panel position="bottom-right" className="!m-3">
+                        <div className="flex items-center gap-2 rounded-lg border bg-surface-primary py-1 pl-2.5 pr-1 shadow-sm">
+                            <span className="text-xs font-semibold text-secondary">Nodes</span>
+                            <LemonSegmentedButton
+                                size="small"
+                                value={nodeStyle}
+                                onChange={setNodeStyle}
+                                options={NODE_STYLES}
+                            />
+                        </div>
+                    </Panel>
                     {(isMovingNode || isCopyingNode) && (
                         <Panel position="top-center" className="!mt-16">
                             <div className="rounded-full border bg-surface-primary px-3 py-1 text-sm shadow">
@@ -890,14 +913,18 @@ function GraphFirstCanvas(): JSX.Element {
 }
 
 /** Mount inside a bound `workflowLogic`. */
-export function PrototypeGraphFirstEditor(): JSX.Element {
+export function PrototypeGraphFirstEditor({
+    initialNodeStyle = 'line',
+}: {
+    initialNodeStyle?: NodeStyle
+}): JSX.Element {
     const { logicProps } = useValues(workflowLogic)
     return (
         <BindLogic logic={hogFlowEditorLogic} props={logicProps}>
             <HogFlowBranchSelectionProvider>
                 <div className="@container/workflow-editor flex min-h-0 min-w-0 flex-1">
                     <ReactFlowProvider>
-                        <GraphFirstCanvas />
+                        <GraphFirstCanvas initialNodeStyle={initialNodeStyle} />
                     </ReactFlowProvider>
                 </div>
             </HogFlowBranchSelectionProvider>

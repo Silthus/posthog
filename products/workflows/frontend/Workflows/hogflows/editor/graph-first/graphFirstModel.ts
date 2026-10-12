@@ -524,3 +524,146 @@ export function groupEmails(workflow: HogFlow, group: BranchGroup): { subject: s
     })
     return [...counts.entries()].map(([subject, count]) => ({ subject, count }))
 }
+
+// --- Node facts: the data a node shows instead of its name and description ---
+
+export type NodeFacts = {
+    headline: string
+    detail?: string
+    fields: [string, string][]
+}
+
+const humanKey = (key: string): string => key.replace(/^\$/, '').replace(/_/g, ' ')
+
+function splitKey(config: AnyConfig): string | undefined {
+    const keys = new Set<string>(
+        (config.conditions ?? []).flatMap((condition: AnyConfig) =>
+            (condition.filters?.properties ?? []).map((filter: AnyConfig) => filter.key)
+        )
+    )
+    return keys.size === 1 ? humanKey([...keys][0]) : undefined
+}
+
+function triggerFacts(workflow: HogFlow, action: HogFlowAction): NodeFacts {
+    const trigger = workflow.trigger as AnyConfig | undefined
+    const events: string[] = (trigger?.filters?.events ?? []).map((event: AnyConfig) => event.name ?? event.id)
+    const properties = trigger?.filters?.properties ?? []
+    const who = properties.length ? conditionText({ properties }) : 'Anyone'
+    if (trigger?.type === 'event' && events.length) {
+        return {
+            headline: events.join(' or '),
+            detail: properties.length ? `Starts when someone does this, if ${who}` : 'Starts when someone does this',
+            fields: [
+                ['Starts on', events.join(', ')],
+                ['Who', who],
+            ],
+        }
+    }
+    if (trigger?.type === 'batch') {
+        const audience = action.name.replace(/^Audience:\s*/i, '')
+        return {
+            headline: audience.charAt(0).toUpperCase() + audience.slice(1),
+            detail: 'Audience · starts once for every person',
+            fields: [
+                ['Starts on', 'Audience, once per person'],
+                ['Who', who],
+            ],
+        }
+    }
+    const text = triggerText(workflow)
+    return { headline: text, fields: [['Starts on', text]] }
+}
+
+export function nodeFacts(workflow: HogFlow, action: HogFlowAction, templateName?: string): NodeFacts {
+    const config = configOf(action)
+    const email = emailContent(action)
+    if (email) {
+        return {
+            headline: email.subject,
+            detail: email.preheader,
+            fields: [
+                ['Preview', email.preheader || 'None'],
+                ['To', email.to === "the person's email address" ? 'Their email address' : email.to],
+                ['Type', config.message_category_type === 'transactional' ? 'Transactional' : 'Marketing'],
+            ],
+        }
+    }
+    switch (action.type) {
+        case 'trigger':
+            return triggerFacts(workflow, action)
+        case 'conditional_branch': {
+            const conditions: AnyConfig[] = config.conditions ?? []
+            const names = conditions.map((condition, index) => condition.name || `Condition ${index + 1}`)
+            const key = splitKey(config)
+            return {
+                headline: key ? `Split by ${key}` : 'Split by condition',
+                detail: `${names.join(', ')}, or no match`,
+                fields: [
+                    ...conditions.map((condition, index): [string, string] => [
+                        names[index],
+                        conditionText(condition.filters),
+                    ]),
+                    ['No match', 'Everyone else'],
+                ],
+            }
+        }
+        case 'random_cohort_branch': {
+            const cohorts: AnyConfig[] = config.cohorts ?? []
+            return {
+                headline: 'Random split',
+                detail: cohorts.map((cohort) => `${cohort.percentage}%`).join(' / '),
+                fields: cohorts.map((cohort, index): [string, string] => [
+                    cohort.name || `Group ${index + 1}`,
+                    `${cohort.percentage}% of people`,
+                ]),
+            }
+        }
+        case 'delay':
+            return {
+                headline: `Wait ${humanDuration(config.delay_duration) || '(not set)'}`,
+                detail: 'Then continue',
+                fields: [['Wait', humanDuration(config.delay_duration) || 'Not set']],
+            }
+        case 'wait_until_time_window': {
+            const day = config.day === 'weekday' ? 'weekday' : (config.day ?? 'day')
+            return {
+                headline: `Next ${day}, ${config.time?.[0]}–${config.time?.[1]}`,
+                detail: `Holds people until then (${config.timezone ?? 'UTC'})`,
+                fields: [
+                    ['Day', day],
+                    ['Time', `${config.time?.[0]}–${config.time?.[1]}`],
+                    ['Time zone', config.timezone ?? 'UTC'],
+                ],
+            }
+        }
+        case 'wait_until_condition': {
+            const name = config.condition?.name ?? 'a condition'
+            return {
+                headline: `Wait for ${name}`,
+                detail: `Gives up after ${humanDuration(config.max_wait_duration)}`,
+                fields: [
+                    ['Waits for', conditionText(config.condition?.filters)],
+                    ['Gives up', `after ${humanDuration(config.max_wait_duration)}`],
+                ],
+            }
+        }
+        case 'exit':
+            return {
+                headline: config.reason || 'End of workflow',
+                detail: exitRuleText(workflow),
+                fields: [
+                    ['Ends when', config.reason || 'The path runs out'],
+                    ['Also ends', exitRuleText(workflow).replace(/^People also leave early when /, 'When ')],
+                    ...(workflow.conversion?.window
+                        ? [['Goal window', humanDuration(workflow.conversion.window)] as [string, string]]
+                        : []),
+                ],
+            }
+        default:
+            return {
+                headline: templateName ?? action.name,
+                detail: action.description || undefined,
+                fields: [['Runs', templateName ?? action.type]],
+            }
+    }
+}
