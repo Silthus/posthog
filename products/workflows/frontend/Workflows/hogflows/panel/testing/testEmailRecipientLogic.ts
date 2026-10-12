@@ -2,11 +2,11 @@ import { MakeLogicType, actions, connect, kea, listeners, path, reducers, select
 
 import { FEATURE_FLAGS } from 'lib/constants'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
+import type { FeatureFlagsSet } from 'lib/logic/featureFlagLogic'
 import { userLogic } from 'scenes/userLogic'
 
 import { UserType } from '~/types'
 
-import type { FeatureFlagsSet } from '../../../../../../../frontend/src/lib/logic/featureFlagLogic'
 import { isEmailAction } from '../../steps/types'
 import { HogFlow } from '../../types'
 
@@ -45,7 +45,7 @@ export interface testEmailRecipientLogicValues {
     user: UserType | null // userLogic
     emailAddressOverride: string | null
     storedEmailAddressOverride: StoredEmailAddressOverride | null
-    testEmailAddress: string
+    preferredTestEmailAddress: string
     testingV2Enabled: boolean
 }
 
@@ -67,7 +67,11 @@ export interface testEmailRecipientLogicMeta {
             storedEmailAddressOverride: StoredEmailAddressOverride | null,
             user: UserType | null
         ) => string | null
-        testEmailAddress: (emailAddressOverride: string | null, user: UserType | null, testingV2Enabled: any) => string
+        preferredTestEmailAddress: (
+            emailAddressOverride: string | null,
+            user: UserType | null,
+            testingV2Enabled: any
+        ) => string
     }
 }
 
@@ -107,7 +111,7 @@ export const testEmailRecipientLogic = kea<testEmailRecipientLogicType>([
             (stored: StoredEmailAddressOverride | null, user: UserType | null): string | null =>
                 stored && stored.userUuid === user?.uuid ? stored.email : null,
         ],
-        testEmailAddress: [
+        preferredTestEmailAddress: [
             (s) => [s.emailAddressOverride, s.user, s.testingV2Enabled],
             (emailAddressOverride: string | null, user: UserType | null, enabled: boolean): string =>
                 emailAddressOverride ?? (enabled ? (user?.email ?? '') : ''),

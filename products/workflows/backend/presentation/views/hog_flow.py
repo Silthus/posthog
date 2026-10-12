@@ -3386,11 +3386,6 @@ def _apply_action_email_edit(
 
 
 class HogFlowInvocationSerializer(serializers.Serializer):
-    testing_v2 = serializers.BooleanField(
-        default=False,
-        write_only=True,
-        help_text="Use the enhanced testing experience. Requires workflows-testing-v2 for this project and caller.",
-    )
     configuration = HogFlowSerializer(
         write_only=True, required=False, help_text="Optional override; omit to use saved definition."
     )
@@ -5602,13 +5597,6 @@ class HogFlowViewSet(
             return Response(serializer.errors, status=400)
 
         payload = dict(serializer.validated_data)
-        if payload.pop("testing_v2", False) and not posthog_feature_flag_enabled(
-            "workflows-testing-v2",
-            str(request.user.distinct_id),
-            organization_id=self.team.organization_id,
-            team_id=self.team_id,
-        ):
-            raise exceptions.PermissionDenied("The enhanced workflow testing experience is not available.")
         if payload.pop("use_draft", False):
             # The staged draft was validated when written, so it goes to the executor inline exactly
             # like an explicit configuration override — workers never read (or cache) the draft column.

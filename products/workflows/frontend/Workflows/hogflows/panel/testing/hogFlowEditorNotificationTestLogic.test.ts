@@ -155,14 +155,14 @@ describe('hogFlowEditorNotificationTestLogic', () => {
             await expectLogic(logic, () => {
                 logic.actions.loadSamplePersonByDistinctIdSuccess(globalsWithEmail)
             }).toMatchValues({
-                emailAddressOverride: null, // Should remain null, not automatically set
+                effectiveEmailAddressOverride: null, // Should remain null, not automatically set
             })
 
             // Only manual setting should update it
             await expectLogic(logic, () => {
                 logic.actions.setEmailAddressOverride('manual@example.com')
             }).toMatchValues({
-                emailAddressOverride: 'manual@example.com',
+                effectiveEmailAddressOverride: 'manual@example.com',
             })
         })
     })
@@ -196,7 +196,7 @@ describe('hogFlowEditorNotificationTestLogic', () => {
                 .toDispatchActions(['setSampleGlobals'])
                 .toMatchValues({
                     sampleGlobals: globals,
-                    emailAddressOverride: null, // Should not be automatically set
+                    effectiveEmailAddressOverride: null, // Should not be automatically set
                 })
 
             // Verify that the form was updated with reordered globals
@@ -259,26 +259,26 @@ describe('hogFlowEditorNotificationTestLogic', () => {
             await expectLogic(logic, () => {
                 logic.actions.loadSamplePersonByDistinctIdSuccess(person1Globals)
             }).toMatchValues({
-                emailAddressOverride: null,
+                effectiveEmailAddressOverride: null,
             })
 
             await expectLogic(logic, () => {
                 logic.actions.loadSamplePersonByDistinctIdSuccess(person2Globals)
             }).toMatchValues({
-                emailAddressOverride: null,
+                effectiveEmailAddressOverride: null,
             })
 
             // Test 2: Manual override - should be preserved when switching persons
             await expectLogic(logic, () => {
                 logic.actions.setEmailAddressOverride('manual-override@example.com')
             }).toMatchValues({
-                emailAddressOverride: 'manual-override@example.com',
+                effectiveEmailAddressOverride: 'manual-override@example.com',
             })
 
             await expectLogic(logic, () => {
                 logic.actions.loadSamplePersonByDistinctIdSuccess(person1Globals)
             }).toMatchValues({
-                emailAddressOverride: 'manual-override@example.com', // Preserved
+                effectiveEmailAddressOverride: 'manual-override@example.com', // Preserved
             })
         })
     })
@@ -448,7 +448,7 @@ describe('hogFlowEditorNotificationTestLogic', () => {
                 logic.actions.setSampleGlobals(JSON.stringify(testGlobals, null, 2))
             }).toMatchValues({
                 selectedPersonDistinctId: testDistinctId,
-                emailAddressOverride: testEmail,
+                effectiveEmailAddressOverride: testEmail,
                 sampleGlobals: testGlobals,
             })
 
@@ -459,7 +459,7 @@ describe('hogFlowEditorNotificationTestLogic', () => {
 
             await expectLogic(newLogic).toMatchValues({
                 selectedPersonDistinctId: testDistinctId,
-                emailAddressOverride: testEmail,
+                effectiveEmailAddressOverride: testEmail,
                 sampleGlobals: testGlobals,
             })
 
@@ -468,7 +468,7 @@ describe('hogFlowEditorNotificationTestLogic', () => {
     })
 
     describe('test email recipient', () => {
-        const emailAction = (id: string): HogFlowAction => ({
+        const emailAction = (id: string): Extract<HogFlowAction, { type: 'function_email' }> => ({
             id,
             type: 'function_email',
             name: id,
@@ -544,7 +544,11 @@ describe('hogFlowEditorNotificationTestLogic', () => {
                 'keeps the selected person recipient when enhanced testing is off',
                 false,
                 null,
-                { to: { email: 'customer@example.com' }, cc: '', bcc: '' },
+                {
+                    to: { email: '{{ person.properties.email }}' },
+                    cc: 'account-manager@example.com',
+                    bcc: 'audit@example.com',
+                },
                 false,
             ],
         ])('%s', async (_, mocked, typedAddress, expectedRecipients, enabled) => {
@@ -568,7 +572,30 @@ describe('hogFlowEditorNotificationTestLogic', () => {
                 expect(action.config.inputs.email.value).toMatchObject({ ...expectedRecipients, subject: 'Welcome' })
             }
             expect(postedBody!.globals.person.properties.email).toEqual('customer@example.com')
-            expect(postedBody!.testing_v2 ?? false).toEqual(enabled)
+        })
+
+        it('preserves fixed recipients and per-workflow overrides with enhanced testing off', async () => {
+            featureFlagLogic.actions.setFeatureFlags([], { 'workflows-testing-v2': false })
+            const fixedAction = emailAction('fixed_email')
+            fixedAction.config.inputs!.email.value.to = { email: 'fixed@example.com', name: 'Fixed recipient' }
+            workflowLogicInstance.actions.setWorkflowValue('actions', [fixedAction])
+            logic.actions.setEmailAddressOverride('override@example.com')
+            logic.actions.setTestInvocationValue('mock_async_functions', false)
+
+            await expectLogic(logic, () => logic.actions.submitTestInvocation()).toDispatchActions([
+                'submitTestInvocationSuccess',
+            ])
+
+            expect(postedBody!.configuration.actions[0].config.inputs.email.value).toMatchObject({
+                to: { email: 'fixed@example.com', name: 'Fixed recipient' },
+                cc: 'account-manager@example.com',
+                bcc: 'audit@example.com',
+            })
+            expect(postedBody!.globals.person.properties.email).toEqual('override@example.com')
+            const anotherWorkflow = hogFlowEditorNotificationTestLogic({ id: 'another-workflow' })
+            anotherWorkflow.mount()
+            expect(anotherWorkflow.values.emailAddressOverride).toBeNull()
+            anotherWorkflow.unmount()
         })
 
         it.each([
@@ -601,7 +628,7 @@ describe('hogFlowEditorNotificationTestLogic', () => {
         ])('sends test emails to the right address when %s', (_, act, expectedAddress) => {
             act()
 
-            expect(logic.values.testEmailAddress).toEqual(expectedAddress)
+            expect(logic.values.resolvedTestEmailAddress).toEqual(expectedAddress)
         })
 
         it.each([

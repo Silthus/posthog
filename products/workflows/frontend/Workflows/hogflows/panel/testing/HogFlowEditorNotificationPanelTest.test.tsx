@@ -12,7 +12,13 @@ import { AccessControlLevel } from '~/types'
 import { workflowLogic } from '../../../workflowLogic'
 import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
 import { HogFlow } from '../../types'
+import { EmailActionTestContent } from './HogFlowEditorNotificationPanelTest'
 import { hogFlowEditorNotificationTestLogic } from './hogFlowEditorNotificationTestLogic'
+
+jest.mock('lib/utils/getAppContext', () => ({
+    ...jest.requireActual('lib/utils/getAppContext'),
+    getCurrentTeamId: () => 997,
+}))
 
 const WORKFLOW: HogFlow = {
     id: 'confirmation-workflow',
@@ -68,7 +74,6 @@ describe('EmailActionTestContent', () => {
             },
         })
         initKeaTests()
-        const { EmailActionTestContent } = await import('./HogFlowEditorNotificationPanelTest')
         featureFlagLogic.actions.setFeatureFlags(['workflows-testing-v2'], { 'workflows-testing-v2': true })
         const props = { id: WORKFLOW.id }
         const workflow = workflowLogic(props)
@@ -107,17 +112,15 @@ describe('EmailActionTestContent', () => {
             release()
             await pending
         })
-        await waitFor(() => expect(testing.values.isTestInvocationSubmitting).toBe(false))
         if (status === 200) {
             await screen.findByText('Success')
         } else {
+            await waitFor(() =>
+                expect(screen.getByText('Run test').closest('button')).toHaveAttribute('aria-disabled', 'false')
+            )
             fireEvent.click(screen.getByText('Run test'))
             const retry = await screen.findByText('Send email')
-            await waitFor(() => {
-                if (retry.closest('button')?.getAttribute('aria-disabled') !== 'false') {
-                    throw new Error('Retry remains disabled')
-                }
-            })
+            await waitFor(() => expect(retry.closest('button')).toHaveAttribute('aria-disabled', 'false'))
             fireEvent.click(screen.getByText('Cancel'))
         }
         testing.unmount()

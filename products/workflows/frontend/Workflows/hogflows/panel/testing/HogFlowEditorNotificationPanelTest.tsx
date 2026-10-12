@@ -50,9 +50,9 @@ export function EmailActionTestContent(): JSX.Element | null {
         sampleGlobals,
         sampleGlobalsLoading,
         sampleGlobalsError,
-        testEmailAddress,
+        resolvedTestEmailAddress,
         testingV2Enabled,
-        emailAddressOverride,
+        effectiveEmailAddressOverride: emailAddressOverride,
         runTestDisabledReason,
     } = useValues(hogFlowEditorNotificationTestLogic(logicProps))
     const {
@@ -138,7 +138,7 @@ export function EmailActionTestContent(): JSX.Element | null {
                                     size="small"
                                     value={emailAddressOverride ?? ''}
                                     onChange={setEmailAddressOverride}
-                                    placeholder={testEmailAddress || 'Enter email address'}
+                                    placeholder={resolvedTestEmailAddress || 'Enter email address'}
                                     disabledReason={value ? 'Turn on "Send real email to" to change the address' : null}
                                     aria-label="Test email address"
                                     className="flex-1 min-w-40"
@@ -185,7 +185,7 @@ export function EmailActionTestContent(): JSX.Element | null {
                                     LemonDialog.open({
                                         title: 'Confirm email test',
                                         shouldAwaitSubmit: true,
-                                        description: `This will send an email to ${testEmailAddress}, do you want to proceed?`,
+                                        description: `This will send an email to ${resolvedTestEmailAddress}, do you want to proceed?`,
                                         primaryButton: {
                                             children: 'Send email',
                                             type: 'primary',
@@ -337,7 +337,7 @@ export function EmailActionTestContent(): JSX.Element | null {
                                     <>
                                         <LemonLabel>Email address</LemonLabel>
                                         <LemonInput
-                                            value={testEmailAddress}
+                                            value={resolvedTestEmailAddress}
                                             onChange={setEmailAddressOverride}
                                             placeholder="Enter email address"
                                             type="email"
