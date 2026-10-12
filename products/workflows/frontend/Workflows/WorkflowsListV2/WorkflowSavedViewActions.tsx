@@ -58,8 +58,8 @@ export function WorkflowSavedViewActions({
                         disabledReason={saving ? 'A view is being saved' : loadingReason}
                         tooltip={
                             canUpdateActiveView
-                                ? `Keep ${activeView.name} as it was and save your changes as a new tab`
-                                : `${activeView.name} is built in and can't change. Save your changes (${changed}) as a new tab.`
+                                ? `Keep ${activeView.name} as it was and save your changes as a new view`
+                                : `${activeView.name} is built in and can't change. Save your changes (${changed}) as a new view.`
                         }
                         data-attr="workflows-combined-save-as-new"
                     >

@@ -8,7 +8,7 @@ export function openWorkflowSavedViewDialog(onSubmit: (name: string) => Promise<
         title: currentName === undefined ? 'Save as new view' : 'Rename view',
         description:
             currentName === undefined
-                ? 'The filters, search and columns become a new tab that everyone in this project sees.'
+                ? 'The filters, search and columns become a new view that everyone in this project sees.'
                 : undefined,
         initialValues: { name: currentName ?? '' },
         shouldAwaitSubmit: true,
