@@ -55,8 +55,6 @@ import { WorkflowListRow, buildWorkflowListRows } from './workflowListRows'
 
 const WORKFLOWS_PAGE_TYPES = LIST_TYPES.join(',')
 const PAGE_LIMIT = 500
-// A `next` link that never ends shows the load error instead of looping.
-const MAX_PAGES = 40
 const MIN_SERVER_SEARCH_LENGTH = 3
 const SERVER_SEARCH_DEBOUNCE_MS = 300
 
@@ -82,24 +80,35 @@ const LEGACY_VALUES: Record<string, (value: string) => boolean> = {
 // Parsing only needs facet keys and aliases, which don't depend on the loaded rows.
 const QUERY_FACETS = buildWorkflowListFacets([])
 
-/** Follows `next` to the end. Rows are keyed by id, because a row created mid-load shifts later offsets. */
+function nextOffsetOf(page: PaginatedHogFlowListSummaryListApi): number | null {
+    const nextOffset = page.next ? new URL(page.next, window.location.origin).searchParams.get('offset') : null
+    return nextOffset && page.results.length ? Number(nextOffset) : null
+}
+
+/**
+ * Follows `next` to the end, one page after another, so a row created mid-load still lands on a later
+ * page. Rows are keyed by id, because that row shifts later offsets and repeats one.
+ */
 async function loadAllPages(
     fetchPage: (offset: number | undefined) => Promise<PaginatedHogFlowListSummaryListApi>
 ): Promise<HogFlowListSummaryApi[]> {
     const byId = new Map<string, HogFlowListSummaryApi>()
-    let offset: number | undefined = undefined
-    for (let pages = 0; pages < MAX_PAGES; pages++) {
-        const page: PaginatedHogFlowListSummaryListApi = await fetchPage(offset)
+    let offset = 0
+    let page = await fetchPage(undefined)
+    for (;;) {
         for (const row of page.results) {
             byId.set(row.id, byId.get(row.id) ?? row)
         }
-        const nextOffset = page.next ? new URL(page.next, window.location.origin).searchParams.get('offset') : null
-        if (!nextOffset || !page.results.length) {
+        const nextOffset = nextOffsetOf(page)
+        if (nextOffset === null) {
             return [...byId.values()]
         }
-        offset = Number(nextOffset)
+        if (!(nextOffset > offset)) {
+            throw new Error(`The next page link went back to offset ${nextOffset}`)
+        }
+        offset = nextOffset
+        page = await fetchPage(offset)
     }
-    throw new Error(`Stopped loading after ${MAX_PAGES} pages`)
 }
 
 /** Reads a param as written. kea-router turns number-like values such as `007` into numbers. */

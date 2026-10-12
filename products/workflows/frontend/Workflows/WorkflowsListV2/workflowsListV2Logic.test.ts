@@ -117,7 +117,29 @@ describe('workflowsListV2Logic', () => {
         expect(logic.values.facets.find((facet) => facet.key === 'created-by')?.formatValue?.('me')).toEqual('Lin')
     })
 
-    it('stops following a next link that never ends and shows the load error', async () => {
+    it('follows next links for as many pages as the project has', async () => {
+        const pageCount = 45
+        useMocks({
+            get: {
+                '/api/projects/:team_id/hog_flows/summaries/': ({ request }) => {
+                    const page = Number(new URL(request.url).searchParams.get('offset') ?? 0) / 500
+                    const next =
+                        page + 1 < pageCount
+                            ? `http://localhost/api/projects/997/hog_flows/summaries/?limit=500&offset=${(page + 1) * 500}`
+                            : null
+                    return [200, paginated([buildWorkflowRow({ id: `wf-page-${page}` })], next)]
+                },
+            },
+        })
+        router.actions.push(urls.workflows())
+        logic = workflowsListV2Logic()
+        logic.mount()
+
+        await expectLogic(logic).toDispatchActions(['loadWorkflowsSuccess'])
+        expect(logic.values.rows).toHaveLength(pageCount)
+    })
+
+    it('stops at a next link that does not move forward and shows the load error', async () => {
         let requests = 0
         useMocks({
             get: {
@@ -139,7 +161,7 @@ describe('workflowsListV2Logic', () => {
 
         await expectLogic(logic).toDispatchActions(['loadWorkflowsFailure'])
         expect(logic.values.loadFailed).toBe(true)
-        expect(requests).toBeLessThanOrEqual(100)
+        expect(requests).toEqual(2)
     })
 
     it('sends every request to the team id, which can differ from the project id', async () => {
