@@ -632,10 +632,15 @@ describe('hogFlowEditorNotificationTestLogic', () => {
         })
 
         it.each([
-            ['a mocked test with a half-typed address', true, 'qa@', null],
-            ['a real send with a half-typed address', false, 'qa@', 'Must enter a valid email address'],
-            ['a real send to your own address', false, '', null],
-        ])('lets %s run only when the address it sends to is valid', (_, mocked, typedAddress, reason) => {
+            ['a mocked test with a half-typed address', true, 'qa@', null, true],
+            ['a real send with a half-typed address', false, 'qa@', 'Must enter a valid email address', true],
+            ['a real send to your own address', false, '', null, true],
+            ['a legacy mocked test with an invalid address', true, 'qa@', 'Must enter a valid email address', false],
+            ['a legacy real send with an invalid address', false, 'qa@', 'Must enter a valid email address', false],
+        ])('lets %s run only when the address it sends to is valid', (_, mocked, typedAddress, reason, enhanced) => {
+            featureFlagLogic.actions.setFeatureFlags(enhanced ? ['workflows-testing-v2'] : [], {
+                'workflows-testing-v2': enhanced,
+            })
             logic.actions.setTestInvocationValue('mock_async_functions', mocked)
             logic.actions.setEmailAddressOverride(typedAddress)
 

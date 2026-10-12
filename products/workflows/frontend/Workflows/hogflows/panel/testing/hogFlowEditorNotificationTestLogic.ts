@@ -467,7 +467,7 @@ export const hogFlowEditorNotificationTestLogic = kea<hogFlowEditorNotificationT
                 if (!sampleGlobals) {
                     return 'Must load person to run test'
                 }
-                if (testingV2Enabled && !testInvocation.mock_async_functions && !isEmail(resolvedTestEmailAddress)) {
+                if ((!testingV2Enabled || !testInvocation.mock_async_functions) && !isEmail(resolvedTestEmailAddress)) {
                     return 'Must enter a valid email address'
                 }
                 return null
