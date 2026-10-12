@@ -280,6 +280,7 @@ describe('EmailService', () => {
                     },
                 })
                 invocation.queueParameters = createEmailParams({ from: { integrationId: 4 } })
+                Object.assign(invocation, { hogFlow: { id: invocation.functionId, team_id: team.id } })
             })
 
             afterEach(async () => {
@@ -289,6 +290,31 @@ describe('EmailService', () => {
                     sandboxRedisClient = undefined
                 }
             })
+
+            it.each([false, true])(
+                'permits sandbox destination invocations only as explicit tests (%s)',
+                async (isTest) => {
+                    service = createSandboxService(true)
+                    const destination = createExampleInvocation({ team_id: team.id, id: 'email-destination' })
+                    destination.state.vmState = { stack: [] } as any
+                    destination.queueParameters = createEmailParams({ from: { integrationId: 4 } })
+
+                    const result = await service.executeSendEmail(destination, isTest)
+
+                    expect(result.error).toBeUndefined()
+                    expect(result.skipped === true).toBe(!isTest)
+                    expect(sendEmailSpy).toHaveBeenCalledTimes(isTest ? 1 : 0)
+                    expect(result.invocation.state.vmState?.stack).toEqual([{ success: isTest }])
+                    if (!isTest) {
+                        expect(result.logs).toContainEqual(
+                            expect.objectContaining({
+                                message:
+                                    'Skipping send: the sandbox sender is only available for workflows and test sends.',
+                            })
+                        )
+                    }
+                }
+            )
 
             it.each([
                 [false, {}],

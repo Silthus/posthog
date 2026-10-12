@@ -481,6 +481,12 @@ export class EmailService {
                 )
             }
 
+            if (isSandbox && !isTest && !('hogFlow' in invocation)) {
+                addLog('info', 'Skipping send: the sandbox sender is only available for workflows and test sends.')
+                result.skipped = true
+                result.invocation.state.vmState?.stack.push({ success: false })
+                return result
+            }
             if (isSandbox && !this.sandboxSender?.canSend) {
                 addLog(
                     'info',
