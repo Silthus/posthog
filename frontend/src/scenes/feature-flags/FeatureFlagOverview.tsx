@@ -21,6 +21,7 @@ import {
 } from 'products/feature_flags/frontend/featureFlagConfigFormat'
 import { FeatureFlagConfigReadonlyNotice } from 'products/feature_flags/frontend/FeatureFlagConfigReadonlyNotice'
 import { FeatureFlagRulesV2Readonly } from 'products/feature_flags/frontend/FeatureFlagRulesV2Readonly'
+import { FeatureFlagHealthCard } from 'products/feature_flags/frontend/health/FeatureFlagHealthCard'
 
 import { EditableOverviewSection } from './EditableOverviewSection'
 import { FeatureFlagEvaluationContexts } from './FeatureFlagEvaluationContexts'
@@ -75,6 +76,12 @@ export function FeatureFlagOverview({ featureFlag }: FeatureFlagOverviewProps): 
     const multivariateEnabled = !!v1Filters?.multivariate
     const variants = v1Filters?.multivariate?.variants || []
     const hasPayload = !!v1Filters?.payloads?.['true']
+    const showHealth =
+        !!featureFlags[FEATURE_FLAGS.FEATURE_FLAG_HEALTH] &&
+        !!v1Filters &&
+        !multivariateEnabled &&
+        !featureFlag.is_remote_configuration &&
+        !featureFlag.deleted
     const showImplementation =
         !!v1Filters ||
         (isRulesV2FeatureFlagConfig(featureFlag.filters) && featureFlag.filters.return_type === 'boolean')
@@ -177,6 +184,8 @@ export function FeatureFlagOverview({ featureFlag }: FeatureFlagOverviewProps): 
                             </AccessControlAction>
                         )}
                     </div>
+
+                    {showHealth && <FeatureFlagHealthCard flagKey={featureFlag.key} />}
 
                     <EditableOverviewSection editOptions={{ expandAdvanced: true }}>
                         <div className="flex flex-col gap-4">
