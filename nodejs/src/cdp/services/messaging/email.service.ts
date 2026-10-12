@@ -34,7 +34,7 @@ import { EmailTrackingCodeSigner, TRACKING_CODE_HEADER_NAME } from './helpers/tr
 import { addUtmTagsToEmail, renderUtmOverrides, resolveUtmTags } from './helpers/utm'
 import { MessageAssetsService } from './message-assets.service'
 import { RecipientTokensService } from './recipient-tokens.service'
-import { SandboxEmailSender } from './sandbox-email-sender'
+import { SandboxDailyCapGrant, SandboxEmailSender } from './sandbox-email-sender'
 
 const sesThrottleResponsesTotal = new Counter({
     name: 'cdp_ses_throttle_responses_total',
@@ -386,6 +386,37 @@ function sandboxAddressList(value?: string): string[] {
         .filter(Boolean)
         .map((entry) => angleAddress(entry) ?? entry)
 }
+
+type SandboxAddressBlockReason = 'recipient_not_member' | 'check_failed' | 'cap_reached'
+
+const SANDBOX_ADDRESS_BLOCK_COPY: Record<
+    SandboxAddressBlockReason,
+    { explanation: string; label: string; guidance: string }
+> = {
+    recipient_not_member: {
+        explanation:
+            'Skipping send: the sandbox sender only sends to active organization members with verified email addresses',
+        label: '. Blocked addresses: ',
+        guidance: 'Verify your own domain to send to anyone.',
+    },
+    check_failed: {
+        explanation: 'Skipping send: could not check organization members',
+        label: ' for these addresses: ',
+        guidance: 'Try again, or verify your own domain to send to anyone.',
+    },
+    cap_reached: {
+        explanation: "Skipping send: these addresses reached the sandbox sender's daily limit per address",
+        label: ': ',
+        guidance: 'Verify your own domain to send more.',
+    },
+}
+
+const SANDBOX_CAP_SKIP_MESSAGES = {
+    project_cap_reached:
+        "Skipping send: this email would go over the sandbox sender's daily limit for this project. Verify your own domain to send more.",
+    check_failed:
+        "Skipping send: could not check the sandbox sender's daily limit. Try again later, or verify your own domain to send more.",
+} as const
 
 const BLOCKED_ADDRESSES_LABEL = 'Blocked addresses: '
 
@@ -1034,22 +1065,39 @@ export class EmailService {
         return false
     }
 
+    private async claimSandboxDailyCaps(
+        result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>,
+        recipients: string[],
+        isTest: boolean
+    ): Promise<SandboxDailyCapGrant | null> {
+        const teamId = result.invocation.teamId
+        const claim = await this.sandboxSender!.claimDailyCaps(teamId, recipients)
+        if (claim.type === 'granted') {
+            return claim
+        }
+        result.skipped = true
+        result.invocation.state.vmState?.stack.push({ success: false })
+        if (claim.type === 'recipient_cap_reached') {
+            this.logSandboxRecipientBlock(result, claim.addresses, 'cap_reached')
+        } else {
+            createAddLogFunction(result.logs)('info', SANDBOX_CAP_SKIP_MESSAGES[claim.type])
+        }
+        await this.sandboxSender!.capture(teamId, isTest, {
+            type: 'blocked',
+            reason: claim.type === 'check_failed' ? 'check_failed' : 'cap_reached',
+            blockedRecipientCount: claim.type === 'recipient_cap_reached' ? claim.addresses.length : recipients.length,
+        })
+        return null
+    }
+
     private logSandboxRecipientBlock(
         result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>,
         blockedRecipients: string[],
-        reason: 'recipient_not_member' | 'check_failed'
+        reason: SandboxAddressBlockReason
     ): void {
         const addLog = createAddLogFunction(result.logs)
         const addresses = blockedRecipients.map((address) => address.trim() || '(empty address)')
-        const explanation =
-            reason === 'check_failed'
-                ? 'Skipping send: could not check organization members'
-                : 'Skipping send: the sandbox sender only sends to active organization members with verified email addresses'
-        const guidance =
-            reason === 'check_failed'
-                ? 'Try again, or verify your own domain to send to anyone.'
-                : 'Verify your own domain to send to anyone.'
-        const label = reason === 'check_failed' ? ' for these addresses: ' : '. Blocked addresses: '
+        const { explanation, label, guidance } = SANDBOX_ADDRESS_BLOCK_COPY[reason]
         const message = `${explanation}${label}${addresses.join(', ')}. ${guidance}`
         if (sanitizeLogMessage([message]) === message) {
             addLog('info', message)
@@ -1413,15 +1461,16 @@ export class EmailService {
             sendEmailParams.Destination!.BccAddresses = bccAddresses
         }
 
-        if (
-            integration.config.provider === 'sandbox' &&
-            !(await this.checkSandboxRecipients(
-                result,
-                [params.to.email, ...(ccAddresses ?? []), ...(bccAddresses ?? [])],
-                isTest
-            ))
-        ) {
-            return false
+        let dailyCapGrant: SandboxDailyCapGrant | null = null
+        if (integration.config.provider === 'sandbox') {
+            const sandboxRecipients = [params.to.email, ...(ccAddresses ?? []), ...(bccAddresses ?? [])]
+            if (!(await this.checkSandboxRecipients(result, sandboxRecipients, isTest))) {
+                return false
+            }
+            dailyCapGrant = await this.claimSandboxDailyCaps(result, sandboxRecipients, isTest)
+            if (!dailyCapGrant) {
+                return false
+            }
         }
         try {
             const response = await this.sesV2Client.send(new SendEmailCommand(sendEmailParams))
@@ -1431,6 +1480,9 @@ export class EmailService {
         } catch (error: unknown) {
             if (isSesThrottleError(error)) {
                 sesThrottleResponsesTotal.inc({ error_code: error.name })
+                if (dailyCapGrant) {
+                    await this.sandboxSender!.returnDailyCaps(dailyCapGrant)
+                }
                 throw new SESThrottleError(error.name, pickThrottleRetryDelayMs(), error.message)
             }
             const message = error instanceof Error ? error.message : String(error)

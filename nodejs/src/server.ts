@@ -133,8 +133,8 @@ export class PluginServer implements NodeServer {
 
         // Build typed deps objects for consumers. `emailValidationValkey` is null in
         // the shared deps and set only by the cyclotron workers that run the hogflow
-        // email action (see `withEmailValidationValkey` at their loaders below) — no
-        // other consumer touches the SES Valkey.
+        // email action and by cdp-api (see `withEmailValidationValkey` at their loaders
+        // below) — no other consumer touches the SES Valkey.
         const cdpDeps: CdpConsumerBaseDeps | undefined = needsCdp
             ? {
                   postgres: this.postgres!,
@@ -240,7 +240,7 @@ export class PluginServer implements NodeServer {
                     : null
                 const api = new CdpApi(
                     this.config,
-                    cdpDeps!,
+                    this.withEmailValidationValkey(cdpDeps!),
                     { hogQueue: kafkaQueue, hogflowQueue: postgresV2Queue },
                     batchResolverProducer
                 )
@@ -443,14 +443,7 @@ export class PluginServer implements NodeServer {
         this.lifecycle.services.push(...readyServices)
     }
 
-    /**
-     * Grants the SES Valkey pool that backs the shared MX-verdict cache to a worker's
-     * deps. Only the cyclotron workers that run the hogflow email action call this, so
-     * the pool is never opened on other CDP consumers or cdp-api — an idle Valkey sized
-     * for the SES rate limiter shouldn't hold connections from pods that never validate.
-     * Null when no SES Valkey host is configured (local dev), in which case
-     * EmailValidationService degrades to its local cache + DNS.
-     */
+    // Test sends run inline in cdp-api and must share the workers' sandbox cap buckets.
     private withEmailValidationValkey(deps: CdpConsumerBaseDeps): CdpConsumerBaseDeps {
         return { ...deps, emailValidationValkey: createSesRateLimiterValkeyPool(this.config, 'email-mx-validation') }
     }
