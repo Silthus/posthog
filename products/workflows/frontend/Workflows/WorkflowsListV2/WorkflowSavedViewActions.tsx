@@ -10,7 +10,7 @@ export interface WorkflowSavedViewActionsProps {
     canUpdateActiveView: boolean
     activeViewChanges: string[]
     saving: boolean
-    loadingReason?: string
+    writeDisabledReason?: string
     sharedSaveDisabledReason?: string
     onReset: () => void
     onSaveAs: () => void
@@ -26,7 +26,7 @@ export function WorkflowSavedViewActions({
     canUpdateActiveView,
     activeViewChanges,
     saving,
-    loadingReason,
+    writeDisabledReason,
     sharedSaveDisabledReason,
     onReset,
     onSaveAs,
@@ -55,7 +55,7 @@ export function WorkflowSavedViewActions({
                         size="small"
                         type={canUpdateActiveView ? 'secondary' : 'primary'}
                         onClick={onSaveAs}
-                        disabledReason={saving ? 'A view is being saved' : loadingReason}
+                        disabledReason={saving ? 'A view is being saved' : writeDisabledReason}
                         tooltip={
                             canUpdateActiveView
                                 ? `Keep ${activeView.name} as it was and save your changes as a new view`
@@ -73,7 +73,7 @@ export function WorkflowSavedViewActions({
                         disabledReason={
                             !canUpdateActiveView
                                 ? "Built-in views can't be changed. Save as a new view instead."
-                                : (sharedSaveDisabledReason ?? loadingReason)
+                                : (sharedSaveDisabledReason ?? writeDisabledReason)
                         }
                         tooltip={`Update ${activeView.name} for everyone in this project. Changed: ${changed}.`}
                         data-attr="workflows-combined-update-view"
@@ -96,7 +96,7 @@ export function WorkflowSavedViewActions({
                         type="tertiary"
                         icon={<IconEllipsis />}
                         loading={saving && !isModified}
-                        disabledReason={saving ? 'A view is being saved' : loadingReason}
+                        disabledReason={saving ? 'A view is being saved' : writeDisabledReason}
                         data-attr="workflows-combined-view-more"
                         aria-label="More options"
                     />
