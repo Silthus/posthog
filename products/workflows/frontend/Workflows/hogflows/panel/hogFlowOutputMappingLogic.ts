@@ -451,6 +451,8 @@ export const hogFlowOutputMappingLogic = kea<hogFlowOutputMappingLogicType>([
                     }
 
                     const config = sanitizeWorkflow(JSON.parse(JSON.stringify(workflow)), hogFunctionTemplatesById)
+                    // This fetches one step's response, so the workflow's exit condition must not stop it.
+                    config.exit_condition = 'exit_only_at_end'
 
                     // Strip output_variable from the current action so the backend
                     // only executes the step and returns the raw result without
@@ -460,6 +462,7 @@ export const hogFlowOutputMappingLogic = kea<hogFlowOutputMappingLogicType>([
                         delete currentAction.output_variable
                     }
 
+                    // nosemgrep: prefer-codegen-api-namespaced-workflows
                     const result: HogflowTestResult = await api.hogFlows.createTestInvocation(workflow.id, {
                         configuration: config,
                         globals,

@@ -456,7 +456,7 @@ export const isScheduleTrigger = (action: HogFlowAction): boolean => {
 }
 
 export interface HogflowTestResult {
-    status: 'success' | 'error' | 'skipped'
+    status: 'success' | 'error' | 'skipped' | 'exited'
     logs?: LogEntry[]
     nextActionId: string | null
     awaitingResume?: boolean
