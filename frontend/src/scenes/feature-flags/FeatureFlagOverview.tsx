@@ -79,6 +79,7 @@ export function FeatureFlagOverview({ featureFlag }: FeatureFlagOverviewProps): 
     const showHealth =
         !!featureFlags[FEATURE_FLAGS.FEATURE_FLAG_HEALTH] &&
         !!v1Filters &&
+        v1Filters.aggregation_group_type_index == null &&
         !multivariateEnabled &&
         !featureFlag.is_remote_configuration &&
         !featureFlag.deleted

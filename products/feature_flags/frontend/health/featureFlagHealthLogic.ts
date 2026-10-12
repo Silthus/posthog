@@ -80,9 +80,14 @@ export const featureFlagHealthLogic = kea<featureFlagHealthLogicType>([
                         flagKey: props.flagKey,
                         dateRange: { date_from: `-${values.period}` },
                     }
-                    const response = await api.query(query)
-                    breakpoint()
-                    return response
+                    try {
+                        const response = await api.query(query)
+                        breakpoint()
+                        return response
+                    } catch (error) {
+                        breakpoint()
+                        throw error
+                    }
                 },
             },
         ],
@@ -98,6 +103,7 @@ export const featureFlagHealthLogic = kea<featureFlagHealthLogicType>([
             false,
             {
                 loadHealthResponse: () => false,
+                loadHealthResponseSuccess: () => false,
                 loadHealthResponseFailure: () => true,
             },
         ],

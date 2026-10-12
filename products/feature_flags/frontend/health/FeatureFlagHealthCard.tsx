@@ -1,6 +1,13 @@
 import { useActions, useValues } from 'kea'
 
-import { LemonButton, LemonSegmentedButton, LemonSkeleton, LemonTag, LemonTagType } from '@posthog/lemon-ui'
+import {
+    LemonButton,
+    LemonSegmentedButton,
+    LemonSegmentedButtonOption,
+    LemonSkeleton,
+    LemonTag,
+    LemonTagType,
+} from '@posthog/lemon-ui'
 
 import { percentage } from 'lib/utils/numbers'
 
@@ -10,14 +17,15 @@ import { FeatureFlagHealthPeriod, featureFlagHealthLogic } from './featureFlagHe
 
 const VERDICT_TAGS: Record<FeatureFlagHealthVerdict, { label: string; type: LemonTagType }> = {
     [FeatureFlagHealthVerdict.Pass]: { label: 'Healthy', type: 'success' },
-    [FeatureFlagHealthVerdict.Harm]: { label: 'Hurting users', type: 'danger' },
+    [FeatureFlagHealthVerdict.Harm]: { label: 'More errors with flag on', type: 'danger' },
     [FeatureFlagHealthVerdict.InsufficientData]: { label: 'Not enough data', type: 'muted' },
     [FeatureFlagHealthVerdict.TelemetryFailure]: { label: "Can't measure", type: 'warning' },
 }
 
-const PERIOD_OPTIONS: { value: FeatureFlagHealthPeriod; label: string }[] = [
-    { value: '24h', label: '24h' },
-    { value: '7d', label: '7d' },
+const PERIOD_OPTIONS: LemonSegmentedButtonOption<FeatureFlagHealthPeriod>[] = [
+    // pinned: data-attr values, renaming breaks autocapture dashboards
+    { value: '24h', label: '24h', 'data-attr': 'feature-flag-health-period-24h' },
+    { value: '7d', label: '7d', 'data-attr': 'feature-flag-health-period-7d' },
 ]
 
 function HealthArm({ label, arm }: { label: string; arm: FeatureFlagHealthArm }): JSX.Element {
@@ -50,9 +58,8 @@ export function FeatureFlagHealthCard({ flagKey }: FeatureFlagHealthCardProps): 
                 <LemonSegmentedButton
                     size="xsmall"
                     value={period}
-                    onChange={setPeriod}
+                    onChange={(newPeriod) => newPeriod !== period && setPeriod(newPeriod)}
                     options={PERIOD_OPTIONS}
-                    data-attr="feature-flag-health-period"
                 />
             </div>
             {healthResponseLoading || (!healthResponse && !loadFailed) ? (
