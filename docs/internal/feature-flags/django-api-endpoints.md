@@ -90,6 +90,9 @@ API tokens need both `query:read` and `feature_flag:read`.
 The response contains one object in `results`: `verdict`, `reason`, `on` and `off`
 counts, rates and confidence bounds, `excessBounds`, `crossovers`,
 `exceptionsWithoutFlagState`, `window`, and `thresholds`.
+Flags are resolved within the project, while events remain scoped to the requested environment.
+Invalid thresholds and empty date windows return HTTP 400. An end-only window starts 24 hours before that end.
+
 The query counts browser users with explicit boolean flag values and exceptions
 at or after their first exposure. Users seen in both arms are excluded.
 

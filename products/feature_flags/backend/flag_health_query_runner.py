@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 from django.utils import timezone
 
+from rest_framework.exceptions import ValidationError
+
 from posthog.schema import (
     CachedFeatureFlagHealthQueryResponse,
     DateRange,
@@ -36,14 +38,26 @@ class FeatureFlagHealthQueryRunner(AnalyticsQueryRunner[FeatureFlagHealthQueryRe
 
     @cached_property
     def flag(self) -> FeatureFlag | None:
-        return FeatureFlag.objects.filter(team_id=self.team.id, key=self.query.flagKey, deleted=False).first()
+        return FeatureFlag.objects.filter(
+            team__project_id=self.team.project_id, key=self.query.flagKey, deleted=False
+        ).first()
 
     def validate_query_runner_access(self, user: "User") -> bool:
         access = UserAccessControl(user=user, team=self.team)
-        access.assert_access_level_for_resource("feature_flag", "viewer")
-        if self.flag is not None and not access.check_access_level_for_object(self.flag, "viewer"):
+        if self.flag is None:
+            return access.assert_access_level_for_resource("feature_flag", "viewer")
+        if not access.check_access_level_for_object(self.flag, "viewer"):
             raise UserAccessControlError("feature_flag", "viewer")
         return True
+
+    def get_cache_payload(self) -> dict[str, object]:
+        payload = super().get_cache_payload()
+        flag = self.flag
+        payload["flag_state"] = (
+            (flag.id, flag.version, flag.aggregation_group_type_index, bool(flag.variants)) if flag else None
+        )
+        payload["exception_capture_opt_in"] = self.team.autocapture_exceptions_opt_in
+        return payload
 
     @cached_property
     def thresholds(self) -> FeatureFlagHealthThresholds:
@@ -53,7 +67,9 @@ class FeatureFlagHealthQueryRunner(AnalyticsQueryRunner[FeatureFlagHealthQueryRe
             alpha=self.query.alpha if self.query.alpha is not None else 0.05,
         )
         if not 0 <= thresholds.toleratedExcess <= 1 or not 0 < thresholds.alpha < 1:
-            raise ValueError("toleratedExcess must be between 0 and 1, and alpha must be between 0 and 1 exclusive")
+            raise ValidationError(
+                "toleratedExcess must be between 0 and 1, and alpha must be between 0 and 1 exclusive"
+            )
         return thresholds
 
     @cached_property
@@ -64,10 +80,16 @@ class FeatureFlagHealthQueryRunner(AnalyticsQueryRunner[FeatureFlagHealthQueryRe
         parsed = QueryDateRange(
             date_range, self.team, None, now, exact_timerange=True, earliest_timestamp_fallback=now - timedelta(days=7)
         )
-        end = min(parsed.date_to(), now - timedelta(minutes=5)).astimezone(UTC)
-        start = max(parsed.date_from(), end - timedelta(days=7)).astimezone(UTC)
+        try:
+            end = min(parsed.date_to(), now - timedelta(minutes=5)).astimezone(UTC)
+            if self.query.dateRange and self.query.dateRange.date_to and not self.query.dateRange.date_from:
+                start = end - timedelta(hours=24)
+            else:
+                start = max(parsed.date_from(), end - timedelta(days=7)).astimezone(UTC)
+        except ValueError as error:
+            raise ValidationError("dateRange must contain valid dates") from error
         if start >= end:
-            raise ValueError("The health window must start before its mature end")
+            raise ValidationError("The health window must start before its mature end")
         return FeatureFlagHealthWindow(date_from=start.isoformat(), date_to=end.isoformat())
 
     def to_query(self) -> ast.SelectQuery | ast.SelectSetQuery:
@@ -98,6 +120,7 @@ class FeatureFlagHealthQueryRunner(AnalyticsQueryRunner[FeatureFlagHealthQueryRe
                     WHERE timestamp >= toDateTime({start}) AND timestamp <= toDateTime({end})
                         AND properties.$lib = 'web'
                 )
+                WHERE event = '$exception' OR flag_value IN ('true', 'false')
                 GROUP BY person_id
             )
             """,
@@ -125,6 +148,7 @@ class FeatureFlagHealthQueryRunner(AnalyticsQueryRunner[FeatureFlagHealthQueryRe
             response = execute_hogql_query(
                 query=self.to_query(),
                 team=self.team,
+                user=self.user,
                 query_type="feature_flag_health_query",
                 timings=self.timings,
                 modifiers=self.modifiers,

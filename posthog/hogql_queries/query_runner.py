@@ -1405,6 +1405,7 @@ def get_query_runner(
             timings=timings,
             limit_context=limit_context,
             modifiers=modifiers,
+            user=user,
         )
 
     if kind == "MCPToolStatsQuery":
