@@ -310,6 +310,7 @@ def get_scoped_models() -> tuple[dict[str, set[str]], set[str], set[str], set[st
         "AsyncMigrationError",
         "InstanceSetting",
         "License",
+        "SandboxSenderTenantState",  # instance-global mirror of the shared sandbox SES tenant state
         # --- Deprecated ---
         "Prompt",
         "PromptSequence",
