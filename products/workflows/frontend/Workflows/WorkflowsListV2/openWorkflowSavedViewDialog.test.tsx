@@ -7,7 +7,7 @@ import { ApiError } from 'lib/api-error'
 
 import { initKeaTests } from '~/test/init'
 
-import { openWorkflowSavedViewDialog } from './openWorkflowSavedViewDialog'
+import { openDeleteWorkflowSavedViewDialog, openWorkflowSavedViewDialog } from './openWorkflowSavedViewDialog'
 
 describe('saved workflow view dialog', () => {
     beforeEach(() => initKeaTests())
@@ -44,6 +44,21 @@ describe('saved workflow view dialog', () => {
         await userEvent.keyboard('{Enter}')
         await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument())
         expect(submit.mock.calls).toEqual([['Shared draft'], ['Shared draft']])
+    })
+
+    it('deletes a shared view only after the user confirms that everyone loses it', async () => {
+        const remove = jest.fn().mockResolvedValue(undefined)
+        act(() => openDeleteWorkflowSavedViewDialog('Active flows', remove))
+        expect(await screen.findByText('Delete Active flows?')).toBeInTheDocument()
+        expect(screen.getByText(/Everyone in this project loses this view/)).toBeInTheDocument()
+        await userEvent.click(screen.getByText('Cancel'))
+        await waitFor(() => expect(screen.queryByText('Delete Active flows?')).not.toBeInTheDocument())
+        expect(remove).not.toHaveBeenCalled()
+
+        act(() => openDeleteWorkflowSavedViewDialog('Active flows', remove))
+        await userEvent.click(await screen.findByRole('button', { name: 'Delete view' }))
+        await waitFor(() => expect(screen.queryByText('Delete Active flows?')).not.toBeInTheDocument())
+        expect(remove).toHaveBeenCalledTimes(1)
     })
 
     it('does not submit when Enter confirms an IME composition', async () => {

@@ -2,7 +2,7 @@ import { useActions, useValues } from 'kea'
 
 import { LemonBanner, LemonButton } from '@posthog/lemon-ui'
 
-import { openWorkflowSavedViewDialog } from './openWorkflowSavedViewDialog'
+import { openDeleteWorkflowSavedViewDialog, openWorkflowSavedViewDialog } from './openWorkflowSavedViewDialog'
 import { WorkflowSavedViewActions } from './WorkflowSavedViewActions'
 import { WorkflowSavedViewTabsRow } from './WorkflowSavedViewTabsRow'
 import { workflowsSavedViewsLogic } from './workflowsSavedViewsLogic'
@@ -24,7 +24,7 @@ export function WorkflowSavedViewTabs(): JSX.Element | null {
         savedViewsLoading,
         addedFilters,
     } = useValues(workflowsSavedViewsLogic)
-    const { applyView, resetView, updateActiveView, deleteView, loadSavedViews } = useActions(workflowsSavedViewsLogic)
+    const { applyView, resetView, updateActiveView, loadSavedViews } = useActions(workflowsSavedViewsLogic)
     if (savedViewsLoadFailed) {
         return (
             <LemonBanner type="warning" className="mb-3">
@@ -78,7 +78,12 @@ export function WorkflowSavedViewTabs(): JSX.Element | null {
                             activeView.name
                         )
                     }
-                    onDelete={() => deleteView(activeView.id)}
+                    onDelete={() =>
+                        openDeleteWorkflowSavedViewDialog(
+                            activeView.name,
+                            async () => await workflowsSavedViewsLogic.asyncActions.deleteView(activeView.id)
+                        )
+                    }
                 />
             </div>
         </div>
