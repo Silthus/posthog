@@ -4,12 +4,14 @@ import type { DragEvent, ReactNode } from 'react'
 
 import { IconCopy, IconDrag, IconTrash } from '@posthog/icons'
 
+import { EmailPreviewThumbnail } from 'lib/components/EmailPreviewThumbnail/EmailPreviewThumbnail'
 import { Badge, Button, Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle, cn } from 'lib/ui/quill'
 
 import { workflowLogic } from '../../workflowLogic'
 import { useHogFlowBranchSelection } from '../HogFlowBranchSelection'
 import { hogFlowEditorLogic } from '../hogFlowEditorLogic'
 import { StepView } from '../steps/components/StepView'
+import { getEmailStepHtml } from '../steps/emailStepHtml'
 import { useHogFlowStep } from '../steps/HogFlowSteps'
 import type { HogFlowAction, HogFlowActionNode } from '../types'
 import { isBranchingAction } from './workflowTree'
@@ -59,6 +61,8 @@ export function HogFlowTreeStep({
     const isAnimationTarget = animatingEdgePair?.endsWith(`->${action.id}`) ?? false
     const previews = step?.previews ?? []
     const hasFooterContent = !!action.description || previews.length > 0
+    const emailHtml = getEmailStepHtml(action)
+    const mediaAlignment = emailHtml ? 'flex-start' : 'center'
 
     return (
         <Item
@@ -87,7 +91,10 @@ export function HogFlowTreeStep({
             {canDrag && (
                 <div
                     draggable
-                    className="relative z-10 -ms-0.5 -me-1 flex size-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground active:cursor-grabbing"
+                    className={cn(
+                        'relative z-10 -ms-0.5 -me-1 flex size-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground active:cursor-grabbing',
+                        emailHtml && 'self-start'
+                    )}
                     onDragStart={(event) => onDragStart(event, action.id, dragPreviewRef.current)}
                     onDragEnd={onDragEnd}
                     data-attr="workflow-tree-step-drag"
@@ -101,12 +108,12 @@ export function HogFlowTreeStep({
                 style={
                     step?.color
                         ? {
-                              alignSelf: 'center',
+                              alignSelf: mediaAlignment,
                               translate: 'none',
                               backgroundColor: `${step.color}20`,
                               color: step.color,
                           }
-                        : { alignSelf: 'center', translate: 'none' }
+                        : { alignSelf: mediaAlignment, translate: 'none' }
                 }
             >
                 {step?.icon}
@@ -176,6 +183,16 @@ export function HogFlowTreeStep({
                                 ))}
                             </div>
                         )}
+                    </div>
+                )}
+                {emailHtml && (
+                    <div className="mt-1 w-fit max-w-full overflow-hidden rounded border">
+                        <EmailPreviewThumbnail
+                            html={emailHtml}
+                            title={`${action.name} preview`}
+                            size="listItem"
+                            className="max-w-full dark:invert dark:hue-rotate-180"
+                        />
                     </div>
                 )}
             </ItemContent>

@@ -4,6 +4,7 @@ import { initKeaTests } from '~/test/init'
 
 import { EXIT_NODE_ID, NEW_WORKFLOW, TRIGGER_NODE_ID, workflowLogic } from '../workflowLogic'
 import { computeInsertEdges, computeMoveEdges, hogFlowEditorLogic } from './hogFlowEditorLogic'
+import { NODE_WIDTH } from './react_flow_utils/constants'
 import { HogFlow, HogFlowAction, HogFlowActionEdge, HogFlowActionNode } from './types'
 
 type Edge = HogFlow['edges'][0]
@@ -676,6 +677,120 @@ describe('hogFlowEditorLogic', () => {
         })
     })
 
+    describe('email step layout', () => {
+        const emailInputs = { email: { value: { subject: 'Welcome', html: '<p>Welcome aboard</p>' } } }
+
+        const flowWithEmail = (emailStep: Pick<HogFlowAction, 'type' | 'config'>): HogFlow =>
+            ({
+                id: 'email-flow',
+                team_id: 1,
+                version: 1,
+                name: 'Email flow',
+                status: 'draft',
+                exit_condition: 'exit_only_at_end',
+                actions: [
+                    {
+                        id: 'trigger',
+                        name: 'Trigger',
+                        description: '',
+                        type: 'trigger',
+                        created_at: 1,
+                        updated_at: 1,
+                        config: { type: 'event', filters: {} },
+                    },
+                    { id: 'email', name: 'Welcome email', description: '', created_at: 1, updated_at: 1, ...emailStep },
+                    {
+                        id: 'exit',
+                        name: 'Exit',
+                        description: '',
+                        type: 'exit',
+                        created_at: 1,
+                        updated_at: 1,
+                        config: { reason: '' },
+                    },
+                ],
+                edges: [
+                    { from: 'trigger', to: 'email', type: 'continue' },
+                    { from: 'email', to: 'exit', type: 'continue' },
+                ],
+                updated_at: '2026-01-01T00:00:00Z',
+                created_at: '2026-01-01T00:00:00Z',
+            }) as HogFlow
+
+        beforeEach(async () => {
+            await expectLogic(logic).toDispatchActions(['setNodesRaw'])
+        })
+
+        it.each([
+            {
+                name: 'an email step',
+                emailStep: { type: 'function_email', config: { template_id: 'template-email', inputs: emailInputs } },
+            },
+            {
+                name: 'a generic step using the email template',
+                emailStep: { type: 'function', config: { template_id: 'template-email', inputs: emailInputs } },
+            },
+        ] as { name: string; emailStep: Pick<HogFlowAction, 'type' | 'config'> }[])(
+            'makes room for the preview of $name and connects the next step to the bottom of it',
+            async ({ emailStep }) => {
+                await expectLogic(logic, () =>
+                    logic.actions.resetFlowFromHogFlow(flowWithEmail(emailStep))
+                ).toDispatchActions(['setNodesRaw'])
+
+                const nodeById = (id: string): HogFlowActionNode => logic.values.nodes.find((node) => node.id === id)!
+                const trigger = nodeById('trigger')
+                const email = nodeById('email')
+                const exit = nodeById('exit')
+
+                expect(email.height).toBeGreaterThan(trigger.height!)
+                expect(email.handles?.find((handle) => handle.type === 'source')).toMatchObject({
+                    x: email.width! / 2,
+                    y: email.height,
+                })
+                expect(exit.position.y).toBeGreaterThan(email.position.y + email.height!)
+            }
+        )
+
+        it('starts sibling branches on the same row when one of them begins with an email', async () => {
+            const flow = flowWithEmail({
+                type: 'function_email',
+                config: { template_id: 'template-email', inputs: emailInputs },
+            } as Pick<HogFlowAction, 'type' | 'config'>)
+            flow.actions.push(
+                {
+                    id: 'branch',
+                    name: 'Branch',
+                    description: '',
+                    type: 'conditional_branch',
+                    created_at: 1,
+                    updated_at: 1,
+                    config: { conditions: [{ filters: {} }] },
+                },
+                {
+                    id: 'delay',
+                    name: 'Delay',
+                    description: '',
+                    type: 'delay',
+                    created_at: 1,
+                    updated_at: 1,
+                    config: { delay_duration: '1d' },
+                }
+            )
+            flow.edges = [
+                { from: 'trigger', to: 'branch', type: 'continue' },
+                { from: 'branch', to: 'email', type: 'branch', index: 0 },
+                { from: 'branch', to: 'delay', type: 'continue' },
+                { from: 'email', to: 'exit', type: 'continue' },
+                { from: 'delay', to: 'exit', type: 'continue' },
+            ]
+
+            await expectLogic(logic, () => logic.actions.resetFlowFromHogFlow(flow)).toDispatchActions(['setNodesRaw'])
+
+            const nodeById = (id: string): HogFlowActionNode => logic.values.nodes.find((node) => node.id === id)!
+            expect(nodeById('delay').position.y).toBe(nodeById('email').position.y)
+        })
+    })
+
     describe('showDropzones branch-join placement', () => {
         const makeNode = (id: string): HogFlowActionNode =>
             ({
@@ -742,6 +857,20 @@ describe('hogFlowEditorLogic', () => {
             logic.actions.setEdges(edges)
             logic.actions.showDropzones()
             expect(branchJoinDropzones()).toEqual(expected)
+        })
+
+        it('centers the branch-join dropzone on a target wider than a regular step', () => {
+            const wideTarget = { ...makeNode('email'), position: { x: 100, y: 300 }, width: 180 }
+            logic.actions.setNodesRaw([makeNode('trigger'), makeNode('cond'), wideTarget])
+            logic.actions.setEdges([
+                makeEdge('trigger', 'cond', 'continue'),
+                makeEdge('cond', 'email', 'branch', 0),
+                makeEdge('cond', 'email', 'continue'),
+            ])
+            logic.actions.showDropzones()
+
+            const dropzone = logic.values.dropzoneNodes.find((node) => node.data.isBranchJoinDropzone)!
+            expect(dropzone.position.x + NODE_WIDTH / 2).toBe(wideTarget.position.x + wideTarget.width / 2)
         })
     })
 })

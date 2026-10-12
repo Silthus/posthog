@@ -5,7 +5,8 @@ import { getElk } from 'lib/elk'
 
 import { TRIGGER_NODE_ID } from '../../workflowLogic'
 import type { HogFlowActionNode } from '../types'
-import { NODE_EDGE_GAP, NODE_HEIGHT, NODE_LAYER_GAP, NODE_NODE_GAP, NODE_WIDTH } from './constants'
+import { NODE_EDGE_GAP, NODE_LAYER_GAP, NODE_NODE_GAP } from './constants'
+import { getNodeSize } from './nodeSize'
 
 /**
  * By default, React Flow does not do any layouting of nodes or edges. This file uses the ELK Layered algorithm
@@ -57,12 +58,13 @@ export const getFormattedNodes = async (nodes: HogFlowActionNode[], edges: Edge[
 
             return {
                 ...node,
-                width: NODE_WIDTH,
-                height: NODE_HEIGHT,
+                ...getNodeSize(node.data),
                 targetPosition: 'top',
                 sourcePosition: 'bottom',
                 properties: {
                     'org.eclipse.elk.portConstraints': 'FIXED_ORDER',
+                    // Email steps are taller, so centering within a layer would push their sibling branches down.
+                    'org.eclipse.elk.alignment': 'TOP',
                 },
                 ports: [...handles],
             }
@@ -109,8 +111,7 @@ export const getFormattedNodes = async (nodes: HogFlowActionNode[], edges: Edge[
         }
         return {
             ...node,
-            width: NODE_WIDTH,
-            height: NODE_HEIGHT,
+            ...getNodeSize(node.data),
             position: { x: layouted?.x ?? 0, y: layouted?.y ?? 0 },
         }
     })
