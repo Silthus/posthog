@@ -896,3 +896,37 @@ tools:
                     Identifier used to bucket users into rollout percentages and variants — `distinct_id` (user ID, the
                     default) or `device_id`. Using `device_id` is incompatible with `ensure_experience_continuity=true`.
         hooks: featureFlags/updateFeatureFlagHooks
+wrappers:
+    query-feature-flag-health:
+        schema_ref: FeatureFlagHealthQuery
+        enabled: true
+        scopes:
+            - query:read
+            - feature_flag:read
+        annotations:
+            readOnly: true
+            destructive: false
+            idempotent: true
+        title: Check if a feature flag is hurting users
+        description: >
+            Answer "is flag X hurting users?" for a person-based boolean flag. Compares the share of users who hit a
+            browser $exception after their first exposure, between users who saw the flag on and users who saw it off.
+            Pass flagKey. dateRange defaults to the last 24 hours (start there), spans at most 7 days, and ends 5
+            minutes before now. The single result holds verdict, reason, per-arm counts, rates and bounds for on and
+            off, excessBounds (on minus off), crossovers (users seen with both values, excluded), and the window and
+            thresholds used. Read verdict like this. harm: the flag-on rate is above the flag-off rate by more than
+            toleratedExcess (default 0.01, one percentage point), with confidence; recommend rolling the flag back.
+            pass: both arms reached minExposedPerArm (default 300) exposed users and any excess stays within
+            toleratedExcess. insufficient_data: not enough evidence for harm or pass; this is NOT a pass and must never
+            be reported as healthy. It is normal at 0% or 100% rollout, where one arm is missing; suggest waiting for
+            more exposures or a longer window. telemetry_failure: the check cannot run (unknown flag, multivariate or
+            group-aggregated flag, no browser event carries the flag value, or exception capture is off); report the
+            reason and do not read it as healthy. Always quote reason and the exposed and affected counts of both arms.
+            alpha (default 0.05) sets the confidence of the bounds.
+        system_prompt_hint: Is a boolean flag hurting users? Harm, pass, insufficient data, or telemetry failure
+        url_prefix: /feature_flags?search={flagKey}
+        exclude_properties:
+            - response
+            - modifiers
+            - version
+            - tags
