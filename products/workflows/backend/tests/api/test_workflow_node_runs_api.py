@@ -8,6 +8,7 @@ from django.test import override_settings
 
 from parameterized import parameterized
 from rest_framework import status
+from rest_framework.exceptions import APIException, PermissionDenied
 
 from posthog.constants import AvailableFeature
 from posthog.jwt import PosthogJwtAudience, encode_jwt
@@ -17,7 +18,9 @@ from posthog.models.scoping import team_scope
 from posthog.models.team.team import Team
 
 from products.access_control.backend.models.access_control import AccessControl
+from products.approvals.backend.exceptions import PolicyConflict
 from products.approvals.backend.models import ApprovalPolicy, ChangeRequest
+from products.feature_flags.backend.facade.api import user_can_edit_flag
 from products.feature_flags.backend.models.feature_flag import FeatureFlag
 from products.workflows.backend.models import HogFlow
 from products.workflows.backend.models.hog_flow_revision import HogFlowRevision
@@ -25,6 +28,8 @@ from products.workflows.backend.models.hog_flow_revision import HogFlowRevision
 SECRET = "test-workflow-nodes-run-jwt"
 ACTION_ID = "action_set_rollout"
 DISPATCH_KEY = "invocation-1:action_set_rollout:3:0"
+_CAN_EDIT_FLAG = "products.workflows.backend.nodes.feature_flag.user_can_edit_flag"
+_SET_ROLLOUT = "products.workflows.backend.nodes.feature_flag.set_release_condition_rollout"
 
 
 @override_settings(WORKFLOW_NODES_RUN_JWT_SECRETS=[SECRET])
@@ -132,6 +137,20 @@ class TestWorkflowNodeRunsAPI(APIBaseTest):
         self.flag.refresh_from_db()
         assert self.flag.version == version_after_first_write
 
+    def test_a_concurrent_retry_that_loses_the_race_to_the_target_is_done(self) -> None:
+        def concurrent_write_lands_after_the_read(flag: FeatureFlag, **kwargs: Any) -> bool:
+            FeatureFlag.objects.filter(id=flag.id).update(
+                filters={"groups": [{"properties": [], "rollout_percentage": 25}]}, version=(flag.version or 0) + 1
+            )
+            return user_can_edit_flag(flag, **kwargs)
+
+        with patch(_CAN_EDIT_FLAG, side_effect=concurrent_write_lands_after_the_read):
+            response = self._run()
+
+        assert response.json()["outcome"] == "done", response.content
+        self.flag.refresh_from_db()
+        assert response.json()["result"]["version"] == self.flag.version
+
     def test_a_stale_expected_version_is_changed_elsewhere_and_writes_nothing(self) -> None:
         stale_version = self.flag.version or 0
         self.flag.filters = {"groups": [{"properties": [], "rollout_percentage": 15}]}
@@ -185,6 +204,23 @@ class TestWorkflowNodeRunsAPI(APIBaseTest):
         assert change_request.resource_id == str(self.flag.id)
         self.flag.refresh_from_db()
         assert self.flag.conditions[0]["rollout_percentage"] == 10
+
+    @parameterized.expand(
+        [
+            ("deny_policy", PermissionDenied("This action is not allowed by approval policy."), "not_permitted"),
+            ("policy_conflict", PolicyConflict([], "This change matches multiple approval policies", ""), "failed"),
+            ("gate_error", APIException("Failed to create approval request"), "failed"),
+        ]
+    )
+    def test_an_approval_gate_refusal_answers_with_an_outcome(
+        self, _name: str, refusal: Exception, expected_outcome: str
+    ) -> None:
+        with patch(_SET_ROLLOUT, side_effect=refusal):
+            response = self._run()
+
+        assert response.status_code == status.HTTP_200_OK, response.content
+        assert response.json()["outcome"] == expected_outcome
+        assert response.json()["result"]["reason"]
 
     def test_a_publisher_without_editor_access_to_the_flag_is_not_permitted(self) -> None:
         self.organization.available_product_features = [

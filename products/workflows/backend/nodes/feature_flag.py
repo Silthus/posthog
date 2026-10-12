@@ -1,16 +1,18 @@
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import APIException, PermissionDenied
 
 from products.feature_flags.backend.facade.api import set_release_condition_rollout, user_can_edit_flag
 from products.feature_flags.backend.facade.config import ConfigFormatError
 from products.feature_flags.backend.facade.contracts import (
+    ApprovalDetectionFailed,
     ApprovalRequired,
     FlagRolloutConditionNotFound,
     FlagRolloutDeletedFlag,
     FlagRolloutUnsupportedConfig,
     FlagRolloutVersionConflict,
+    PolicyConflict,
 )
 from products.feature_flags.backend.models.feature_flag import FeatureFlag
 from products.workflows.backend.facade.contracts import NodeOutcome
@@ -21,6 +23,7 @@ CHANGED_ELSEWHERE = "changed_elsewhere"
 NEEDS_APPROVAL = "needs_approval"
 
 EDITOR_ACCESS = "feature_flag:editor"
+APPROVAL_POLICY = "approval_policy"
 
 
 class SetRolloutPercentageInputs(BaseModel):
@@ -63,15 +66,25 @@ def set_rollout_percentage(context: NodeRunContext, inputs: SetRolloutPercentage
             flag, 0, inputs.rollout_percentage, expected_version, team=context.team, user=context.actor
         )
     except FlagRolloutVersionConflict:
-        return NodeOutcome(outcome=CHANGED_ELSEWHERE, result=_current_result(flag))
+        current = _current_result(flag)
+        reached_target = current["rollout_percentage"] == inputs.rollout_percentage
+        return NodeOutcome(outcome=DONE if reached_target else CHANGED_ELSEWHERE, result=current)
     except ApprovalRequired as approval:
         return NodeOutcome(
             outcome=NEEDS_APPROVAL,
             result={**_flag_result(flag, current_percentage), "change_request_id": str(approval.change_request.id)},
         )
-    except (FlagRolloutUnsupportedConfig, FlagRolloutConditionNotFound, FlagRolloutDeletedFlag) as error:
+    except PermissionDenied as error:
+        return NodeOutcome.not_permitted(missing_permission=APPROVAL_POLICY, reason=str(error.detail))
+    except (
+        FlagRolloutUnsupportedConfig,
+        FlagRolloutConditionNotFound,
+        FlagRolloutDeletedFlag,
+        PolicyConflict,
+        ApprovalDetectionFailed,
+    ) as error:
         return NodeOutcome.failed(str(error))
-    except ValidationError as error:
+    except APIException as error:
         return NodeOutcome.failed(f"The feature flag rejected the change: {error.detail}")
     return NodeOutcome(outcome=DONE, result=_flag_result(updated, inputs.rollout_percentage))
 

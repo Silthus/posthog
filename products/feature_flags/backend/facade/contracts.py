@@ -1,11 +1,13 @@
-from products.approvals.backend.exceptions import ApprovalRequired
+from products.approvals.backend.exceptions import ApprovalDetectionFailed, ApprovalRequired, PolicyConflict
 
 __all__ = [
+    "ApprovalDetectionFailed",
     "ApprovalRequired",
     "FlagRolloutConditionNotFound",
     "FlagRolloutDeletedFlag",
     "FlagRolloutUnsupportedConfig",
     "FlagRolloutVersionConflict",
+    "PolicyConflict",
 ]
 
 
