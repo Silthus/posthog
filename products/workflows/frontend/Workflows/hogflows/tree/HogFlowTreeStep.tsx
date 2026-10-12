@@ -12,7 +12,7 @@ import { hogFlowEditorLogic } from '../hogFlowEditorLogic'
 import { StepView } from '../steps/components/StepView'
 import { useHogFlowStep } from '../steps/HogFlowSteps'
 import type { HogFlowAction, HogFlowActionNode } from '../types'
-import { isBranchingAction } from './workflowTree'
+import { isBranchingAction, isBranchingStep } from './workflowTree'
 
 export function HogFlowTreeStep({
     action,
@@ -40,7 +40,7 @@ export function HogFlowTreeStep({
     const canHaveActions = !['trigger', 'exit'].includes(action.type)
     const outgoingActionIds = workflow.edges.filter((edge) => edge.from === action.id).map((edge) => edge.to)
     const canDelete = canHaveActions && (outgoingActionIds.length === 1 || new Set(outgoingActionIds).size === 1)
-    const canDuplicate = canDelete && !isBranchingAction(action)
+    const canDuplicate = canDelete && !isBranchingStep(action, workflow.edges)
     const node =
         nodesById[action.id] ??
         ({

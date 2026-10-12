@@ -34,6 +34,7 @@ import { resolveDefaultEmailSender } from '../../Channels/defaultEmailSender'
 import { optOutCategoriesLogic } from '../../OptOuts/optOutCategoriesLogic'
 import type { MessageCategory } from '../../OptOuts/optOutCategoriesLogic'
 import { EXIT_NODE_ID, TRIGGER_NODE_ID, WorkflowLogicProps, workflowLogic } from '../workflowLogic'
+import { getOutcomeLabel, getSourceHandleId, isSameEdgeSlot, NATIVE_PRIMARY_OUTCOME } from './hogFlowEdges'
 import { getFormattedNodes } from './react_flow_utils/autolayout'
 import {
     BOTTOM_HANDLE_POSITION,
@@ -46,12 +47,12 @@ import {
 import { getSmartStepPath } from './react_flow_utils/SmartEdge'
 import { getHogFlowStep } from './steps/HogFlowSteps'
 import { CyclotronInputType, StepViewNodeHandle } from './steps/types'
-import { isWorkflowTreeComplete } from './tree/workflowTree'
+import { isBranchingStep, isWorkflowTreeComplete } from './tree/workflowTree'
 import type { DropzoneNode, HogFlow, HogFlowAction, HogFlowActionEdge, HogFlowActionNode } from './types'
 import type { HogFlowEdge } from './types'
 
 const getEdgeId = (edge: HogFlow['edges'][number]): string =>
-    `${edge.from}->${edge.to} ${edge.type} ${edge.index ?? ''}`.trim()
+    `${edge.from}->${edge.to} ${edge.type} ${edge.index ?? edge.outcome ?? ''}`.trim()
 
 export function computeInsertEdges(
     edges: HogFlow['edges'],
@@ -66,21 +67,17 @@ export function computeInsertEdges(
         return null
     }
 
+    const insertionTarget = matchingEdges[0].to
     return [
         ...edges.filter((edge) => !edgeIdsToReplace.has(getEdgeId(edge))),
         ...matchingEdges.map((edge) => ({ ...edge, to: newActionId })),
         ...Array.from({ length: branchEdges }, (_, index) => ({
-            ...matchingEdges[0],
-            index,
+            from: newActionId,
+            to: insertionTarget,
             type: 'branch' as const,
-            from: newActionId,
+            index,
         })),
-        {
-            ...matchingEdges[0],
-            index: undefined,
-            type: 'continue' as const,
-            from: newActionId,
-        },
+        { from: newActionId, to: insertionTarget, type: 'continue' as const, index: undefined },
     ]
 }
 
@@ -88,6 +85,9 @@ export function computeInsertEdges(
  * Helper to get branch label with custom name fallback
  */
 const getBranchLabel = (action: HogFlowAction | undefined, edge: HogFlow['edges'][0]): string => {
+    if (edge.outcome) {
+        return getOutcomeLabel(edge.outcome)
+    }
     if (!action) {
         return `If condition #${(edge.index || 0) + 1} matches`
     }
@@ -112,6 +112,9 @@ const getBranchLabel = (action: HogFlowAction | undefined, edge: HogFlow['edges'
             return `If condition #${(edge.index || 0) + 1} matches`
     }
 }
+
+const getContinueLabel = (action: HogFlowAction | undefined): string =>
+    action?.type === 'native' ? getOutcomeLabel(NATIVE_PRIMARY_OUTCOME) : 'No match'
 
 /**
  * Computes the new edges after moving a node to a new position in the graph.
@@ -149,12 +152,7 @@ export function computeMoveEdges(
             .filter(({ edge }) => (joinEdgeIds ? joinEdgeIds.has(getEdgeId(edge)) : edge.to === newTarget))
             .map(({ index }) => index)
     } else {
-        edgesToSplitIndexes = [
-            newEdges.findIndex(
-                (edge) =>
-                    edge.from === targetEdge.from && edge.type === targetEdge.type && edge.index === targetEdge.index
-            ),
-        ]
+        edgesToSplitIndexes = [newEdges.findIndex((edge) => isSameEdgeSlot(edge, targetEdge))]
     }
 
     if (edgesToSplitIndexes.length === 0 || edgesToSplitIndexes.includes(-1)) {
@@ -469,6 +467,52 @@ export interface hogFlowEditorLogicActions {
                                 | null
                                 | undefined
                             type: 'delay'
+                            updated_at?: number | undefined
+                        }
+                      | {
+                            config: {
+                                inputs: Record<
+                                    string,
+                                    {
+                                        bytecode?: any
+                                        order?: number | undefined
+                                        secret?: boolean | undefined
+                                        templating?: 'hog' | 'liquid' | undefined
+                                        value: any
+                                    }
+                                >
+                                node: string
+                                operation: string
+                            }
+                            created_at?: number | undefined
+                            description: string
+                            filters?:
+                                | {
+                                      actions?: any[] | undefined
+                                      events?: any[] | undefined
+                                      properties?: any[] | undefined
+                                  }
+                                | null
+                                | undefined
+                            id: string
+                            name: string
+                            on_error?: 'abort' | 'continue' | null | undefined
+                            output_variable?:
+                                | {
+                                      key: string
+                                      label?: string | null | undefined
+                                      result_path?: string | null | undefined
+                                      spread?: boolean | null | undefined
+                                  }
+                                | {
+                                      key: string
+                                      label?: string | null | undefined
+                                      result_path?: string | null | undefined
+                                      spread?: boolean | null | undefined
+                                  }[]
+                                | null
+                                | undefined
+                            type: 'native'
                             updated_at?: number | undefined
                         }
                       | {
@@ -933,6 +977,7 @@ export interface hogFlowEditorLogicActions {
                   edges: {
                       from: string
                       index?: number | undefined
+                      outcome?: string | undefined
                       to: string
                       type: 'branch' | 'continue'
                   }[]
@@ -1348,6 +1393,52 @@ export interface hogFlowEditorLogicActions {
                                         value: any
                                     }
                                 >
+                                node: string
+                                operation: string
+                            }
+                            created_at?: number | undefined
+                            description: string
+                            filters?:
+                                | {
+                                      actions?: any[] | undefined
+                                      events?: any[] | undefined
+                                      properties?: any[] | undefined
+                                  }
+                                | null
+                                | undefined
+                            id: string
+                            name: string
+                            on_error?: 'abort' | 'continue' | null | undefined
+                            output_variable?:
+                                | {
+                                      key: string
+                                      label?: string | null | undefined
+                                      result_path?: string | null | undefined
+                                      spread?: boolean | null | undefined
+                                  }
+                                | {
+                                      key: string
+                                      label?: string | null | undefined
+                                      result_path?: string | null | undefined
+                                      spread?: boolean | null | undefined
+                                  }[]
+                                | null
+                                | undefined
+                            type: 'native'
+                            updated_at?: number | undefined
+                        }
+                      | {
+                            config: {
+                                inputs: Record<
+                                    string,
+                                    {
+                                        bytecode?: any
+                                        order?: number | undefined
+                                        secret?: boolean | undefined
+                                        templating?: 'hog' | 'liquid' | undefined
+                                        value: any
+                                    }
+                                >
                                 mappings?:
                                     | {
                                           disabled?: boolean | undefined
@@ -1798,6 +1889,7 @@ export interface hogFlowEditorLogicActions {
                   edges: {
                       from: string
                       index?: number | undefined
+                      outcome?: string | undefined
                       to: string
                       type: 'branch' | 'continue'
                   }[]
@@ -1987,6 +2079,7 @@ export interface hogFlowEditorLogicActions {
         edges: {
             from: string
             index?: number | undefined
+            outcome?: string | undefined
             to: string
             type: 'branch' | 'continue'
         }[]
@@ -1995,6 +2088,7 @@ export interface hogFlowEditorLogicActions {
         edges: {
             from: string
             index?: number | undefined
+            outcome?: string | undefined
             to: string
             type: 'branch' | 'continue'
         }[]
@@ -2172,7 +2266,8 @@ export interface hogFlowEditorLogicMeta {
         ) => boolean
         selectedNodeCanBeCopiedOrMoved: (
             selectedNode: HogFlowActionNode | null,
-            selectedNodeCanBeDeleted: boolean
+            selectedNodeCanBeDeleted: boolean,
+            workflow: HogFlow
         ) => boolean
     }
 }
@@ -2438,14 +2533,13 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
             },
         ],
         selectedNodeCanBeCopiedOrMoved: [
-            (s) => [s.selectedNode, s.selectedNodeCanBeDeleted],
-            (selectedNode: HogFlowActionNode | null, selectedNodeCanBeDeleted: boolean) => {
+            (s) => [s.selectedNode, s.selectedNodeCanBeDeleted, s.workflow],
+            (selectedNode: HogFlowActionNode | null, selectedNodeCanBeDeleted: boolean, workflow: HogFlow) => {
                 if (!selectedNodeCanBeDeleted) {
                     return false
                 }
 
-                const branchingTypes = ['conditional_branch', 'random_cohort_branch', 'wait_until_condition']
-                return !branchingTypes.includes(selectedNode?.data.type ?? '')
+                return !(selectedNode && isBranchingStep(selectedNode.data, workflow.edges))
             },
         ],
     }),
@@ -2547,15 +2641,12 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                                 label: isOnlyEdgeForNode
                                     ? undefined
                                     : edge.type === 'continue'
-                                      ? `No match`
+                                      ? getContinueLabel(edgeSourceAction)
                                       : getBranchLabel(edgeSourceAction, edge),
                             },
                             labelShowBg: false,
                             targetHandle: `target_${edge.to}`,
-                            sourceHandle:
-                                edge.type === 'continue'
-                                    ? `continue_${edge.from}`
-                                    : `branch_${edge.from}_${edge.index}`,
+                            sourceHandle: getSourceHandleId(edge),
                         }
                     })
 
@@ -2602,7 +2693,13 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                             data: migratedAction,
                             position: { x: 0, y: 0 },
                             handles: Object.values(handlesByIdByNodeId[migratedAction.id] ?? {}),
-                            deletable: !['trigger', 'exit'].includes(migratedAction.type),
+                            deletable:
+                                !['trigger', 'exit'].includes(migratedAction.type) &&
+                                new Set(
+                                    hogFlow.edges
+                                        .filter((edge) => edge.from === migratedAction.id)
+                                        .map((edge) => edge.to)
+                                ).size <= 1,
                             selectable: true,
                             draggable: false,
                             connectable: false,

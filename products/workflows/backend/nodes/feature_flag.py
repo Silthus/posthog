@@ -40,7 +40,7 @@ class SetRolloutPercentageInputs(BaseModel):
         default=None,
         title="Expected flag version",
         description=(
-            "The flag version this step expects, usually {variables.<output>.version} from an earlier step. "
+            "The flag version this step expects, usually {variables.flag.version} from an earlier step. "
             "A different version means someone else changed the flag, and the step answers changed_elsewhere. "
             "Leave empty to change the current version."
         ),

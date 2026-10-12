@@ -11,7 +11,7 @@ import { cn } from 'lib/utils/css-classes'
 
 import { getHogFlowBranchColor, useHogFlowBranchSelection } from '../HogFlowBranchSelection'
 import { hogFlowEditorLogic } from '../hogFlowEditorLogic'
-import type { HogFlowEdge } from '../types'
+import type { HogFlowAction, HogFlowEdge } from '../types'
 import { HogFlowTreeBranchConnector } from './HogFlowTreeBranchConnector'
 import { getWaitTimeoutLabel, type WorkflowTreeBranch, type WorkflowTreeNode } from './workflowTree'
 import { getWorkflowTreeBranchSummary, getWorkflowTreeOccurrenceKey } from './workflowTreePresentation'
@@ -53,22 +53,7 @@ export function HogFlowTreeBranch({
         branchIndex !== null && node.action.type === 'random_cohort_branch'
             ? node.action.config.cohorts[branchIndex]?.percentage
             : undefined
-    const badge =
-        node.action.type === 'conditional_branch'
-            ? branchIndex === null
-                ? 'Else'
-                : `If #${branchIndex + 1}`
-            : node.action.type === 'wait_until_condition'
-              ? branchIndex === null
-                  ? getWaitTimeoutLabel(node.action.config.max_wait_duration)
-                      ? 'Timeout'
-                      : 'No match'
-                  : 'Match'
-              : branchIndex === null
-                ? 'Fallback'
-                : percentage !== undefined
-                  ? `${percentage}%`
-                  : `${branchIndex + 1}`
+    const badge = getBranchBadge(node.action, branchIndex, percentage)
 
     const selectContinuation = (): void => {
         if (continuation) {
@@ -197,4 +182,23 @@ export function HogFlowTreeBranch({
             </div>
         </div>
     )
+}
+
+function getBranchBadge(action: HogFlowAction, branchIndex: number | null, percentage: number | undefined): string {
+    switch (action.type) {
+        case 'conditional_branch':
+            return branchIndex === null ? 'Else' : `If #${branchIndex + 1}`
+        case 'wait_until_condition':
+            if (branchIndex !== null) {
+                return 'Match'
+            }
+            return getWaitTimeoutLabel(action.config.max_wait_duration) ? 'Timeout' : 'No match'
+        case 'native':
+            return branchIndex === null ? 'Default' : 'Outcome'
+        default:
+            if (branchIndex === null) {
+                return 'Fallback'
+            }
+            return percentage !== undefined ? `${percentage}%` : `${branchIndex + 1}`
+    }
 }

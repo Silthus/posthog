@@ -734,6 +734,52 @@ export interface workflowLogicActions {
                         }
                       | {
                             config: {
+                                inputs: Record<
+                                    string,
+                                    {
+                                        bytecode?: any
+                                        order?: number | undefined
+                                        secret?: boolean | undefined
+                                        templating?: 'hog' | 'liquid' | undefined
+                                        value: any
+                                    }
+                                >
+                                node: string
+                                operation: string
+                            }
+                            created_at?: number | undefined
+                            description: string
+                            filters?:
+                                | {
+                                      actions?: any[] | undefined
+                                      events?: any[] | undefined
+                                      properties?: any[] | undefined
+                                  }
+                                | null
+                                | undefined
+                            id: string
+                            name: string
+                            on_error?: 'abort' | 'continue' | null | undefined
+                            output_variable?:
+                                | {
+                                      key: string
+                                      label?: string | null | undefined
+                                      result_path?: string | null | undefined
+                                      spread?: boolean | null | undefined
+                                  }
+                                | {
+                                      key: string
+                                      label?: string | null | undefined
+                                      result_path?: string | null | undefined
+                                      spread?: boolean | null | undefined
+                                  }[]
+                                | null
+                                | undefined
+                            type: 'native'
+                            updated_at?: number | undefined
+                        }
+                      | {
+                            config: {
                                 cohorts: {
                                     name?: string | undefined
                                     percentage: number
@@ -1025,6 +1071,7 @@ export interface workflowLogicActions {
                   edges: {
                       from: string
                       index?: number | undefined
+                      outcome?: string | undefined
                       to: string
                       type: 'branch' | 'continue'
                   }[]
@@ -1599,6 +1646,52 @@ export interface workflowLogicActions {
                         }
                       | {
                             config: {
+                                inputs: Record<
+                                    string,
+                                    {
+                                        bytecode?: any
+                                        order?: number | undefined
+                                        secret?: boolean | undefined
+                                        templating?: 'hog' | 'liquid' | undefined
+                                        value: any
+                                    }
+                                >
+                                node: string
+                                operation: string
+                            }
+                            created_at?: number | undefined
+                            description: string
+                            filters?:
+                                | {
+                                      actions?: any[] | undefined
+                                      events?: any[] | undefined
+                                      properties?: any[] | undefined
+                                  }
+                                | null
+                                | undefined
+                            id: string
+                            name: string
+                            on_error?: 'abort' | 'continue' | null | undefined
+                            output_variable?:
+                                | {
+                                      key: string
+                                      label?: string | null | undefined
+                                      result_path?: string | null | undefined
+                                      spread?: boolean | null | undefined
+                                  }
+                                | {
+                                      key: string
+                                      label?: string | null | undefined
+                                      result_path?: string | null | undefined
+                                      spread?: boolean | null | undefined
+                                  }[]
+                                | null
+                                | undefined
+                            type: 'native'
+                            updated_at?: number | undefined
+                        }
+                      | {
+                            config: {
                                 cohorts: {
                                     name?: string | undefined
                                     percentage: number
@@ -1890,6 +1983,7 @@ export interface workflowLogicActions {
                   edges: {
                       from: string
                       index?: number | undefined
+                      outcome?: string | undefined
                       to: string
                       type: 'branch' | 'continue'
                   }[]
@@ -2170,6 +2264,20 @@ export interface workflowLogicActions {
                         }
                       | undefined
                   max_delay_duration?: string | undefined
+              }
+            | {
+                  inputs: Record<
+                      string,
+                      {
+                          bytecode?: any
+                          order?: number | undefined
+                          secret?: boolean | undefined
+                          templating?: 'hog' | 'liquid' | undefined
+                          value: any
+                      }
+                  >
+                  node: string
+                  operation: string
               }
             | {
                   inputs: Record<
@@ -2573,6 +2681,20 @@ export interface workflowLogicActions {
                           value: any
                       }
                   >
+                  node: string
+                  operation: string
+              }
+            | {
+                  inputs: Record<
+                      string,
+                      {
+                          bytecode?: any
+                          order?: number | undefined
+                          secret?: boolean | undefined
+                          templating?: 'hog' | 'liquid' | undefined
+                          value: any
+                      }
+                  >
                   mappings?:
                       | {
                             disabled?: boolean | undefined
@@ -2781,6 +2903,7 @@ export interface workflowLogicActions {
         edges: {
             from: string
             index?: number | undefined
+            outcome?: string | undefined
             to: string
             type: 'branch' | 'continue'
         }[]

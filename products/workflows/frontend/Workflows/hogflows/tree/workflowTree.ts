@@ -1,3 +1,4 @@
+import { compareOutgoingEdges, getOutcomeLabel, isSameEdgeSlot, NATIVE_PRIMARY_OUTCOME } from '../hogFlowEdges'
 import type { HogFlow, HogFlowAction, HogFlowEdge } from '../types'
 
 export const BRANCHING_ACTION_TYPES = ['conditional_branch', 'random_cohort_branch', 'wait_until_condition'] as const
@@ -43,6 +44,11 @@ export function isBranchingAction(action: Pick<HogFlowAction, 'type'>): boolean 
     return BRANCHING_ACTION_TYPES.includes(action.type as (typeof BRANCHING_ACTION_TYPES)[number])
 }
 
+// A native step branches only once it has an outcome path, so its edges decide, not its type.
+export function isBranchingStep(action: Pick<HogFlowAction, 'id' | 'type'>, edges: HogFlowEdge[]): boolean {
+    return isBranchingAction(action) || edges.filter((edge) => edge.from === action.id).length > 1
+}
+
 export function getWaitTimeoutLabel(maxWaitDuration: string | undefined): string | null {
     const parts = COMPLETE_DURATION_PATTERN.exec(maxWaitDuration ?? '')
     if (!parts) {
@@ -53,6 +59,9 @@ export function getWaitTimeoutLabel(maxWaitDuration: string | undefined): string
 }
 
 export function getWorkflowBranchLabel(action: HogFlowAction | undefined, edge: HogFlowEdge): string {
+    if (action?.type === 'native') {
+        return getOutcomeLabel(edge.outcome ?? NATIVE_PRIMARY_OUTCOME)
+    }
     if (action?.type === 'wait_until_condition') {
         if (edge.type === 'continue') {
             const timeout = getWaitTimeoutLabel(action.config.max_wait_duration)
@@ -270,12 +279,7 @@ export function buildWorkflowTree(workflow: Pick<HogFlow, 'actions' | 'edges'>):
     }
 
     for (const edges of outgoingEdgesByActionId.values()) {
-        edges.sort((left, right) => {
-            if (left.type !== right.type) {
-                return left.type === 'branch' ? -1 : 1
-            }
-            return (left.index ?? Number.POSITIVE_INFINITY) - (right.index ?? Number.POSITIVE_INFINITY)
-        })
+        edges.sort(compareOutgoingEdges)
     }
 
     const postDominatorsByActionId = buildPostDominators([...actionsById.keys()], outgoingEdgesByActionId)
@@ -452,24 +456,13 @@ export function computeMoveTreeBranchEdges(
                   }
 
                   if (joinEdges) {
-                      return joinEdges.some(
-                          (joinEdge) =>
-                              edge.from === joinEdge.from &&
-                              edge.to === joinEdge.to &&
-                              edge.type === joinEdge.type &&
-                              edge.index === joinEdge.index
-                      )
+                      return joinEdges.some((joinEdge) => edge.to === joinEdge.to && isSameEdgeSlot(edge, joinEdge))
                   }
 
                   return edge.to === targetEdge.to
               })
               .map(({ index }) => index)
-        : [
-              newEdges.findIndex(
-                  (edge) =>
-                      edge.from === targetEdge.from && edge.type === targetEdge.type && edge.index === targetEdge.index
-              ),
-          ]
+        : [newEdges.findIndex((edge) => isSameEdgeSlot(edge, targetEdge))]
 
     if (targetEdgeIndexes.length === 0 || targetEdgeIndexes.includes(-1)) {
         return null

@@ -1,3 +1,4 @@
+import { isSameEdgeSlot } from '../hogFlowEdges'
 import type { HogFlowEdge } from '../types'
 import type { WorkflowTreeBranch, WorkflowTreeNode, WorkflowTreeSequence } from './workflowTree'
 
@@ -15,7 +16,9 @@ export interface WorkflowTreeNodeViewState {
 }
 
 export function getWorkflowTreeOccurrenceKey(actionId: string, path: HogFlowEdge[]): string {
-    return encodeURIComponent(JSON.stringify([path.map((edge) => [edge.from, edge.type, edge.index]), actionId]))
+    return encodeURIComponent(
+        JSON.stringify([path.map((edge) => [edge.from, edge.type, edge.index ?? edge.outcome]), actionId])
+    )
 }
 
 export function getWorkflowTreeStepId(actionId: string, path: HogFlowEdge[]): string {
@@ -30,7 +33,7 @@ export function findWorkflowTreePath(sequence: WorkflowTreeSequence, edges: HogF
     for (const node of sequence.nodes) {
         for (const branch of node.branches) {
             const path = { node, branch }
-            if (branch.edge.from === edge.from && branch.edge.type === edge.type && branch.edge.index === edge.index) {
+            if (isSameEdgeSlot(branch.edge, edge)) {
                 if (remainingEdges.length === 0) {
                     return [path]
                 }
@@ -98,7 +101,7 @@ export function getWorkflowTreeBranchSummary(node: WorkflowTreeNode, branch: Wor
 }
 
 export function getWorkflowTreeBranchKey(edge: HogFlowEdge): string {
-    return `${edge.from}-${edge.type}-${edge.index ?? 'continue'}`
+    return `${edge.from}-${edge.type}-${edge.index ?? edge.outcome ?? 'continue'}`
 }
 
 export interface WorkflowTreeBranchGroup {

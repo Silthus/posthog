@@ -13,6 +13,7 @@ const edge = (from: string, to: string, type: 'continue' | 'branch', index?: num
     type,
     index,
 })
+const outcomeEdge = (from: string, to: string, outcome: string): Edge => ({ from, to, type: 'branch', outcome })
 
 describe('computeMoveEdges', () => {
     it.each([
@@ -72,9 +73,43 @@ describe('computeMoveEdges', () => {
             isBranchJoin: false,
             expected: [edge('cond', 'exit', 'continue'), edge('cond', 'A', 'branch', 0), edge('A', 'exit', 'continue')],
         },
+        {
+            name: 'move node onto one of several outcome edges of a native step',
+            edges: [
+                outcomeEdge('flag', 'exit', 'needs_approval'),
+                outcomeEdge('flag', 'exit', 'changed_elsewhere'),
+                edge('flag', 'A', 'continue'),
+                edge('A', 'exit', 'continue'),
+            ],
+            movingNodeId: 'A',
+            targetEdge: outcomeEdge('flag', 'exit', 'changed_elsewhere'),
+            isBranchJoin: false,
+            expected: [
+                outcomeEdge('flag', 'exit', 'needs_approval'),
+                edge('flag', 'exit', 'continue'),
+                outcomeEdge('flag', 'A', 'changed_elsewhere'),
+                edge('A', 'exit', 'continue'),
+            ],
+        },
     ])('$name', ({ edges, movingNodeId, targetEdge, isBranchJoin, expected }) => {
         const result = computeMoveEdges(edges, movingNodeId, targetEdge, isBranchJoin)
         expect(result).toEqual(expected)
+    })
+
+    it('inserts a branching step into an outcome path without copying the outcome onto its own edges', () => {
+        const edges = [
+            edge('trigger', 'flag', 'continue'),
+            outcomeEdge('flag', 'exit', 'needs_approval'),
+            edge('flag', 'exit', 'continue'),
+        ]
+
+        expect(computeInsertEdges(edges, 'cond', 1, [outcomeEdge('flag', 'exit', 'needs_approval')])).toEqual([
+            edge('trigger', 'flag', 'continue'),
+            edge('flag', 'exit', 'continue'),
+            outcomeEdge('flag', 'cond', 'needs_approval'),
+            edge('cond', 'exit', 'branch', 0),
+            edge('cond', 'exit', 'continue'),
+        ])
     })
 
     it('inserts a step after only the nested split paths', () => {
@@ -580,6 +615,79 @@ describe('hogFlowEditorLogic', () => {
 
             expect(branchEdge0?.data?.label).toBe('If cohort #1 matches')
             expect(branchEdge1?.data?.label).toBe('If cohort #2 matches')
+        })
+    })
+
+    describe('native step outcomes', () => {
+        const flagStep: HogFlowAction = {
+            id: 'flag',
+            name: 'Feature flag',
+            description: '',
+            type: 'native',
+            created_at: 1,
+            updated_at: 1,
+            config: {
+                node: 'feature_flag',
+                operation: 'set_rollout_percentage',
+                inputs: { flag_key: { value: 'new-checkout' }, rollout_percentage: { value: '25' } },
+            },
+        }
+        const makeFlow = (edges: HogFlow['edges']): HogFlow => ({
+            ...NEW_WORKFLOW,
+            id: 'test-flow',
+            team_id: 1,
+            actions: [NEW_WORKFLOW.actions[0], flagStep, NEW_WORKFLOW.actions[1]],
+            edges: [edge(TRIGGER_NODE_ID, flagStep.id, 'continue'), ...edges],
+        })
+
+        it('draws one labelled edge and source handle per wired outcome', async () => {
+            await expectLogic(logic).toDispatchActions(['setNodesRaw'])
+            const flow = makeFlow([
+                { from: flagStep.id, to: EXIT_NODE_ID, type: 'branch', outcome: 'needs_approval' },
+                { from: flagStep.id, to: EXIT_NODE_ID, type: 'branch', outcome: 'changed_elsewhere' },
+                edge(flagStep.id, EXIT_NODE_ID, 'continue'),
+            ])
+            await expectLogic(logic, () => logic.actions.resetFlowFromHogFlow(flow)).toDispatchActions(['setNodesRaw'])
+
+            const outgoing = logic.values.edges.filter((graphEdge) => graphEdge.source === flagStep.id)
+            expect(outgoing.map((graphEdge) => [graphEdge.sourceHandle, graphEdge.data?.label])).toEqual([
+                ['branch_flag_needs_approval', 'Needs approval'],
+                ['branch_flag_changed_elsewhere', 'Changed elsewhere'],
+                ['continue_flag', 'Done'],
+            ])
+            expect(new Set(outgoing.map((graphEdge) => graphEdge.id)).size).toBe(3)
+
+            const flagNode = logic.values.nodes.find((node) => node.id === flagStep.id)
+            expect(flagNode?.deletable).toBe(true)
+            const sourceHandleIds = flagNode?.handles
+                ?.filter((handle) => handle.type === 'source')
+                .map((handle) => handle.id)
+            expect(sourceHandleIds?.sort()).toEqual([
+                'branch_flag_changed_elsewhere',
+                'branch_flag_needs_approval',
+                'continue_flag',
+            ])
+        })
+
+        it('keeps a native step whose paths lead to different steps from being deleted', async () => {
+            await expectLogic(logic).toDispatchActions(['setNodesRaw'])
+            const flow = makeFlow([
+                { from: flagStep.id, to: EXIT_NODE_ID, type: 'branch', outcome: 'needs_approval' },
+                edge(flagStep.id, 'delay', 'continue'),
+                edge('delay', EXIT_NODE_ID, 'continue'),
+            ])
+            flow.actions.splice(2, 0, {
+                id: 'delay',
+                name: 'Delay',
+                description: '',
+                type: 'delay',
+                created_at: 1,
+                updated_at: 1,
+                config: { delay_duration: '1d' },
+            })
+            await expectLogic(logic, () => logic.actions.resetFlowFromHogFlow(flow)).toDispatchActions(['setNodesRaw'])
+
+            expect(logic.values.nodes.find((node) => node.id === flagStep.id)?.deletable).toBe(false)
         })
     })
 

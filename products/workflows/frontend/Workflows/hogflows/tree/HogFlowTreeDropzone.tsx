@@ -10,7 +10,7 @@ import { cn, Popover, PopoverContent, PopoverTrigger } from 'lib/ui/quill'
 import { type CreateActionType, hogFlowEditorLogic } from '../hogFlowEditorLogic'
 import { HogFlowEditorPanelBuild } from '../panel/HogFlowEditorPanelBuild'
 import type { HogFlowEdge } from '../types'
-import { computeMoveTreeBranchEdges, isBranchingAction } from './workflowTree'
+import { computeMoveTreeBranchEdges, isBranchingStep } from './workflowTree'
 
 export function HogFlowTreeDropzone({
     active,
@@ -63,7 +63,7 @@ export function HogFlowTreeDropzone({
                 return
             }
             const action = workflow.actions.find((action) => action.id === draggedActionId)
-            if (!action || !isBranchingAction(action)) {
+            if (!action || !isBranchingStep(action, workflow.edges)) {
                 moveNodeToEdge(draggedActionId, edge, isBranchJoin, joinEdges)
             } else {
                 const newEdges = computeMoveTreeBranchEdges(workflow, draggedActionId, edge, isBranchJoin, joinEdges)

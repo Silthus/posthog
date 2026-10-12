@@ -9,12 +9,55 @@ import { mswDecorator } from '~/mocks/browser'
 import _hogFunctionTemplatesDestinations from '~/mocks/fixtures/_hogFunctionTemplatesDestinations.json'
 import { HogFunctionTemplateType } from '~/types'
 
+import type { WorkflowNodeApi } from 'products/workflows/frontend/generated/api.schemas'
+
 import { NEW_WORKFLOW, WorkflowLogicProps, workflowLogic } from '../../workflowLogic'
 import { hogFlowEditorLogic, HogFlowEditorMode } from '../hogFlowEditorLogic'
 import type { HogFlow, HogFlowAction } from '../types'
 import { HogFlowEditorPanel } from './HogFlowEditorPanel'
 
 const LOGIC_PROPS: WorkflowLogicProps = { id: 'storybook-configuration-panel' }
+
+const WORKFLOW_NODES: WorkflowNodeApi[] = [
+    {
+        key: 'feature_flag',
+        name: 'Feature flag',
+        operations: [
+            {
+                key: 'set_rollout_percentage',
+                name: 'Set rollout percentage',
+                description: 'Sets the rollout percentage of a flag with exactly one release condition.',
+                inputs_schema: [
+                    {
+                        type: 'string',
+                        key: 'flag_key',
+                        label: 'Flag key',
+                        required: true,
+                        description: 'Key of the feature flag to change.',
+                        templating: 'hog',
+                    },
+                    {
+                        type: 'string',
+                        key: 'rollout_percentage',
+                        label: 'Rollout percentage',
+                        required: true,
+                        description: 'Target percentage from 0 to 100, for example 25. Fractions are allowed.',
+                        templating: 'hog',
+                    },
+                    {
+                        type: 'string',
+                        key: 'expected_version',
+                        label: 'Expected flag version',
+                        required: false,
+                        description: 'Leave empty to change the current version.',
+                        templating: 'hog',
+                    },
+                ],
+                outcomes: ['done', 'changed_elsewhere', 'needs_approval', 'failed', 'not_permitted'],
+            },
+        ],
+    },
+]
 
 // The email template is hidden, so it is not in the shared destinations fixture. Mirrors
 // nodejs/src/cdp/templates/_destinations/email/email.template.ts.
@@ -91,6 +134,20 @@ const PANEL_WORKFLOW: HogFlow = {
             },
         },
         {
+            id: 'feature-flag',
+            type: 'native',
+            name: 'Roll out new checkout',
+            description: 'Widen the new checkout to a quarter of users.',
+            config: {
+                node: 'feature_flag',
+                operation: 'set_rollout_percentage',
+                inputs: {
+                    flag_key: { value: 'new-checkout', templating: 'hog' },
+                    rollout_percentage: { value: '25', templating: 'hog' },
+                },
+            },
+        },
+        {
             id: 'email',
             type: 'function_email',
             name: 'Send welcome email',
@@ -152,7 +209,9 @@ const PANEL_WORKFLOW: HogFlow = {
     edges: [
         { from: 'trigger', to: 'delay', type: 'continue' },
         { from: 'delay', to: 'webhook', type: 'continue' },
-        { from: 'webhook', to: 'email', type: 'continue' },
+        { from: 'webhook', to: 'feature-flag', type: 'continue' },
+        { from: 'feature-flag', to: 'exit', type: 'branch', outcome: 'needs_approval' },
+        { from: 'feature-flag', to: 'email', type: 'continue' },
         { from: 'email', to: 'conditional', type: 'continue' },
         { from: 'conditional', to: 'cohort', type: 'branch', index: 0 },
         { from: 'conditional', to: 'exit', type: 'branch', index: 1 },
@@ -181,6 +240,7 @@ const meta: Meta<typeof HogFlowEditorPanel> = {
             get: {
                 '/api/environments/:team_id/hog_flows/:id/': PANEL_WORKFLOW,
                 '/api/environments/:team_id/messaging_categories': { count: 0, results: [] },
+                '/api/projects/:team_id/workflow_nodes/': WORKFLOW_NODES,
                 '/api/projects/:team_id/hog_function_templates': {
                     count: _hogFunctionTemplatesDestinations.results.length + 1,
                     results: [...(_hogFunctionTemplatesDestinations.results as unknown[]), EMAIL_TEMPLATE],
@@ -281,6 +341,9 @@ ConditionalBranch.args = { mode: 'build', selectedNodeId: 'conditional' }
 
 export const CohortBranch: StoryFn<PanelStoryProps> = Template.bind({})
 CohortBranch.args = { mode: 'build', selectedNodeId: 'cohort' }
+
+export const FeatureFlag: StoryFn<PanelStoryProps> = Template.bind({})
+FeatureFlag.args = { mode: 'build', selectedNodeId: 'feature-flag' }
 
 export const Variables: StoryFn<PanelStoryProps> = Template.bind({})
 Variables.args = { mode: 'variables', selectedNodeId: null }

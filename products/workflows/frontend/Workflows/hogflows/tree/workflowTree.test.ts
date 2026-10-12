@@ -3,12 +3,14 @@ import {
     buildWorkflowTree,
     computeMoveTreeBranchEdges,
     getWorkflowBranchLabel,
+    isBranchingStep,
     isWorkflowTreeComplete,
 } from './workflowTree'
 import {
     areAllWorkflowTreeBranchesCollapsed,
     findWorkflowTreePath,
     getWorkflowTreeBranchGroups,
+    getWorkflowTreeBranchKey,
     getWorkflowTreeBranchSummary,
     getWorkflowTreeContinuationPath,
     getWorkflowTreeOccurrenceKey,
@@ -442,6 +444,44 @@ describe('buildWorkflowTree', () => {
         }
         expect(getWorkflowBranchLabel(cohortAction, edge('split', 'next', edgeType, 0))).toBe(label)
     })
+
+    it('shows one labelled path per wired outcome of a native step, primary outcome last', () => {
+        const tree = buildWorkflowTree(
+            workflow(
+                [action('trigger', 'trigger'), action('flag', 'native'), action('notify'), action('exit', 'exit')],
+                [
+                    edge('trigger', 'flag'),
+                    edge('flag', 'exit'),
+                    { from: 'flag', to: 'notify', type: 'branch', outcome: 'needs_approval' },
+                    { from: 'flag', to: 'exit', type: 'branch', outcome: 'changed_elsewhere' },
+                    edge('notify', 'exit'),
+                ]
+            )
+        )
+
+        const branches = tree.nodes[1].branches
+        expect(branches.map((branch) => [branch.label, branch.edge.to])).toEqual([
+            ['Changed elsewhere', 'exit'],
+            ['Needs approval', 'notify'],
+            ['Done', 'exit'],
+        ])
+        expect(new Set(branches.map((branch) => getWorkflowTreeBranchKey(branch.edge))).size).toBe(3)
+        expect(new Set(branches.map((branch) => getWorkflowTreeOccurrenceKey('flag', [branch.edge]))).size).toBe(3)
+        expect(findWorkflowTreePath(tree, [branches[1].edge]).map(({ branch }) => branch.label)).toEqual([
+            'Needs approval',
+        ])
+    })
+
+    it.each([
+        ['native', [edge('step', 'exit')], false],
+        ['native', [edge('step', 'exit'), { from: 'step', to: 'exit', type: 'branch', outcome: 'failed' }], true],
+        ['conditional_branch', [edge('step', 'exit')], true],
+    ] as [HogFlowAction['type'], HogFlowEdge[], boolean][])(
+        'treats a %s step with outgoing edges %j as branching: %s',
+        (type, edges, expected) => {
+            expect(isBranchingStep(action('step', type), edges)).toBe(expected)
+        }
+    )
 
     it('moves a branching action with all of its paths', () => {
         const workflowWithJoin = workflow(

@@ -407,6 +407,17 @@ export const HogFlowActionSchema = z.discriminatedUnion('type', [
         }),
     }),
 
+    // Native steps run a PostHog operation from the node catalog. Keep in sync with nodejs/src/cdp/schema/hogflow.ts.
+    z.object({
+        ..._commonActionFields,
+        type: z.literal('native'),
+        config: z.object({
+            node: z.string(),
+            operation: z.string(),
+            inputs: z.record(z.string(), CyclotronInputSchema),
+        }),
+    }),
+
     // Exit
     z.object({
         ..._commonActionFields,
