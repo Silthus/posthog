@@ -826,7 +826,12 @@ export class CdpApi {
             const startingAction = compoundConfiguration.actions?.find(
                 (action: HogFlowAction) => action.id === startingActionId
             )
-            if (startingAction && startingAction.type !== 'trigger') {
+            if (
+                startingAction &&
+                startingAction.type !== 'trigger' &&
+                compoundConfiguration.exit_condition &&
+                compoundConfiguration.exit_condition !== 'exit_only_at_end'
+            ) {
                 const earlyExitResult = await this.hogFlowExecutor.shouldExitEarly(invocation)
                 if (earlyExitResult) {
                     res.json({

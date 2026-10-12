@@ -3,18 +3,20 @@ import '@testing-library/jest-dom'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { BindLogic, Provider } from 'kea'
 
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
+
 import { useMocks } from '~/mocks/jest'
 import { initKeaTests } from '~/test/init'
 
 import { NEW_WORKFLOW, workflowLogic } from '../../../workflowLogic'
 import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
 import { HogflowTestResult } from '../../steps/types'
+import { createExampleEventForTrigger } from '../../testEventFactory'
 import { HogFlow } from '../../types'
 import { EmailActionTestContent } from './HogFlowEditorNotificationPanelTest'
 import { hogFlowEditorNotificationTestLogic } from './hogFlowEditorNotificationTestLogic'
 import { HogFlowEditorPanelTest } from './HogFlowEditorPanelTest'
 import { hogFlowEditorTestLogic } from './hogFlowEditorTestLogic'
-import { HogFlowTestRunSteps } from './HogFlowTestRunSteps'
 
 jest.mock('lib/utils/getAppContext', () => ({
     ...jest.requireActual('lib/utils/getAppContext'),
@@ -44,21 +46,33 @@ const WORKFLOW: HogFlow = {
             config: { template_id: 'template-email', inputs: {} },
         },
     ],
+    edges: [
+        { from: 'trigger_node', to: 'webhook', type: 'continue' },
+        { from: 'webhook', to: 'email', type: 'continue' },
+        { from: 'email', to: 'exit_node', type: 'continue' },
+    ],
 }
 
 describe('workflow test exit outcomes', () => {
     afterEach(cleanup)
 
-    it.each(['single step', 'email pane', 'run list'] as const)('shows an early exit in the %s', async (view) => {
+    it.each(['single step', 'email pane', 'full run'] as const)('shows an early exit in the %s', async (view) => {
         let invocationCount = 0
+        const requestedActions: string[] = []
         useMocks({
             post: {
-                '/api/environments/:team_id/hog_flows/:id/invocations': () => {
+                '/api/environments/:team_id/hog_flows/:id/invocations': async ({ request }) => {
+                    const body = (await request.json()) as { current_action_id: string }
+                    requestedActions.push(body.current_action_id)
                     invocationCount++
                     return [
                         200,
                         invocationCount === 1
-                            ? { status: 'success', nextActionId: 'exit_node', logs: [] }
+                            ? {
+                                  status: 'success',
+                                  nextActionId: view === 'full run' ? 'webhook' : 'exit_node',
+                                  logs: [],
+                              }
                             : EXITED_RESULT,
                     ]
                 },
@@ -69,6 +83,7 @@ describe('workflow test exit outcomes', () => {
             },
         })
         initKeaTests()
+        featureFlagLogic.actions.setFeatureFlags(['workflows-testing-v2'], { 'workflows-testing-v2': true })
         const props = { id: 'new' }
         const workflow = workflowLogic(props)
         workflow.mount()
@@ -82,25 +97,28 @@ describe('workflow test exit outcomes', () => {
         editor.mount()
         testing.mount()
         emailTesting.mount()
-        act(() => editor.actions.setSelectedNodeId(view === 'single step' ? 'webhook' : 'email'))
+        act(() =>
+            editor.actions.setSelectedNodeId(
+                view === 'full run' ? 'trigger_node' : view === 'single step' ? 'webhook' : 'email'
+            )
+        )
 
         render(
             <Provider>
                 <BindLogic logic={workflowLogic} props={props}>
                     <BindLogic logic={hogFlowEditorLogic} props={props}>
-                        {view === 'run list' ? (
-                            <HogFlowTestRunSteps />
-                        ) : view === 'email pane' ? (
-                            <EmailActionTestContent />
-                        ) : (
-                            <HogFlowEditorPanelTest />
-                        )}
+                        {view === 'email pane' ? <EmailActionTestContent /> : <HogFlowEditorPanelTest />}
                     </BindLogic>
                 </BindLogic>
             </Provider>
         )
-        if (view === 'run list') {
-            act(() => testing.actions.addTestRunStep({ actionId: 'email', result: EXITED_RESULT, waitSkipped: false }))
+        if (view === 'full run') {
+            act(() => {
+                testing.actions.setSampleGlobals(
+                    JSON.stringify(createExampleEventForTrigger({ type: 'event' }, 997, 'test-workflow'))
+                )
+                testing.actions.runAllSteps({ ...testing.values.testInvocation, mock_async_functions: true })
+            })
         } else {
             const stepTesting = view === 'email pane' ? emailTesting : testing
             act(() => {
@@ -115,11 +133,14 @@ describe('workflow test exit outcomes', () => {
         }
 
         await screen.findByText('Workflow exited before this step')
-        expect(screen.queryByText('Success')).not.toBeInTheDocument()
+        if (view !== 'full run') {
+            expect(screen.queryByText('Success')).not.toBeInTheDocument()
+        }
         expect(screen.queryByText('Go to next step')).not.toBeInTheDocument()
-        expect(invocationCount).toBe(view === 'run list' ? 0 : 2)
-        if (view === 'run list') {
+        expect(invocationCount).toBe(2)
+        if (view === 'full run') {
             expect(screen.getByText('Exited')).toBeInTheDocument()
+            expect(requestedActions).toEqual(['trigger_node', 'webhook'])
         }
         emailTesting.unmount()
         testing.unmount()
