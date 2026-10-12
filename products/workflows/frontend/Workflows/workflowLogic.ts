@@ -3160,7 +3160,9 @@ export const workflowLogic = kea<workflowLogicType>([
                                 const senderLogic = firstRunSenderLogic({
                                     allowSandbox: templateActions.some(
                                         (action) =>
-                                            needsFirstRunSender(action) && !action.config.inputs?.email?.value?.replyTo
+                                            action.type === 'function_email' &&
+                                            needsFirstRunSender(action) &&
+                                            !action.config.inputs?.email?.value?.replyTo
                                     ),
                                 })
                                 const unmount = senderLogic.mount()

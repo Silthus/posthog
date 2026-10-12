@@ -113,7 +113,7 @@ describe('workflow first-run sender', () => {
                 ? email.config.inputs?.email?.value?.from
                 : undefined
         expect(from?.integrationId).toBe(ownSender ? 5 : type === 'function_email' ? SANDBOX.id : undefined)
-        expect(ensureCalls).toBe(ownSender ? 0 : 1)
+        expect(ensureCalls).toBe(!ownSender && type === 'function_email' ? 1 : 0)
         logic.unmount()
     })
 
