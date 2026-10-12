@@ -666,3 +666,27 @@ class NodeOutcome:
     @classmethod
     def not_permitted(cls, *, missing_permission: str, reason: str) -> "NodeOutcome":
         return cls(outcome=NODE_NOT_PERMITTED, result={"missing_permission": missing_permission, "reason": reason})
+
+
+@frozen
+class NodeOperationSpec:
+    key: str
+    name: str
+    description: str
+    inputs_schema: tuple[dict[str, Any], ...]
+    outcomes: tuple[str, ...]
+
+    @property
+    def primary_outcome(self) -> str:
+        return self.outcomes[0]
+
+    @property
+    def edge_outcomes(self) -> tuple[str, ...]:
+        return self.outcomes[1:]
+
+
+@frozen
+class NodeSpec:
+    key: str
+    name: str
+    operations: tuple[NodeOperationSpec, ...]

@@ -62,6 +62,7 @@ import type {
     PatchedHogFlowUpdateApi,
     TeamEmailReputationResponseApi,
     WorkflowEmailPauseStatusApi,
+    WorkflowNodeApi,
     WorkflowProposalApi,
     WorkflowProposalApproveRequestApi,
     WorkflowProposalCreateApi,
@@ -1310,6 +1311,20 @@ export const hogFlowsUserBlastRadiusCreate = async (
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...options?.headers },
         body: JSON.stringify(blastRadiusRequestApi),
+    })
+}
+
+export const getWorkflowNodesListUrl = (projectId: string) => {
+    return `/api/projects/${projectId}/workflow_nodes/`
+}
+
+/**
+ * @summary List the nodes a native workflow step can run
+ */
+export const workflowNodesList = async (projectId: string, options?: RequestInit): Promise<WorkflowNodeApi[]> => {
+    return apiMutator<WorkflowNodeApi[]>(getWorkflowNodesListUrl(projectId), {
+        ...options,
+        method: 'GET',
     })
 }
 

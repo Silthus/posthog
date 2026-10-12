@@ -24,10 +24,21 @@ def _cond(action_id: str, n_conditions: int) -> dict:
     }
 
 
-def _edge(frm: str, to: str, edge_type: str = "continue", index: int | None = None) -> dict:
+def _native(action_id: str) -> dict:
+    return {
+        "id": action_id,
+        "name": action_id,
+        "type": "native",
+        "config": {"node": "feature_flag", "operation": "set_rollout_percentage", "inputs": {}},
+    }
+
+
+def _edge(frm: str, to: str, edge_type: str = "continue", index: int | None = None, outcome: str | None = None) -> dict:
     edge: dict = {"from": frm, "to": to, "type": edge_type}
     if index is not None:
         edge["index"] = index
+    if outcome is not None:
+        edge["outcome"] = outcome
     return edge
 
 
@@ -104,6 +115,47 @@ class TestValidateGraph(TestCase):
         edges = [_edge("t", "w"), _edge("w", "x", "branch", index=0), _edge("w", "x")]
         assert validate_graph(actions, edges) == []
         assert "out of range [0, 1)" in _graph_errors(actions, [_edge("t", "w"), _edge("w", "x", "branch", index=1)])
+
+    def test_native_step_routes_outcomes_through_outcome_edges(self):
+        actions = [TRIGGER, _native("n"), _fn("review"), EXIT]
+        edges = [
+            _edge("t", "n"),
+            _edge("n", "x"),
+            _edge("n", "review", "branch", outcome="changed_elsewhere"),
+            _edge("n", "review", "branch", outcome="failed"),
+            _edge("review", "x"),
+        ]
+        assert validate_graph(actions, edges) == []
+
+    @parameterized.expand(
+        [
+            ("primary_outcome", _native("n"), [_edge("n", "x", "branch", outcome="done")], "follows the continue edge"),
+            ("unknown_outcome", _native("n"), [_edge("n", "x", "branch", outcome="maybe")], "has no outcome 'maybe'"),
+            ("continue_type", _native("n"), [_edge("n", "x", outcome="failed")], "must be a 'branch' edge"),
+            ("missing_outcome", _native("n"), [_edge("n", "x", "branch", index=0)], "missing 'outcome'"),
+            (
+                "outcome_with_index",
+                _native("n"),
+                [_edge("n", "x", "branch", index=0, outcome="failed")],
+                "sets 'outcome', so it takes no 'index'",
+            ),
+            (
+                "duplicate_outcome",
+                _native("n"),
+                [_edge("n", "x", "branch", outcome="failed"), _edge("n", "x", "branch", outcome="failed")],
+                "Duplicate outcome edge",
+            ),
+            ("not_a_native_step", _fn("n"), [_edge("n", "x", "branch", outcome="failed")], "only native steps"),
+            (
+                "unknown_operation",
+                {**_native("n"), "config": {"node": "feature_flag", "operation": "launch"}},
+                [_edge("n", "x", "branch", outcome="failed")],
+                "has no outcome 'failed'",
+            ),
+        ]
+    )
+    def test_outcome_edge_errors(self, _name, source, edges, message):
+        assert message in _graph_errors([TRIGGER, source, EXIT], [_edge("t", "n"), _edge("n", "x"), *edges])
 
     def test_unreachable_node_returns_warning_not_error(self):
         actions = [TRIGGER, _fn("a"), _fn("orphan"), EXIT]
@@ -188,6 +240,15 @@ class TestApplyGraphOperations(TestCase):
             [TRIGGER, _fn("a"), EXIT], edges, [{"op": "remove_edge", "edge": _edge("t", "a")}]
         )
         assert new_edges == [_edge("a", "x")]
+
+    def test_remove_edge_matches_on_outcome(self):
+        edges = [_edge("n", "x", "branch", outcome="failed"), _edge("n", "x", "branch", outcome="changed_elsewhere")]
+        _, new_edges = apply_graph_operations(
+            [TRIGGER, _native("n"), EXIT],
+            edges,
+            [{"op": "remove_edge", "edge": _edge("n", "x", "branch", outcome="failed")}],
+        )
+        assert new_edges == [_edge("n", "x", "branch", outcome="changed_elsewhere")]
 
     def test_remove_edge_no_match_raises(self):
         with pytest.raises(serializers.ValidationError) as exc:

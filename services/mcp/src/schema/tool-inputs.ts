@@ -1107,13 +1107,24 @@ const WorkflowGraphEdgeSchema = z.object({
     type: z
         .enum(['continue', 'branch'])
         .describe(
-            "'continue' = fall-through (sequential or no-match path); 'branch' = a condition/cohort branch (needs index)."
+            "'continue' = fall-through (sequential or no-match path); 'branch' = a condition/cohort branch (needs " +
+                'index) or a native step outcome (needs outcome).'
         ),
     index: z
         .number()
         .int()
         .optional()
-        .describe('Required for type=branch: which condition/cohort slot this branch matches (0-based).'),
+        .describe(
+            'Required for a type=branch edge from a condition or cohort step: which slot this branch matches ' +
+                '(0-based). Omit it on an outcome edge from a native step.'
+        ),
+    outcome: z
+        .string()
+        .optional()
+        .describe(
+            'Required for type=branch from a native step, instead of index: the outcome this edge handles, from the ' +
+                "operation's outcomes in the workflow nodes catalog. The primary outcome (done) uses the continue edge."
+        ),
 })
 
 const WorkflowGraphOperationSchema = z.discriminatedUnion('op', [
@@ -1145,7 +1156,7 @@ const WorkflowGraphOperationSchema = z.discriminatedUnion('op', [
     }),
     z.object({
         op: z.literal('remove_edge'),
-        edge: WorkflowGraphEdgeSchema.describe('The edge to remove (matched on from/to/type/index).'),
+        edge: WorkflowGraphEdgeSchema.describe('The edge to remove (matched on from/to/type/index/outcome).'),
     }),
     z.object({
         op: z.literal('replace_action_edges'),

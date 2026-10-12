@@ -42,6 +42,7 @@ SUPPORTED_ACTION_TYPES: Final[list[str]] = [
     "wait_until_time_window",
     "conditional_branch",
     "random_cohort_branch",
+    "native",
     "exit",
 ]
 

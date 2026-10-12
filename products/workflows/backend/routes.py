@@ -9,6 +9,7 @@ from products.workflows.backend.presentation.views import (
     hog_flow,
     hog_flow_template,
     workflow_node_runs,
+    workflow_nodes,
     workflow_scout_runs,
     workflow_tasks,
 )
@@ -33,6 +34,9 @@ def register_routes(routers: RouterRegistry) -> None:
         workflow_scout_runs.WorkflowScoutRunViewSet,
         "project_workflow_scout_runs",
         ["team_id"],
+    )
+    routers.projects.register(
+        r"workflow_nodes", workflow_nodes.WorkflowNodeViewSet, "project_workflow_nodes", ["team_id"]
     )
     routers.projects.register(
         r"internal/workflow_nodes",

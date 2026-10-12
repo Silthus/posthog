@@ -309,6 +309,21 @@ const workflowsListInvocations = (): ToolBase<
     },
 })
 
+const WorkflowsListNodesSchema = () => z.object({})
+
+const workflowsListNodes = (): ToolBase<ReturnType<typeof WorkflowsListNodesSchema>, Schemas.WorkflowNode[]> => ({
+    name: 'workflows-list-nodes',
+    schema: WorkflowsListNodesSchema(),
+    handler: async (context: Context, _params: z.infer<ReturnType<typeof WorkflowsListNodesSchema>>) => {
+        const projectId = await context.stateManager.getProjectId()
+        const result = await context.api.request<Schemas.WorkflowNode[]>({
+            method: 'GET',
+            path: `/api/projects/${encodeURIComponent(String(projectId))}/workflow_nodes/`,
+        })
+        return result
+    },
+})
+
 const WorkflowsListProposalsSchema = () => {
     const HogFlowsProposalsListParams = orvalSchemas.HogFlowsProposalsListParams()
     const HogFlowsProposalsListQueryParams = orvalSchemas.HogFlowsProposalsListQueryParams()
@@ -739,6 +754,7 @@ export const GENERATED_TOOLS: Record<string, () => ToolBase<ZodObjectAny>> = {
     'workflows-list': workflowsList,
     'workflows-list-batch-jobs': workflowsListBatchJobs,
     'workflows-list-invocations': workflowsListInvocations,
+    'workflows-list-nodes': workflowsListNodes,
     'workflows-list-proposals': workflowsListProposals,
     'workflows-list-revisions': workflowsListRevisions,
     'workflows-list-versions': workflowsListVersions,

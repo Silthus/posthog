@@ -226,6 +226,19 @@ describe('native workflow steps', () => {
         expect(result.error).toEqual(expect.stringContaining('not_permitted'))
     })
 
+    it('changes nothing in a test run with mocked async functions', async () => {
+        const invocation = createExampleHogFlowInvocation(buildFlow())
+        invocation.state.currentAction = { id: 'flag_step', startedAtTimestamp: Date.now() }
+
+        const result = await buildExecutor(SIGNING_KEY).executeCurrentAction(invocation, {
+            hogExecutorOptions: { asyncFunctionsNames: [], functions: {} },
+        })
+
+        expect(mockInternalFetch).not.toHaveBeenCalled()
+        expect(result.invocation.state.currentAction?.id).toBe('after_done')
+        expect(result.logs.map((log) => log.message)).toContainEqual(expect.stringContaining('mocked'))
+    })
+
     it('follows a wired failed edge when the inputs cannot be rendered', async () => {
         const { result } = await runFlow(buildFlow({ rolloutTemplate: '{% if %}', wireFailed: true }))
 
