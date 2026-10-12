@@ -11,6 +11,11 @@ const labelFrom =
     (value: string): string =>
         labels[value] ?? value
 
+const valueFromLabel =
+    (labels: Record<string, string>) =>
+    (typed: string): string =>
+        Object.keys(labels).find((value) => labels[value].toLowerCase() === typed.toLowerCase()) ?? typed
+
 /** Every word of the text must appear in the name or description. */
 export function matchesWorkflowListText(row: WorkflowListRow, text: string): boolean {
     return text
@@ -23,9 +28,12 @@ export function matchesWorkflowListText(row: WorkflowListRow, text: string): boo
 /** `rows` supplies the names shown for creator uuids. */
 export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinition<WorkflowListRow>[] {
     const creatorNames = new Map<string, string>()
+    const creatorIds = new Map<string, string>()
     for (const { workflow } of rows) {
         if (workflow.created_by) {
-            creatorNames.set(workflow.created_by.uuid, workflow.created_by.first_name || workflow.created_by.email)
+            const name = workflow.created_by.first_name || workflow.created_by.email
+            creatorNames.set(workflow.created_by.uuid, name)
+            creatorIds.set(name.toLowerCase(), workflow.created_by.uuid)
         }
     }
 
@@ -37,6 +45,7 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
             showOnFocus: true,
             order: 1,
             getValues: (row) => [row.workflow.status],
+            normalizeValue: valueFromLabel(STATUS_LABELS),
             formatValue: labelFrom(STATUS_LABELS),
         },
         {
@@ -46,6 +55,7 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
             showOnFocus: true,
             order: 2,
             getValues: (row) => [row.workflow.type],
+            normalizeValue: valueFromLabel(TYPE_LABELS),
             formatValue: labelFrom(TYPE_LABELS),
         },
         {
@@ -55,6 +65,7 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
             showOnFocus: true,
             order: 3,
             getValues: (row) => (row.triggerType ? [row.triggerType] : []),
+            normalizeValue: valueFromLabel(TRIGGER_LABELS),
             formatValue: labelFrom(TRIGGER_LABELS),
         },
         {
@@ -64,6 +75,7 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
             showOnFocus: true,
             order: 4,
             getValues: (row) => row.owners,
+            normalizeValue: (value) => value.replace(/^@/, ''),
             formatValue: (value) => `@${value}`,
         },
         {
@@ -73,6 +85,7 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
             showOnFocus: true,
             order: 5,
             getValues: (row) => (row.last7Days === null ? [] : [row.health]),
+            normalizeValue: valueFromLabel(HEALTH_LABELS),
             formatValue: labelFrom(HEALTH_LABELS),
         },
         {
@@ -81,6 +94,7 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
             description: 'Who created it',
             order: 6,
             getValues: (row) => (row.workflow.created_by ? [row.workflow.created_by.uuid] : []),
+            resolveValue: (value) => creatorIds.get(value.toLowerCase()) ?? value,
             formatValue: (value) => creatorNames.get(value) ?? value,
         },
     ]

@@ -511,7 +511,9 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
                         ? {
                               ...facet,
                               resolveValue: (value: string): string =>
-                                  value.toLowerCase() === 'me' ? (user?.uuid ?? '__signed_out__') : value,
+                                  value.toLowerCase() === 'me'
+                                      ? (user?.uuid ?? '__signed_out__')
+                                      : (facet.resolveValue?.(value) ?? value),
                               formatValue: (value: string): string =>
                                   value === 'me'
                                       ? user?.first_name || user?.email || 'Me'

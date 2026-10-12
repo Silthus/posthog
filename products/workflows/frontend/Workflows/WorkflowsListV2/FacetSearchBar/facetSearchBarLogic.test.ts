@@ -17,6 +17,7 @@ const FACETS: FacetDefinition<Item>[] = [
         showOnFocus: true,
         order: 1,
         getValues: (item) => [item.status],
+        normalizeValue: (value) => value.toLowerCase(),
         formatValue: (value) => value[0].toUpperCase() + value.slice(1),
     },
     {
@@ -120,6 +121,15 @@ describe('facetSearchBarLogic', () => {
         mountWith({ filters, text: '' })
         logic.actions.setInput(input)
         expect(logic.values.suggestions.map((s) => [s.kind, s.label])).toEqual([['none', label]])
+    })
+
+    it('stores a typed value in the form the facet keeps', () => {
+        mountWith({ filters: [], text: '' })
+        logic.actions.setInput('status:Draft ')
+        expect(onChange).toHaveBeenLastCalledWith({
+            filters: [{ facet: 'status', value: 'draft', negated: false }],
+            text: '',
+        })
     })
 
     it('adds a pill from a value row and keeps the text before the draft', () => {

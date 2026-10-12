@@ -139,6 +139,19 @@ describe('workflowsListV2Logic', () => {
         expect(logic.values.rows).toHaveLength(pageCount)
     })
 
+    it.each([
+        ['an owner as the list shows it', 'owner:@maya', ['wf-welcome']],
+        ['a health label', 'health:"No runs"', ['wf-page-two', 'wf-sync', 'wf-old-promo']],
+        ['a creator name', 'created-by:Ada', ['wf-welcome', 'wf-page-two', 'wf-renewal', 'wf-old-promo']],
+    ])('matches a link with %s', async (_, q, ids) => {
+        router.actions.push(urls.workflows(), { q })
+        logic = workflowsListV2Logic()
+        logic.mount()
+
+        await expectLogic(logic).toDispatchActions(['loadWorkflowsSuccess', 'loadMetricsSuccess'])
+        expect(shownIds(logic)).toEqual(ids)
+    })
+
     it('stops at a next link that does not move forward and shows the load error', async () => {
         let requests = 0
         useMocks({

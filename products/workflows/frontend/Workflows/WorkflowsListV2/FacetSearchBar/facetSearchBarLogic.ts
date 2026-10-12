@@ -9,6 +9,7 @@ import {
     facetFilterKey,
     findFacet,
     formatFacetValue,
+    normalizeFacetValue,
     sortFacets,
 } from './facetQuery'
 
@@ -67,7 +68,9 @@ function extractCompleteFilters(
         COMPLETE_TOKEN,
         (token: string, lead: string, minus: string, key: string, quoted?: string, bare?: string) => {
             const facet = findFacet(facets, key)
-            const value = quoted !== undefined ? quoted.replace(/\\(.)/g, '$1') : bare
+            const value =
+                facet &&
+                normalizeFacetValue(facet, quoted !== undefined ? quoted.replace(/\\(.)/g, '$1') : (bare ?? ''))
             if (!facet || !value) {
                 return token
             }

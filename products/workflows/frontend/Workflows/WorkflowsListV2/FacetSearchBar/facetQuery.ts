@@ -9,6 +9,9 @@ export interface FacetDefinition<TItem> {
     description: string
     /** Every value the item has. An item with no values never matches a positive pill and always passes a negated one. */
     getValues: (item: TItem) => string[]
+    /** Turns a typed form, such as a label or `@name`, into the stored value when a pill is made. */
+    normalizeValue?: (value: string) => string
+    /** Maps a stored value to the one `getValues` returns when it depends on the viewer or the loaded items. */
     resolveValue?: (value: string) => string
     /** Display form of a stored value: `active` → `Active`, a user uuid → a name. */
     formatValue?: (value: string) => string
@@ -49,6 +52,10 @@ export function sortFacets<TItem>(facets: FacetDefinition<TItem>[]): FacetDefini
     return [...facets].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 }
 
+export function normalizeFacetValue<TItem>(facet: FacetDefinition<TItem>, value: string): string {
+    return facet.normalizeValue ? facet.normalizeValue(value) : value
+}
+
 export function facetFilterKey(filter: FacetFilter): string {
     return `${filter.negated ? '-' : ''}${filter.facet}:${filter.value.toLowerCase()}`
 }
@@ -74,8 +81,11 @@ export function parseFacetQuery<TItem>(query: string, facets: FacetDefinition<TI
         }
         index = TOKEN.lastIndex
         const facet = findFacet(facets, match[2])
-        const value = match[3] !== undefined ? match[3].replace(/\\(.)/g, '$1') : match[4]
-        if (!facet || !value) {
+        if (!facet) {
+            continue
+        }
+        const value = normalizeFacetValue(facet, match[3] !== undefined ? match[3].replace(/\\(.)/g, '$1') : match[4])
+        if (!value) {
             continue
         }
         const filter = { facet: facet.key, value, negated: match[1] === '-' }
