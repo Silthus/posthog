@@ -69,6 +69,7 @@ export interface workflowsSavedViewsLogicValues {
     enabled: boolean
     isModified: boolean
     myWorkflowsDeleted: boolean
+    mutationFailure: unknown
     pendingAction: SavedViewAction | null
     savedViews: WorkflowViewApi[] | null
     savedViewsLoadFailed: boolean
@@ -180,6 +181,9 @@ export interface workflowsSavedViewsLogicActions {
     setSavedViewsLoadFailed: (failed: boolean) => {
         failed: boolean
     }
+    setMutationFailure: (failure: unknown) => {
+        failure: unknown
+    }
     setPendingAction: (action: SavedViewAction | null) => {
         action: SavedViewAction | null
     }
@@ -283,6 +287,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
         removeSavedView: (id: string) => ({ id }),
         setDefaultView: (view: WorkflowViewApi | null) => ({ view }),
         setPendingAction: (action: SavedViewAction | null) => ({ action }),
+        setMutationFailure: (failure: unknown) => ({ failure }),
         setConflictedViewId: (id: string | null) => ({ id }),
         syncViewFromUrl: true,
         clearSavedViews: true,
@@ -370,6 +375,19 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
             { setActiveViewId: (_, { id }) => id, applyView: (_, { view }) => view.id, clearSavedViews: () => 'all' },
         ],
         pendingAction: [null as SavedViewAction | null, { setPendingAction: (_, { action }) => action }],
+        mutationFailure: [
+            null as unknown,
+            {
+                resetView: () => null,
+                saveViewAs: () => null,
+                updateActiveView: () => null,
+                renameView: () => null,
+                deleteView: () => null,
+                restoreMyWorkflows: () => null,
+                setMutationFailure: (_, { failure }) => failure,
+                clearSavedViews: () => null,
+            },
+        ],
         conflictedViewId: [
             null as string | null,
             { setConflictedViewId: (_, { id }) => id, clearSavedViews: () => null },
@@ -557,10 +575,10 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
             action: SavedViewAction,
             run: (stillCurrent: () => boolean) => Promise<void>,
             target?: WorkflowSavedView
-        ): Promise<unknown> => {
+        ): Promise<void> => {
             const needsWriteAccess = action !== 'reset'
             if (!values.available || values.saving || (needsWriteAccess && values.writeDisabledReason)) {
-                return null
+                return
             }
             actions.setPendingAction(action)
             cache.filterKeysAddedWhileSaving = new Set<string>()
@@ -570,9 +588,10 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                 values.enabled && values.currentTeamId === teamId && (cache.contextGeneration ?? 0) === generation
             try {
                 await run(stillCurrent)
-                return null
             } catch (error) {
-                return stillCurrent() ? handleFailure(action, error, target) : null
+                if (stillCurrent()) {
+                    actions.setMutationFailure(handleFailure(action, error, target))
+                }
             } finally {
                 actions.setPendingAction(null)
             }
@@ -756,9 +775,9 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
             updateActiveView: async () => {
                 const current = values.activeView
                 if (current.builtIn || values.sharedSaveDisabledReason) {
-                    return null
+                    return
                 }
-                return await runMutation(
+                await runMutation(
                     'update',
                     async (stillCurrent) => {
                         const view = await api.workflowViewsPartialUpdate(String(values.currentTeamId), current.id, {
@@ -781,9 +800,9 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
             renameView: async ({ id, name }) => {
                 const current = values.views.find((view) => view.id === id)
                 if (!current || current.builtIn) {
-                    return null
+                    return
                 }
-                return await runMutation(
+                await runMutation(
                     'rename',
                     async (stillCurrent) => {
                         const updated = await api.workflowViewsPartialUpdate(String(values.currentTeamId), id, {
@@ -801,9 +820,9 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
             deleteView: async ({ id }) => {
                 const current = values.views.find((view) => view.id === id)
                 if (!current || current.builtIn) {
-                    return null
+                    return
                 }
-                return await runMutation(
+                await runMutation(
                     'delete',
                     async (stillCurrent) => {
                         await api

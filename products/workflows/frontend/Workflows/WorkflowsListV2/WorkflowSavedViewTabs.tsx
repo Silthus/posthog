@@ -7,8 +7,9 @@ import { WorkflowSavedViewActions } from './WorkflowSavedViewActions'
 import { WorkflowSavedViewTabsRow } from './WorkflowSavedViewTabsRow'
 import { workflowsSavedViewsLogic } from './workflowsSavedViewsLogic'
 
-async function keepDialogOpenOnFailure(mutation: Promise<unknown>): Promise<void> {
-    const failure = await mutation
+async function keepDialogOpenOnFailure(mutation: Promise<void>): Promise<void> {
+    await mutation
+    const failure = workflowsSavedViewsLogic.values.mutationFailure
     if (failure) {
         throw failure
     }
