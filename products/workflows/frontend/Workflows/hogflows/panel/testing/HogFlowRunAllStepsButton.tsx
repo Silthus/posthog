@@ -46,7 +46,11 @@ export function HogFlowRunAllStepsButton({
                       ? 'Wait for the current test to finish'
                       : undefined
             }
-            tooltip="Run every step from the trigger to the end. Built-in email, SMS and push steps stay mocked. Other HTTP steps follow the request setting."
+            tooltip={
+                source === 'email'
+                    ? 'Run every step from the trigger to the end. All messages and HTTP requests stay mocked.'
+                    : 'Run every step from the trigger to the end. Built-in email, SMS and push steps stay mocked. Other HTTP steps follow the request setting.'
+            }
             size="small"
         >
             Run all steps

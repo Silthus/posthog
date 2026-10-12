@@ -619,6 +619,7 @@ describe('hogFlowEditorTestLogic', () => {
             | {
                   status: 'success' | 'error'
                   nextActionId: string | null
+                  awaitingResume?: boolean
                   variables?: Record<string, string>
                   logs?: { level: string; message: string; timestamp: string }[]
               }
@@ -757,6 +758,21 @@ describe('hogFlowEditorTestLogic', () => {
                 result: { status: 'error', nextActionId: null, logs: [{ message }] },
             })
             expect(logic.values.testResult?.status).toBe('error')
+        })
+
+        it('passes a function waiting for an awaited run and finishes downstream steps', async () => {
+            await runToTheEnd({
+                ...COMPLETE_RUN,
+                function_node: { status: 'success', nextActionId: 'function_node', awaitingResume: true },
+            })
+
+            expect(requests.map(({ step }) => step)).toEqual(COMPLETE_STEPS)
+            expect(logic.values.testRunSteps?.[1]).toMatchObject({
+                actionId: 'function_node',
+                waitSkipped: true,
+                result: { status: 'success', nextActionId: 'email_node' },
+            })
+            expect(logic.values.testRunning).toBe(false)
         })
 
         it('keeps the email pane person and mocks every request in its full run', async () => {

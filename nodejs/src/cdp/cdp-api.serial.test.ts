@@ -105,6 +105,7 @@ describe('CDP API', () => {
         await resetTestDatabase()
         hub = await createHub({
             SITE_URL: 'http://localhost:8000',
+            CDP_HOGFLOW_AWAITED_STEPS_ENABLED: true,
         })
         hub.CDP_GOOGLE_ADWORDS_DEVELOPER_TOKEN = 'ADWORDS_TOKEN'
         team = await getFirstTeam(hub.postgres)
@@ -1136,6 +1137,52 @@ describe('CDP API', () => {
             expect(res.body.status).toEqual('success')
             expect(res.body.nextActionId).toEqual(expectedNextActionId)
         })
+    })
+
+    it.each([true, false])('reports whether a function test parks for an awaited run: %s', async (awaitsRun) => {
+        const templateId = `template-cdp-api-awaited-run-${awaitsRun}`
+        await insertHogFunctionTemplate(hub.postgres, {
+            id: templateId,
+            name: 'Awaited run',
+            code: awaitsRun
+                ? "return { 'id': 't1', 'run_id': 'r1', 'await': { 'max_wait': '190m', 'label': 'task' } }"
+                : "return { 'id': 't1', 'run_id': 'r1' }",
+            inputs_schema: [{ key: 'awaits_run', type: 'boolean', required: false }],
+        })
+        const res = await supertest(app)
+            .post(`/api/projects/${team.id}/hog_flows/new/invocations`)
+            .send({
+                globals,
+                mock_async_functions: false,
+                current_action_id: 'task_node',
+                configuration: {
+                    name: 'Await a task',
+                    actions: [
+                        {
+                            id: 'trigger_node',
+                            name: 'Trigger',
+                            type: 'trigger',
+                            config: { type: 'event', filters: {} },
+                        },
+                        {
+                            id: 'task_node',
+                            name: 'Task',
+                            type: 'function',
+                            config: { template_id: templateId, inputs: {} },
+                        },
+                        { id: 'exit_node', name: 'Exit', type: 'exit', config: {} },
+                    ],
+                    edges: [
+                        { from: 'trigger_node', to: 'task_node', type: 'continue' },
+                        { from: 'task_node', to: 'exit_node', type: 'continue' },
+                    ],
+                },
+            })
+
+        expect(res.status).toEqual(200)
+        expect(res.body.status).toEqual('success')
+        expect(res.body.nextActionId).toEqual(awaitsRun ? 'task_node' : 'exit_node')
+        expect(res.body.awaitingResume).toEqual(awaitsRun ? true : undefined)
     })
 
     it('redacts a flow function action secret from mocked async function logs', async () => {

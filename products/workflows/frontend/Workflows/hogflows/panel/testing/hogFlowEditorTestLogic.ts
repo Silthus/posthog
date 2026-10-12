@@ -124,7 +124,8 @@ const nextTestRunStep = (workflow: HogFlow, actionId: string, result: HogflowTes
     if (
         action?.type === 'delay' ||
         action?.type === 'wait_until_condition' ||
-        action?.type === 'wait_until_time_window'
+        action?.type === 'wait_until_time_window' ||
+        result.awaitingResume === true
     ) {
         return { ...step, result: { ...result, nextActionId: continueTarget(workflow, actionId) }, waitSkipped: true }
     }
@@ -438,6 +439,13 @@ export interface hogFlowEditorTestLogicActions {
     }
     setTestResultMode: (mode: 'diff' | 'raw') => {
         mode: 'diff' | 'raw'
+    }
+    startTestRun: (
+        inputs: HogflowTestInvocation,
+        source: TestRunSource
+    ) => {
+        inputs: HogflowTestInvocation
+        source: TestRunSource
     }
     stopTestRun: () => {
         value: true
@@ -924,6 +932,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
         runRequestedTestWhenReady: true,
         requestRunAllSteps: (inputs: HogflowTestInvocation, source: TestRunSource = 'workflow') => ({ inputs, source }),
         runAllSteps: (inputs: HogflowTestInvocation, source: TestRunSource = 'workflow') => ({ inputs, source }),
+        startTestRun: (inputs: HogflowTestInvocation, source: TestRunSource) => ({ inputs, source }),
         runTestRunStep: (actionId: string) => ({ actionId }),
         stopTestRun: true,
         addTestRunStep: (step: TestRunStep) => ({ step }),
@@ -934,7 +943,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
         testRunSteps: [
             null as TestRunStep[] | null,
             {
-                runAllSteps: () => [],
+                startTestRun: () => [],
                 addTestRunStep: (steps, { step }) => [...(steps ?? []), step],
                 clearTestRun: () => null,
                 submitTestInvocation: () => null,
@@ -944,7 +953,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
             false,
             {
                 stopTestRun: () => true,
-                runAllSteps: () => false,
+                startTestRun: () => false,
                 clearTestRun: () => false,
             },
         ],
@@ -958,7 +967,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
         testRunning: [
             false,
             {
-                runAllSteps: () => true,
+                startTestRun: () => true,
                 stopTestRun: () => false,
                 finishTestRun: () => false,
             },
@@ -1014,7 +1023,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
             null as string | null,
             {
                 setNextActionId: (_, { nextActionId }) => nextActionId,
-                runAllSteps: () => null,
+                startTestRun: () => null,
             },
         ],
         sampleGlobals: [
@@ -1429,12 +1438,13 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
             }
             actions.runAllSteps(inputs, source)
         },
-        runAllSteps: async ({ inputs, source }, breakpoint) => {
-            if (!values.testingV2Enabled) {
-                actions.stopTestRun()
-                actions.clearTestRun()
+        runAllSteps: ({ inputs, source }) => {
+            if (!values.testingV2Enabled || values.testRunning) {
                 return
             }
+            actions.startTestRun(inputs, source)
+        },
+        startTestRun: async ({ inputs, source }, breakpoint) => {
             actions.resetAccumulatedVariables()
             const { globals: globalsJson, mock_async_functions: mockAsyncFunctions } = inputs
             const variables = { ...values.workflowVariableDefaults }
