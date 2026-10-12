@@ -3,6 +3,7 @@
 The counterpart to ``products.slack_app.backend.slack_workflow_events``, and deliberately dumb in
 the same way: resolve the PostHog projects behind the GitHub installation, then write the delivery
 out as-is. A workflow's trigger config decides what it wants, and the CDP consumer evaluates that.
+The one addition is the labels of a failing suite's pull request, which the delivery does not carry.
 
 Registered by ``products/workflows/backend/webhook_consumers.py`` as the ``workflows`` consumer
 on the GitHub App endpoint, which verifies the signature, parses the body, and dedupes redeliveries
@@ -18,9 +19,10 @@ from django.conf import settings
 import structlog
 
 from posthog.cdp.internal_events import InternalEventEvent, produce_internal_event
-from posthog.github.installations import installation_integrations
-from posthog.ingress.dispatch.database import is_statement_timeout
+from posthog.github.installations import SCOPE_DB_ALIAS, InstallationIntegration, installation_integrations
+from posthog.ingress.dispatch.database import bounded_statement_timeout, is_statement_timeout
 from posthog.models.instance_setting import get_instance_setting
+from posthog.models.integration import GitHubIntegration, Integration
 
 logger = structlog.get_logger(__name__)
 
@@ -41,6 +43,15 @@ _MAX_EVENT_PAYLOAD_BYTES = 900_000
 # Associations that mean the actor has, or is granted, write access to the repository. Anyone can
 # open an issue on a public repo, so this is what separates a maintainer from a passer-by.
 TRUSTED_AUTHOR_ASSOCIATIONS = ("OWNER", "MEMBER", "COLLABORATOR")
+
+# Conclusions that point at the code under test. A cancelled, skipped or neutral suite is nothing to
+# fix, so it does not spend the delivery's shared budget on a label lookup.
+FAILING_CHECK_SUITE_CONCLUSIONS = frozenset({"failure", "timed_out", "startup_failure"})
+
+# The label lookup is one GitHub call inside the delivery budget every GitHub consumer shares, so it
+# gets one short attempt and no transient retry.
+_LABEL_LOOKUP_TIMEOUT_SECONDS = 2
+_LABEL_INTEGRATION_LOAD_TIMEOUT_MS = 800
 
 
 def _subject(payload: dict[str, Any]) -> dict[str, Any]:
@@ -123,7 +134,12 @@ def _redacted_github_event(event_type: str, payload: dict[str, Any]) -> dict[str
 
 
 def _event_properties(
-    event_type: str, payload: dict[str, Any], *, integration_id: int, pull_request_number: int | None = None
+    event_type: str,
+    payload: dict[str, Any],
+    *,
+    integration_id: int,
+    pull_request_number: int | None = None,
+    labels: list[str] | None = None,
 ) -> dict[str, Any]:
     repository = payload.get("repository") or {}
     sender = payload.get("sender") or {}
@@ -186,6 +202,8 @@ def _event_properties(
                 "actor_access": "write" if pull_request_number is not None else "read",
             }
         )
+        if labels is not None:
+            properties["labels"] = labels
 
     # A push's commits array grows without bound, so the embedded payload can push the message past
     # Kafka's limit; a silent broker drop is unrecoverable here because the fan-out's dedup mark
@@ -208,6 +226,49 @@ def _check_suite_pull_request_numbers(payload: dict[str, Any]) -> list[int | Non
         if isinstance(number, int) and repository_id is not None and base_repository_id == repository_id:
             numbers.append(number)
     return numbers or [None]
+
+
+def _is_failing_check_suite(event_type: str, payload: dict[str, Any]) -> bool:
+    return (
+        event_type == "check_suite"
+        and payload.get("action") == "completed"
+        and (payload.get("check_suite") or {}).get("conclusion") in FAILING_CHECK_SUITE_CONCLUSIONS
+    )
+
+
+def _pull_request_labels(
+    integration: InstallationIntegration, repository: str, number: int, delivery_id: str
+) -> list[str] | None:
+    """The pull request's label names, or None when the lookup fails.
+
+    None rather than an empty list, so a label filter cannot match a lookup that never happened.
+    """
+    try:
+        with bounded_statement_timeout(_LABEL_INTEGRATION_LOAD_TIMEOUT_MS, aliases=[SCOPE_DB_ALIAS]):
+            github_integration = Integration.objects.using(SCOPE_DB_ALIAS).get(
+                pk=integration.id, team_id=integration.team_id
+            )
+        response = GitHubIntegration(github_integration, source="workflows").api_request(
+            "GET",
+            f"/repos/{repository}/issues/{number}/labels",
+            endpoint="/repos/{owner}/{repo}/issues/{issue_number}/labels",
+            # GitHub caps a pull request at 100 labels, so one page holds them all.
+            params={"per_page": 100},
+            timeout=_LABEL_LOOKUP_TIMEOUT_SECONDS,
+            retry_transient=False,
+        )
+        response.raise_for_status()
+        return [label["name"] for label in response.json() if isinstance(label.get("name"), str)]
+    except Exception:
+        logger.warning(
+            "github_workflow_event_label_lookup_failed",
+            team_id=integration.team_id,
+            repository=repository,
+            number=number,
+            delivery_id=delivery_id,
+            exc_info=True,
+        )
+        return None
 
 
 def emit_github_event(event_type: str, payload: dict[str, Any], delivery_id: str) -> None:
@@ -241,6 +302,16 @@ def emit_github_event(event_type: str, payload: dict[str, Any], delivery_id: str
     if event_type == "check_suite":
         pull_request_numbers = _check_suite_pull_request_numbers(payload)
 
+    labels_by_number: dict[int | None, list[str] | None] = {}
+    repository = (payload.get("repository") or {}).get("full_name")
+    if integrations and repository and _is_failing_check_suite(event_type, payload):
+        # Every connected project reads the same installation, so one lookup answers for all of them.
+        labels_by_number = {
+            number: _pull_request_labels(integrations[0], repository, number, delivery_id)
+            for number in pull_request_numbers
+            if number is not None
+        }
+
     for integration in integrations:
         for pull_request_number in pull_request_numbers:
             try:
@@ -253,7 +324,11 @@ def emit_github_event(event_type: str, payload: dict[str, Any], delivery_id: str
                         event=GITHUB_EVENT_RECEIVED_EVENT,
                         distinct_id=distinct_id,
                         properties=_event_properties(
-                            event_type, payload, integration_id=integration.id, pull_request_number=pull_request_number
+                            event_type,
+                            payload,
+                            integration_id=integration.id,
+                            pull_request_number=pull_request_number,
+                            labels=labels_by_number.get(pull_request_number),
                         ),
                         uuid=str(uuid.uuid5(_GITHUB_EVENT_NAMESPACE, event_key)),
                     ),

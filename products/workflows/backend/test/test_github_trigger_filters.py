@@ -105,6 +105,20 @@ class TestGithubTriggerFilters(ClickhouseTestMixin, APIBaseTest):
     def test_title_contains(self, _name, overrides, expected):
         assert self._matches([_prop("title", ["fire"], "icontains")], _event(**overrides)) is expected
 
+    @parameterized.expand(
+        [
+            ("the label", {"labels": ["babysit", "ci"]}, True),
+            ("a longer label", {"labels": ["babysitter"]}, False),
+            ("no labels", {"labels": []}, False),
+            ("a failed label lookup", {}, False),
+        ]
+    )
+    def test_label_filter_matches_a_whole_label(self, _name, overrides, expected):
+        # labels is a list, and no property operator compares list elements: exact never matches a
+        # list, and icontains would also match "babysitter".
+        label_filter = {"type": "hogql", "key": "has(properties.labels, 'babysit')"}
+        assert self._matches([label_filter], _event(**overrides)) is expected
+
     def test_filters_combine_with_and(self):
         properties = [
             _prop("repository", ["PostHog/posthog"], "exact"),

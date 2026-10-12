@@ -7,6 +7,9 @@ from unittest.mock import patch
 
 from django.db import OperationalError
 
+import requests
+import responses
+
 from posthog.ingress.contracts import WebhookDelivery
 from posthog.models.instance_setting import override_instance_config
 from posthog.models.integration import Integration
@@ -48,7 +51,14 @@ def integration(db):
         kind="github",
         integration_id=str(INSTALLATION_ID),
         config={"account": {"name": "PostHog"}},
+        sensitive_config={"access_token": "ghs_test_token"},
     )
+
+
+@pytest.fixture
+def github():
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as mock:
+        yield mock
 
 
 @pytest.mark.parametrize("enabled", [True, False])
@@ -88,26 +98,36 @@ def test_emits_nothing_for_an_unconnected_installation(produce, integration) -> 
     produce.assert_not_called()
 
 
-@pytest.mark.parametrize("pr_numbers,foreign_pr_numbers", [([7, 8], [9]), ([], [9]), ([], [])])
-def test_check_suite_emits_ci_results_per_pull_request(
-    produce, integration, pr_numbers: list[int], foreign_pr_numbers: list[int]
-) -> None:
-    payload = {
+def _check_suite_payload(
+    pr_numbers: list[int], foreign_pr_numbers: list[int] | None = None, conclusion: str = "failure"
+) -> dict[str, Any]:
+    return {
         "action": "completed",
         "installation": {"id": INSTALLATION_ID},
         "repository": {"id": 42, "full_name": "example/project", "private": False},
         "sender": {"login": "github-actions[bot]", "type": "Bot"},
         "check_suite": {
             "id": 123,
-            "conclusion": "failure",
+            "conclusion": conclusion,
             "head_sha": "abc123",
             "head_branch": "fix-build",
             "app": {"slug": "github-actions"},
             "pull_requests": [{"number": number, "base": {"repo": {"id": 42}}} for number in pr_numbers]
-            + [{"number": number, "base": {"repo": {"id": 99}}} for number in foreign_pr_numbers],
+            + [{"number": number, "base": {"repo": {"id": 99}}} for number in foreign_pr_numbers or []],
             "head_commit": {"id": "abc123", "message": "Untrusted commit text"},
         },
     }
+
+
+def _labels_url(number: int) -> str:
+    return f"https://api.github.com/repos/example/project/issues/{number}/labels"
+
+
+@pytest.mark.parametrize("pr_numbers,foreign_pr_numbers", [([7, 8], [9]), ([], [9]), ([], [])])
+def test_check_suite_emits_ci_results_per_pull_request(
+    produce, integration, github, pr_numbers: list[int], foreign_pr_numbers: list[int]
+) -> None:
+    payload = _check_suite_payload(pr_numbers, foreign_pr_numbers)
 
     with patch("django.conf.settings.GITHUB_WORKFLOW_TRIGGERS_ENABLED", True):
         emit_github_event("check_suite", payload, "ci-delivery")
@@ -138,6 +158,67 @@ def test_check_suite_emits_ci_results_per_pull_request(
         emit_github_event("check_suite", payload, "ci-delivery")
     assert [call.args[1].uuid for call in produce.call_args_list] == first_uuids
     assert payload["check_suite"]["head_commit"]["message"] == "Untrusted commit text"
+
+
+def test_a_failing_check_suite_carries_each_pull_requests_labels(produce, integration, github) -> None:
+    second_team = Team.objects.create(organization=integration.team.organization, name="Second")
+    Integration.objects.create(team=second_team, kind="github", integration_id=str(INSTALLATION_ID), config={})
+    github.get(_labels_url(7), json=[{"name": "babysit"}, {"name": "ci"}])
+    github.get(_labels_url(8), json=[])
+
+    with patch("django.conf.settings.GITHUB_WORKFLOW_TRIGGERS_ENABLED", True):
+        emit_github_event("check_suite", _check_suite_payload([7, 8]), "ci-delivery")
+
+    assert {
+        (call.args[0], call.args[1].properties["number"]): call.args[1].properties["labels"]
+        for call in produce.call_args_list
+    } == {
+        (integration.team_id, 7): ["babysit", "ci"],
+        (integration.team_id, 8): [],
+        (second_team.pk, 7): ["babysit", "ci"],
+        (second_team.pk, 8): [],
+    }
+    assert len(github.calls) == 2
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        {"status": 500, "json": {"message": "Server Error"}},
+        {"status": 404, "json": {"message": "Not Found"}},
+        {"body": requests.ConnectionError("github is unreachable")},
+    ],
+)
+def test_a_failed_label_lookup_still_emits_the_event_without_labels(
+    produce, integration, github, failure: dict[str, Any]
+) -> None:
+    github.get(_labels_url(7), **failure)
+
+    with (
+        patch("django.conf.settings.GITHUB_WORKFLOW_TRIGGERS_ENABLED", True),
+        patch("products.workflows.backend.github_workflow_events.logger") as logger,
+    ):
+        emit_github_event("check_suite", _check_suite_payload([7]), "ci-delivery")
+
+    assert produce.call_count == 1
+    assert "labels" not in produce.call_args.args[1].properties
+    assert logger.warning.call_args.args[0] == "github_workflow_event_label_lookup_failed"
+    assert len(github.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "pr_numbers,conclusion",
+    [([7], "success"), ([7], "cancelled"), ([7], "neutral"), ([], "failure")],
+)
+def test_only_a_failing_pull_request_suite_looks_up_labels(
+    produce, integration, github, pr_numbers: list[int], conclusion: str
+) -> None:
+    with patch("django.conf.settings.GITHUB_WORKFLOW_TRIGGERS_ENABLED", True):
+        emit_github_event("check_suite", _check_suite_payload(pr_numbers, conclusion=conclusion), "ci-delivery")
+
+    assert produce.call_count == 1
+    assert "labels" not in produce.call_args.args[1].properties
+    assert len(github.calls) == 0
 
 
 @pytest.mark.parametrize(
