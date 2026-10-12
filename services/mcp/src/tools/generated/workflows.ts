@@ -571,7 +571,7 @@ const workflowsSearch = (): ToolBase<
                 pickResponseFields(
                     item,
                     params.fields?.length
-                        ? params.fields
+                        ? [...params.fields, 'id']
                         : [
                               'id',
                               'name',
