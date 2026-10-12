@@ -325,6 +325,7 @@ function AtAGlance({
     const emails = collectEmails(tree)
     const paths = countPaths(tree)
     const endings = collectEndings(workflow, tree)
+    const warnings = [...new Set(workflow.actions.map((a) => splitWarning(workflow, a)).filter(Boolean))] as string[]
     const firstSplit = tree.nodes.find((n) => n.branches.length > 1 && n.action.type !== 'wait_until_condition')
     const splitBranches = firstSplit?.branches.filter((b) => b.sequence.nodes.length > 0) ?? []
 
@@ -340,15 +341,21 @@ function AtAGlance({
                 <span>
                     <strong className="text-primary">{paths}</strong> path{paths === 1 ? '' : 's'}
                 </span>
-                <span>
-                    Ends when:{' '}
-                    {endings
-                        .slice(0, 4)
-                        .map((e) => e.text.replace(/: leaves right away$/, ''))
-                        .join(' · ')}
-                    {endings.length > 4 ? ` · +${endings.length - 4} more` : ''}
+                <span className="flex flex-wrap items-center gap-1">
+                    Ends when:
+                    {(endings.length ? endings.map((e) => e.text) : ['They reach the end']).slice(0, 3).map((text) => (
+                        <span key={text} className="rounded-full bg-[#2f9e441a] px-2 py-0.5 text-[12px] text-[#22762f]">
+                            {text.replace(/: leaves right away$/, '')}
+                        </span>
+                    ))}
+                    {endings.length > 3 && <span className="text-[12px]">+{endings.length - 3} more</span>}
                 </span>
             </div>
+            {warnings.map((warning) => (
+                <div key={warning} className="rounded border border-warning bg-warning-highlight px-2 py-1 text-[13px]">
+                    <strong>Heads up:</strong> {warning}
+                </div>
+            ))}
             {firstSplit && splitBranches.length > 1 && (
                 <div
                     className="flex flex-col gap-1 rounded-md border bg-surface-secondary px-3 py-2"
@@ -466,7 +473,7 @@ function renderNode(node: WorkflowTreeNode, time: TimeRange, depth: number): { e
     return { element: <StepRow key={action.id} action={action} time={time} end={end} />, end }
 }
 
-function StepRow({ action, time, end }: { action: HogFlowAction; time: TimeRange; end: TimeRange }): JSX.Element {
+function StepRow({ action, time }: { action: HogFlowAction; time: TimeRange; end: TimeRange }): JSX.Element {
     const { workflow } = useDoc()
     switch (action.type) {
         case 'trigger': {
@@ -484,13 +491,13 @@ function StepRow({ action, time, end }: { action: HogFlowAction; time: TimeRange
             return <EmailRow action={action} time={time} />
         case 'delay':
             return (
-                <Row action={action} when={formatWhen(end)} icon={<IconClock />} tone="wait" compact>
+                <Row action={action} when="" icon={<IconClock />} tone="wait" compact>
                     Wait <strong>{durationInWords(action.config.delay_duration)}</strong>
                 </Row>
             )
         case 'wait_until_time_window':
             return (
-                <Row action={action} when={formatWhen(end)} icon={<IconCalendar />} tone="wait" compact>
+                <Row action={action} when="" icon={<IconCalendar />} tone="wait" compact>
                     Wait for <strong>{describeTimeWindow(action)}</strong>
                 </Row>
             )
@@ -650,7 +657,7 @@ function WaitForEvent({ node, time, depth }: { node: WorkflowTreeNode; time: Tim
 
     return (
         <>
-            <Row action={action} when={formatWhen(time)} icon={<IconClock />} tone="wait" compact>
+            <Row action={action} when="" icon={<IconClock />} tone="wait" compact>
                 Wait up to <strong>{durationInWords(maxWait)}</strong> for <strong>{describeWaitEvent(action)}</strong>
                 {empty.map((branch) => (
                     <Outcome
@@ -713,9 +720,7 @@ function Split({ node, time, depth }: { node: WorkflowTreeNode; time: TimeRange;
                     />
                 ))}
                 {warning && (
-                    <div className="mt-1 rounded bg-warning-highlight px-2 py-1 text-[12px] text-primary">
-                        ⚠ {warning}
-                    </div>
+                    <div className="text-[12px] text-warning">⚠ Nothing sets this value yet, see the note above</div>
                 )}
             </Row>
             <Branches node={node} time={time} depth={depth} />
@@ -799,9 +804,15 @@ function PathStrip({
     compact?: boolean
 }): JSX.Element {
     const { openStep, workflow } = useDoc()
-    const items: ReactNode[] = []
+    const lines: ReactNode[][] = [[]]
+    let varies = false
+    const newLine = (): void => {
+        if (lines[lines.length - 1].length) {
+            lines.push([])
+        }
+    }
     const chip = (key: string, onClick: () => void, content: ReactNode, strong?: boolean): void => {
-        items.push(
+        lines[lines.length - 1].push(
             <button
                 key={key}
                 type="button"
@@ -820,7 +831,15 @@ function PathStrip({
             const action = node.action
             const email = getEmailContent(action)
             if (email) {
-                chip(action.id, () => openStep(action.id, 'preview'), <>✉ {email.subject}</>, true)
+                chip(
+                    action.id,
+                    () => openStep(action.id, 'preview'),
+                    <>
+                        ✉ {email.subject}
+                        {varies && <span className="font-normal italic text-tertiary"> (varies by path)</span>}
+                    </>,
+                    true
+                )
             } else if (action.type === 'delay') {
                 chip(action.id, () => openStep(action.id), <>wait {durationInWords(action.config.delay_duration)}</>)
             } else if (action.type === 'wait_until_time_window') {
@@ -832,12 +851,15 @@ function PathStrip({
             } else if (action.type === 'wait_until_condition') {
                 const continuing = node.branches.find((b) => b.sequence.nodes.length > 0)
                 const endsOn = node.branches.find((b) => b.sequence.nodes.length === 0)
+                if (compact) {
+                    newLine()
+                }
                 chip(
                     action.id,
                     () => openStep(action.id),
                     <>
                         {endsOn && continuing?.edge.type === 'continue'
-                            ? `if no ${describeWaitEvent(action)} within ${durationInWords(action.config.max_wait_duration)}`
+                            ? `after ${durationInWords(action.config.max_wait_duration)} with no ${describeWaitEvent(action)}`
                             : `wait up to ${durationInWords(action.config.max_wait_duration)} for ${describeWaitEvent(action)}`}
                     </>
                 )
@@ -857,12 +879,9 @@ function PathStrip({
                             by {splits.join(', then ')} into <strong>{leaves.length} paths</strong>, each:
                         </>
                     )
+                    newLine()
+                    varies = true
                     walk(leaves[0])
-                    items.push(
-                        <span key="vary" className="px-1 text-[12px] italic text-tertiary">
-                            (subjects vary by path)
-                        </span>
-                    )
                     return
                 }
                 const emails = node.branches.reduce((sum, b) => sum + collectEmails(b.sequence).length, 0)
@@ -881,15 +900,24 @@ function PathStrip({
     }
     walk(sequence)
     return (
-        <div className={clsx('flex flex-wrap items-center gap-x-0.5 gap-y-0.5 text-secondary', !compact && 'px-2')}>
-            {items.flatMap((item, index) => (index ? [<span key={`sep-${index}`}>→</span>, item] : [item]))}
-            <span>→</span>
-            <span className="px-1 text-[13px] font-medium text-[#2f9e44]">ends</span>
-            {onExpand && (
-                <LemonButton size="xsmall" type="tertiary" onClick={onExpand}>
-                    Expand
-                </LemonButton>
-            )}
+        <div className={clsx('flex flex-col text-secondary', !compact && 'px-2')}>
+            {lines.map((line, lineIndex) => (
+                <div key={lineIndex} className="flex flex-wrap items-center gap-x-0.5 gap-y-0.5">
+                    {lineIndex > 0 && <span className="text-tertiary">↳</span>}
+                    {line.flatMap((item, index) => (index ? [<span key={`sep-${index}`}>→</span>, item] : [item]))}
+                    {lineIndex === lines.length - 1 && (
+                        <>
+                            <span>→</span>
+                            <span className="px-1 text-[13px] font-medium text-[#2f9e44]">ends</span>
+                            {onExpand && (
+                                <LemonButton size="xsmall" type="secondary" onClick={onExpand} className="ml-1">
+                                    Show steps
+                                </LemonButton>
+                            )}
+                        </>
+                    )}
+                </div>
+            ))}
         </div>
     )
 }
@@ -942,7 +970,7 @@ function InsertPoint(): JSX.Element {
             <button
                 type="button"
                 onClick={openAdd}
-                className="flex h-4 cursor-pointer items-center gap-1 text-[12px] text-tertiary opacity-40 hover:opacity-100"
+                className="flex h-5 cursor-pointer items-center gap-1 text-[12px] text-secondary opacity-70 hover:opacity-100"
             >
                 <span className="h-px flex-1 bg-[var(--border)]" />
                 <IconPlus /> Add step
