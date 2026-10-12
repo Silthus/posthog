@@ -144,7 +144,13 @@ describe('messageTemplateTestSendLogic', () => {
             post: {
                 '/api/environments/:team_id/hog_flows/:id/invocations/': () => [
                     200,
-                    { status: 'skipped', logs: [{ message: 'Recipient has opted out.' }] },
+                    {
+                        status: 'skipped',
+                        logs: [
+                            { message: 'Executing action [Action:send_test_email]' },
+                            { message: '[Action:send_test_email] Recipient has opted out, skipping message delivery.' },
+                        ],
+                    },
                 ],
             },
         })
@@ -160,7 +166,26 @@ describe('messageTemplateTestSendLogic', () => {
         expect(mockToast.error).not.toHaveBeenCalled()
         expect(logic.values.isModalOpen).toBe(true)
         expect(logic.values.testSendResult?.status).toBe('skipped')
-        expect(logic.values.testSendSkipMessage).toBe('Recipient has opted out.')
+        expect(logic.values.testSendSkipMessage).toBe('Recipient has opted out, skipping message delivery.')
+    })
+
+    it.each(['recipient', 'sender'])('clears the previous send outcome when changing the %s', async (field) => {
+        logic.actions.sendTestEmailSuccess({
+            status: 'skipped',
+            logs: [],
+            nextActionId: null,
+            errors: [],
+            variables: {},
+        })
+        expect(logic.values.testSendResult?.status).toBe('skipped')
+
+        if (field === 'recipient') {
+            logic.actions.setRecipientEmail('teammate@example.com')
+        } else {
+            logic.actions.setSenderIntegrationId(5)
+        }
+
+        await expectLogic(logic).toMatchValues({ testSendResult: null })
     })
 
     describe('sandbox sender', () => {
@@ -299,7 +324,7 @@ describe('messageTemplateTestSendLogic', () => {
             expect(emailAction.config.inputs.email.value).toMatchObject({ from: { integrationId: 7 }, replyTo: '' })
         })
 
-        it('warns about a recipient outside the organization and blocks the send while the sandbox sender is selected', async () => {
+        it('warns about addresses absent from visible verified suggestions without blocking server authorization', async () => {
             useMocks({
                 get: {
                     '/api/organizations/:organization_id/members/': {
@@ -339,29 +364,29 @@ describe('messageTemplateTestSendLogic', () => {
             })
                 .toDispatchActions(membersLogic, ['loadAllMembersSuccess'])
                 .toMatchValues({
-                    recipientOutsideOrganization: true,
-                    sendDisabledReason: 'The sandbox sender only delivers to verified members of your organization',
+                    recipientNotSuggested: true,
+                    sendDisabledReason: undefined,
                     recipientSuggestions: expect.arrayContaining(['rose.dawson@posthog.com']),
                 })
 
             logic.actions.setRecipientEmail('Rose.Dawson@posthog.com')
             await expectLogic(logic).toMatchValues({
-                recipientOutsideOrganization: false,
+                recipientNotSuggested: false,
                 sendDisabledReason: undefined,
             })
 
             logic.actions.setRecipientEmail('unverified@posthog.com')
-            await expectLogic(logic).toMatchValues({ recipientOutsideOrganization: true })
+            await expectLogic(logic).toMatchValues({ recipientNotSuggested: true })
             expect(logic.values.recipientSuggestions).not.toContain('unverified@posthog.com')
 
             logic.actions.setRecipientEmail('unknown@example.com')
-            await expectLogic(logic).toMatchValues({ recipientOutsideOrganization: true })
+            await expectLogic(logic).toMatchValues({ recipientNotSuggested: true })
             expect(logic.values.recipientSuggestions).not.toContain('unknown@example.com')
 
             logic.actions.setRecipientEmail('outsider@example.com')
             logic.actions.setSenderIntegrationId(5)
             await expectLogic(logic).toMatchValues({
-                recipientOutsideOrganization: false,
+                recipientNotSuggested: false,
                 sendDisabledReason: undefined,
             })
         })
@@ -376,11 +401,11 @@ describe('messageTemplateTestSendLogic', () => {
             })
                 .toDispatchActions(membersLogic, ['loadAllMembers'])
                 .toMatchValues({
-                    recipientOutsideOrganization: false,
+                    recipientNotSuggested: false,
                     sendDisabledReason: 'Checking your organization members',
                 })
                 .toDispatchActions(membersLogic, ['loadAllMembersSuccess'])
-                .toMatchValues({ recipientOutsideOrganization: true })
+                .toMatchValues({ recipientNotSuggested: true })
         })
     })
 

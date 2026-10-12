@@ -51,19 +51,22 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
         recipientEmail,
         recipientSuggestions,
         sandboxEmailSenderEnabled,
-        recipientOutsideOrganization,
+        recipientNotSuggested,
         senderIntegrationId,
         sandboxEmailSender,
         isSandboxSenderSelected,
         emailIntegrations,
         emailIntegrationsLoading,
+        sandboxEmailSenderProvisionResult,
+        sandboxEmailSenderProvisionResultLoading,
         sendDisabledReason,
         testSendResult,
         testSendResultLoading,
         testSendSkipMessage,
         membersLoading,
     } = useValues(logic)
-    const { setModalOpen, setRecipientEmail, setSenderIntegrationId, sendTestEmail } = useActions(logic)
+    const { setModalOpen, setRecipientEmail, setSenderIntegrationId, sendTestEmail, ensureSandboxEmailSender } =
+        useActions(logic)
 
     return (
         <LemonModal
@@ -111,7 +114,7 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
                             data-attr="send-test-email-recipient"
                         />
                     )}
-                    {recipientOutsideOrganization && (
+                    {recipientNotSuggested && (
                         <LemonBanner
                             type="warning"
                             action={{
@@ -123,13 +126,25 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
                             <span translate="no" className="break-all">
                                 {recipientEmail}
                             </span>{' '}
-                            is not a verified member of your organization. The sandbox sender only delivers to verified
-                            members. Pick a teammate, or add your own sender to email anyone.
+                            is not in your visible verified member suggestions. The sandbox sender checks organization
+                            membership before delivery. Add your own sender to email anyone.
                         </LemonBanner>
                     )}
                 </div>
                 <div className="flex flex-col gap-1">
                     <LemonLabel>From</LemonLabel>
+                    {sandboxEmailSenderEnabled && sandboxEmailSenderProvisionResult === 'failed' && (
+                        <LemonBanner
+                            type="error"
+                            action={{
+                                children: 'Try again',
+                                onClick: ensureSandboxEmailSender,
+                                loading: sandboxEmailSenderProvisionResultLoading,
+                            }}
+                        >
+                            Could not set up the sandbox sender.
+                        </LemonBanner>
+                    )}
                     {emailIntegrationsLoading && emailIntegrations.length === 0 ? (
                         <Spinner />
                     ) : emailIntegrations.length > 0 ? (

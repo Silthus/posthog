@@ -8,6 +8,8 @@ import { initKeaTests } from '~/test/init'
 
 import { SendTestEmailModal } from './SendTestEmailModal'
 
+const mockEnsureSandboxEmailSender = jest.fn()
+
 jest.mock('kea', () => ({
     ...jest.requireActual('kea'),
     useValues: jest.fn(),
@@ -16,6 +18,7 @@ jest.mock('kea', () => ({
         setRecipientEmail: jest.fn(),
         setSenderIntegrationId: jest.fn(),
         sendTestEmail: jest.fn(),
+        ensureSandboxEmailSender: mockEnsureSandboxEmailSender,
     }),
 }))
 
@@ -31,6 +34,7 @@ jest.mock('lib/lemon-ui/LemonModal', () => ({
 describe('SendTestEmailModal', () => {
     beforeEach(() => {
         initKeaTests()
+        mockEnsureSandboxEmailSender.mockClear()
     })
     afterEach(cleanup)
 
@@ -39,7 +43,7 @@ describe('SendTestEmailModal', () => {
             recipientEmail: '',
             recipientSuggestions: [],
             sandboxEmailSenderEnabled: true,
-            recipientOutsideOrganization: false,
+            recipientNotSuggested: false,
             senderIntegrationId: null,
             sandboxEmailSender: null,
             isSandboxSenderSelected: false,
@@ -69,4 +73,13 @@ describe('SendTestEmailModal', () => {
             expect(screen.queryByText('Type an email address and press Enter') !== null).toBe(emptyStateShown)
         }
     )
+
+    it('offers a retry when sandbox sender setup fails', () => {
+        mockValues({ sandboxEmailSenderProvisionResult: 'failed' })
+        render(<SendTestEmailModal id="new" isOpen />)
+
+        expect(screen.getByText('Could not set up the sandbox sender.')).toBeInTheDocument()
+        fireEvent.click(screen.getAllByRole('button', { name: 'Try again' })[0])
+        expect(mockEnsureSandboxEmailSender).toHaveBeenCalledTimes(1)
+    })
 })
