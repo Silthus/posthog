@@ -9,6 +9,7 @@ export interface FacetDefinition<TItem> {
     description: string
     /** Every value the item has. An item with no values never matches a positive pill and always passes a negated one. */
     getValues: (item: TItem) => string[]
+    resolveValue?: (value: string) => string
     /** Display form of a stored value: `active` → `Active`, a user uuid → a name. */
     formatValue?: (value: string) => string
     /** Listed when the input is empty. Other facets are found by typing. */
@@ -112,7 +113,8 @@ function groupFilters<TItem>(filters: FacetFilter[], facets: FacetDefinition<TIt
             continue
         }
         const group = groups.get(facet.key) ?? { facet, positive: new Set(), negative: new Set() }
-        ;(filter.negated ? group.negative : group.positive).add(filter.value.toLowerCase())
+        const value = facet.resolveValue?.(filter.value) ?? filter.value
+        ;(filter.negated ? group.negative : group.positive).add(value.toLowerCase())
         groups.set(facet.key, group)
     }
     return [...groups.values()]

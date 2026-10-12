@@ -1,4 +1,4 @@
-import { MOCK_DEFAULT_TEAM } from 'lib/api.mock'
+import { MOCK_DEFAULT_TEAM, MOCK_DEFAULT_USER } from 'lib/api.mock'
 
 import { router } from 'kea-router'
 import { expectLogic } from 'kea-test-utils'
@@ -7,6 +7,7 @@ import { lemonToast } from '@posthog/lemon-ui'
 
 import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
+import { userLogic } from 'scenes/userLogic'
 
 import { useMocks } from '~/mocks/jest'
 import { initKeaTests } from '~/test/init'
@@ -103,6 +104,17 @@ describe('workflowsListV2Logic', () => {
             ['500', null, 'messaging,automation,loop'],
             ['500', '500', 'messaging,automation,loop'],
         ])
+    })
+
+    it('reads created-by:me as the signed-in user', async () => {
+        userLogic.actions.loadUserSuccess({ ...MOCK_DEFAULT_USER, uuid: FIXTURE_USERS.lin.uuid, first_name: 'Lin' })
+        router.actions.push(urls.workflows(), { q: 'created-by:me' })
+        logic = workflowsListV2Logic()
+        logic.mount()
+
+        await expectLogic(logic).toDispatchActions(['loadWorkflowsSuccess'])
+        expect(shownIds(logic)).toEqual(['wf-sync'])
+        expect(logic.values.facets.find((facet) => facet.key === 'created-by')?.formatValue?.('me')).toEqual('Lin')
     })
 
     it('stops following a next link that never ends and shows the load error', async () => {
