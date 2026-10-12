@@ -314,6 +314,16 @@ It takes the same filters as the list. Keep these in mind when you change it:
 - **It uses the list facade for access checks.** The routing mixin only filters `list`; the facade filters both list and summary pages.
 - **Only this path is gzipped.** The full list has step config next to the `search` input that its `next` link reflects, which is the shape `ScopedGZipMiddleware` warns about.
 
+## Searching stored workflow text
+
+`GET /api/projects/:id/hog_flows/search/` and the `workflows-search` MCP tool match a phrase in names, descriptions, step names and readable email content, live and draft alike.
+The `workflows-search-mcp-tool` flag gates both, evaluated on the project group keyed by the team uuid. Keep these in mind when you change it:
+
+- **`HogFlow.search_text` is derived on every save while the flag is on.** While it is off, the save nulls the column, so stale text never outlives a disabled period.
+- **Rows with a null `search_text` fall back to the source columns.** Results stay correct, but the query reads every workflow's `actions` JSON.
+- **Run the rebuild after enabling the flag for a project.** `python manage.py rebuild_hog_flow_search_text --team-id <id>` fills the column page by page. Add `--dry-run` to count the rows it would write.
+- **Activity logs skip `search_text`.** It repeats changes to its source fields and copies whole email bodies.
+
 ## Metrics and version attribution
 
 Workflow metrics live in the ClickHouse `app_metrics2` table, written by the CDP workers.
