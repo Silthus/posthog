@@ -34,7 +34,9 @@ class TestSandboxSenderValidation(APIBaseTest):
         capture = patch("posthoganalytics.capture")
         capture.start()
         self.addCleanup(capture.stop)
-        self.sender = ensure_sandbox_email_sender(self.team.id).integration
+        self.sender = Integration.objects.get(
+            team_id=self.team.id, id=ensure_sandbox_email_sender(self.team.id).integration_id
+        )
         self.email_schema = [{"key": "email", "type": "native_email", "required": True, "templating": "liquid"}]
         HogFunctionTemplate.objects.create(
             template_id="template-email",
