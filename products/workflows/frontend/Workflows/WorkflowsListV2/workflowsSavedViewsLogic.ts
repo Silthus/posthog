@@ -49,6 +49,7 @@ export interface workflowsSavedViewsLogicValues {
     currentTeamId: number | null // workflowsListV2Logic
     facets: FacetDefinition<WorkflowListRow>[] // workflowsListV2Logic
     matchesText: MatchesText<WorkflowListRow> // workflowsListV2Logic
+    listLoaded: boolean // workflowsListV2Logic
     metricsLoaded: boolean // workflowsListV2Logic
     rows: WorkflowListRow[] // workflowsListV2Logic
     serverSearch: ServerSearchResult | null // workflowsListV2Logic
@@ -218,7 +219,8 @@ export interface workflowsSavedViewsLogicMeta {
             facets: FacetDefinition<WorkflowListRow>[],
             matchesText: MatchesText<WorkflowListRow>,
             serverSearch: ServerSearchResult | null,
-            metricsLoaded: boolean
+            metricsLoaded: boolean,
+            listLoaded: boolean
         ) => Record<string, number>
     }
 }
@@ -246,6 +248,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                 'matchesText',
                 'serverSearch',
                 'metricsLoaded',
+                'listLoaded',
             ],
             userLogic,
             ['user'],
@@ -438,31 +441,34 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
         ],
         myWorkflowsDeleted: [(s) => [s.defaultView], (view: WorkflowViewApi | null): boolean => view?.deleted === true],
         viewCounts: [
-            (s) => [s.views, s.rows, s.facets, s.matchesText, s.serverSearch, s.metricsLoaded],
+            (s) => [s.views, s.rows, s.facets, s.matchesText, s.serverSearch, s.metricsLoaded, s.listLoaded],
             (
                 views: WorkflowSavedView[],
                 rows: WorkflowListRow[],
                 facets: FacetDefinition<WorkflowListRow>[],
                 matchesText: MatchesText<WorkflowListRow>,
                 serverSearch: ServerSearchResult | null,
-                metricsLoaded: boolean
+                metricsLoaded: boolean,
+                listLoaded: boolean
             ): Record<string, number> =>
-                Object.fromEntries(
-                    views.flatMap((view) => {
-                        if (!metricsLoaded && view.state.filters.some((filter) => filter.facet === 'health')) {
-                            return []
-                        }
-                        const text = view.state.text.trim()
-                        if (
-                            text.length >= MIN_SERVER_SEARCH_LENGTH &&
-                            (serverSearch?.text !== text || serverSearch.failed)
-                        ) {
-                            return []
-                        }
-                        const value = workflowViewValue(view.state)
-                        return [[view.id, rows.filter(createFacetMatcher(value, facets, matchesText)).length]]
-                    })
-                ),
+                !listLoaded
+                    ? {}
+                    : Object.fromEntries(
+                          views.flatMap((view) => {
+                              if (!metricsLoaded && view.state.filters.some((filter) => filter.facet === 'health')) {
+                                  return []
+                              }
+                              const text = view.state.text.trim()
+                              if (
+                                  text.length >= MIN_SERVER_SEARCH_LENGTH &&
+                                  (serverSearch?.text !== text || serverSearch.failed)
+                              ) {
+                                  return []
+                              }
+                              const value = workflowViewValue(view.state)
+                              return [[view.id, rows.filter(createFacetMatcher(value, facets, matchesText)).length]]
+                          })
+                      ),
         ],
     }),
     listeners(({ actions, values, cache }) => {

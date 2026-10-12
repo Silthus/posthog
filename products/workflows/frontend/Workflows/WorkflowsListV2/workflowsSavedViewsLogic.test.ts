@@ -240,6 +240,19 @@ describe('workflowsSavedViewsLogic', () => {
         expect(logic.values.viewCounts['needs-attention']).toBeUndefined()
     })
 
+    it('shows no view counts while the workflow list has not loaded', async () => {
+        useMocks({
+            get: { '/api/projects/:team_id/hog_flows/summaries/': () => [500, { detail: 'Unavailable' }] },
+        })
+        router.actions.push(urls.workflows())
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(workflowsListV2Logic).toDispatchActions(['loadWorkflowsFailure'])
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+
+        expect(logic.values.viewCounts).toEqual({})
+    })
+
     it('opens a shared view from a view-only link after its saved state loads', async () => {
         router.actions.push(urls.workflows(), { view: VIEW_ID })
         logic = workflowsSavedViewsLogic()
