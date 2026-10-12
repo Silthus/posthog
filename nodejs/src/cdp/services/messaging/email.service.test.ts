@@ -309,14 +309,8 @@ describe('EmailService', () => {
                         hub.teamManager,
                         capLimiter,
                         {
-                            useClient: async (_options, callback) => {
-                                const client = await hub.redisPool.acquire()
-                                try {
-                                    return await callback(client as unknown as RedisClient)
-                                } finally {
-                                    await hub.redisPool.release(client)
-                                }
-                            },
+                            useClient: async (_options, callback) =>
+                                callback(sandboxRedisClients[0] as unknown as RedisClient),
                         }
                     ),
                     new OrganizationMembersService(membersPostgres)
@@ -377,6 +371,10 @@ describe('EmailService', () => {
                     [extraOrganizationIds],
                     'test:delete-sandbox-organizations'
                 )
+                capture.mockRestore()
+                for (const client of sandboxRedisClients) {
+                    await hub.redisPool.release(client)
+                }
                 const client = await hub.redisPool.acquire()
                 try {
                     const keys = await client.keys(`@posthog/workflows-sandbox-blocked/${team.id}/*`)
@@ -384,10 +382,6 @@ describe('EmailService', () => {
                         await client.del(...keys)
                     }
                 } finally {
-                    await hub.redisPool.release(client)
-                }
-                capture.mockRestore()
-                for (const client of sandboxRedisClients) {
                     await hub.redisPool.release(client)
                 }
             })
@@ -1375,10 +1369,10 @@ describe('EmailService', () => {
                     expect(result.invocation.queueScheduledAt).toBeUndefined()
                     expect(result.invocation.state.vmState?.stack).toEqual([{ success: false }])
                     expect(result.logs).toContainEqual(expect.objectContaining({ level: 'info', message }))
-                    expect(capture).toHaveBeenLastCalledWith(
+                    expect(capture).toHaveBeenCalledWith(
                         expect.objectContaining({ id: team.id }),
                         'workflows sandbox email blocked',
-                        { ...blocked, is_test: isTest }
+                        expect.objectContaining({ reason: blocked.reason, is_test: isTest })
                     )
                 }
 
@@ -1456,7 +1450,9 @@ describe('EmailService', () => {
                     service = createSandboxService(true, { dailyTeamCap: '1', dailyRecipientCap: '1' })
                     expectSent(await send(true, {}))
                     const client = sandboxRedisClients[0]
-                    const keys = await client.keys(`@posthog/workflows-sandbox-daily/{${team.id}}/*`)
+                    const keys = (
+                        await client.keys(`@posthog/workflows-sandbox-daily/{${team.organization_id}}/*`)
+                    ).filter((key) => !key.includes('/claimed/'))
                     const [seconds, microseconds] = await client.time()
                     const redisNow = Number(seconds) * 1000 + Math.floor(Number(microseconds) / 1000)
                     for (const key of keys) {

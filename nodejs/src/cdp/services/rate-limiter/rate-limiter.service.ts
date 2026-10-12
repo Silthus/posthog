@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { Counter, Histogram } from 'prom-client'
 
 import { RedisV2 } from '~/common/redis/redis-v2'
@@ -252,9 +253,18 @@ return {1, 0, 0, 0}
 const CLAIM_ALL_OR_NOTHING_LUA = `
 local time = redis.call('TIME')
 local now = tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000)
+local claimKey = KEYS[#KEYS]
+local previous = redis.call('GET', claimKey)
+if previous then
+    return cjson.decode(previous)
+end
+if now > tonumber(ARGV[#ARGV - 1]) then
+    return {0}
+end
+local replayTtlMs = tonumber(ARGV[#ARGV])
 local available = {}
 local denied = {0}
-for i = 1, #KEYS do
+for i = 1, #KEYS - 1 do
     local offset = (i - 1) * 4
     local requested = tonumber(ARGV[offset + 1])
     local capacity = tonumber(ARGV[offset + 2])
@@ -277,14 +287,17 @@ for i = 1, #KEYS do
     end
 end
 if #denied > 1 then
+    redis.call('SET', claimKey, cjson.encode(denied), 'NX', 'PX', replayTtlMs)
     return denied
 end
-for i = 1, #KEYS do
+for i = 1, #KEYS - 1 do
     local offset = (i - 1) * 4
     redis.call('hset', KEYS[i], 'ts', now, 'pool', available[i] - tonumber(ARGV[offset + 1]))
     redis.call('expire', KEYS[i], tonumber(ARGV[offset + 4]))
 end
-return {1}
+local granted = {1}
+redis.call('SET', claimKey, cjson.encode(granted), 'NX', 'PX', replayTtlMs)
+return granted
 `
 
 // ioredis can replay unanswered commands, so returns need deduplication and an expiry.
@@ -438,19 +451,24 @@ export class RateLimiterService {
     ): Promise<{ granted: true } | { granted: false; deniedIndexes: number[] | null }> {
         const endTimer = claimLatency.startTimer({ limiter: this.config.name })
         const keys = buckets.map((bucket) => bucket.key)
+        const claimId = randomUUID()
+        const deadline = Date.now() + RETURN_WINDOW_MS
         try {
             const result = await this.valkey.useClient(
                 { name: `rate-limiter:${this.config.name}:claimAllOrNothing`, timeout: 1000 },
                 (client) =>
                     client.eval(
                         CLAIM_ALL_OR_NOTHING_LUA,
-                        buckets.length,
+                        buckets.length + 1,
                         ...keys,
+                        `${keys[0]}/claimed/${claimId}`,
                         ...buckets.flatMap((bucket) =>
                             [bucket.requested, bucket.capacity, bucket.refillPerSecond, bucket.ttlSeconds ?? 3600].map(
                                 String
                             )
-                        )
+                        ),
+                        String(deadline),
+                        String(2 * RETURN_WINDOW_MS)
                     )
             )
             if (Array.isArray(result) && result.length === 1 && result[0] === 1) {

@@ -4,8 +4,10 @@ import { register } from 'prom-client'
 import { deleteKeysWithPrefix } from '~/common/redis/_tests/redis'
 import { RedisV2, createRedisV2PoolFromConfig } from '~/common/redis/redis-v2'
 import { closeHub, createHub } from '~/common/utils/db/hub'
+import { TeamManager } from '~/common/utils/team-manager'
 import { Hub } from '~/types'
 
+import { SandboxEmailSender } from '../messaging/sandbox-email-sender'
 import { RateLimiterService } from './rate-limiter.service'
 
 const KEY = `@posthog-test/ses-rate-limiter/${randomUUID()}/bucket`
@@ -412,6 +414,67 @@ describe('RateLimiterService', () => {
             // which is the caller's cue to spread its own wake.
             expect([first.reserved, second.reserved, third.reserved]).toEqual([true, false, false])
         })
+    })
+
+    it('shares recipient allowances across projects in an organization while keeping project allowances separate', async () => {
+        const organizations = { 1: randomUUID(), 3: randomUUID() }
+        const manager = {
+            getTeam: jest.fn((id: number) =>
+                Promise.resolve({ organization_id: id === 3 ? organizations[3] : organizations[1] })
+            ),
+        } as unknown as TeamManager
+        const sender = new SandboxEmailSender(
+            {
+                enabled: true,
+                tenantName: 'sandbox',
+                configurationSetName: 'sandbox',
+                fromAddress: 'sender@example.com',
+                dailyTeamCap: '1',
+                dailyRecipientCap: '1',
+            },
+            manager,
+            limiter
+        )
+
+        try {
+            expect(await sender.claimDailyCaps(1, ['member@example.com'])).toMatchObject({ type: 'granted' })
+            expect(await sender.claimDailyCaps(2, ['member@example.com'])).toEqual({
+                type: 'recipient_cap_reached',
+                addresses: ['member@example.com'],
+            })
+            expect(await sender.claimDailyCaps(2, ['other@example.com'])).toMatchObject({ type: 'granted' })
+            expect(await sender.claimDailyCaps(3, ['member@example.com'])).toMatchObject({ type: 'granted' })
+            expect(await sender.claimDailyCaps(2, ['third@example.com'])).toEqual({ type: 'project_cap_reached' })
+        } finally {
+            for (const organizationId of Object.values(organizations)) {
+                await deleteKeysWithPrefix(redis, `@posthog/workflows-sandbox-daily/{${organizationId}}`)
+            }
+        }
+    })
+
+    it('spends an unanswered claim once when the same EVAL is replayed', async () => {
+        const bucket = { key: `${KEY}/claim-replay`, requested: 1, capacity: 2, refillPerSecond: 0 }
+        const replayingRedis: RedisV2 = {
+            ...redis,
+            useClient: async (options, callback) =>
+                redis.useClient(options, async (client) => {
+                    const evaluate = client.eval.bind(client)
+                    const replay = jest.spyOn(client, 'eval').mockImplementation(async (...args) => {
+                        await evaluate(...args)
+                        return evaluate(...args)
+                    })
+                    try {
+                        return await callback(client)
+                    } finally {
+                        replay.mockRestore()
+                    }
+                }),
+        }
+        const replayingLimiter = new RateLimiterService(replayingRedis, { name: 'ses-rate-limiter' })
+
+        expect(await replayingLimiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
+        expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
+        expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: false, deniedIndexes: [0] })
     })
 
     describe('returnClaim', () => {

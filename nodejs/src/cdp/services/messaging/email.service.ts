@@ -1464,9 +1464,6 @@ export class EmailService {
         let dailyCapGrant: SandboxDailyCapGrant | null = null
         if (integration.config.provider === 'sandbox') {
             const sandboxRecipients = [params.to.email, ...(ccAddresses ?? []), ...(bccAddresses ?? [])]
-            if (!(await this.checkSandboxRecipients(result, sandboxRecipients, isTest))) {
-                return false
-            }
             dailyCapGrant = await this.claimSandboxDailyCaps(result, sandboxRecipients, isTest)
             if (!dailyCapGrant) {
                 return false

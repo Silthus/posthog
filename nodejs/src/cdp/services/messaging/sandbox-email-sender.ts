@@ -59,9 +59,9 @@ function parseDailyCap(value: string): number | null {
     return cap !== null && Number.isSafeInteger(cap) && cap > 0 ? cap : null
 }
 
-// One `{teamId}` hash tag keeps every bucket of a claim in one Valkey cluster slot.
-function dailyCapKeyPrefix(teamId: number): string {
-    return `@posthog/workflows-sandbox-daily/{${teamId}}`
+// The organization hash tag keeps shared recipient and project claims in one Valkey cluster slot.
+function dailyCapKeyPrefix(organizationId: string): string {
+    return `@posthog/workflows-sandbox-daily/{${organizationId}}`
 }
 
 function addressDigest(address: string): string {
@@ -192,11 +192,16 @@ export class SandboxEmailSender {
             logger.error('Sandbox email daily caps are not configured correctly', { teamId })
             return { type: 'check_failed' }
         }
+        const team = await this.teamManager.getTeam(teamId).catch(() => null)
+        if (!team?.organization_id) {
+            return { type: 'check_failed' }
+        }
+        const prefix = dailyCapKeyPrefix(team.organization_id)
         const addresses = distinctAddresses(recipients)
         const buckets = [
-            dailyBucket(`${dailyCapKeyPrefix(teamId)}/team`, recipients.length, dailyTeamCap),
+            dailyBucket(`${prefix}/project/${teamId}`, recipients.length, dailyTeamCap),
             ...addresses.map((address) =>
-                dailyBucket(`${dailyCapKeyPrefix(teamId)}/recipient/${addressDigest(address)}`, 1, dailyRecipientCap)
+                dailyBucket(`${prefix}/recipient/${addressDigest(address)}`, 1, dailyRecipientCap)
             ),
         ]
         const claim = await this.dailyCapLimiter.claimAllOrNothing(buckets)

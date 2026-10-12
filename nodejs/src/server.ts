@@ -240,7 +240,7 @@ export class PluginServer implements NodeServer {
                     : null
                 const api = new CdpApi(
                     this.config,
-                    this.withEmailValidationValkey(cdpDeps!),
+                    this.config.WORKFLOWS_SANDBOX_SENDER_ENABLED ? this.withEmailValidationValkey(cdpDeps!) : cdpDeps!,
                     { hogQueue: kafkaQueue, hogflowQueue: postgresV2Queue },
                     batchResolverProducer
                 )
@@ -443,7 +443,13 @@ export class PluginServer implements NodeServer {
         this.lifecycle.services.push(...readyServices)
     }
 
-    // Share the MX cache and sandbox cap buckets between workers and cdp-api.
+    /**
+     * Grants the SES Valkey pool that backs the shared MX-verdict cache to a worker's
+     * deps. The email workers and sandbox-enabled cdp-api call this, so the pool stays
+     * closed on other CDP consumers and cdp-api when sandbox delivery is disabled.
+     * Null when no SES Valkey host is configured (local dev), in which case
+     * EmailValidationService degrades to its local cache + DNS.
+     */
     private withEmailValidationValkey(deps: CdpConsumerBaseDeps): CdpConsumerBaseDeps {
         return { ...deps, emailValidationValkey: createSesRateLimiterValkeyPool(this.config, 'email-mx-validation') }
     }
