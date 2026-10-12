@@ -25,7 +25,7 @@ export function WorkflowUnverifiedSenderBanner(): JSX.Element | null {
                     className="break-words"
                     data-attr="workflow-unverified-sender-banner"
                     action={{
-                        children: 'Verify sender',
+                        children: unverifiedEmailSenders.length === 1 ? 'Verify sender' : 'Verify senders',
                         type: 'primary',
                         onClick: () => {
                             posthog.capture('workflows verify sender clicked', {

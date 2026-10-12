@@ -4017,7 +4017,7 @@ export const workflowLogic = kea<workflowLogicType>([
                     return 'Save your changes first'
                 }
                 if (unverifiedEmailSenders.length) {
-                    return 'Verify the email senders before publishing'
+                    return `Verify the email ${unverifiedEmailSenders.length === 1 ? 'sender' : 'senders'} before publishing`
                 }
                 return hasStagedDraft ? undefined : 'No changes staged to publish'
             },

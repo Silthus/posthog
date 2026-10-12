@@ -233,7 +233,7 @@ export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.El
                                             hasUnsavedChanges
                                                 ? 'Save changes first'
                                                 : displayStatus === 'draft' && unverifiedEmailSenders.length > 0
-                                                  ? 'Verify the email sender before you enable this workflow'
+                                                  ? `Verify the email ${unverifiedEmailSenders.length === 1 ? 'sender' : 'senders'} before you enable this workflow`
                                                   : undefined
                                         }
                                         className="transition-colors duration-300 ease-in-out"

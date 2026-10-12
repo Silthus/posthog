@@ -332,9 +332,13 @@ describe('workflowLogic email step "from" validation', () => {
     const PUBLISH_STEP_ERROR =
         'step \'Send email\': The email sender "hello@example.dev" is not verified yet. Verify its domain under Channels, or choose a verified sender.'
 
-    it('allows saving a staged pending sender while blocking publication', async () => {
+    it.each([1, 2])('allows saving %s staged pending senders while blocking publication', async (count) => {
         const live = makeWorkflow({ integrationId: 42 }, 'active')
-        const staged = makeWorkflow({ integrationId: 43 }, 'active')
+        const pendingIds = count === 1 ? [43] : [43, 44]
+        const staged = makeWorkflow(
+            { integrationId: 43, ...(count > 1 ? { integrationIds: pendingIds } : {}) },
+            'active'
+        )
         useMocks({
             get: {
                 '/api/environments/:team_id/hog_flows/:id/': {
@@ -344,7 +348,7 @@ describe('workflowLogic email step "from" validation', () => {
                 },
                 '/api/projects/:team_id/hog_function_templates/': hangingTemplatesEndpoint,
                 '/api/environments/:team_id/integrations': {
-                    results: [emailSender(42, true), emailSender(43, false)],
+                    results: [emailSender(42, true), ...pendingIds.map((id) => emailSender(id, false))],
                 },
             },
         })
@@ -354,8 +358,10 @@ describe('workflowLogic email step "from" validation', () => {
         await expectLogic(logic).toDispatchActions(['loadWorkflowSuccess'])
         await expectLogic(integrationsLogic).toDispatchActions(['loadIntegrationsSuccess'])
 
-        expect(logic.values.unverifiedEmailSenders.map(({ id }) => id)).toEqual([43])
-        expect(logic.values.publishDisabledReason).toBe('Verify the email senders before publishing')
+        expect(logic.values.unverifiedEmailSenders.map(({ id }) => id)).toEqual(pendingIds)
+        expect(logic.values.publishDisabledReason).toBe(
+            count === 1 ? 'Verify the email sender before publishing' : 'Verify the email senders before publishing'
+        )
         expect(logic.values.actionValidationErrorsById[EMAIL_NODE_ID]?.valid).toBe(true)
         expect(logic.values.autoSaveBlockedByValidation).toBe(false)
     })

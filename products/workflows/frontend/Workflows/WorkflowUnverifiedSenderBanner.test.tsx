@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom'
 
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BindLogic, Provider } from 'kea'
 import posthog from 'posthog-js'
 
@@ -65,28 +65,39 @@ const DRAFT_SENDING_FROM_PENDING_DOMAIN: HogFlow = {
     updated_at: '2026-05-01T00:00:00.000Z',
 }
 
-const sender = (verified: boolean): IntegrationType =>
-    ({
-        id: 42,
+const sender = (verified: boolean, id = 42): IntegrationType => {
+    const email = id === 42 ? 'hello@example.dev' : 'other@example.dev'
+    return {
+        id,
         kind: 'email',
-        display_name: 'hello@example.dev',
-        config: { email: 'hello@example.dev', domain: 'example.dev', verified },
-    }) as IntegrationType
+        display_name: email,
+        config: { email, domain: 'example.dev', verified },
+    } as IntegrationType
+}
 
 const enableButton = (): HTMLElement => screen.getByText('Enable').closest('button')!
 
-describe('WorkflowUnverifiedSenderBanner', () => {
+describe.each([1, 2])('WorkflowUnverifiedSenderBanner with %s pending senders', (senderCount) => {
     let logic: ReturnType<typeof workflowLogic.build>
     let domainVerified: boolean
 
     beforeEach(async () => {
         domainVerified = false
+        const senderIds = senderCount === 1 ? [42] : [42, 43]
+        const workflow = structuredClone(DRAFT_SENDING_FROM_PENDING_DOMAIN)
+        const emailAction = workflow.actions.find((action) => action.type === 'function_email')!
+        emailAction.config.inputs.email.value.from = { integrationId: 42, integrationIds: senderIds }
         useMocks({
             get: {
-                '/api/environments/:team_id/hog_flows/:id/': DRAFT_SENDING_FROM_PENDING_DOMAIN,
+                '/api/environments/:team_id/hog_flows/:id/': workflow,
                 '/api/environments/:team_id/hog_flows/:id/schedules': { results: [] },
                 '/api/projects/:team_id/hog_function_templates/': () => new Promise(() => {}),
-                '/api/environments/:team_id/integrations': () => [200, { results: [sender(domainVerified)] }],
+                '/api/environments/:team_id/integrations': () => [
+                    200,
+                    {
+                        results: senderIds.map((id) => sender(domainVerified, id)),
+                    },
+                ],
             },
             post: {
                 '/api/environments/:team_id/integrations/:id/email/verify': () => [
@@ -119,16 +130,19 @@ describe('WorkflowUnverifiedSenderBanner', () => {
 
     it('blocks enabling until the sender is verified from the banner', async () => {
         expect(enableButton()).toHaveAttribute('aria-disabled', 'true')
-        expect(screen.getByText(/hello@example.dev can't send until its domain is verified/)).toBeInTheDocument()
+        const noun = senderCount === 1 ? 'sender' : 'senders'
+        expect(screen.getByText(new RegExp(`Verify the email ${noun} before you enable`))).toBeInTheDocument()
+        fireEvent.click(enableButton())
+        expect(await screen.findByText(`Verify the email ${noun} before you enable this workflow`)).toBeInTheDocument()
 
         const capture = jest.spyOn(posthog, 'capture').mockClear()
         domainVerified = true
         act(() => {
-            screen.getAllByText('Verify sender')[0].click()
+            screen.getAllByText(`Verify ${noun}`)[0].click()
         })
 
         await waitFor(() => expect(enableButton()).not.toHaveAttribute('aria-disabled', 'true'))
-        expect(screen.queryByText(/can't send until its domain is verified/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/can't send until/)).not.toBeInTheDocument()
         expect(screen.getByText('Configure email sender')).toBeInTheDocument()
         expect(capture).toHaveBeenCalledWith('workflows verify sender clicked', {
             source: 'workflow_banner',
