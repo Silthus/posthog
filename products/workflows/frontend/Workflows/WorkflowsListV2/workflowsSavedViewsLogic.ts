@@ -609,10 +609,6 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                 if (!values.available) {
                     return
                 }
-                if (values.conflictedViewId === view.id) {
-                    actions.resetView(true)
-                    return
-                }
                 cache.applyingView = true
                 const viewValue = workflowViewValue(view.state)
                 actions.setValue({
@@ -622,6 +618,9 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                 actions.setVisibleColumns(normalizeViewColumns(view.state.columns))
                 cache.applyingView = false
                 writeUrl()
+                if (values.conflictedViewId === view.id) {
+                    actions.resetView(true)
+                }
             },
             resetView: async ({ keepAddedFilters }) => {
                 if (!values.available || values.saving) {

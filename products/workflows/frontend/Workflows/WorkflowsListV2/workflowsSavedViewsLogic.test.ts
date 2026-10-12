@@ -202,6 +202,51 @@ describe('workflowsSavedViewsLogic', () => {
         expect(workflowsListV2Logic.values.value.filters).toEqual([status('active'), eventTrigger])
     })
 
+    it.each([
+        ['while another save is in flight', true],
+        ['when its latest version fails to load', false],
+    ])('opens a conflicted view with its saved state %s', async (_, saveInFlight) => {
+        let releaseSave: () => void = () => {}
+        const pendingSave = new Promise<void>((resolve) => {
+            releaseSave = resolve
+        })
+        useMocks({
+            patch: { '/api/projects/:team_id/workflow_views/:id/': () => [409, { detail: 'View changed' }] },
+            get: { '/api/projects/:team_id/workflow_views/:id/': () => [500, { detail: 'Unavailable' }] },
+            post: {
+                '/api/projects/:team_id/workflow_views/': async () => {
+                    await pendingSave
+                    return [201, { ...savedView, id: '00000000-0000-4000-8000-000000000003', name: 'Pending' }]
+                },
+            },
+        })
+        router.actions.push(urls.workflows(), { view: VIEW_ID })
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+        workflowsListV2Logic.actions.setValue({ filters: [status('active'), eventTrigger], text: '' })
+        await logic.asyncActions.updateActiveView()
+        applyViewById('drafts')
+        workflowsListV2Logic.actions.setVisibleColumns(['trigger'])
+        const save = saveInFlight ? logic.asyncActions.saveViewAs('Pending') : Promise.resolve()
+
+        const openConflictedView = (): void => applyViewById(VIEW_ID)
+
+        if (saveInFlight) {
+            openConflictedView()
+        } else {
+            await expectLogic(logic, openConflictedView).toFinishAllListeners()
+        }
+
+        expect(logic.values.activeViewId).toEqual(VIEW_ID)
+        expect(workflowsListV2Logic.values.value.filters).toEqual([status('active'), eventTrigger])
+        expect(workflowsListV2Logic.values.shownColumns).toEqual(['health'])
+        expect(new URLSearchParams(router.values.location.search).get('view')).toEqual(VIEW_ID)
+        expect(logic.values.sharedSaveDisabledReason).toBeTruthy()
+        releaseSave()
+        await save
+    })
+
     it('carries additions across views and shared links until reset', async () => {
         router.actions.push(urls.workflows(), { view: 'drafts' })
         logic = workflowsSavedViewsLogic()
