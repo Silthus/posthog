@@ -111,6 +111,25 @@ const isFilterRow = (suggestion: FacetSuggestion | null | undefined): boolean =>
 const verbOf = (suggestion: FacetSuggestion): string =>
     suggestion.kind === 'facet' ? `pick ${suggestion.label}` : 'add filter'
 
+/** What narrows a draft's values besides its own facet: the free text and the other facets' pills. */
+function narrowingOf(draft: FacetDraft, value: FacetSearchValue): string | null {
+    const otherFilters = value.filters.some((filter) => filter.facet !== draft.facetKey)
+    const search = !!draft.rest.trim()
+    if (otherFilters && search) {
+        return 'your search and other filters'
+    }
+    if (otherFilters) {
+        return 'your other filters'
+    }
+    return search ? 'your search' : null
+}
+
+function noValuesLabel(draft: FacetDraft, value: FacetSearchValue): string {
+    const reason = draft.partial ? `No value matches "${draft.partial}"` : 'No values to pick'
+    const narrowing = narrowingOf(draft, value)
+    return narrowing ? `${reason} with ${narrowing}` : reason
+}
+
 function buildSuggestions(
     input: string,
     draft: FacetDraft | null,
@@ -147,7 +166,7 @@ function buildSuggestions(
                     rest: draft.rest,
                 })
             )
-        return rows.length ? rows : [{ id: 'none', kind: 'none', label: 'No values match your other filters' }]
+        return rows.length ? rows : [{ id: 'none', kind: 'none', label: noValuesLabel(draft, value) }]
     }
 
     const ordered = sortFacets(facets)

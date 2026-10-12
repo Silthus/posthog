@@ -106,12 +106,20 @@ describe('facetSearchBarLogic', () => {
         expect(logic.values.title).toEqual('Status is not')
     })
 
-    it('says when no values are left', () => {
-        mountWith({ filters: [], text: 'promo' })
-        logic.actions.setInput('promo sends:renew')
-        expect(logic.values.suggestions.map((s) => [s.kind, s.label])).toEqual([
-            ['none', 'No values match your other filters'],
-        ])
+    it.each([
+        ['a typed value nothing has', [], 'status:zzz', 'No value matches "zzz"'],
+        ['a value the search rules out', [], 'promo sends:renew', 'No value matches "renew" with your search'],
+        [
+            'a value other pills rule out',
+            [{ facet: 'status', value: 'archived', negated: false }],
+            'sends:renew',
+            'No value matches "renew" with your other filters',
+        ],
+        ['no values left for the search', [], 'zzz sends:', 'No values to pick with your search'],
+    ])('says why no values are left for %s', (_, filters, input, label) => {
+        mountWith({ filters, text: '' })
+        logic.actions.setInput(input)
+        expect(logic.values.suggestions.map((s) => [s.kind, s.label])).toEqual([['none', label]])
     })
 
     it('adds a pill from a value row and keeps the text before the draft', () => {

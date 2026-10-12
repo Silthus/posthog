@@ -190,7 +190,7 @@ describe('FacetSearchBar', () => {
         await user.click(input())
         await user.keyboard('status:zzz')
         expect(document.querySelectorAll('[role="option"]')).toHaveLength(0)
-        expect(listbox()).toHaveTextContent('No values match your other filters')
+        expect(listbox()).toHaveTextContent('No value matches "zzz"')
         expect(input()).not.toHaveAttribute('aria-activedescendant')
     })
 
