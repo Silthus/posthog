@@ -15,6 +15,7 @@ from products.workflows.backend.facade.enums import (
 )
 
 if TYPE_CHECKING:
+    from posthog.models.integration import Integration
     from posthog.models.team.team import Team
     from posthog.models.user import User
 
@@ -167,6 +168,16 @@ class EmailSendingTierLimits:
     per_hour: int
     per_day: int
     max_batch_audience: int
+
+
+@frozen
+class SandboxEmailSender:
+    integration: "Integration"
+    created: bool
+
+
+class SandboxSenderUnavailable(Exception):
+    pass
 
 
 @frozen
