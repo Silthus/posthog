@@ -12,6 +12,7 @@ import { HogFunctionTemplateManagerService } from '../managers/hog-function-temp
 
 type FunctionActionType = 'function' | 'function_email' | 'function_sms'
 type Action = Extract<HogFlowAction, { type: FunctionActionType }>
+type NativeAction = Extract<HogFlowAction, { type: 'native' }>
 
 // Helper class that can turn a hog flow action into a hog function
 export class HogFlowFunctionsService {
@@ -102,10 +103,61 @@ export class HogFlowFunctionsService {
         hogFunction: HogFunctionType,
         globals: Omit<HogFunctionInvocationGlobals, 'source' | 'project'>
     ): Promise<CyclotronJobInvocationHogFunction> {
-        const teamId = invocation.hogFlow.team_id
-        const projectUrl = `${this.siteUrl}/project/${teamId}`
+        const hogFunctionInvocation: CyclotronJobInvocationHogFunction = {
+            ...invocation,
+            hogFunction,
+            state: invocation.state.currentAction?.hogFunctionState ?? {
+                globals: await this.hogFunctionExecutor.hogExecutor.buildInputsWithGlobals(
+                    hogFunction,
+                    this.withWorkflowGlobals(invocation, hogFunction, globals)
+                ),
+                timings: [],
+                attempts: 0,
+                actionId: invocation.state.currentAction?.id,
+                actionStepCount: invocation.state.actionStepCount,
+                customerTaskIdempotencyVersion: invocation.state.customerTaskIdempotencyVersion,
+                rerunAttempts: invocation.state.rerunAttempts,
+            },
+        }
 
-        const globalsWithSource: HogFunctionInvocationGlobals = {
+        return hogFunctionInvocation
+    }
+
+    async renderNativeStepInputs(
+        invocation: CyclotronJobInvocationHogFlow,
+        action: NativeAction
+    ): Promise<Record<string, unknown>> {
+        const { hogFlow } = invocation
+        const hogFunction: HogFunctionType = {
+            id: hogFlow.id,
+            team_id: hogFlow.team_id,
+            name: `${hogFlow.name} - ${action.name}`,
+            enabled: true,
+            type: 'destination',
+            deleted: false,
+            hog: '',
+            bytecode: [],
+            inputs: action.config.inputs,
+            created_at: '',
+            updated_at: '',
+        }
+        const globals = this.withWorkflowGlobals(invocation, hogFunction, {
+            event: invocation.state.event,
+            person: invocation.person,
+            groups: invocation.groups,
+            variables: invocation.state.variables,
+        })
+        const { inputs } = await this.hogFunctionExecutor.hogExecutor.buildInputsWithGlobals(hogFunction, globals)
+        return inputs
+    }
+
+    private withWorkflowGlobals(
+        invocation: CyclotronJobInvocationHogFlow,
+        hogFunction: HogFunctionType,
+        globals: Omit<HogFunctionInvocationGlobals, 'source' | 'project'>
+    ): HogFunctionInvocationGlobals {
+        const projectUrl = `${this.siteUrl}/project/${invocation.hogFlow.team_id}`
+        return {
             ...globals,
             // Include workflow-level variables
             variables: invocation.state.variables,
@@ -119,25 +171,6 @@ export class HogFlowFunctionsService {
                 url: '',
             },
         }
-
-        const hogFunctionInvocation: CyclotronJobInvocationHogFunction = {
-            ...invocation,
-            hogFunction,
-            state: invocation.state.currentAction?.hogFunctionState ?? {
-                globals: await this.hogFunctionExecutor.hogExecutor.buildInputsWithGlobals(
-                    hogFunction,
-                    globalsWithSource
-                ),
-                timings: [],
-                attempts: 0,
-                actionId: invocation.state.currentAction?.id,
-                actionStepCount: invocation.state.actionStepCount,
-                customerTaskIdempotencyVersion: invocation.state.customerTaskIdempotencyVersion,
-                rerunAttempts: invocation.state.rerunAttempts,
-            },
-        }
-
-        return hogFunctionInvocation
     }
 
     async execute(

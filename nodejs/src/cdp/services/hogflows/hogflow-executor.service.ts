@@ -23,16 +23,19 @@ import {
 } from '../../types'
 import { convertToHogFunctionFilterGlobal, filterFunctionInstrumented } from '../../utils/hog-function-filtering'
 import { createInvocationResult } from '../../utils/invocation-utils'
+import { PosthogJwtAudience } from '../../utils/jwt-utils'
+import { ScopedServiceJwt } from '../../utils/scoped-service-jwt'
 import { CohortMembershipRepository } from '../cohorts/cohort-membership-repository'
 import { HogExecutorExecuteAsyncOptions } from '../hog-executor-async.service'
 import { EmailValidationService } from '../messaging/email-validation.service'
 import { RecipientPreferencesService } from '../messaging/recipient-preferences.service'
 import { CdpUsageReporterService } from '../usage/cdp-usage-reporter.service'
-import { ActionHandler } from './actions/action.interface'
+import { ActionHandler, ActionHandlerResult } from './actions/action.interface'
 import { ConditionalBranchHandler } from './actions/conditional_branch'
 import { DelayHandler } from './actions/delay'
 import { ExitHandler } from './actions/exit.handler'
 import { HogFunctionHandler } from './actions/hog_function'
+import { NativeNodeHandler, NativeStepsConfig } from './actions/native'
 import { RandomCohortBranchHandler } from './actions/random_cohort_branch'
 import { SlackAppLookup, TriggerHandler } from './actions/trigger.handler'
 import { WaitUntilTimeWindowHandler } from './actions/wait_until_time_window'
@@ -40,6 +43,7 @@ import { buildConversionWatcher } from './conversion-watcher'
 import { HogFlowDuplicateObserverService } from './hogflow-duplicate-observer.service'
 import { HogFlowFunctionsService } from './hogflow-functions.service'
 import {
+    RunEndingStepError,
     WorkflowChangedError,
     actionIdForLogging,
     ensureCurrentAction,
@@ -122,7 +126,7 @@ export class HogFlowExecutorService {
         integrationManager: SlackAppLookup,
         duplicateObserver?: HogFlowDuplicateObserverService,
         usageReporter?: CdpUsageReporterService,
-        options: { awaitedStepsEnabled?: boolean } = {}
+        options: { awaitedStepsEnabled?: boolean; nativeSteps?: NativeStepsConfig } = {}
     ) {
         this.hogFlowFunctionsService = hogFlowFunctionsService
         this.duplicateObserver = duplicateObserver ?? null
@@ -168,6 +172,13 @@ export class HogFlowExecutorService {
             function_sms: hogFunctionSmsHandler,
             function_push: hogFunctionPushHandler,
             function_email: hogFunctionEmailHandler,
+            native: new NativeNodeHandler(
+                hogFlowFunctionsService,
+                options.nativeSteps ?? {
+                    jwt: new ScopedServiceJwt(PosthogJwtAudience.WORKFLOW_NODES_RUN, ''),
+                    internalApiBaseUrl: '',
+                }
+            ),
             exit: new ExitHandler(),
         }
     }
@@ -625,7 +636,7 @@ export class HogFlowExecutorService {
 
                 // Stored before the error so `on_error: continue` still sees what the step returned.
                 if (handlerResult.result) {
-                    this.trackActionResult(result, currentAction, handlerResult.result)
+                    this.trackActionResultUnlessRunEnds(result, currentAction, handlerResult)
                     result.execResult = handlerResult.result
                 }
 
@@ -694,7 +705,9 @@ export class HogFlowExecutorService {
             // (a WorkflowChangedError from an untouched flow lands here too: the graph was malformed
             // all along, so it stays a failure the author can see rather than a quiet exit)
 
-            this.maybeContinueToNextActionOnError(result)
+            if (!(err instanceof RunEndingStepError)) {
+                this.maybeContinueToNextActionOnError(result)
+            }
 
             logger.error(
                 '🦔',
@@ -900,6 +913,21 @@ export class HogFlowExecutorService {
             metric_name: metricName,
             count: 1,
         })
+    }
+
+    // A step that ends the run must still end it when its result does not fit the run variables.
+    private trackActionResultUnlessRunEnds(
+        result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFlow>,
+        action: HogFlowAction,
+        handlerResult: ActionHandlerResult
+    ): void {
+        try {
+            this.trackActionResult(result, action, handlerResult.result)
+        } catch (storeError) {
+            if (!(handlerResult.error instanceof RunEndingStepError)) {
+                throw storeError
+            }
+        }
     }
 
     private trackActionResult(

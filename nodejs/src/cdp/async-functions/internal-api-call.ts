@@ -4,7 +4,7 @@ import { parseJSON } from '~/common/utils/json-parse'
 import { internalFetch } from '~/common/utils/request'
 
 import { AsyncFunctionContext } from '../async-function-registry'
-import { CyclotronJobInvocationHogFunction, CyclotronJobInvocationResult } from '../types'
+import { CyclotronJobInvocationHogFunction, CyclotronJobInvocationResult, MinimalLogEntry } from '../types'
 import { RETRIABLE_STATUS_CODES, fetchErrorDetail } from '../utils/cdp-fetch'
 import { ScopedServiceJwt } from '../utils/scoped-service-jwt'
 
@@ -18,6 +18,8 @@ const BACKOFF_MS = 250
 // Same statuses the queued-fetch path retries (cdp-fetch.ts), so a transient Django 500
 // gets the same resilience here that it would have gotten through executeFetch.
 const RETRIABLE_STATUSES = RETRIABLE_STATUS_CODES
+
+export type InternalApiResponse = { status: number; body: unknown }
 
 /**
  * Calls an internal-only Django route (/api/projects/<team_id>/internal/...) on behalf of a
@@ -35,23 +37,56 @@ const RETRIABLE_STATUSES = RETRIABLE_STATUS_CODES
 export async function callInternalApi(
     context: AsyncFunctionContext,
     result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>,
-    options: {
-        jwt: ScopedServiceJwt
-        path: `/${string}`
-        method: 'GET' | 'PATCH' | 'POST'
-        entityClaims: Record<string, string>
-        body?: string
-        extraHeaders?: Record<string, string>
-        retriableStatuses?: number[]
-    }
+    options: InternalApiRequestOptions
 ): Promise<void> {
-    const { jwt, path, method, entityClaims, body, extraHeaders, retriableStatuses = [] } = options
     const startedAt = performance.now()
 
-    // Counts once per handler call, not per retry attempt below: the retries are all one
-    // logical step from the VM's point of view, and the counted queued-fetch path only
+    // Counts once per handler call, not per retry attempt in internalApiRequest: the retries are
+    // all one logical step from the VM's point of view, and the counted queued-fetch path only
     // counts once per queued fetch too.
     context.consumeInlineAsyncBudget()
+
+    const response = await internalApiRequest({
+        ...options,
+        teamId: context.invocation.teamId,
+        internalApiBaseUrl: context.internalApiBaseUrl,
+        logs: result.logs,
+    })
+
+    result.invocation.state.timings.push({
+        kind: 'async_function',
+        duration_ms: Math.round(performance.now() - startedAt),
+    })
+    result.metrics.push({
+        team_id: context.invocation.teamId,
+        app_source_id: context.invocation.parentRunId ?? context.invocation.functionId,
+        metric_kind: 'other',
+        metric_name: 'fetch',
+        count: 1,
+    })
+
+    result.invocation.state.vmState?.stack.push(response)
+}
+
+type InternalApiRequestOptions = {
+    jwt: ScopedServiceJwt
+    path: `/${string}`
+    method: 'GET' | 'PATCH' | 'POST'
+    entityClaims: Record<string, string | number>
+    body?: string
+    extraHeaders?: Record<string, string>
+    retriableStatuses?: number[]
+}
+
+// `teamId` becomes the trusted team claim, so it must come from the invocation, never from step input.
+export async function internalApiRequest(
+    options: InternalApiRequestOptions & {
+        teamId: number
+        internalApiBaseUrl: string
+        logs: MinimalLogEntry[]
+    }
+): Promise<InternalApiResponse> {
+    const { jwt, path, method, entityClaims, body, extraHeaders, retriableStatuses = [], teamId, logs } = options
 
     const parseBody = (text: string | null): unknown => {
         try {
@@ -62,18 +97,18 @@ export async function callInternalApi(
         }
     }
 
-    let response: { status: number; body: unknown } | null = null
+    let response: InternalApiResponse | null = null
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         // Fresh token per attempt: nothing stored, nothing reusable after the short TTL.
         // team_id spreads last so no entityClaims value can ever override the trusted team.
-        const token = jwt.mint({ ...entityClaims, team_id: context.invocation.teamId })
+        const token = jwt.mint({ ...entityClaims, team_id: teamId })
 
         let fetchError: Error | null = null
         let status: number | null = null
         let text: string | null = null
         try {
-            const fetchResponse = await internalFetch(`${context.internalApiBaseUrl}${path}`, {
+            const fetchResponse = await internalFetch(`${options.internalApiBaseUrl}${path}`, {
                 method,
                 headers: {
                     'Content-Type': 'application/json',
@@ -97,7 +132,7 @@ export async function callInternalApi(
         if (succeeded) {
             const parsedBody = parseBody(text)
             if (status! >= 400) {
-                result.logs.push({
+                logs.push({
                     level: 'error',
                     timestamp: DateTime.now(),
                     message: `Internal API call failed with status code ${status}.`,
@@ -108,7 +143,7 @@ export async function callInternalApi(
         }
 
         const willRetry = attempt < MAX_ATTEMPTS
-        result.logs.push({
+        logs.push({
             level: willRetry ? 'info' : 'error',
             timestamp: DateTime.now(),
             message:
@@ -139,17 +174,5 @@ export async function callInternalApi(
         await new Promise((resolve) => setTimeout(resolve, BACKOFF_MS * attempt))
     }
 
-    result.invocation.state.timings.push({
-        kind: 'async_function',
-        duration_ms: Math.round(performance.now() - startedAt),
-    })
-    result.metrics.push({
-        team_id: context.invocation.teamId,
-        app_source_id: context.invocation.parentRunId ?? context.invocation.functionId,
-        metric_kind: 'other',
-        metric_name: 'fetch',
-        count: 1,
-    })
-
-    result.invocation.state.vmState?.stack.push(response)
+    return response!
 }

@@ -287,6 +287,16 @@ export const HogFlowActionSchema = z.discriminatedUnion('type', [
             mappings: z.array(CyclotronInputMappingSchema).optional(),
         }),
     }),
+    // Native steps
+    z.object({
+        ..._commonActionFields,
+        type: z.literal('native'),
+        config: z.object({
+            node: z.string(),
+            operation: z.string(),
+            inputs: z.record(z.string(), CyclotronInputSchema),
+        }),
+    }),
     // Exit
     z.object({
         ..._commonActionFields,
@@ -302,6 +312,8 @@ const HogFlowEdgeSchema = z.object({
     to: z.string(),
     type: z.enum(['continue', 'branch']),
     index: z.number().optional(),
+    // A native step's primary outcome follows its continue edge, never an outcome edge.
+    outcome: z.string().optional(),
 })
 
 // Optional masking config for the trigger, allows HogFlows to be rate limited per distinct ID or other property
