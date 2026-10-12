@@ -6217,6 +6217,13 @@ class TestHogFlowSecretInputs(APIBaseTest):
         assert row["trigger"]["inputs"]["api_key"] == {"secret": True}
         assert "TRIGGER-SECRET" not in json.dumps(listing)
 
+        # Summary rows build their trigger apart from the step graph, and the route is gzipped on the
+        # promise that the trigger is masked.
+        summaries = self.client.get(f"/api/projects/{self.team.id}/hog_flows/summaries").json()
+        summary_row = next(r for r in summaries["results"] if r["id"] == str(flow.id))
+        assert summary_row["trigger"]["inputs"]["api_key"] == {"secret": True}
+        assert "TRIGGER-SECRET" not in json.dumps(summaries)
+
     def test_legacy_plaintext_secret_stripped_from_revision_snapshot(self):
         # A row written before encryption shipped still has a plaintext secret in `actions`. The first
         # tracked live edit bootstraps a revision of that prior state, which must be stripped - not carry
