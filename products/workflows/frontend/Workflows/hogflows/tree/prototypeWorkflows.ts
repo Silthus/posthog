@@ -97,15 +97,23 @@ const waitForEventAction = (
         },
     }) as HogFlowAction
 
-const variableBranchAction = (id: string, name: string, key: string, values: string[]): HogFlowAction =>
+const labelFor = (value: string): string => value.charAt(0).toUpperCase() + value.slice(1)
+
+const variableBranchAction = (
+    id: string,
+    name: string,
+    key: string,
+    values: string[],
+    labels: string[] = values.map(labelFor)
+): HogFlowAction =>
     ({
         id,
         type: 'conditional_branch',
         name,
         description: '',
         config: {
-            conditions: values.map((value) => ({
-                name: value,
+            conditions: values.map((value, index) => ({
+                name: labels[index],
                 filters: { properties: [{ key, type: 'workflow_variable', value: [value], operator: 'exact' }] },
             })),
         },
@@ -119,7 +127,7 @@ const personPropertyBranchAction = (id: string, name: string, key: string, value
         description: '',
         config: {
             conditions: values.map((value) => ({
-                name: value,
+                name: labelFor(value),
                 filters: { properties: [{ key, type: 'person', value: [value], operator: 'exact' }] },
             })),
         },
@@ -187,7 +195,8 @@ const larkspurLaunchAbTest = (): HogFlow => {
             'route_variant',
             'Route by email variant',
             'variant',
-            VARIANTS.map((v) => v.key)
+            VARIANTS.map((v) => v.key),
+            VARIANTS.map((v) => v.label)
         ),
     ]
     const edges: Edge[] = [{ from: 'trigger_node', to: 'route_variant', type: 'continue' }]
