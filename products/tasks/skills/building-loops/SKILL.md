@@ -258,6 +258,7 @@ Trigger, with `trigger_masking` beside `actions` and `edges`:
 ```
 
 - `labels` holds the pull request's label names. Only a failing check suite on a pull request carries it, and when the label lookup fails the event comes without it, so the loop does not start. It is a list, so filter it with `has()` as above: `exact` never matches a list, and `icontains` also matches `babysitter`.
+- `<label>` sits inside a HogQL string, so put a backslash before each `\` and `'` in the label: `it's-red` becomes `it\'s-red`. Then escape the key as any JSON string: `"has(properties.labels, 'it\\'s-red')"`.
 - One push starts a check suite per CI workflow, so one red push can fail several suites. The mask lets one fix task start per pull request every 2 hours. Change `ttl` only when the user asks.
 - `actor_access` is `write` only for a branch in the repository itself, so a pull request from a fork never starts a task.
 
@@ -276,10 +277,10 @@ Task step: set `repository` to `<owner/name>` and use this prompt, with your val
 Slack step, with this text:
 
 ```json
-"text": { "value": "Started a fix task for red CI on <owner/name> pull request #{event.properties.number}" }
+"text": { "value": "Fix task for red CI on <owner/name> pull request #{event.properties.number}" }
 ```
 
-The text announces the start, so it reads right whether or not the workflow waits for the task to finish. The task's report is in the task itself.
+The step posts when the task starts, or when it finishes in a project where the workflow waits for the task. The text reads right either way. The task's report is in the task itself.
 
 To test it, send this sample as the event in step 1 of [Test run](#test-run), with the user's values. Then send it again with `conclusion` set to `success`, and with `labels` set to `["<label>-extra"]`. Both must come back `skipped`.
 
