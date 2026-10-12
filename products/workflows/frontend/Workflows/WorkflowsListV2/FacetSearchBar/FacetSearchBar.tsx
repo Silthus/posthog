@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { useActions, useValues } from 'kea'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { IconSearch } from '@posthog/icons'
 import { LemonButton, LemonInput, LemonSnack, Popover } from '@posthog/lemon-ui'
@@ -56,6 +56,12 @@ export function FacetSearchBar<TItem>({
         removeFilter,
         removeLastFilter,
     } = useActions(logic)
+
+    const inputRef = useRef<HTMLInputElement>(null)
+    const removePill = (filter: FacetFilter): void => {
+        removeFilter(filter)
+        inputRef.current?.focus()
+    }
 
     const listboxId = `${dataAttr}-listbox`
     const optionId = (index: number): string => `${listboxId}-option-${index}`
@@ -161,6 +167,7 @@ export function FacetSearchBar<TItem>({
                 <LemonInput
                     type="text"
                     fullWidth
+                    inputRef={inputRef}
                     data-attr={dataAttr}
                     role="combobox"
                     aria-label={placeholder}
@@ -184,7 +191,8 @@ export function FacetSearchBar<TItem>({
                                     <LemonSnack
                                         key={facetFilterKey(filter)}
                                         closeLabel={`Remove filter ${label}`}
-                                        onClose={() => removeFilter(filter)}
+                                        onClose={() => removePill(filter)}
+                                        title={label}
                                         className="max-w-80"
                                     >
                                         <span className={filter.negated ? 'text-danger' : undefined}>{label}</span>

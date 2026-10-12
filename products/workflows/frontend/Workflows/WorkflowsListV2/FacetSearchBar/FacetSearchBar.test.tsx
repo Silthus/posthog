@@ -194,11 +194,20 @@ describe('FacetSearchBar', () => {
         expect(input()).not.toHaveAttribute('aria-activedescendant')
     })
 
+    it('keeps focus in the input after a pill is removed with the keyboard', async () => {
+        const user = setup({ filters: [{ facet: 'status', value: 'draft', negated: false }], text: '' })
+        document.querySelector<HTMLElement>('[aria-label="Remove filter Status: Draft"]')!.focus()
+        await user.keyboard('{Enter}')
+        expect(shown('query')).toEqual('')
+        expect(input()).toHaveFocus()
+    })
+
     it('exposes the combobox and labels each pill remove button', async () => {
         const user = setup({ filters: [{ facet: 'status', value: 'draft', negated: true }], text: '' })
         expect(input()).toHaveAttribute('role', 'combobox')
         expect(input()).toHaveAttribute('aria-expanded', 'false')
         expect(document.querySelector('[aria-label="Remove filter Status is not: Draft"]')).not.toBeNull()
+        expect(document.querySelector('[title="Status is not: Draft"]')).not.toBeNull()
 
         await user.click(input())
         await user.keyboard('status:')
