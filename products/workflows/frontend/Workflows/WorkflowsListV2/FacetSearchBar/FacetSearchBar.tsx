@@ -68,8 +68,8 @@ export function FacetSearchBar<TItem>({
     }, [activeOptionId])
 
     const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
-        // Keys during IME composition belong to the input method, not to the suggestions.
-        if (event.nativeEvent.isComposing) {
+        // Keys during IME composition belong to the input method, not to the suggestions. Safari reports 229.
+        if (event.nativeEvent.isComposing || event.keyCode === 229) {
             return
         }
         const caretAtEnd =

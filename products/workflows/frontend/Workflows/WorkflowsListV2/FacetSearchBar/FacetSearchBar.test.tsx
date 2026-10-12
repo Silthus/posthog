@@ -165,11 +165,14 @@ describe('FacetSearchBar', () => {
         expect(shown('query')).toEqual('')
     })
 
-    it('Enter while an IME is composing does not apply the highlighted row', async () => {
+    it.each([
+        ['flags the composition', { isComposing: true }],
+        ['sends key code 229, as Safari does', { keyCode: 229 }],
+    ])('Enter while an IME %s does not apply the highlighted row', async (_, composition) => {
         const user = setup()
         await user.click(input())
         await user.keyboard('status:')
-        fireEvent.keyDown(input(), { key: 'Enter', isComposing: true })
+        fireEvent.keyDown(input(), { key: 'Enter', ...composition })
         expect(shown('query')).toEqual('')
         expect(input()).toHaveValue('status:')
     })
