@@ -319,9 +319,9 @@ def _list_queryset(
     regex_pattern = re.escape(query.search).replace(r"\ ", r"[\s\-_]*")
 
     # Name and description are small columns, while the step search has to read every workflow's `actions`
-    # JSON (tens of KB per email step). Only fall through to the step content when nothing matched by
-    # name, so the common search stays cheap and a subject line or body text, which rarely appears in a
-    # workflow name, is still found.
+    # JSON (tens of KB per email step). The list falls through to the step content only when nothing
+    # matched by name, so its common search stays cheap. Summary pages return both kinds of match
+    # together, because the redesigned list shows every workflow that mentions the term, and pay the scan.
     by_name = Q(name__iregex=regex_pattern) | Q(description__iregex=regex_pattern)
     if query.summaries:
         return queryset.filter(by_name | Q(_action_content_matches(regex_pattern)))
