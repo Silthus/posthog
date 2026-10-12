@@ -63,6 +63,27 @@ function githubValues(overrides: Partial<LoopFormValues> = {}): LoopFormValues {
   });
 }
 
+function ciFailedValues(
+  overrides: Partial<LoopFormValues> = {},
+): LoopFormValues {
+  return scheduleValues({
+    triggers: [
+      {
+        key: "t1",
+        type: "github",
+        enabled: true,
+        config: {
+          github_integration_id: 7,
+          repository: "example/app",
+          events: ["check_suite"],
+          filters: { labels: ["it's-red"] },
+        },
+      },
+    ],
+    ...overrides,
+  });
+}
+
 /** The flow the API would hand back after a write, so read mapping can be
  * checked against exactly what write mapping produced. */
 function flowFromWrite(
@@ -80,6 +101,7 @@ function flowFromWrite(
     created_by: { id: 5 },
     actions: flow.actions,
     edges: flow.edges,
+    trigger_masking: flow.trigger_masking,
     schedules: schedule
       ? [
           {
@@ -179,6 +201,65 @@ describe("loopHogFlowMapping", () => {
     });
   });
 
+  it("writes a CI failed loop as a failing check suite on a labelled PR, once per PR", () => {
+    const { flow } = formValuesToHogFlowWrite(ciFailedValues(), {
+      enabled: true,
+    });
+    expect(flow.actions[0].config).toMatchObject({
+      type: "internal-event",
+      filters: {
+        events: [{ id: "$github_event_received", type: "events" }],
+        properties: [
+          {
+            key: "repository",
+            value: ["example/app"],
+            operator: "exact",
+            type: "event",
+          },
+          {
+            key: "event_type",
+            value: ["check_suite"],
+            operator: "exact",
+            type: "event",
+          },
+          {
+            key: "actor_access",
+            value: ["write"],
+            operator: "exact",
+            type: "event",
+          },
+          {
+            key: "action",
+            value: ["completed"],
+            operator: "exact",
+            type: "event",
+          },
+          {
+            key: "conclusion",
+            value: ["failure", "timed_out", "startup_failure"],
+            operator: "exact",
+            type: "event",
+          },
+          { key: "has(properties.labels, 'it\\'s-red')", type: "hogql" },
+        ],
+      },
+    });
+    expect(flow.trigger_masking).toEqual({
+      hash: "{event.properties.repository}#{event.properties.number}",
+      ttl: 7200,
+      threshold: null,
+    });
+  });
+
+  it("drops the per-PR mask when a CI failed loop is switched to another event", () => {
+    const existing = flowFromWrite(ciFailedValues());
+    const { flow } = formValuesToHogFlowWrite(githubValues(), {
+      enabled: true,
+      existing,
+    });
+    expect(flow.trigger_masking).toBeNull();
+  });
+
   it.each([
     ["a named space", "general", "folder-1|general"],
     ["a space with no name yet", "", "folder-1"],
@@ -266,6 +347,7 @@ describe("loopHogFlowMapping", () => {
   it.each([
     ["schedule", scheduleValues()],
     ["GitHub", githubValues()],
+    ["CI failed", ciFailedValues()],
   ])(
     "reads a %s loop back into the form values that wrote it",
     (_label, values) => {
@@ -432,6 +514,10 @@ describe("loopHogFlowMapping", () => {
         operator: "exact",
         type: "event",
       },
+    ],
+    [
+      "a HogQL filter added in the workflow editor",
+      { key: "has(properties.labels, 'babysit')", type: "hogql" },
     ],
   ])("marks a GitHub loop with %s as foreign", (_label, property) => {
     const flow = flowFromWrite(githubValues());

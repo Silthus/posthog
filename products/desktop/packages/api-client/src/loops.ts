@@ -25,11 +25,14 @@ export namespace LoopSchemas {
     | "pr_merged"
     | "pr_closed"
     | "needs_attention";
+  /** `check_suite` is a workflow-backed loop's "CI failed" trigger; the loops
+   * API does not accept it. */
   export type LoopGithubTriggerEventEnum =
     | "issues"
     | "issue_comment"
     | "pull_request"
-    | "push";
+    | "push"
+    | "check_suite";
   export type LoopFireReasonEnum =
     | "created"
     | "deduped"
