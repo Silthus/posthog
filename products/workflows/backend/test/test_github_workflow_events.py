@@ -88,12 +88,14 @@ def test_emits_nothing_for_an_unconnected_installation(produce, integration) -> 
     produce.assert_not_called()
 
 
-@pytest.mark.parametrize("pr_numbers", [[7, 8], []])
-def test_check_suite_emits_ci_results_per_pull_request(produce, integration, pr_numbers: list[int]) -> None:
+@pytest.mark.parametrize("pr_numbers,foreign_pr_numbers", [([7, 8], [9]), ([], [9]), ([], [])])
+def test_check_suite_emits_ci_results_per_pull_request(
+    produce, integration, pr_numbers: list[int], foreign_pr_numbers: list[int]
+) -> None:
     payload = {
         "action": "completed",
         "installation": {"id": INSTALLATION_ID},
-        "repository": {"full_name": "example/project", "private": False},
+        "repository": {"id": 42, "full_name": "example/project", "private": False},
         "sender": {"login": "github-actions[bot]", "type": "Bot"},
         "check_suite": {
             "id": 123,
@@ -101,7 +103,8 @@ def test_check_suite_emits_ci_results_per_pull_request(produce, integration, pr_
             "head_sha": "abc123",
             "head_branch": "fix-build",
             "app": {"slug": "github-actions"},
-            "pull_requests": [{"number": number} for number in pr_numbers],
+            "pull_requests": [{"number": number, "base": {"repo": {"id": 42}}} for number in pr_numbers]
+            + [{"number": number, "base": {"repo": {"id": 99}}} for number in foreign_pr_numbers],
             "head_commit": {"id": "abc123", "message": "Untrusted commit text"},
         },
     }

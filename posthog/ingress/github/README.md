@@ -57,7 +57,10 @@ The provider's `dispatch_scope()` opens one lookup cache per request, so every c
 
 The Workflows consumer forwards `check_suite` deliveries as `$github_event_received` when `GITHUB_WORKFLOW_TRIGGERS_ENABLED` is enabled.
 The customer-facing App must also subscribe to check suites with Checks read permission.
-Each associated pull request gets an event with its own `number` and UUID; a suite without pull requests gets one event with `number` unset.
+Each pull request based in the delivery's repository gets an event with its own `number` and UUID.
+GitHub's associations can include pull requests from other repositories in the fork network, so those entries are excluded.
+A suite without matching pull requests gets one event with `number` unset and `actor_access: read`.
+Matching pull requests carry `actor_access: write`, because their head branch is in this repository and pushing there requires write access.
 CI filters can use `action`, `conclusion`, `head_sha`, `branch`, `check_suite_id`, and `ci_app`.
 Head commit messages are removed from the embedded payload, as they are for pushes.
 

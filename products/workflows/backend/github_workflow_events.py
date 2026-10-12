@@ -197,6 +197,19 @@ def _event_properties(
     return properties
 
 
+def _check_suite_pull_request_numbers(payload: dict[str, Any]) -> list[int | None]:
+    repository_id = (payload.get("repository") or {}).get("id")
+    numbers: list[int | None] = []
+    for pull_request in (payload.get("check_suite") or {}).get("pull_requests") or []:
+        if not isinstance(pull_request, dict):
+            continue
+        number = pull_request.get("number")
+        base_repository_id = ((pull_request.get("base") or {}).get("repo") or {}).get("id")
+        if isinstance(number, int) and repository_id is not None and base_repository_id == repository_id:
+            numbers.append(number)
+    return numbers or [None]
+
+
 def emit_github_event(event_type: str, payload: dict[str, Any], delivery_id: str) -> None:
     """Write one internal event per PostHog project connected to this GitHub installation.
 
@@ -226,9 +239,7 @@ def emit_github_event(event_type: str, payload: dict[str, Any], delivery_id: str
     distinct_id = str((payload.get("sender") or {}).get("login") or f"installation:{installation_id}")
     pull_request_numbers: list[int | None] = [None]
     if event_type == "check_suite":
-        pull_request_numbers = [pr["number"] for pr in (payload.get("check_suite") or {}).get("pull_requests", [])] or [
-            None
-        ]
+        pull_request_numbers = _check_suite_pull_request_numbers(payload)
 
     for integration in integrations:
         for pull_request_number in pull_request_numbers:
