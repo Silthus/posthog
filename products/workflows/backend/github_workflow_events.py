@@ -11,6 +11,7 @@ before any consumer runs.
 """
 
 import json
+import time
 import uuid
 from typing import Any
 
@@ -19,10 +20,11 @@ from django.conf import settings
 import structlog
 
 from posthog.cdp.internal_events import InternalEventEvent, produce_internal_event
+from posthog.egress.github.transport import github_request
 from posthog.github.installations import SCOPE_DB_ALIAS, InstallationIntegration, installation_integrations
 from posthog.ingress.dispatch.database import bounded_statement_timeout, is_statement_timeout
 from posthog.models.instance_setting import get_instance_setting
-from posthog.models.integration import GitHubIntegration, Integration
+from posthog.models.integration import Integration
 
 logger = structlog.get_logger(__name__)
 
@@ -48,10 +50,12 @@ TRUSTED_AUTHOR_ASSOCIATIONS = ("OWNER", "MEMBER", "COLLABORATOR")
 # fix, so it does not spend the delivery's shared budget on a label lookup.
 FAILING_CHECK_SUITE_CONCLUSIONS = frozenset({"failure", "timed_out", "startup_failure"})
 
-# The label lookup is one GitHub call inside the delivery budget every GitHub consumer shares, so it
-# gets one short attempt and no transient retry.
-_LABEL_LOOKUP_TIMEOUT_SECONDS = 2
-_LABEL_INTEGRATION_LOAD_TIMEOUT_MS = 800
+# Label lookups run inside the delivery budget every GitHub consumer shares, and that budget cannot
+# interrupt a consumer, so all of one delivery's lookups share this deadline.
+_LABEL_LOOKUP_BUDGET_SECONDS = 2.0
+_LABEL_TOKEN_LOAD_TIMEOUT_MS = 800
+
+_clock = time.monotonic
 
 
 def _subject(payload: dict[str, Any]) -> dict[str, Any]:
@@ -236,39 +240,36 @@ def _is_failing_check_suite(event_type: str, payload: dict[str, Any]) -> bool:
     )
 
 
-def _pull_request_labels(
-    integration: InstallationIntegration, repository: str, number: int, delivery_id: str
-) -> list[str] | None:
-    """The pull request's label names, or None when the lookup fails.
+def _installation_access_token(integration: InstallationIntegration) -> str | None:
+    """The stored installation token, without a refresh.
 
-    None rather than an empty list, so a label filter cannot match a lookup that never happened.
+    A refresh is two App API calls with their own timeouts. The scheduled integration refresh keeps
+    the stored token valid, so the delivery path reads it as-is and treats a rejection as a miss.
     """
-    try:
-        with bounded_statement_timeout(_LABEL_INTEGRATION_LOAD_TIMEOUT_MS, aliases=[SCOPE_DB_ALIAS]):
-            github_integration = Integration.objects.using(SCOPE_DB_ALIAS).get(
-                pk=integration.id, team_id=integration.team_id
-            )
-        response = GitHubIntegration(github_integration, source="workflows").api_request(
-            "GET",
-            f"/repos/{repository}/issues/{number}/labels",
-            endpoint="/repos/{owner}/{repo}/issues/{issue_number}/labels",
-            # GitHub caps a pull request at 100 labels, so one page holds them all.
-            params={"per_page": 100},
-            timeout=_LABEL_LOOKUP_TIMEOUT_SECONDS,
-            retry_transient=False,
-        )
-        response.raise_for_status()
-        return [label["name"] for label in response.json() if isinstance(label.get("name"), str)]
-    except Exception:
-        logger.warning(
-            "github_workflow_event_label_lookup_failed",
-            team_id=integration.team_id,
-            repository=repository,
-            number=number,
-            delivery_id=delivery_id,
-            exc_info=True,
-        )
-        return None
+    with bounded_statement_timeout(_LABEL_TOKEN_LOAD_TIMEOUT_MS, aliases=[SCOPE_DB_ALIAS]):
+        row = Integration.objects.using(SCOPE_DB_ALIAS).get(pk=integration.id, team_id=integration.team_id)
+    return (row.sensitive_config or {}).get("access_token")
+
+
+def _pull_request_labels(
+    access_token: str, installation_id: str, repository: str, number: int, deadline: float
+) -> list[str]:
+    remaining_seconds = deadline - _clock()
+    if remaining_seconds <= 0:
+        raise TimeoutError("label lookup budget spent")
+    response = github_request(
+        "GET",
+        f"https://api.github.com/repos/{repository}/issues/{number}/labels",
+        source="workflows",
+        headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
+        installation_id=installation_id,
+        endpoint="/repos/{owner}/{repo}/issues/{issue_number}/labels",
+        # GitHub caps a pull request at 100 labels, so one page holds them all.
+        params={"per_page": 100},
+        timeout=remaining_seconds,
+    )
+    response.raise_for_status()
+    return [label["name"] for label in response.json() if isinstance(label.get("name"), str)]
 
 
 def _failing_suite_labels(
@@ -277,16 +278,35 @@ def _failing_suite_labels(
     integrations: tuple[InstallationIntegration, ...],
     pull_request_numbers: list[int | None],
     delivery_id: str,
-) -> dict[int | None, list[str] | None]:
+) -> dict[int | None, list[str]]:
+    """Label names per pull request. A pull request whose lookup failed has no entry, so its event
+    carries no `labels` and a label filter cannot match a lookup that never happened."""
     repository = (payload.get("repository") or {}).get("full_name")
-    if not integrations or not repository or not _is_failing_check_suite(event_type, payload):
+    installation_id = (payload.get("installation") or {}).get("id")
+    numbers = [number for number in pull_request_numbers if number is not None]
+    if not integrations or not repository or not numbers or not _is_failing_check_suite(event_type, payload):
         return {}
-    # Every connected project reads the same installation, so one lookup answers for all of them.
-    return {
-        number: _pull_request_labels(integrations[0], repository, number, delivery_id)
-        for number in pull_request_numbers
-        if number is not None
-    }
+
+    deadline = _clock() + _LABEL_LOOKUP_BUDGET_SECONDS
+    labels_by_number: dict[int | None, list[str]] = {}
+    try:
+        # Every connected project reads the same installation, so one token answers for all of them.
+        access_token = _installation_access_token(integrations[0])
+        if not access_token:
+            raise ValueError("installation has no stored access token")
+        for number in numbers:
+            labels_by_number[number] = _pull_request_labels(
+                access_token, str(installation_id), repository, number, deadline
+            )
+    except Exception:
+        logger.warning(
+            "github_workflow_event_label_lookup_failed",
+            installation_id=installation_id,
+            repository=repository,
+            delivery_id=delivery_id,
+            exc_info=True,
+        )
+    return labels_by_number
 
 
 def emit_github_event(event_type: str, payload: dict[str, Any], delivery_id: str) -> None:

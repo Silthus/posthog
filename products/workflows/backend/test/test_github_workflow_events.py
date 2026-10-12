@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -6,9 +7,12 @@ import pytest
 from unittest.mock import patch
 
 from django.db import OperationalError
+from django.test import override_settings
 
 import requests
 import responses
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 from posthog.ingress.contracts import WebhookDelivery
 from posthog.models.instance_setting import override_instance_config
@@ -132,9 +136,10 @@ def test_check_suite_emits_ci_results_per_pull_request(
     with patch("django.conf.settings.GITHUB_WORKFLOW_TRIGGERS_ENABLED", True):
         emit_github_event("check_suite", payload, "ci-delivery")
 
+    expected_numbers: list[int | None] = [*pr_numbers] or [None]
     events = [call.args[1] for call in produce.call_args_list]
-    assert len(events) == len(pr_numbers or [None])
-    assert [event.properties["number"] for event in events] == (pr_numbers or [None])
+    assert len(events) == len(expected_numbers)
+    assert [event.properties["number"] for event in events] == expected_numbers
     assert len({event.uuid for event in events}) == len(events)
     for event in events:
         assert event.event == "$github_event_received"
@@ -203,6 +208,49 @@ def test_a_failed_label_lookup_still_emits_the_event_without_labels(
     assert produce.call_count == 1
     assert "labels" not in produce.call_args.args[1].properties
     assert logger.warning.call_args.args[0] == "github_workflow_event_label_lookup_failed"
+    assert len(github.calls) == 1
+
+
+def test_an_expiring_or_rejected_token_is_not_refreshed_inside_the_delivery(produce, integration, github) -> None:
+    integration.config = {**integration.config, "expires_in": 3600, "refreshed_at": 0}
+    integration.save()
+    app_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    )
+    github.post(f"https://api.github.com/app/installations/{INSTALLATION_ID}/access_tokens", status=500)
+    github.get(_labels_url(7), status=401, json={"message": "Bad credentials"})
+
+    with (
+        patch("django.conf.settings.GITHUB_WORKFLOW_TRIGGERS_ENABLED", True),
+        override_settings(GITHUB_APP_CLIENT_ID="client-id", GITHUB_APP_PRIVATE_KEY=app_private_key.decode()),
+    ):
+        emit_github_event("check_suite", _check_suite_payload([7]), "ci-delivery")
+
+    assert "labels" not in produce.call_args.args[1].properties
+    assert [call.request.method for call in github.calls] == ["GET"]
+
+
+def test_label_lookups_stop_when_their_shared_deadline_passes(produce, integration, github) -> None:
+    clock = {"now": 0.0}
+
+    def slow_labels(request: requests.PreparedRequest) -> tuple[int, dict[str, str], str]:
+        clock["now"] += 10.0
+        return 200, {}, json.dumps([{"name": "babysit"}])
+
+    github.add_callback(responses.GET, _labels_url(7), callback=slow_labels)
+    github.get(_labels_url(8), json=[{"name": "babysit"}])
+
+    with (
+        patch("django.conf.settings.GITHUB_WORKFLOW_TRIGGERS_ENABLED", True),
+        patch("products.workflows.backend.github_workflow_events._clock", lambda: clock["now"]),
+    ):
+        emit_github_event("check_suite", _check_suite_payload([7, 8]), "ci-delivery")
+
+    properties_by_number = {
+        call.args[1].properties["number"]: call.args[1].properties for call in produce.call_args_list
+    }
+    assert properties_by_number[7]["labels"] == ["babysit"]
+    assert "labels" not in properties_by_number[8]
     assert len(github.calls) == 1
 
 
