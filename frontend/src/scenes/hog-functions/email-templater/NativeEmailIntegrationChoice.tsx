@@ -106,7 +106,7 @@ export function NativeEmailIntegrationChoice({
                         <span className="px-2 pb-1 text-xs text-muted">
                             {isSandboxSenderSelected
                                 ? SANDBOX_EMAIL_SENDER_NOTE
-                                : `Choose up to ${MAX_WORKFLOW_EMAIL_SENDERS} senders. Each workflow run uses one sender. Choosing sandbox replaces the selection and removes custom sender and Reply-To.`}
+                                : `Choose up to ${MAX_WORKFLOW_EMAIL_SENDERS} senders. Each workflow run uses one sender.${sandboxSenderId !== undefined ? ' Choosing the sandbox sender replaces the selection and removes custom sender and Reply-To.' : ''}`}
                         </span>
                     </div>
                 ) : (
@@ -146,7 +146,7 @@ export function NativeEmailIntegrationChoice({
                         )}
                         {!isSandboxSenderSelected && sandboxSenderId !== undefined && (
                             <span className="px-2 pb-1 text-xs text-muted">
-                                Choosing sandbox removes custom sender and Reply-To.
+                                Choosing the sandbox sender removes custom sender and Reply-To.
                             </span>
                         )}
                     </div>

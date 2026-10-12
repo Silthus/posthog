@@ -79,6 +79,15 @@ describe('NativeEmailIntegrationChoice', () => {
         expect(screen.getByText('Delivers only to verified members of your organization.')).toBeInTheDocument()
     })
 
+    it.each([false, true])('mentions sandbox selection changes only when the option is offered (%s)', (offered) => {
+        mockSenderRotationEnabled = true
+        mockValues(offered ? SANDBOX_SENDER : null)
+
+        render(<NativeEmailIntegrationChoice label="From" value={{ integrationId: 1 }} onChange={jest.fn()} />)
+
+        expect(screen.queryByText(/Choosing (the )?sandbox/)).toEqual(offered ? expect.anything() : null)
+    })
+
     it('shows the picker, not the empty state, while the sandbox sender is still being created', () => {
         mockSenderRotationEnabled = false
         mockValues(null, { senderIntegrations: [], senderIntegrationsLoading: true })
