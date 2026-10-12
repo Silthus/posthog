@@ -534,11 +534,13 @@ export class EmailTrackingService {
         }
     }
 
-    private async captureSandboxDeliveries(deliveries: { teamId: string; isTest: boolean }[]): Promise<void> {
-        for (const { teamId, isTest } of deliveries) {
+    private async captureSandboxDeliveries(
+        deliveries: { teamId: string; isTest: boolean; recipientCount: number }[]
+    ): Promise<void> {
+        for (const { teamId, isTest, recipientCount } of deliveries) {
             const parsedTeamId = Number(teamId)
             if (Number.isSafeInteger(parsedTeamId) && parsedTeamId > 0) {
-                await this.sandboxEmailSender.capture(parsedTeamId, isTest, { type: 'delivered' })
+                await this.sandboxEmailSender.capture(parsedTeamId, isTest, { type: 'delivered', recipientCount })
             }
         }
     }

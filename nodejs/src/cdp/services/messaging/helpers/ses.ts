@@ -598,7 +598,7 @@ export class SesWebhookHandler {
             emailAddresses: string[]
             timestamp?: string
         }[]
-        sandboxDeliveries?: { teamId: string; isTest: boolean }[]
+        sandboxDeliveries?: { teamId: string; isTest: boolean; recipientCount: number }[]
     }> {
         logger.info('[SesWebhookHandler] handleWebhook', { body: opts.body, headers: opts.headers })
         const parsed = this.parseIncomingBody(opts.body)
@@ -698,7 +698,7 @@ export class SesWebhookHandler {
             emailAddresses: string[]
             timestamp?: string
         }[] = []
-        const sandboxDeliveries: { teamId: string; isTest: boolean }[] = []
+        const sandboxDeliveries: { teamId: string; isTest: boolean; recipientCount: number }[] = []
 
         for (const rec of records) {
             logger.info('[SesWebhookHandler] processing record', { rec })
@@ -858,7 +858,11 @@ export class SesWebhookHandler {
                 this.sandboxConfigurationSetName &&
                 rec.mail.tags?.['ses:configuration-set']?.[0] === this.sandboxConfigurationSetName
             ) {
-                sandboxDeliveries.push({ teamId, isTest: isTest ?? false })
+                sandboxDeliveries.push({
+                    teamId,
+                    isTest: isTest ?? false,
+                    recipientCount: rec.delivery.recipients?.length ?? 0,
+                })
             }
 
             // Suppression writes (below) skip test sends — editor "Run test" traffic must not be

@@ -51,7 +51,7 @@ export type SandboxDailyCapClaim =
 
 type SandboxEmailOutcome =
     | { type: 'sent'; recipientCount: number }
-    | { type: 'delivered' }
+    | { type: 'delivered'; recipientCount: number }
     | {
           type: 'blocked'
           reason: 'switch_off' | 'recipient_not_member' | 'check_failed' | 'cap_reached' | 'paused'
@@ -65,7 +65,7 @@ function outcomeProperties(outcome: SandboxEmailOutcome, isTest: boolean): Recor
         case 'blocked':
             return { reason: outcome.reason, blocked_recipient_count: outcome.blockedRecipientCount }
         case 'delivered':
-            return {}
+            return { recipient_count: outcome.recipientCount }
     }
 }
 

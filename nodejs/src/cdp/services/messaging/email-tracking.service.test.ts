@@ -755,7 +755,8 @@ describe('EmailTrackingService', () => {
         const postDelivery = async (
             configurationSet: string,
             isTest: boolean,
-            signedCode = true
+            signedCode = true,
+            recipients: string[] | null = ['member@example.com']
         ): Promise<supertest.Response> => {
             const signedTrackingCode = signer.generate(
                 { functionId: 'function-id', id: 'invocation-id', teamId: team.id },
@@ -777,7 +778,7 @@ describe('EmailTrackingService', () => {
                 },
                 delivery: {
                     timestamp: '2024-01-01T00:00:01.000Z',
-                    recipients: ['member@example.com'],
+                    ...(recipients ? { recipients } : {}),
                 },
             }
             const envelope = {
@@ -806,7 +807,7 @@ describe('EmailTrackingService', () => {
                 expect(capture).toHaveBeenCalledWith(
                     expect.objectContaining({ id: team.id, organization_id: team.organization_id }),
                     'workflows sandbox email delivered',
-                    { is_test: isTest }
+                    { is_test: isTest, recipient_count: 1 }
                 )
             }
         )
@@ -819,6 +820,19 @@ describe('EmailTrackingService', () => {
 
             expect(res.status).toBe(200)
             expect(capture).not.toHaveBeenCalled()
+        })
+
+        it.each([
+            { recipients: ['member@example.com', 'another@example.com'], count: 2 },
+            { recipients: null, count: 0 },
+        ])('counts recipient copies in a delivery notification ($count)', async ({ recipients, count }) => {
+            const res = await postDelivery(sandboxConfigurationSet, false, true, recipients)
+            expect(res.status).toBe(200)
+            expect(capture).toHaveBeenCalledWith(
+                expect.objectContaining({ id: team.id }),
+                'workflows sandbox email delivered',
+                { is_test: false, recipient_count: count }
+            )
         })
     })
 
