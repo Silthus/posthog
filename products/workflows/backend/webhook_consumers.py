@@ -24,7 +24,9 @@ WEBHOOK_CONSUMERS = (
         name="workflows",
         provider="github",
         app="posthog",
-        event_types=frozenset({"issues", "issue_comment", "pull_request", "pull_request_review", "push"}),
+        event_types=frozenset(
+            {"issues", "issue_comment", "pull_request", "pull_request_review", "push", "check_suite"}
+        ),
         handler=_run_workflows,
     ),
     WebhookConsumer(

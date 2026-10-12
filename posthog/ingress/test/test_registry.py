@@ -81,6 +81,13 @@ class TestConsumerRegistry(SimpleTestCase):
         self.assertEqual(
             [
                 consumer.name
+                for consumer in registry.consumers_for(provider="github", app="posthog", event_type="check_suite")
+            ],
+            ["workflows"],
+        )
+        self.assertEqual(
+            [
+                consumer.name
                 for consumer in registry.consumers_for(provider="github", app="posthog", event_type="installation")
             ],
             ["installation_lifecycle"],

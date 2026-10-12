@@ -55,5 +55,11 @@ Removing a link from a later description does not remove the reference.
 A consumer that needs the teams behind a delivery's installation calls `installation_integrations()` from `posthog/github/installations.py`, never its own `Integration` query.
 The provider's `dispatch_scope()` opens one lookup cache per request, so every consumer on a delivery that calls it shares a single capped query.
 
+The Workflows consumer forwards `check_suite` deliveries as `$github_event_received` when `GITHUB_WORKFLOW_TRIGGERS_ENABLED` is enabled.
+The customer-facing App must also subscribe to check suites with Checks read permission.
+Each associated pull request gets an event with its own `number` and UUID; a suite without pull requests gets one event with `number` unset.
+CI filters can use `action`, `conclusion`, `head_sha`, `branch`, `check_suite_id`, and `ci_app`.
+Head commit messages are removed from the embedded payload, as they are for pushes.
+
 The [Endpoints table](../README.md#endpoints) lists the consumer names per event type.
 PR analytics shared by those consumers live in `posthog/github/`, see its README.
