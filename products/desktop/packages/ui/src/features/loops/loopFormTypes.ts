@@ -110,6 +110,7 @@ const GITHUB_EVENT_ACTIONS: Record<
     "transferred",
   ],
   issue_comment: ["created", "edited", "deleted"],
+  check_suite: [],
 };
 
 /** Actions offerable for a set of events, which is their intersection rather than their union:
@@ -399,6 +400,11 @@ export function isTriggerDraftValid(
   if (trigger.type === "github") {
     const config = trigger.config as LoopSchemas.LoopGithubTriggerConfig;
     const workflow = rules.backend === "workflow";
+    if (config.events.includes("check_suite")) {
+      return (
+        workflow && !!config.repository && !!config.filters?.labels?.[0]?.trim()
+      );
+    }
     return (
       !!config.repository &&
       (workflow || config.github_integration_id > 0) &&

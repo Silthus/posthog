@@ -9,10 +9,12 @@ import {
   isAutoFixEnabled,
   isLoopFormValid,
   isTriggerDraftValid,
+  type LoopFormRules,
   type LoopFormValues,
   type LoopTriggerDraft,
   loopToFormValues,
   normalizeLoopFormValues,
+  WORKFLOW_RULES,
   withAutoFix,
   withGithubTriggerEvents,
 } from "./loopFormTypes";
@@ -48,7 +50,12 @@ function validFormValues(): LoopFormValues {
 }
 
 describe("isTriggerDraftValid", () => {
-  it.each([
+  it.each<{
+    name: string;
+    trigger: LoopTriggerDraft;
+    expected: boolean;
+    rules?: LoopFormRules;
+  }>([
     {
       name: "schedule with a cron",
       trigger: scheduleTrigger({ cron_expression: "0 9 * * *" }),
@@ -128,8 +135,34 @@ describe("isTriggerDraftValid", () => {
       } as LoopTriggerDraft,
       expected: true,
     },
-  ])("$name → $expected", ({ trigger, expected }) => {
-    expect(isTriggerDraftValid(trigger)).toBe(expected);
+    {
+      name: "CI failed with a label on a workflow loop",
+      trigger: githubTrigger({
+        events: ["check_suite"],
+        filters: { labels: ["babysit"] },
+      }),
+      rules: WORKFLOW_RULES,
+      expected: true,
+    },
+    {
+      name: "CI failed without a label on a workflow loop",
+      trigger: githubTrigger({
+        events: ["check_suite"],
+        filters: { labels: [" "] },
+      }),
+      rules: WORKFLOW_RULES,
+      expected: false,
+    },
+    {
+      name: "CI failed on a loops API loop",
+      trigger: githubTrigger({
+        events: ["check_suite"],
+        filters: { labels: ["babysit"] },
+      }),
+      expected: false,
+    },
+  ])("$name → $expected", ({ trigger, expected, rules }) => {
+    expect(isTriggerDraftValid(trigger, rules)).toBe(expected);
   });
 });
 

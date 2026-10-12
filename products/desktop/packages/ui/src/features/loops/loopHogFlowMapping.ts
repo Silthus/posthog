@@ -30,7 +30,16 @@ const LOOP_GITHUB_EVENTS: ReadonlySet<string> =
     "issue_comment",
     "pull_request",
     "push",
+    "check_suite",
   ]);
+
+const CI_FAILED_EVENT: LoopSchemas.LoopGithubTriggerEventEnum = "check_suite";
+const CI_FAILED_ACTION = "completed";
+const FAILING_CI_CONCLUSIONS = ["failure", "timed_out", "startup_failure"];
+const ONCE_PER_PULL_REQUEST_HASH =
+  "{event.properties.repository}#{event.properties.number}";
+const CI_FAILED_MASK_TTL_SECONDS = 2 * 60 * 60;
+const LABEL_FILTER_PATTERN = /^has\(properties\.labels, '((?:[^'\\]|\\.)*)'\)$/;
 
 /** Thrown when the form holds a trigger the workflow shape cannot carry. The
  * form's own validation stops this before submit; the error is the backstop. */
@@ -60,6 +69,8 @@ export interface LoopHogFlowSource {
   actions?: unknown;
   edges?: unknown;
   schedules?: Schemas.HogFlowSchedule[];
+  /** Only the detail carries a typed mask; a list row leaves it unknown. */
+  trigger_masking?: unknown;
   /** Staged edits the workflow editor holds back from the live graph. Only
    * the detail carries it; a list row leaves it undefined. */
   draft?: unknown;
@@ -93,6 +104,48 @@ function exactFilter(key: string, value: string[]): Json {
   return { key, value, operator: "exact", type: "event" };
 }
 
+function isCiFailedConfig(
+  config: LoopSchemas.LoopGithubTriggerConfig,
+): boolean {
+  return config.events.length === 1 && config.events[0] === CI_FAILED_EVENT;
+}
+
+function hogqlString(value: string): string {
+  return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+}
+
+/** `labels` is a list, and no property operator matches one element of a
+ * list, so the label filter is a HogQL `has()`. */
+function labelFilter(label: string): Json {
+  return {
+    key: `has(properties.labels, ${hogqlString(label)})`,
+    type: "hogql",
+  };
+}
+
+/** Reads back only the literal `labelFilter` writes. HogQL gives escapes
+ * like `\0` or `\x41` their own meaning, so any other spelling opens the
+ * loop read-only rather than being rewritten to a different label. */
+function labelFromFilter(filter: Json): string | null {
+  if (typeof filter.key !== "string") return null;
+  const match = LABEL_FILTER_PATTERN.exec(filter.key);
+  if (!match) return null;
+  const label = match[1].replace(/\\(.)/g, "$1");
+  return labelFilter(label).key === filter.key ? label : null;
+}
+
+function ciFailedFilters(config: LoopSchemas.LoopGithubTriggerConfig): Json[] {
+  const label = config.filters?.labels?.[0]?.trim();
+  if (!label) {
+    throw new UnsupportedLoopShapeError("A CI failed trigger needs a label.");
+  }
+  return [
+    exactFilter("action", [CI_FAILED_ACTION]),
+    exactFilter("conclusion", FAILING_CI_CONCLUSIONS),
+    labelFilter(label),
+  ];
+}
+
 function githubTriggerConfig(
   config: LoopSchemas.LoopGithubTriggerConfig,
 ): Json {
@@ -105,7 +158,9 @@ function githubTriggerConfig(
     exactFilter("actor_access", ["write"]),
   ];
   const actions = config.filters?.actions ?? [];
-  if (actions.length > 0) {
+  if (isCiFailedConfig(config)) {
+    properties.push(...ciFailedFilters(config));
+  } else if (actions.length > 0) {
     properties.push(exactFilter("action", actions));
   }
   return {
@@ -121,6 +176,7 @@ function githubTriggerConfig(
 function triggerFromForm(values: LoopFormValues): {
   config: Json;
   schedule: HogFlowScheduleWrite | null;
+  ciFailed: boolean;
 } {
   const enabledTriggers = values.triggers.filter((trigger) => trigger.enabled);
   if (enabledTriggers.length !== 1) {
@@ -138,11 +194,15 @@ function triggerFromForm(values: LoopFormValues): {
         "This schedule is not one of the supported presets.",
       );
     }
-    return { config: { type: "schedule" }, schedule };
+    return { config: { type: "schedule" }, schedule, ciFailed: false };
   }
   if (trigger.type === "github") {
     const config = trigger.config as LoopSchemas.LoopGithubTriggerConfig;
-    return { config: githubTriggerConfig(config), schedule: null };
+    return {
+      config: githubTriggerConfig(config),
+      schedule: null,
+      ciFailed: isCiFailedConfig(config),
+    };
   }
   throw new UnsupportedLoopShapeError(
     `Trigger type "${trigger.type}" is not supported for workflow-backed loops.`,
@@ -251,6 +311,30 @@ const DEFAULT_EXIT_ACTION: LoopAction = {
   config: { reason: "Task created" },
 };
 
+/** A CI failed loop starts one fix task per pull request per window. Leaving
+ * CI failed drops that per-PR mask, which would otherwise throttle the new
+ * trigger per repository. A mask set in the workflow editor is never touched:
+ * undefined leaves the workflow's mask as it is. */
+function triggerMaskingFor(
+  ciFailed: boolean,
+  existing: LoopHogFlowSource | undefined,
+  existingWasCiFailed: boolean,
+): Schemas.HogFlowMasking | null | undefined {
+  const mask = existing?.trigger_masking;
+  const hasMask = isRecord(mask) && typeof mask.hash === "string";
+  if (ciFailed) {
+    return hasMask
+      ? undefined
+      : {
+          hash: ONCE_PER_PULL_REQUEST_HASH,
+          ttl: CI_FAILED_MASK_TTL_SECONDS,
+          threshold: null,
+        };
+  }
+  const ownsMask = hasMask && mask.hash === ONCE_PER_PULL_REQUEST_HASH;
+  return existingWasCiFailed && ownsMask ? null : undefined;
+}
+
 /**
  * The workflow a loop form saves as: one trigger, one "Create AI task" step,
  * one exit. `enabled` decides whether the flow is created live or as a draft.
@@ -275,6 +359,14 @@ export function formValuesToHogFlowWrite(
     ...(notifyAction ? [notifyAction] : []),
     exitAction,
   ];
+  const existingWasCiFailed =
+    existing !== null &&
+    githubConfigFromTrigger(existing.trigger)?.events[0] === CI_FAILED_EVENT;
+  const triggerMasking = triggerMaskingFor(
+    trigger.ciFailed,
+    options.existing,
+    existingWasCiFailed,
+  );
   return {
     flow: {
       name: values.name.trim(),
@@ -306,6 +398,9 @@ export function formValuesToHogFlowWrite(
           type: "continue" as const,
         })),
       ],
+      ...(triggerMasking === undefined
+        ? {}
+        : { trigger_masking: triggerMasking }),
     },
     schedule: trigger.schedule,
   };
@@ -419,11 +514,24 @@ function githubConfigFromTrigger(
   let repository: string | null = null;
   let eventTypes: string[] | null = null;
   let actions: string[] = [];
+  let conclusions: string[] = [];
+  let label: string | null = null;
   let trustedActorsOnly = false;
+  const seenKeys = new Set<unknown>();
   for (const property of Array.isArray(properties) ? properties : []) {
     if (!isRecord(property)) return null;
+    if (property.type === "hogql") {
+      if (label !== null) return null;
+      label = labelFromFilter(property);
+      if (label === null) return null;
+      continue;
+    }
     const values = filterValues(property);
     if (!values) return null;
+    // The form holds one value list per key; a repeated key is an AND it
+    // cannot show, and a save would keep only the last one.
+    if (seenKeys.has(property.key)) return null;
+    seenKeys.add(property.key);
     switch (property.key) {
       case "actor_access":
         if (values.length !== 1 || values[0] !== "write") return null;
@@ -442,6 +550,9 @@ function githubConfigFromTrigger(
       case "action":
         actions = values;
         break;
+      case "conclusion":
+        conclusions = values;
+        break;
       default:
         return null;
     }
@@ -451,6 +562,21 @@ function githubConfigFromTrigger(
   // A trigger open to anyone is outside what a loop offers; editing it here
   // would silently narrow it back to write access.
   if (!trustedActorsOnly) return null;
+  if (eventTypes[0] === CI_FAILED_EVENT) {
+    const failingOnly =
+      conclusions.length === FAILING_CI_CONCLUSIONS.length &&
+      FAILING_CI_CONCLUSIONS.every((value) => conclusions.includes(value));
+    const completedOnly =
+      actions.length === 1 && actions[0] === CI_FAILED_ACTION;
+    if (!label || !failingOnly || !completedOnly) return null;
+    return {
+      github_integration_id: 0,
+      repository,
+      events: [CI_FAILED_EVENT],
+      filters: { labels: [label] },
+    };
+  }
+  if (label !== null || conclusions.length > 0) return null;
   return {
     github_integration_id: 0,
     repository,

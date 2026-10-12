@@ -1,9 +1,19 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
 import type { LoopTriggerDraft } from "../loopFormTypes";
+import {
+  type LoopTriggerEditorLimits,
+  WORKFLOW_TRIGGER_LIMITS,
+} from "../loopTriggerLimits";
 import { LoopTriggerEditor } from "./LoopTriggerEditor";
 
-function Harness({ initial }: { initial: LoopTriggerDraft[] }) {
+function Harness({
+  initial,
+  limits,
+}: {
+  initial: LoopTriggerDraft[];
+  limits?: LoopTriggerEditorLimits;
+}) {
   const [triggers, setTriggers] = useState(initial);
   return (
     <div className="w-[600px] p-4">
@@ -11,6 +21,7 @@ function Harness({ initial }: { initial: LoopTriggerDraft[] }) {
         triggers={triggers}
         onChange={setTriggers}
         triggerEndpointPath={null}
+        limits={limits}
       />
     </div>
   );
@@ -61,4 +72,11 @@ export const TwoEventsShareFewerActions: Story = {
 
 export const PushHasNoActions: Story = {
   args: { initial: gh({ events: ["push"] }) },
+};
+
+export const CiFailedOnAWorkflowLoop: Story = {
+  args: {
+    initial: gh({ events: ["check_suite"], filters: { labels: ["babysit"] } }),
+    limits: WORKFLOW_TRIGGER_LIMITS,
+  },
 };

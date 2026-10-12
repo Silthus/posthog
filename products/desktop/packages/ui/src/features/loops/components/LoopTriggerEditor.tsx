@@ -108,6 +108,9 @@ function githubTriggerInvalidMessage(
   config: LoopSchemas.LoopGithubTriggerConfig,
   limits: LoopTriggerEditorLimits,
 ): string {
+  if (config.events.includes("check_suite")) {
+    return "Pick a repository and add a pull request label to finish this trigger.";
+  }
   if (limits.singleGithubEvent) {
     return "Pick a repository and one event to finish this trigger.";
   }
@@ -602,6 +605,11 @@ const GITHUB_EVENT_OPTIONS: {
     label: "Issue comment",
     description: "A comment is added on an issue or PR",
   },
+  {
+    value: "check_suite",
+    label: "CI failed",
+    description: "CI fails on a pull request with a label you choose",
+  },
 ];
 
 /** Each accepted value is a discrete chip, committed with Enter. A single delimited text field
@@ -693,6 +701,9 @@ function GithubTriggerFields({
     ),
   ];
   const conditions = config.filters?.payload ?? [];
+  const eventOptions = GITHUB_EVENT_OPTIONS.filter(
+    (option) => option.value !== "check_suite" || limits.ciFailedEvent,
+  );
 
   const setConditions = (
     next: LoopSchemas.LoopGithubTriggerPayloadFilter[],
@@ -736,7 +747,7 @@ function GithubTriggerFields({
 
       <SubField label="Run when">
         <div className="flex flex-col gap-2">
-          {GITHUB_EVENT_OPTIONS.map((option) => (
+          {eventOptions.map((option) => (
             <Label className="flex items-start gap-2.5" key={option.value}>
               <Checkbox
                 className="mt-0.5"
@@ -756,6 +767,32 @@ function GithubTriggerFields({
           ))}
         </div>
       </SubField>
+
+      {config.events.includes("check_suite") ? (
+        <SubField label="Pull request label">
+          <div className="flex flex-col gap-2">
+            <Input
+              value={config.filters?.labels?.[0] ?? ""}
+              disabled={disabled}
+              placeholder="babysit"
+              aria-label="Pull request label"
+              className="h-7"
+              onChange={(event) =>
+                onChange(
+                  withGithubTriggerFilters(config, {
+                    labels: event.target.value ? [event.target.value] : [],
+                  }),
+                )
+              }
+            />
+            <span className="text-[12px] text-gray-10">
+              Runs only on pull requests with this label. Remove the label to
+              stop it. By default, starts at most one task per pull request
+              every 2 hours.
+            </span>
+          </div>
+        </SubField>
+      ) : null}
 
       {actionOptions.length > 0 ? (
         <SubField label="Actions">

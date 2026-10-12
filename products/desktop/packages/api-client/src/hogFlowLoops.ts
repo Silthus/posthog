@@ -23,6 +23,8 @@ export interface HogFlowLoopBody {
   exit_condition: "exit_only_at_end";
   actions: Schemas.HogFlowAction[];
   edges: Schemas.HogFlowEdge[];
+  /** Left out, the workflow keeps the mask it has. */
+  trigger_masking?: Schemas.HogFlowMasking | null;
 }
 
 /** Optimistic-concurrency fields a patch may carry beside the loop body.
