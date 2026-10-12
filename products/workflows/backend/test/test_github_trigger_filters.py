@@ -105,6 +105,24 @@ class TestGithubTriggerFilters(ClickhouseTestMixin, APIBaseTest):
     def test_title_contains(self, _name, overrides, expected):
         assert self._matches([_prop("title", ["fire"], "icontains")], _event(**overrides)) is expected
 
+    @parameterized.expand(
+        [
+            ("a failed suite", {"conclusion": "failure"}, True),
+            ("a timed out suite", {"conclusion": "timed_out"}, True),
+            ("a suite that needs action", {"conclusion": "action_required"}, True),
+            ("a passing suite", {"conclusion": "success"}, False),
+            ("a cancelled suite", {"conclusion": "cancelled"}, False),
+            ("a suite still running", {"action": "requested", "conclusion": None}, False),
+        ]
+    )
+    def test_only_ci_failures(self, _name, overrides, expected):
+        properties = [
+            _prop("event_type", ["check_suite"], "exact"),
+            _prop("conclusion", ["failure", "timed_out", "action_required"], "exact"),
+        ]
+        event = _event(**{"event_type": "check_suite", "action": "completed", **overrides})
+        assert self._matches(properties, event) is expected
+
     def test_filters_combine_with_and(self):
         properties = [
             _prop("repository", ["PostHog/posthog"], "exact"),

@@ -15,31 +15,91 @@ describe('github event trigger', () => {
     }
 
     describe('filters round-trip', () => {
-        it.each<{ name: string; mode: GithubActorMode; logins: string[] }>([
-            { name: 'write access', mode: 'write_access', logins: [] },
-            { name: 'anyone', mode: 'anyone', logins: [] },
-            { name: 'anyone except bots', mode: 'people', logins: [] },
-            { name: 'specific people', mode: 'specific_people', logins: ['octocat'] },
-        ])('survives a save and reload for $name', ({ mode, logins }) => {
+        const ISSUE_EVENTS = ['issues', 'issue_comment']
+
+        it.each<{ name: string; mode: GithubActorMode; logins: string[]; eventTypes: string[]; onlyFailures: boolean }>(
+            [
+                {
+                    name: 'write access',
+                    mode: 'write_access',
+                    logins: [],
+                    eventTypes: ISSUE_EVENTS,
+                    onlyFailures: false,
+                },
+                { name: 'anyone', mode: 'anyone', logins: [], eventTypes: ISSUE_EVENTS, onlyFailures: false },
+                {
+                    name: 'anyone except bots',
+                    mode: 'people',
+                    logins: [],
+                    eventTypes: ISSUE_EVENTS,
+                    onlyFailures: false,
+                },
+                {
+                    name: 'specific people',
+                    mode: 'specific_people',
+                    logins: ['octocat'],
+                    eventTypes: ISSUE_EVENTS,
+                    onlyFailures: false,
+                },
+                {
+                    name: 'all CI results',
+                    mode: 'write_access',
+                    logins: [],
+                    eventTypes: ['check_suite'],
+                    onlyFailures: false,
+                },
+                {
+                    name: 'CI failures only',
+                    mode: 'write_access',
+                    logins: [],
+                    eventTypes: ['check_suite'],
+                    onlyFailures: true,
+                },
+            ]
+        )('survives a save and reload for $name', ({ mode, logins, eventTypes, onlyFailures }) => {
             // The editor reads its controls back out of the stored filters, so a mode that encodes
             // to something decode can't recognize silently resets the control on reopen.
             const filters = {
                 repository: 'PostHog/posthog',
-                eventTypes: ['issues', 'issue_comment'],
+                eventTypes,
                 actorMode: mode,
                 actorLogins: logins,
+                onlyFailures,
                 additional: [],
             }
             expect(decodeGithubFilters(encodeGithubFilters(filters))).toEqual(filters)
         })
 
-        it('keeps filters the native controls do not own', () => {
-            const custom = { key: 'title', value: ['fire'], operator: PropertyOperator.IContains, type: 'event' }
+        it.each([
+            {
+                name: 'a title match',
+                eventTypes: ['issues'],
+                custom: { key: 'title', value: ['fire'], operator: PropertyOperator.IContains, type: 'event' },
+            },
+            {
+                // Written through the API, this is not what "Only failures" writes, so the checkbox must
+                // not claim it and overwrite it on the next save.
+                name: 'a conclusion other than failures',
+                eventTypes: ['check_suite'],
+                custom: { key: 'conclusion', value: ['success'], operator: PropertyOperator.Exact, type: 'event' },
+            },
+            {
+                name: 'failing conclusions on a person property',
+                eventTypes: ['check_suite'],
+                custom: {
+                    key: 'conclusion',
+                    value: ['failure', 'timed_out', 'action_required'],
+                    operator: PropertyOperator.Exact,
+                    type: 'person',
+                },
+            },
+        ])('keeps $name, which the native controls do not own', ({ eventTypes, custom }) => {
             const encoded = encodeGithubFilters({
                 repository: 'PostHog/posthog',
-                eventTypes: ['issues'],
+                eventTypes,
                 actorMode: 'write_access',
                 actorLogins: [],
+                onlyFailures: false,
                 additional: [custom],
             })
 
@@ -55,6 +115,7 @@ describe('github event trigger', () => {
                 eventTypes: [],
                 actorMode: 'people',
                 actorLogins: [],
+                onlyFailures: false,
                 additional: [],
             })
             expect(encoded).toContainEqual(
@@ -70,6 +131,7 @@ describe('github event trigger', () => {
                 eventTypes: [],
                 actorMode: 'specific_people',
                 actorLogins: [],
+                onlyFailures: false,
                 additional: [],
             })
             expect(decodeGithubFilters(encoded).actorMode).toBe('specific_people')
@@ -91,6 +153,35 @@ describe('github event trigger', () => {
                     { key: 'event_type', value: ['issues'] },
                 ],
                 valid: true,
+            },
+            {
+                name: 'only CI failures',
+                properties: [
+                    { key: 'repository', value: ['PostHog/posthog'] },
+                    { key: 'event_type', value: ['check_suite'] },
+                    {
+                        key: 'conclusion',
+                        value: ['failure', 'timed_out', 'action_required'],
+                        operator: 'exact',
+                        type: 'event',
+                    },
+                ],
+                valid: true,
+            },
+            {
+                // Issues carry no conclusion, so the failures filter would stop them ever starting a run.
+                name: 'only CI failures mixed with another event type',
+                properties: [
+                    { key: 'repository', value: ['PostHog/posthog'] },
+                    { key: 'event_type', value: ['issues', 'check_suite'] },
+                    {
+                        key: 'conclusion',
+                        value: ['failure', 'timed_out', 'action_required'],
+                        operator: 'exact',
+                        type: 'event',
+                    },
+                ],
+                valid: false,
             },
         ])('validate returns valid=$valid for $name', ({ properties, valid }) => {
             const result = getTriggerType().validate!({
