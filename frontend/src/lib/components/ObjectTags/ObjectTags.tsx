@@ -3,7 +3,7 @@ import { useActions, useValues } from 'kea'
 import { ComponentProps, CSSProperties, useId, useState } from 'react'
 
 import { IconPencil, IconPlus } from '@posthog/icons'
-import { LemonButton, LemonInputSelect, LemonTag, LemonTagType, Popover } from '@posthog/lemon-ui'
+import { LemonButton, LemonInputSelect, LemonTag, LemonTagType, Popover, Tooltip } from '@posthog/lemon-ui'
 
 import { objectTagsLogic } from 'lib/components/ObjectTags/objectTagsLogic'
 import { colorForString } from 'lib/utils/colors'
@@ -37,6 +37,7 @@ interface ObjectTagsPropsBase {
      * room surrounding table columns get.
      */
     wrap?: boolean
+    truncateTags?: boolean
     editorFullWidth?: boolean
 }
 
@@ -84,6 +85,7 @@ export function ObjectTags({
     maxVisibleTags,
     showOverflowLabel = false,
     wrap = false,
+    truncateTags = false,
     editorFullWidth = false,
 }: ObjectTagsProps): JSX.Element {
     const objectTagId = useId()
@@ -102,6 +104,12 @@ export function ObjectTags({
     const [showOverflowTags, setShowOverflowTags] = useState(false)
     const visibleTags = maxVisibleTags === undefined ? displayTags : displayTags.slice(0, maxVisibleTags)
     const overflowTags = maxVisibleTags === undefined ? [] : displayTags.slice(maxVisibleTags)
+    const sharesRowWithOtherTags = displayTags.length > 1
+    const tagSlotClassName = truncateTags
+        ? clsx('min-w-10', sharesRowWithOtherTags ? 'max-w-28' : 'max-w-full')
+        : wrap
+          ? 'min-w-0 max-w-full'
+          : undefined
 
     return (
         <div
@@ -109,7 +117,8 @@ export function ObjectTags({
             style={style}
             className={clsx(
                 className,
-                'inline-flex flex-wrap gap-0.5 items-center',
+                'inline-flex gap-0.5 items-center',
+                truncateTags ? 'flex-nowrap min-w-0' : 'flex-wrap',
                 wrap && 'min-w-0 max-w-full',
                 editingTags && editorFullWidth && 'w-full min-w-0'
             )}
@@ -138,30 +147,27 @@ export function ObjectTags({
                     {showPlaceholder
                         ? '—'
                         : visibleTags.map((tag, index) => {
-                              const tagLabel = (
+                              const tagChip = (
                                   <LemonTag
                                       type={tagType ?? COLOR_OVERRIDES[tag] ?? colorForString(tag)}
-                                      className={wrap ? 'max-w-full' : undefined}
+                                      className={truncateTags ? 'w-full min-w-0' : wrap ? 'max-w-full' : undefined}
                                       wrap={wrap}
                                   >
-                                      {tag}
+                                      {truncateTags ? <span className="truncate">{tag}</span> : tag}
                                   </LemonTag>
                               )
+                              const tagLabel = truncateTags ? <Tooltip title={tag}>{tagChip}</Tooltip> : tagChip
                               return onTagClick ? (
                                   <button
                                       key={index}
                                       type="button"
-                                      className={
-                                          wrap
-                                              ? 'inline-flex min-w-0 max-w-full cursor-pointer'
-                                              : 'inline-flex cursor-pointer'
-                                      }
+                                      className={clsx('inline-flex cursor-pointer', tagSlotClassName)}
                                       onClick={() => onTagClick(tag)}
                                   >
                                       {tagLabel}
                                   </button>
                               ) : (
-                                  <span key={index} className={wrap ? 'inline-flex min-w-0 max-w-full' : 'inline-flex'}>
+                                  <span key={index} className={clsx('inline-flex', tagSlotClassName)}>
                                       {tagLabel}
                                   </span>
                               )
@@ -183,6 +189,7 @@ export function ObjectTags({
                         >
                             <LemonButton
                                 size="xsmall"
+                                className="shrink-0"
                                 type="tertiary"
                                 onClick={() => setShowOverflowTags(!showOverflowTags)}
                                 data-attr={dataAttr ? `${dataAttr}-overflow` : undefined}

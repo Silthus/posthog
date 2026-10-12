@@ -94,6 +94,7 @@ export function buildWorkflowsListV2Columns(visibleColumns: OptionalColumn[], me
         title: OPTIONAL_COLUMN_TITLES[column],
         key: column,
         width: 0,
+        className: 'hidden @min-[48rem]/main-content:table-cell',
         render: renderers[column],
     })
     return [
@@ -102,7 +103,7 @@ export function buildWorkflowsListV2Columns(visibleColumns: OptionalColumn[], me
             key: 'name',
             // Takes the leftover width and truncates, so the other columns and the menu stay in view. With
             // optional columns on a narrow scene it keeps a readable minimum and the table scrolls sideways.
-            className: 'w-full max-w-0 min-w-40',
+            className: 'w-full max-w-0 min-w-24 @min-[48rem]/main-content:min-w-40',
             sorter: (a, b) => a.name.localeCompare(b.name),
             render: (_, row) =>
                 row.kind === 'workflow' ? (
@@ -116,14 +117,14 @@ export function buildWorkflowsListV2Columns(visibleColumns: OptionalColumn[], me
         {
             title: 'Tags',
             key: 'tags',
-            width: 128,
-            className: 'min-w-24',
+            className: 'w-44 min-w-44 @min-[48rem]/main-content:w-72 @min-[48rem]/main-content:min-w-72',
             render: (_, row) => <WorkflowTagsCell row={row} />,
         },
         ...(visibleColumns.includes('type') ? [optionalColumn('type')] : []),
         {
             title: 'Status',
             key: 'status',
+            className: 'hidden @min-[48rem]/main-content:table-cell',
             width: 0,
             render: (_, row) => (row.kind === 'workflow' ? <WorkflowStatusTag status={row.workflow.status} /> : null),
         },
@@ -131,6 +132,7 @@ export function buildWorkflowsListV2Columns(visibleColumns: OptionalColumn[], me
         {
             title: 'Updated',
             key: 'updated_at',
+            className: 'hidden @min-[48rem]/main-content:table-cell',
             width: 0,
             align: 'right',
             sorter: (a, b) =>

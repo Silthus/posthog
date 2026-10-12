@@ -43,6 +43,7 @@ interface VirtualizedOptionRowProps<T = string> {
     setSelectedIndex: (index: number) => void
     allowCustomValues?: boolean
     disableEditing?: boolean
+    onEditValue?: (value: string) => void
     setInputValue: (value: string) => void
     inputRef: React.RefObject<HTMLInputElement | null>
     _onFocus: () => void
@@ -62,6 +63,7 @@ function VirtualizedOptionRow<T = string>({
     setSelectedIndex,
     allowCustomValues,
     disableEditing,
+    onEditValue,
     setInputValue,
     inputRef,
     _onFocus,
@@ -100,6 +102,10 @@ function VirtualizedOptionRow<T = string>({
                               </>
                           ),
                           onClick: () => {
+                              if (onEditValue) {
+                                  onEditValue(option.key)
+                                  return
+                              }
                               setInputValue(option.key)
                               inputRef.current?.focus()
                               _onFocus()
@@ -156,6 +162,7 @@ export type LemonInputSelectProps<T = string> = Pick<
     /** Transform input value as user types, e.g. normalization like replacing spaces with dashes. */
     inputTransform?: (input: string) => string
     emptyStateComponent?: React.ReactNode
+    onEditValue?: (value: T) => void
     onChange?: (newValue: T[]) => void
     onBlur?: () => void
     onFocus?: () => void
@@ -186,6 +193,7 @@ export function LemonInputSelect<T = string>({
     loading,
     emptyStateComponent,
     onChange,
+    onEditValue,
     onInputChange,
     onFocus,
     onBlur,
@@ -496,6 +504,10 @@ export function LemonInputSelect<T = string>({
         shouldInitiateEdit?: boolean
     ): void => {
         if (shouldInitiateEdit && allowCustomValues) {
+            if (onEditValue) {
+                onEditValue(getTypedValue(item))
+                return
+            }
             // In this case we want to remove it if added and set input to it
             const typedValue = getTypedValue(item)
             let indexOfValue = values.indexOf(typedValue)
@@ -963,6 +975,9 @@ export function LemonInputSelect<T = string>({
                                                     setSelectedIndex,
                                                     allowCustomValues,
                                                     disableEditing,
+                                                    onEditValue: onEditValue
+                                                        ? (key) => onEditValue(getTypedValue(key))
+                                                        : undefined,
                                                     setInputValue,
                                                     inputRef,
                                                     _onFocus,
@@ -1007,6 +1022,10 @@ export function LemonInputSelect<T = string>({
                                                           </>
                                                       ),
                                                       onClick: () => {
+                                                          if (onEditValue) {
+                                                              onEditValue(getTypedValue(option.key))
+                                                              return
+                                                          }
                                                           setInputValue(option.key)
                                                           inputRef.current?.focus()
                                                           _onFocus()

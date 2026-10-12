@@ -166,7 +166,7 @@ function passesGroups<TItem>(item: TItem, groups: FacetFilterGroup<TItem>[], ski
     return true
 }
 
-/** Pills on one facet are OR, pills on different facets are AND, and the text is AND with the pills. */
+/** Pills on one facet are OR unless the facet sets `matchAll`, pills on different facets are AND, and the text is AND with the pills. */
 export function createFacetMatcher<TItem>(
     value: FacetSearchValue,
     facets: FacetDefinition<TItem>[],

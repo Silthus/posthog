@@ -9,6 +9,8 @@ import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
 import { userLogic } from 'scenes/userLogic'
 
+import { tagsRenameCreate } from '~/generated/core/api'
+import { tagsModel } from '~/models/tagsModel'
 import type { UserType } from '~/types'
 
 import {
@@ -46,6 +48,7 @@ import {
     parseFacetQuery,
     serializeFacetQuery,
 } from './FacetSearchBar/facetQuery'
+import { openWorkflowTagRenameDialog } from './openWorkflowTagRenameDialog'
 import { buildWorkflowListFacets, matchesWorkflowListText } from './workflowListFacets'
 import {
     LIST_TYPES,
@@ -311,6 +314,9 @@ export interface workflowsListV2LogicActions {
             value: true
         }
     }
+    openTagRename: (name: string) => {
+        name: string
+    }
     patchEmailTemplate: (
         id: string,
         patch: Partial<MessageTemplateApi>
@@ -418,6 +424,7 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
         loadWorkflows: true,
         loadEmailTemplates: true,
         loadMetrics: true,
+        openTagRename: (name: string) => ({ name }),
         updateWorkflowTags: (row: WorkflowLibraryRow, tags: string[]) => ({ row, tags }),
         setValue: (value: FacetSearchValue) => ({ value }),
         clearFilters: true,
@@ -791,6 +798,31 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
                 if (values.metrics === null && !values.metricsLoading) {
                     actions.loadMetrics()
                 }
+            },
+            openTagRename: ({ name }) => {
+                const teamId = values.currentTeamId
+                openWorkflowTagRenameDialog(name, async (newName) => {
+                    try {
+                        const renamed = await tagsRenameCreate(String(teamId), { name, new_name: newName })
+                        if (values.currentTeamId !== teamId) {
+                            return
+                        }
+                        actions.setValue({
+                            ...values.value,
+                            filters: values.value.filters.map((filter) =>
+                                filter.facet === 'tag' && filter.value === name
+                                    ? { ...filter, value: renamed.name }
+                                    : filter
+                            ),
+                        })
+                        actions.loadWorkflows()
+                        actions.loadEmailTemplates()
+                        tagsModel.actions.loadTags()
+                    } catch (error) {
+                        lemonToast.error(`Could not rename tag: ${workflowActionErrorDetail(error)}`)
+                        throw error
+                    }
+                })
             },
             updateWorkflowTags: async ({ row, tags }) => {
                 await runRowAction(row, 'tags', async () => {

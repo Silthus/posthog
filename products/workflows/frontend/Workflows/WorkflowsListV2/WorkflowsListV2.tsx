@@ -110,6 +110,7 @@ export function WorkflowsListV2(): JSX.Element {
                 dataSource={filteredRows}
                 // Until the server search answers, a match in an email body can still add rows.
                 loading={!listLoaded || searchPending || healthPending}
+                rowClassName="group"
                 rowKey={(row) => `${row.kind}:${row.id}`}
                 bulkSelection={{
                     isRowSelectable: (row) =>
