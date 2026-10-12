@@ -79,7 +79,7 @@ describe('SendTestEmailModal', () => {
         render(<SendTestEmailModal id="new" isOpen />)
 
         expect(screen.getByText('Could not set up the sandbox sender.')).toBeInTheDocument()
-        fireEvent.click(screen.getAllByRole('button', { name: 'Try again' })[0])
+        fireEvent.click(screen.getAllByText('Try again')[0])
         expect(mockEnsureSandboxEmailSender).toHaveBeenCalledTimes(1)
     })
 })
