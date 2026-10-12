@@ -1452,6 +1452,27 @@ describe('EmailService', () => {
                     }
                 )
 
+                it('refills a spent sandbox allowance over a day rather than seconds', async () => {
+                    service = createSandboxService(true, { dailyTeamCap: '1', dailyRecipientCap: '1' })
+                    expectSent(await send(true, {}))
+                    const client = sandboxRedisClients[0]
+                    const keys = await client.keys(`@posthog/workflows-sandbox-daily/{${team.id}}/*`)
+                    const [seconds, microseconds] = await client.time()
+                    const redisNow = Number(seconds) * 1000 + Math.floor(Number(microseconds) / 1000)
+                    for (const key of keys) {
+                        await client.hset(key, 'ts', redisNow - 12 * 60 * 60 * 1000)
+                    }
+                    expectSkipped(await send(true, {}), true, TEAM_CAP_REACHED, {
+                        reason: 'cap_reached',
+                        blocked_recipient_count: 1,
+                    })
+                    for (const key of keys) {
+                        await client.hset(key, 'ts', redisNow - 24 * 60 * 60 * 1000 - 1000)
+                    }
+                    expectSent(await send(true, {}))
+                    expect(sendEmailSpy).toHaveBeenCalledTimes(2)
+                })
+
                 it.each([false, true])(
                     'spends the daily caps once for a send that SES throttles before accepting it (isTest=%s)',
                     async (isTest) => {
@@ -1468,6 +1489,49 @@ describe('EmailService', () => {
                             { reason: 'cap_reached', blocked_recipient_count: 1 }
                         )
                         expect(sendEmailSpy).toHaveBeenCalledTimes(2)
+                    }
+                )
+
+                it.each([false, true])(
+                    'rechecks membership after a delayed cap claim and returns a blocked grant (isTest=%s)',
+                    async (isTest) => {
+                        service = createSandboxService(true, { dailyTeamCap: '1', dailyRecipientCap: '1' })
+                        const now = Date.now()
+                        const clock = jest.spyOn(Date, 'now').mockReturnValue(now)
+                        const claim = dailyCapLimiter.claimAllOrNothing.bind(dailyCapLimiter)
+                        const delayedClaim = jest
+                            .spyOn(dailyCapLimiter, 'claimAllOrNothing')
+                            .mockImplementationOnce(async (buckets) => {
+                                const grant = await claim(buckets)
+                                await hub.postgres.query(
+                                    PostgresUse.COMMON_WRITE,
+                                    'UPDATE posthog_user SET is_email_verified = false WHERE id = $1',
+                                    [memberId],
+                                    'test:revoke-sandbox-verification-during-cap-claim'
+                                )
+                                clock.mockReturnValue(now + 61_000)
+                                return grant
+                            })
+                        try {
+                            const blocked = await send(isTest, {})
+                            expect(blocked).toMatchObject({ finished: true, skipped: true, metrics: [] })
+                            expect(blocked.error).toBeUndefined()
+                            expect(blocked.invocation.state.vmState?.stack).toEqual([{ success: false }])
+                            expect(sendEmailSpy).not.toHaveBeenCalled()
+
+                            await hub.postgres.query(
+                                PostgresUse.COMMON_WRITE,
+                                'UPDATE posthog_user SET is_email_verified = true WHERE id = $1',
+                                [memberId],
+                                'test:restore-sandbox-verification'
+                            )
+                            clock.mockReturnValue(now + 122_000)
+                            expectSent(await send(isTest, {}))
+                            expect(sendEmailSpy).toHaveBeenCalledTimes(1)
+                        } finally {
+                            delayedClaim.mockRestore()
+                            clock.mockRestore()
+                        }
                     }
                 )
 

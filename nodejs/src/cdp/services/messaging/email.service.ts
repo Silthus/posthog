@@ -1471,6 +1471,10 @@ export class EmailService {
             if (!dailyCapGrant) {
                 return false
             }
+            if (!(await this.checkSandboxRecipients(result, sandboxRecipients, isTest))) {
+                await this.sandboxSender!.returnDailyCaps(dailyCapGrant)
+                return false
+            }
         }
         try {
             const response = await this.sesV2Client.send(new SendEmailCommand(sendEmailParams))

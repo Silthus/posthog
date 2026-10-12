@@ -72,8 +72,10 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
 - Sandbox sender sends bypass the team buckets without spending their tokens. Sandbox limits run independently.
   The worker holds every sandbox send, test sends included, to a daily cap per project (`WORKFLOWS_SANDBOX_DAILY_TEAM_CAP`, one token per recipient copy) and per recipient address within that project (`WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP`). These are continuously refilling token buckets, not calendar-day counters; an idle bucket starts full and refills its capacity over 24 hours.
   A reached cap skips the send instead of delaying it. A limiter error or an empty or invalid cap value skips every sandbox send.
-  SES throttle responses return the sandbox claim before master’s delivery retry. Returns are deduplicated, and Valkey ignores a return command that arrives more than five minutes after it was issued.
+  Membership is checked again after the cap claim so a stalled Valkey call cannot outlive the recipient decision. A blocked recheck returns the claim.
+  SES throttle responses return the sandbox claim before the existing delivery retry. Returns are deduplicated, and Valkey ignores a return command that arrives more than five minutes after it was issued.
   Test sends run inline in the CDP API, so the API reads the same `SES_RATE_LIMITER_VALKEY_*` settings as the email worker. Without them, every sandbox test send is skipped.
+  With a Valkey host configured, CDP API opens the shared pool even when sandbox delivery is off and also uses its shared MX-validation cache.
   Keep `WORKFLOWS_SANDBOX_SENDER_ENABLED` off until the recipient membership checks, sandbox caps and sandbox pause gate are deployed.
 - The buckets are token buckets: a full idle bucket plus refill allows up to roughly twice the stated cap in the very first period. The bucket TTLs exceed the refill periods so this does not recur from idling.
 - A denied send parks until every short bucket has refilled enough to cover it, instead of retrying on a fixed few-minute cadence.

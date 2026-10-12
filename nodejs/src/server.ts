@@ -443,7 +443,7 @@ export class PluginServer implements NodeServer {
         this.lifecycle.services.push(...readyServices)
     }
 
-    // Test sends run inline in cdp-api and must share the workers' sandbox cap buckets.
+    // Share the MX cache and sandbox cap buckets between workers and cdp-api.
     private withEmailValidationValkey(deps: CdpConsumerBaseDeps): CdpConsumerBaseDeps {
         return { ...deps, emailValidationValkey: createSesRateLimiterValkeyPool(this.config, 'email-mx-validation') }
     }
