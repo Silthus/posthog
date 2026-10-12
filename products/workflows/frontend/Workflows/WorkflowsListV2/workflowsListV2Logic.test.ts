@@ -152,6 +152,27 @@ describe('workflowsListV2Logic', () => {
         expect(shownIds(logic)).toEqual(ids)
     })
 
+    it('leaves a creator name that two people share unresolved', async () => {
+        const otherAda = { ...FIXTURE_USERS.ada, id: 3, uuid: '0190a1b2-0000-7000-8000-00000000a003' }
+        useMocks({
+            get: {
+                '/api/projects/:team_id/hog_flows/summaries/': () => [
+                    200,
+                    paginated([
+                        buildWorkflowRow({ id: 'wf-first-ada' }),
+                        buildWorkflowRow({ id: 'wf-second-ada', created_by: otherAda }),
+                    ]),
+                ],
+            },
+        })
+        router.actions.push(urls.workflows(), { q: 'created-by:Ada' })
+        logic = workflowsListV2Logic()
+        logic.mount()
+
+        await expectLogic(logic).toDispatchActions(['loadWorkflowsSuccess', 'loadMetricsSuccess'])
+        expect(shownIds(logic)).toEqual([])
+    })
+
     it('stops at a next link that does not move forward and shows the load error', async () => {
         let requests = 0
         useMocks({

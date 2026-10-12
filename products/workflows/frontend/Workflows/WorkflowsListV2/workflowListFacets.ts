@@ -28,12 +28,17 @@ export function matchesWorkflowListText(row: WorkflowListRow, text: string): boo
 /** `rows` supplies the names shown for creator uuids. */
 export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinition<WorkflowListRow>[] {
     const creatorNames = new Map<string, string>()
-    const creatorIds = new Map<string, string>()
+    const creatorIds = new Map<string, string | null>()
     for (const { workflow } of rows) {
         if (workflow.created_by) {
             const name = workflow.created_by.first_name || workflow.created_by.email
+            const key = name.toLowerCase()
+            const known = creatorIds.get(key)
             creatorNames.set(workflow.created_by.uuid, name)
-            creatorIds.set(name.toLowerCase(), workflow.created_by.uuid)
+            creatorIds.set(
+                key,
+                known === undefined || known === workflow.created_by.uuid ? workflow.created_by.uuid : null
+            )
         }
     }
 
