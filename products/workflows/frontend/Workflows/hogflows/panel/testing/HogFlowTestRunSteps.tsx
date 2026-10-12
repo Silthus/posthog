@@ -16,6 +16,9 @@ function stepOutcome(step: TestRunStep): { label: string; type: LemonTagType } {
     if (step.result.status === 'skipped') {
         return { label: 'Skipped', type: 'warning' }
     }
+    if (step.result.status === 'exited') {
+        return { label: 'Exited', type: 'warning' }
+    }
     if (step.waitSkipped) {
         return { label: 'Wait skipped', type: 'muted' }
     }
@@ -58,6 +61,9 @@ export function HogFlowTestRunSteps(): JSX.Element {
                                             The test event does not match the trigger filters, so a real run would not
                                             start.
                                         </div>
+                                    )}
+                                    {step.result.status === 'exited' && (
+                                        <div className="text-secondary text-sm">Workflow exited before this step</div>
                                     )}
                                     {step.waitSkipped && (
                                         <div className="text-secondary text-sm">

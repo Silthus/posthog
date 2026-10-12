@@ -384,7 +384,7 @@ export function EmailActionTestContent(): JSX.Element | null {
                                 type={
                                     testResult.status === 'success'
                                         ? 'success'
-                                        : testResult.status === 'skipped'
+                                        : testResult.status === 'skipped' || testResult.status === 'exited'
                                           ? 'warning'
                                           : 'error'
                                 }
@@ -393,7 +393,9 @@ export function EmailActionTestContent(): JSX.Element | null {
                                     ? 'Success'
                                     : testResult.status === 'skipped'
                                       ? 'Workflow was skipped because the event did not match the filter criteria'
-                                      : 'Error: ' + testResult.errors?.join(', ')}
+                                      : testResult.status === 'exited'
+                                        ? 'Workflow exited before this step'
+                                        : 'Error: ' + testResult.errors?.join(', ')}
                             </LemonBanner>
 
                             <div className="flex flex-col gap-2">

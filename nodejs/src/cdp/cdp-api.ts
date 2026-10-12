@@ -831,7 +831,7 @@ export class CdpApi {
                 if (earlyExitResult) {
                     res.json({
                         nextActionId: null,
-                        status: 'success',
+                        status: 'exited',
                         errors: [],
                         logs: earlyExitResult.logs,
                         variables: earlyExitResult.invocation.state.variables ?? {},

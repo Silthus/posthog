@@ -1209,9 +1209,9 @@ describe('CDP API', () => {
         }
 
         it.each([
-            ['exits a person who already converted', 'paid', null, 'Workflow exited early'],
-            ['runs the step for a person who has not converted', 'free', 'delay_node', 'Executing action'],
-        ])('%s, like a real run', async (_, plan, expectedNextActionId, expectedLog) => {
+            ['exits a person who already converted', 'paid', 'exited', null, 'Workflow exited early'],
+            ['runs the step for a person who has not converted', 'free', 'success', 'delay_node', 'Executing action'],
+        ])('%s, like a real run', async (_, plan, expectedStatus, expectedNextActionId, expectedLog) => {
             const res = await supertest(app)
                 .post(`/api/projects/${team.id}/hog_flows/new/invocations`)
                 .send({
@@ -1222,7 +1222,7 @@ describe('CDP API', () => {
                 })
 
             expect(res.status).toEqual(200)
-            expect(res.body).toMatchObject({ status: 'success', nextActionId: expectedNextActionId })
+            expect(res.body).toMatchObject({ status: expectedStatus, nextActionId: expectedNextActionId })
             expect(res.body.logs.map((log: any) => log.message).join('\n')).toContain(expectedLog)
         })
     })
