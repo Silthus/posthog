@@ -15,7 +15,6 @@ from products.workflows.backend.facade.enums import (
 )
 
 if TYPE_CHECKING:
-    from posthog.models.integration import Integration
     from posthog.models.team.team import Team
     from posthog.models.user import User
 
@@ -172,7 +171,7 @@ class EmailSendingTierLimits:
 
 @frozen
 class SandboxEmailSender:
-    integration: "Integration"
+    integration_id: int
     created: bool
 
 

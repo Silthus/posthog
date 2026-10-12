@@ -2659,7 +2659,8 @@ class IntegrationViewSet(
             report_user_action(
                 cast(User, request.user), "workflows sandbox sender provisioned", team=self.team, request=request
             )
-        return Response(IntegrationSerializer(sandbox_sender.integration, context=self.get_serializer_context()).data)
+        integration = self.get_queryset().get(id=sandbox_sender.integration_id)
+        return Response(IntegrationSerializer(integration, context=self.get_serializer_context()).data)
 
     @action(methods=["POST"], detail=True, url_path="email/verify")
     def email_verify(self, request, **kwargs):

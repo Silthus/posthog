@@ -23,7 +23,7 @@ The endpoint requires `integration:write` and project membership. Repeated reque
 Set `WORKFLOWS_SANDBOX_SENDER_DOMAIN` and `WORKFLOWS_SANDBOX_SENDER_FROM_ADDRESS` in Django; either empty value leaves the endpoint unavailable.
 Users cannot edit, verify, or remove the managed integration, or register their own integration on the shared domain.
 The managed integration is excluded from project SES tenant migration, identity cleanup, and the reputation page's domain breakdown.
-Keep `workflows-sandbox-sender` off until the complete sandbox sending stack is deployed. Provisioned rows are verified integrations, so existing sender selectors can expose them before worker delivery support is available.
+Deploy the schema, recipient restrictions, daily caps, and tenant pause checks first. Configure the shared SES route, then enable `WORKFLOWS_SANDBOX_SENDER_ENABLED` on the worker and CDP API. Enable `workflows-sandbox-sender` last so provisioning and sender selection follow delivery readiness.
 
 ### Sending tiers
 

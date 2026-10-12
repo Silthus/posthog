@@ -66,4 +66,4 @@ def ensure_sandbox_email_sender(team_id: int) -> SandboxEmailSender:
         integration.config = config
         integration.save()
         reload_integrations_on_workers(team_id, [integration.id])
-    return SandboxEmailSender(integration=integration, created=created)
+    return SandboxEmailSender(integration_id=integration.id, created=created)
