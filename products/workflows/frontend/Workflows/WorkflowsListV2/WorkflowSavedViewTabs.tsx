@@ -65,7 +65,7 @@ export function WorkflowSavedViewTabs(): JSX.Element | null {
                     saving={saving}
                     sharedSaveDisabledReason={sharedSaveDisabledReason}
                     loadingReason={writeDisabledReason}
-                    onReset={resetView}
+                    onReset={() => resetView()}
                     onSaveAs={() =>
                         openWorkflowSavedViewDialog(
                             async (name) => await workflowsSavedViewsLogic.asyncActions.saveViewAs(name)

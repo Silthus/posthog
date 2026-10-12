@@ -151,8 +151,8 @@ export interface workflowsSavedViewsLogicActions {
         id: string
         name: string
     }
-    resetView: () => {
-        value: true
+    resetView: (keepAddedFilters?: boolean) => {
+        keepAddedFilters: boolean
     }
     restoreMyWorkflows: () => {
         value: true
@@ -265,7 +265,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
         loadSavedViews: true,
         setActiveViewId: (id: string) => ({ id }),
         applyView: (view: WorkflowSavedView) => ({ view }),
-        resetView: true,
+        resetView: (keepAddedFilters: boolean = false) => ({ keepAddedFilters }),
         saveViewAs: (name: string) => ({ name }),
         updateActiveView: true,
         renameView: (id: string, name: string) => ({ id, name }),
@@ -489,6 +489,16 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
             router.actions.replace(router.values.location.pathname, next, router.values.hashParams)
             cache.writingUrl = false
         }
+        const clearAddedFiltersUnless = (keepAddedFilters: boolean): void => {
+            if (!keepAddedFilters) {
+                actions.setAddedFilters([])
+            }
+        }
+        const keepAdditionsMadeWhileSaving = (saved: WorkflowViewApi): void => {
+            actions.setAddedFilters(
+                addedFiltersAfterEdit(workflowViewValue(saved.state).filters, [], values.value.filters)
+            )
+        }
         const runMutation = async (
             run: (stillCurrent: () => boolean) => Promise<void>,
             rethrow = false,
@@ -544,12 +554,12 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                 }
             },
             loadSavedViewsSuccess: () => actions.syncViewFromUrl(),
-            setValue: ({ value, fromUrl }) => {
+            setValue: ({ value, fromUrl }, _, __, previousState) => {
                 if (!fromUrl) {
                     if (values.available && !cache.applyingView && !cache.syncingUrl) {
                         actions.setAddedFilters(
                             addedFiltersAfterEdit(
-                                workflowViewValue(values.activeView.state).filters,
+                                workflowsListV2Logic.selectors.value(previousState).filters,
                                 values.addedFilters,
                                 value.filters
                             )
@@ -571,17 +581,20 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                     return
                 }
                 if (values.conflictedViewId === view.id) {
-                    actions.resetView()
+                    actions.resetView(true)
                     return
                 }
                 cache.applyingView = true
                 const viewValue = workflowViewValue(view.state)
-                actions.setValue({ ...viewValue, filters: mergeAddedFilters(viewValue.filters, values.addedFilters) })
+                actions.setValue({
+                    ...viewValue,
+                    filters: mergeAddedFilters(viewValue.filters, values.addedFilters, values.facets),
+                })
                 actions.setVisibleColumns(normalizeViewColumns(view.state.columns))
                 cache.applyingView = false
                 writeUrl()
             },
-            resetView: async () => {
+            resetView: async ({ keepAddedFilters }) => {
                 if (!values.available || values.saving) {
                     return
                 }
@@ -600,7 +613,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                                 actions.upsertSavedView(latest)
                                 actions.setConflictedViewId(null)
                                 if (values.activeViewId === currentViewId) {
-                                    actions.setAddedFilters([])
+                                    clearAddedFiltersUnless(keepAddedFilters)
                                     actions.applyView(latest)
                                 }
                             } catch (error) {
@@ -612,7 +625,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                                 }
                                 actions.removeSavedView(currentViewId)
                                 if (values.activeViewId === currentViewId) {
-                                    actions.setAddedFilters([])
+                                    clearAddedFiltersUnless(keepAddedFilters)
                                     actions.applyView(BUILT_IN_WORKFLOW_VIEWS[0])
                                 }
                             }
@@ -622,7 +635,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                         'read'
                     )
                 } else {
-                    actions.setAddedFilters([])
+                    clearAddedFiltersUnless(keepAddedFilters)
                     actions.applyView(values.activeView)
                 }
             },
@@ -693,7 +706,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                     }
                     actions.upsertSavedView(view)
                     if (values.activeViewId === sourceViewId) {
-                        actions.setAddedFilters([])
+                        keepAdditionsMadeWhileSaving(view)
                         actions.setActiveViewId(view.id)
                     }
                     lemonToast.success(`Saved ${view.name} as a new view`)
@@ -713,7 +726,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                     }
                     actions.upsertSavedView(view)
                     if (values.activeViewId === current.id) {
-                        actions.setAddedFilters([])
+                        keepAdditionsMadeWhileSaving(view)
                         writeUrl()
                     }
                     lemonToast.success(`Updated ${view.name} for everyone`)

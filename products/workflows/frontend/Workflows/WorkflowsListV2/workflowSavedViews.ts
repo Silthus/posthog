@@ -1,6 +1,13 @@
 import type { WorkflowViewApi, WorkflowViewFilterApi, WorkflowViewStateApi } from '../../generated/api.schemas'
 import { WorkflowViewFacetEnumApi } from '../../generated/api.schemas'
-import { FacetFilter, FacetSearchValue, facetFilterKey, serializeFacetQuery } from './FacetSearchBar/facetQuery'
+import {
+    FacetDefinition,
+    FacetFilter,
+    FacetSearchValue,
+    facetFilterKey,
+    findFacet,
+    serializeFacetQuery,
+} from './FacetSearchBar/facetQuery'
 import { DEFAULT_COLUMNS, OPTIONAL_COLUMNS, OptionalColumn } from './workflowListLabels'
 
 export type WorkflowSavedView = Pick<WorkflowViewApi, 'id' | 'name' | 'state' | 'version' | 'default_key'> & {
@@ -83,25 +90,34 @@ export function workflowViewState(value: FacetSearchValue, columns: OptionalColu
     return { filters, text: value.text.trim(), columns }
 }
 
-function overrides(added: FacetFilter, viewFilter: FacetFilter): boolean {
-    const bothPositive = !added.negated && !viewFilter.negated
-    const sameValue = added.value.toLowerCase() === viewFilter.value.toLowerCase()
-    return added.facet === viewFilter.facet && (bothPositive || sameValue)
+function resolvedValue<TItem>(facets: FacetDefinition<TItem>[], filter: FacetFilter): string {
+    const facet = findFacet(facets, filter.facet)
+    return (facet?.resolveValue?.(filter.value) ?? filter.value).toLowerCase()
 }
 
-export function mergeAddedFilters(viewFilters: FacetFilter[], added: FacetFilter[]): FacetFilter[] {
+export function mergeAddedFilters<TItem>(
+    viewFilters: FacetFilter[],
+    added: FacetFilter[],
+    facets: FacetDefinition<TItem>[]
+): FacetFilter[] {
+    const overrides = (addedFilter: FacetFilter, viewFilter: FacetFilter): boolean =>
+        addedFilter.facet === viewFilter.facet &&
+        ((!addedFilter.negated && !viewFilter.negated) ||
+            resolvedValue(facets, addedFilter) === resolvedValue(facets, viewFilter))
     const kept = viewFilters.filter((viewFilter) => !added.some((filter) => overrides(filter, viewFilter)))
     return [...kept, ...added]
 }
 
 export function addedFiltersAfterEdit(
-    viewFilters: FacetFilter[],
+    previousFilters: FacetFilter[],
     previouslyAdded: FacetFilter[],
     filters: FacetFilter[]
 ): FacetFilter[] {
-    const viewKeys = new Set(viewFilters.map(facetFilterKey))
+    const previousKeys = new Set(previousFilters.map(facetFilterKey))
     const addedKeys = new Set(previouslyAdded.map(facetFilterKey))
-    return filters.filter((filter) => addedKeys.has(facetFilterKey(filter)) || !viewKeys.has(facetFilterKey(filter)))
+    return filters.filter(
+        (filter) => addedKeys.has(facetFilterKey(filter)) || !previousKeys.has(facetFilterKey(filter))
+    )
 }
 
 export function filtersFromView(

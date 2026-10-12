@@ -95,41 +95,109 @@ describe('workflowsSavedViewsLogic', () => {
 
     const status = (value: string, negated = false): FacetFilter => ({ facet: 'status', value, negated })
     const eventTrigger: FacetFilter = { facet: 'trigger', value: 'event', negated: false }
+    const adaOwns: FacetFilter = { facet: 'owner', value: 'ada', negated: false }
+    const notMe: FacetFilter = { facet: 'created-by', value: MOCK_DEFAULT_USER.uuid, negated: true }
     const applyViewById = (id: string): void =>
         logic.actions.applyView(logic.values.views.find((view) => view.id === id)!)
 
     it.each([
         [
             'an addition on another facet sits beside the view filter',
+            VIEW_ID,
             [eventTrigger],
             [status('active'), eventTrigger],
             [status('active')],
         ],
-        ["an addition on the same facet replaces the view's filter", [status('draft')], [status('draft')], []],
+        ["an addition on the same facet replaces the view's filter", VIEW_ID, [status('draft')], [status('draft')], []],
         [
             'a negated addition with another value sits beside the view filter',
+            VIEW_ID,
             [status('draft', true)],
             [status('active'), status('draft', true)],
             [status('active')],
         ],
         [
             'a negated addition of the same value replaces the view filter',
+            VIEW_ID,
             [status('active', true)],
             [status('active', true)],
             [],
         ],
-    ])('when switching views, %s', async (_, added, expected, fromView) => {
+        ['a negated addition of the viewer replaces the view filter for me', myWorkflows.id, [notMe], [notMe], []],
+    ])('when switching views, %s', async (_, viewId, added, expected, fromView) => {
         router.actions.push(urls.workflows(), { view: 'all' })
         logic = workflowsSavedViewsLogic()
         logic.mount()
         await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
         workflowsListV2Logic.actions.setValue({ filters: added, text: '' })
 
-        applyViewById(VIEW_ID)
+        applyViewById(viewId)
 
         expect(workflowsListV2Logic.values.value.filters).toEqual(expected)
         expect(logic.values.addedFilters).toEqual(added)
         expect(logic.values.viewFilters).toEqual(fromView)
+    })
+
+    it('treats a view pill the user removes and adds back as their own', async () => {
+        router.actions.push(urls.workflows(), { view: 'drafts' })
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+        workflowsListV2Logic.actions.setValue({ filters: [], text: '' })
+        workflowsListV2Logic.actions.setValue({ filters: [status('draft')], text: '' })
+
+        applyViewById('all')
+
+        expect(workflowsListV2Logic.values.value.filters).toEqual([status('draft')])
+        expect(logic.values.addedFilters).toEqual([status('draft')])
+    })
+
+    it('keeps a filter added while an update is saving as an addition', async () => {
+        let release: () => void = () => {}
+        const pending = new Promise<void>((resolve) => {
+            release = resolve
+        })
+        useMocks({
+            patch: {
+                '/api/projects/:team_id/workflow_views/:id/': async ({ request }) => {
+                    const body = (await request.json()) as { state: WorkflowViewApi['state'] }
+                    await pending
+                    return [200, { ...savedView, state: body.state, version: 2 }]
+                },
+            },
+        })
+        router.actions.push(urls.workflows(), { view: VIEW_ID })
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+        workflowsListV2Logic.actions.setValue({ filters: [status('active'), eventTrigger], text: '' })
+        const saving = logic.asyncActions.updateActiveView()
+        workflowsListV2Logic.actions.setValue({ filters: [status('active'), eventTrigger, adaOwns], text: '' })
+
+        release()
+        await saving
+
+        expect(logic.values.addedFilters).toEqual([adaOwns])
+        expect(logic.values.viewFilters).toEqual([status('active'), eventTrigger])
+    })
+
+    it('keeps additions when the user returns to a view whose update conflicted', async () => {
+        useMocks({
+            patch: { '/api/projects/:team_id/workflow_views/:id/': () => [409, { detail: 'View changed' }] },
+            get: { '/api/projects/:team_id/workflow_views/:id/': () => [200, { ...savedView, version: 2 }] },
+        })
+        router.actions.push(urls.workflows(), { view: VIEW_ID })
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+        workflowsListV2Logic.actions.setValue({ filters: [status('active'), eventTrigger], text: '' })
+        await logic.asyncActions.updateActiveView()
+        applyViewById('all')
+
+        await expectLogic(logic, () => applyViewById(VIEW_ID)).toFinishAllListeners()
+
+        expect(logic.values.conflictedViewId).toBeNull()
+        expect(workflowsListV2Logic.values.value.filters).toEqual([status('active'), eventTrigger])
     })
 
     it('carries additions across views and shared links until reset', async () => {
