@@ -18,7 +18,9 @@ class TestSandboxSenderLifecycleExclusions(BaseTest):
     def setUp(self) -> None:
         super().setUp()
         with patch("posthoganalytics.feature_enabled", return_value=True):
-            self.sandbox_row = ensure_sandbox_email_sender(self.team.id).integration
+            self.sandbox_row = Integration.objects.get(
+                team_id=self.team.id, id=ensure_sandbox_email_sender(self.team.id).integration_id
+            )
 
     @patch("posthog.management.commands.migrate_ses_tenants.boto3.client")
     def test_tenant_migration_skips_the_sandbox_sender(self, boto3_client: MagicMock) -> None:
