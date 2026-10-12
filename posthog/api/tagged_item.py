@@ -3,8 +3,9 @@ from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING, Any, Optional, cast
 from uuid import UUID
 
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.db.models import Prefetch, Q, QuerySet, prefetch_related_objects
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
@@ -469,37 +470,61 @@ class RenameTagResponseSerializer(serializers.Serializer):
 
 
 def rename_team_tag(team_id: int, name: str, new_name: str) -> str:
+    try:
+        return _rename_team_tag_once(team_id, name, new_name)
+    except IntegrityError:
+        return _rename_team_tag_once(team_id, name, new_name)
+
+
+def _rename_team_tag_once(team_id: int, name: str, new_name: str) -> str:
     with transaction.atomic():
         source = get_object_or_404(Tag, team_id=team_id, name=name)
         if name == new_name:
             return source.name
-        parents: list[QuerySet] = []
-        for entry in sorted(TAGGABLE_MODELS, key=lambda entry: entry.model_label):
-            model = content_type_for_entry(entry).model_class()
-            if model is None:
-                continue
-            objects = model._default_manager.filter(tagged_items__team_id=team_id, tagged_items__tag_id=source.id)
-            ids = list(objects.order_by("pk").select_for_update().values_list("pk", flat=True))
-            if ids and any(field.name == "updated_at" for field in model._meta.fields):
-                parents.append(model._default_manager.filter(pk__in=ids))
-        list(Tag.objects.filter(team_id=team_id, name__in=[name, new_name]).order_by("name").select_for_update())
-        target = Tag.objects.filter(team_id=team_id, name=new_name).first()
+        tagged_parents = _lock_tagged_parents(team_id, source)
+        locked_tags = {
+            tag.name: tag
+            for tag in Tag.objects.filter(team_id=team_id, name__in=[name, new_name])
+            .order_by("name")
+            .select_for_update()
+        }
+        source = locked_tags.get(name)
+        if source is None:
+            raise Http404
+        target = locked_tags.get(new_name)
         if target is None:
             source.name = new_name
             source.save(update_fields=["name"])
         else:
-            for item in source.tagged_items.filter(team_id=team_id):
-                TaggedItem.objects.get_or_create(
-                    tag=target,
-                    content_type_id=item.content_type_id,
-                    object_id=item.object_id,
-                    object_uuid=item.object_uuid,
-                    team_id=team_id,
-                )
-            source.delete()
-        for objects in parents:
-            objects.update(updated_at=timezone.now())
+            _merge_tag_into(team_id, source, target)
+        for parents in tagged_parents:
+            parents.update(updated_at=timezone.now())
     return new_name
+
+
+def _lock_tagged_parents(team_id: int, tag: Tag) -> list[QuerySet]:
+    tagged_parents: list[QuerySet] = []
+    for entry in sorted(TAGGABLE_MODELS, key=lambda entry: entry.model_label):
+        model = content_type_for_entry(entry).model_class()
+        if model is None:
+            continue
+        objects = model._default_manager.filter(tagged_items__team_id=team_id, tagged_items__tag_id=tag.id)
+        ids = list(objects.order_by("pk").select_for_update().values_list("pk", flat=True))
+        if ids and any(field.name == "updated_at" for field in model._meta.fields):
+            tagged_parents.append(model._default_manager.filter(pk__in=ids))
+    return tagged_parents
+
+
+def _merge_tag_into(team_id: int, source: Tag, target: Tag) -> None:
+    for item in source.tagged_items.filter(team_id=team_id):
+        TaggedItem.objects.get_or_create(
+            tag=target,
+            content_type_id=item.content_type_id,
+            object_id=item.object_id,
+            object_uuid=item.object_uuid,
+            team_id=team_id,
+        )
+    source.delete()
 
 
 class TaggedItemViewSet(TeamAndOrgViewSetMixin, GenericViewSet):
