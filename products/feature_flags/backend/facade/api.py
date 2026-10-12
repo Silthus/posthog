@@ -39,6 +39,7 @@ from rest_framework.request import Request
 
 from posthog.api.utils import ServiceRequest
 from posthog.exceptions import Conflict
+from posthog.models.activity_logging.activity_log import Trigger
 from posthog.models.team.team import Team
 from posthog.models.user import User
 
@@ -147,6 +148,7 @@ def create_flag(
     user: Any,
     request: Any | None = None,
     serializer_context: dict | None = None,
+    activity_trigger: Trigger | None = None,
 ) -> FeatureFlag:
     """Gated create: routes through FeatureFlagSerializer so @approval_gate, validation,
     and activity logging apply. ``data`` is the flag's own write shape (key, name, filters,
@@ -155,8 +157,13 @@ def create_flag(
     ``created_by`` stays null, activity is logged as system, the approval gate is skipped.
     ``serializer_context`` is extra serializer context (an HTTP caller passes its viewset
     context); the facade's own ``request``, ``team_id``, ``project_id``, ``get_team`` and
-    ``get_organization`` entries win over the caller's."""
-    context = {**(serializer_context or {}), **_serializer_context(team, user, request)}
+    ``get_organization`` entries win over the caller's. ``activity_trigger`` names what drove
+    the create in the flag's "created" activity log entry."""
+    context = {
+        **(serializer_context or {}),
+        **_serializer_context(team, user, request),
+        "activity_trigger": activity_trigger,
+    }
     serializer = FeatureFlagSerializer(data=data, context=context)
     serializer.is_valid(raise_exception=True)
     return serializer.save()

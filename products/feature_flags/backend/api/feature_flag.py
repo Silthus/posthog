@@ -2562,7 +2562,9 @@ class FeatureFlagSerializer(
                     self._reject_v2_approval_policy(self._write_team)
                 # After the policy check, so a denied v2 create does not leave a tombstone renamed or removed.
                 self._free_key_held_by_soft_deleted_flags(validated_data["key"])
-                instance: FeatureFlag = super().create(validated_data)
+                instance: FeatureFlag = super().create(
+                    {**validated_data, "activity_trigger": self.context.get("activity_trigger")}
+                )
         except IntegrityError as e:
             self._reraise_duplicate_key_violation(e)
 
