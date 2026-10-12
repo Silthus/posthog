@@ -810,7 +810,7 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
                         actions.setValue({
                             ...values.value,
                             filters: values.value.filters.map((filter) =>
-                                filter.facet === 'tag' && filter.value === name
+                                filter.facet === 'tag' && filter.value.toLowerCase() === name.toLowerCase()
                                     ? { ...filter, value: renamed.name }
                                     : filter
                             ),

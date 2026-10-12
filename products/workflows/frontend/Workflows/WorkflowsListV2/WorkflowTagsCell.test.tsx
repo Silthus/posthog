@@ -79,7 +79,7 @@ describe('inline workflow tags', () => {
         logic.mount()
         try {
             await waitFor(() => expect(logic.values.rows).toHaveLength(2))
-            logic.actions.setValue({ text: '', filters: [{ facet: 'tag', value: 'billing', negated: false }] })
+            logic.actions.setValue({ text: '', filters: [{ facet: 'tag', value: 'Billing', negated: false }] })
             render(<WorkflowTagsCell row={logic.values.rows.find((row) => row.kind === 'workflow')!} />)
             const user = userEvent.setup()
             await user.click(screen.getByRole('button', { name: 'Edit tags' }))
