@@ -526,7 +526,9 @@ export class EmailService {
             // gating here turns wasted invocations into one clear skip.
             const suspensionCause = await this.teamWorkflowsConfigService.getEmailSendingSuspension(invocation.teamId)
             if (suspensionCause) {
-                result.skipped = true
+                if (isSandbox) {
+                    result.skipped = true
+                }
                 addLog(
                     'warn',
                     suspensionCause === 'staff'
@@ -656,7 +658,9 @@ export class EmailService {
                 sandboxRecipients
             )
             if (skipReason) {
-                result.skipped = true
+                if (isSandbox) {
+                    result.skipped = true
+                }
                 addLog('info', skipReason)
                 if (!isTest) {
                     result.metrics.push({

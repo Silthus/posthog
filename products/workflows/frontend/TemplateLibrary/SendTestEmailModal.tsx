@@ -57,15 +57,14 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
         isSandboxSenderSelected,
         emailIntegrations,
         emailIntegrationsLoading,
-        sandboxEmailSenderProvisionResult,
-        sandboxEmailSenderProvisionResultLoading,
+        emailSendersError,
         sendDisabledReason,
         testSendResult,
         testSendResultLoading,
         testSendSkipMessage,
         membersLoading,
     } = useValues(logic)
-    const { setModalOpen, setRecipientEmail, setSenderIntegrationId, sendTestEmail, ensureSandboxEmailSender } =
+    const { setModalOpen, setRecipientEmail, setSenderIntegrationId, sendTestEmail, retryEmailSenders } =
         useActions(logic)
 
     return (
@@ -128,23 +127,23 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
                             <span translate="no" className="break-all">
                                 {recipientEmail}
                             </span>{' '}
-                            is not in your visible verified member suggestions. The sandbox sender checks organization
-                            membership before delivery. Add your own sender to email anyone.
+                            isn't a verified member of your organization, so the sandbox sender won't deliver to it. Add
+                            your own sender to email anyone.
                         </LemonBanner>
                     )}
                 </div>
                 <div className="flex flex-col gap-1">
                     <LemonLabel>From</LemonLabel>
-                    {sandboxEmailSenderEnabled && sandboxEmailSenderProvisionResult === 'failed' && (
+                    {emailSendersError && (
                         <LemonBanner
                             type="error"
                             action={{
                                 children: 'Try again',
-                                onClick: ensureSandboxEmailSender,
-                                loading: sandboxEmailSenderProvisionResultLoading,
+                                onClick: retryEmailSenders,
+                                loading: emailIntegrationsLoading || testSendResultLoading,
                             }}
                         >
-                            Could not set up the sandbox sender.
+                            {emailSendersError}
                         </LemonBanner>
                     )}
                     {emailIntegrationsLoading && emailIntegrations.length === 0 ? (
@@ -165,7 +164,7 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
                                 <span className="text-xs text-secondary">{SANDBOX_EMAIL_SENDER_NOTE}</span>
                             )}
                         </>
-                    ) : (
+                    ) : emailSendersError ? null : (
                         <div className="flex gap-2 items-center">
                             <span className="text-muted">No email senders configured yet</span>
                             <LemonButton
