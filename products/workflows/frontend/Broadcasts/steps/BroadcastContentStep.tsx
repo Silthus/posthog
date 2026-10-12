@@ -7,8 +7,6 @@ import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { EmailTemplater, TemplatePickerModal } from 'scenes/hog-functions/email-templater/EmailTemplater'
 import type { EmailFieldErrors, EmailTemplate } from 'scenes/hog-functions/email-templater/types'
 
-import { IntegrationType } from '~/types'
-
 import { EmailSetupModal } from '../../Channels/EmailSetup/EmailSetupModal'
 import { buildSampleGlobals } from '../../Workflows/hogflows/steps/components/HogFlowFunctionConfiguration'
 import { UtmTagFields } from '../../Workflows/hogflows/steps/components/UtmTagFields'
@@ -26,8 +24,7 @@ export function BroadcastContentStep(): JSX.Element {
     const { integrations, integrationsLoading, ownEmailIntegrations } = useValues(integrationsLogic)
     const { loadIntegrations } = useActions(integrationsLogic)
     const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
-    // null: closed. 'new': set up a sender. An integration: finish verifying that one.
-    const [senderSetup, setSenderSetup] = useState<'new' | IntegrationType | null>(null)
+    const [senderSetupOpen, setSenderSetupOpen] = useState(false)
 
     const hasSenders = ownEmailIntegrations.length > 0
     // A deleted sender would otherwise show as its bare id, so the picker leaves it out.
@@ -44,9 +41,8 @@ export function BroadcastContentStep(): JSX.Element {
           }
         : email
 
-    // Closing the modal after Continue also keeps the sender it created or verified.
     const closeSenderSetup = (integrationId?: number): void => {
-        setSenderSetup(null)
+        setSenderSetupOpen(false)
         if (integrationId) {
             loadIntegrations()
             setEmail({
@@ -54,8 +50,7 @@ export function BroadcastContentStep(): JSX.Element {
                 from: {
                     ...email.from,
                     integrationId,
-                    integrationIds:
-                        senderSetup !== 'new' && remainingSenderIds.length > 1 ? remainingSenderIds : undefined,
+                    integrationIds: undefined,
                 },
             })
         }
@@ -90,7 +85,7 @@ export function BroadcastContentStep(): JSX.Element {
                     type="info"
                     action={{
                         children: 'Set up email sender',
-                        onClick: () => setSenderSetup('new'),
+                        onClick: () => setSenderSetupOpen(true),
                         'data-attr': 'broadcast-setup-sender',
                     }}
                 >
@@ -98,13 +93,7 @@ export function BroadcastContentStep(): JSX.Element {
                     records.
                 </LemonBanner>
             ) : null}
-            {senderSetup ? (
-                <EmailSetupModal
-                    integration={senderSetup === 'new' ? undefined : senderSetup}
-                    onClose={closeSenderSetup}
-                    onComplete={closeSenderSetup}
-                />
-            ) : null}
+            {senderSetupOpen ? <EmailSetupModal onClose={closeSenderSetup} onComplete={closeSenderSetup} /> : null}
             <EmailTemplater
                 type="native_email"
                 templating="liquid"

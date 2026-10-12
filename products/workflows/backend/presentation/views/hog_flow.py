@@ -4765,7 +4765,9 @@ class HogFlowViewSet(
                 includes_staged_draft=bool(self.request.data.get("includes_staged_draft"))
                 and WRITABLE_DRAFT_CONTENT_FIELDS <= self.request.data.keys(),
                 validated_status=serializer.instance.status,
-                validate_live=lambda state: self._validate_locked_content(state, self.request.data),
+                validate_live=lambda state: self._validate_locked_content(
+                    state, self.request.data, partial=serializer.partial
+                ),
             )
         except WorkflowStale:
             raise StaleWorkflowUpdateError()
@@ -4862,10 +4864,11 @@ class HogFlowViewSet(
         data: dict,
         enforce_graph_structure: bool = False,
         writes_live: bool = True,
+        partial: bool = True,
     ) -> dict:
         # Runs inside the write's row lock, against the locked row the service passes in.
         serializer = self.get_serializer(
-            state, data=data, partial=True, context={**self.get_serializer_context(), "writes_live": writes_live}
+            state, data=data, partial=partial, context={**self.get_serializer_context(), "writes_live": writes_live}
         )
         if enforce_graph_structure:
             # The surgical endpoints are the paths where structural corruption would be newly introduced,

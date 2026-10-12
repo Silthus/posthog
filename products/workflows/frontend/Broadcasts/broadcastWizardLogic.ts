@@ -252,7 +252,6 @@ export interface broadcastWizardLogicValues {
     scheduleState: ScheduleState
     scheduleSummary: string
     scheduleTimezone: string | null
-    selectedSender: IntegrationType | null
     sendAt: string | null
     stepValidationErrors: Record<BroadcastWizardStep, string[]>
     summaryStatus: BroadcastStatus
@@ -496,7 +495,6 @@ export interface broadcastWizardLogicMeta {
         ) => BroadcastStatus
         isReadOnly: (broadcast: HogFlowApi | null) => boolean
         effectiveTimezone: (scheduleTimezone: string | null, currentTeam: TeamPublicType | TeamType | null) => string
-        selectedSender: (email: BroadcastEmailValue, integrations: IntegrationType[] | null) => IntegrationType | null
         stepValidationErrors: (
             goalEnabled: boolean,
             conversion: HogFlowConversionApi,
@@ -987,13 +985,6 @@ export const broadcastWizardLogic = kea<broadcastWizardLogicType>([
             (s) => [s.scheduleTimezone, s.currentTeam],
             (scheduleTimezone: string | null, currentTeam: TeamPublicType | TeamType | null): string =>
                 scheduleTimezone ?? currentTeam?.timezone ?? dayjs.tz.guess(),
-        ],
-        selectedSender: [
-            (s) => [s.email, s.integrations],
-            (email: BroadcastEmailValue, integrations: IntegrationType[] | null): IntegrationType | null =>
-                integrations?.find(
-                    (integration) => integration.kind === 'email' && integration.id === email.from?.integrationId
-                ) ?? null,
         ],
         stepValidationErrors: [
             (s) => [

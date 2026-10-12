@@ -93,6 +93,24 @@ describe('emailSetupModalLogic', () => {
         expect(onClose).not.toHaveBeenCalled()
     })
 
+    it('closes the saved sender without completing setup when fresh verification fails', async () => {
+        useMocks({ post: { [VERIFY_URL]: { status: 'success', dnsRecords: [] } } })
+        const { logic, onComplete, onClose } = await mountWithSavedSender()
+        useMocks({
+            patch: { [EMAIL_CONFIG_URL]: { id: 7, kind: 'email', config: { email: 'hello@example.com' } } },
+            post: { [VERIFY_URL]: () => [503, { detail: 'Verification unavailable' }] },
+        })
+
+        await expectLogic(logic, () => logic.actions.saveAndFinish()).toDispatchActions([
+            'submitEmailSenderSuccess',
+            'verifyDomainFailure',
+        ])
+
+        expect(onClose).toHaveBeenCalledWith(7)
+        expect(onComplete).not.toHaveBeenCalled()
+        expect(logic.values.isDomainVerified).toBe(false)
+    })
+
     it('waits for fresh verification before completing a saved sender', async () => {
         const { logic, onComplete, onClose } = await mountWithSavedSender()
         let finishVerification!: (response: [number, { status: string; dnsRecords: [] }]) => void

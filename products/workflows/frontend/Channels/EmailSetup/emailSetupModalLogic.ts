@@ -85,7 +85,7 @@ export interface emailSetupModalLogicValues {
     isEmailSenderValid: boolean
     savedIntegration: IntegrationType | null
     showEmailSenderErrors: boolean
-    verification: any
+    verification: EmailSenderDomainStatus | null
     verificationLoading: boolean
 }
 
@@ -144,12 +144,12 @@ export interface emailSetupModalLogicActions {
         errorObject?: any
     }
     verifyDomainSuccess: (
-        verification: EmailSenderDomainStatus | undefined,
+        verification: EmailSenderDomainStatus | null,
         payload?: {
             value: true
         }
     ) => {
-        verification: EmailSenderDomainStatus | undefined
+        verification: EmailSenderDomainStatus | null
         payload?: {
             value: true
         }
@@ -160,9 +160,12 @@ export interface emailSetupModalLogicActions {
 export interface emailSetupModalLogicMeta {
     key: string
     __keaTypeGenInternalSelectorTypes: {
-        dnsRecords: (verification: any, savedIntegration: IntegrationType | null) => DnsRecord[]
+        dnsRecords: (
+            verification: EmailSenderDomainStatus | null,
+            savedIntegration: IntegrationType | null
+        ) => DnsRecord[]
         domain: (emailSender: EmailSenderFormType) => string
-        isDomainVerified: (verification: any) => boolean
+        isDomainVerified: (verification: EmailSenderDomainStatus | null) => boolean
     }
 }
 
@@ -198,6 +201,12 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
             null as IntegrationType | null,
             {
                 setSavedIntegration: (_, { integration }) => integration || null,
+            },
+        ],
+        verification: [
+            null as EmailSenderDomainStatus | null,
+            {
+                verifyDomainFailure: () => null,
             },
         ],
     }),
@@ -261,6 +270,7 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
                 if (values.savedIntegration) {
                     return api.integrations.verifyEmail(values.savedIntegration.id)
                 }
+                return null
             },
         },
     })),
@@ -310,12 +320,7 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
                 return
             }
             const integrationId = values.savedIntegration?.id
-            try {
-                await asyncActions.verifyDomain()
-            } catch {
-                props.onClose(integrationId)
-                return
-            }
+            await asyncActions.verifyDomain()
             if (values.isDomainVerified) {
                 props.onComplete(integrationId)
             } else {

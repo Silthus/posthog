@@ -198,6 +198,18 @@ class TestHogFlowAPI(APIBaseTest):
         assert response.status_code == 201, response.json()
         return response.json()["id"]
 
+    @parameterized.expand([("put", ""), ("patch", "Existing description")])
+    def test_full_update_resets_omitted_description_while_patch_preserves_it(self, method, expected_description):
+        flow_url = f"/api/projects/{self.team.id}/hog_flows/{self._create_simple_flow()}"
+        described = self.client.patch(flow_url, {"description": "Existing description"})
+        assert described.status_code == 200, described.json()
+
+        response = getattr(self.client, method)(flow_url, {"name": "Renamed", "actions": described.json()["actions"]})
+
+        assert response.status_code == 200, response.json()
+        assert response.json()["description"] == expected_description
+        assert self.client.get(flow_url).json()["description"] == expected_description
+
     def test_email_sending_rate_limit_round_trip(self):
         flow_id = self._create_simple_flow()
 
@@ -846,6 +858,7 @@ class TestHogFlowAPI(APIBaseTest):
             response = self.client.patch(flow_url, {"actions": original_actions})
 
         assert response.status_code == 400, response.json()
+        assert ("no longer exists" if delete_sender else "not verified yet") in response.json()["detail"]
         assert self.client.get(flow_url).json()["actions"] == replacement_actions
 
     def test_inert_email_data_does_not_grandfather_a_new_live_sender(self):
