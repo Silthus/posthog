@@ -3,6 +3,8 @@ import { MOCK_DEFAULT_USER } from 'lib/api.mock'
 import { router } from 'kea-router'
 import { expectLogic } from 'kea-test-utils'
 
+import { lemonToast } from '@posthog/lemon-ui'
+
 import { FEATURE_FLAGS } from 'lib/constants'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { teamLogic } from 'scenes/teamLogic'
@@ -706,6 +708,94 @@ describe('workflowsSavedViewsLogic', () => {
         expect(logic.values.activeViewId).toEqual('drafts')
         expect(logic.values.conflictedViewId).toEqual(VIEW_ID)
         expect(logic.values.sharedSaveDisabledReason).toBeUndefined()
+    })
+
+    type FailingAction = 'update' | 'save-as' | 'rename' | 'delete' | 'restore'
+    const runFailingAction = async (action: FailingAction): Promise<void> => {
+        workflowsListV2Logic.actions.setValue({ filters: [], text: 'mine' })
+        const attempts: Record<FailingAction, () => Promise<unknown>> = {
+            update: () => logic.asyncActions.updateActiveView(),
+            'save-as': () => logic.asyncActions.saveViewAs('Mine'),
+            rename: () => logic.asyncActions.renameView(VIEW_ID, 'Mine'),
+            delete: () => logic.asyncActions.deleteView(VIEW_ID),
+            restore: () => logic.asyncActions.restoreMyWorkflows(),
+        }
+        await attempts[action]().catch(() => {})
+    }
+
+    it.each<[FailingAction, number, Record<string, string>, string]>([
+        [
+            'update',
+            409,
+            { detail: 'View changed' },
+            "Couldn't update Active flows. This view changed since you opened it. Your changes are still here. Save them as a new view or reset to the latest version.",
+        ],
+        [
+            'rename',
+            409,
+            { detail: 'View changed' },
+            "Couldn't rename Active flows. This view changed since you opened it. Reset to the latest version and try again.",
+        ],
+        [
+            'delete',
+            403,
+            { detail: 'Forbidden' },
+            "Couldn't delete Active flows. You need editor access to workflows to change shared views.",
+        ],
+        [
+            'save-as',
+            400,
+            { detail: 'Ensure this field has no more than 1000 characters.' },
+            "Couldn't save the new view. Ensure this field has no more than 1000 characters.",
+        ],
+        [
+            'restore',
+            500,
+            { detail: 'Server error' },
+            "Couldn't restore My workflows. Check your connection and try again.",
+        ],
+    ])('explains a failed %s that returns %s', async (action, status, body, message) => {
+        const toastError = jest.spyOn(lemonToast, 'error')
+        const fail = (): [number, Record<string, string>] => [status, body]
+        useMocks({
+            patch: { '/api/projects/:team_id/workflow_views/:id/': fail },
+            delete: { '/api/projects/:team_id/workflow_views/:id/': fail },
+            post: {
+                '/api/projects/:team_id/workflow_views/': fail,
+                '/api/projects/:team_id/workflow_views/restore_default/': fail,
+            },
+        })
+        router.actions.push(urls.workflows(), { view: VIEW_ID })
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+
+        await runFailingAction(action)
+
+        expect(toastError).toHaveBeenLastCalledWith(message)
+    })
+
+    it('keeps local edits on All when the view being updated was deleted by someone else', async () => {
+        const toastError = jest.spyOn(lemonToast, 'error')
+        useMocks({ patch: { '/api/projects/:team_id/workflow_views/:id/': () => [404, { detail: 'Not found.' }] } })
+        router.actions.push(urls.workflows(), { view: VIEW_ID })
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+        workflowsListV2Logic.actions.setValue({ filters: [status('active'), eventTrigger], text: '' })
+
+        await logic.asyncActions.updateActiveView()
+
+        expect(toastError).toHaveBeenLastCalledWith(
+            "Couldn't update Active flows. It was deleted by someone else. Your changes are still here. Save them as a new view to keep them."
+        )
+        expect(logic.values.views.some((view) => view.id === VIEW_ID)).toBe(false)
+        expect(logic.values.activeViewId).toEqual('all')
+        expect(new URLSearchParams(router.values.location.search).get('view')).toEqual('all')
+        expect(workflowsListV2Logic.values.value.filters).toEqual([status('active'), eventTrigger])
+        expect(logic.values.addedFilters).toEqual([status('active'), eventTrigger])
+        applyViewById('drafts')
+        expect(workflowsListV2Logic.values.value.filters).toEqual([status('active'), eventTrigger])
     })
 
     it('restores the deletable My workflows view from its original default state after reload', async () => {

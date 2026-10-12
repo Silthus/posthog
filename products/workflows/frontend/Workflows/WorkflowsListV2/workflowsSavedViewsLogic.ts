@@ -30,12 +30,15 @@ import type { OptionalColumn } from './workflowListLabels'
 import type { WorkflowListRow } from './workflowListRows'
 import {
     BUILT_IN_WORKFLOW_VIEWS,
+    SavedViewAction,
     WorkflowSavedView,
     addedFiltersAfterEdit,
     filtersFromView,
+    isMissingViewError,
     mergeAddedFilters,
     normalizeViewColumns,
     savedViewChanges,
+    savedViewFailureMessage,
     workflowViewState,
     workflowViewValue,
 } from './workflowSavedViews'
@@ -503,42 +506,56 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                 actions.setAddedFilters([])
             }
         }
+        const ignoreMissingView = (error: unknown): void => {
+            if (!isMissingViewError(error)) {
+                throw error
+            }
+        }
         const keepAdditionsMadeWhileSaving = (saved: WorkflowViewApi): void => {
             actions.setAddedFilters(
                 addedFiltersAfterEdit(workflowViewValue(saved.state).filters, [], values.value.filters)
             )
         }
+        const forgetDeletedView = (id: string): void => {
+            actions.removeSavedView(id)
+            if (values.conflictedViewId === id) {
+                actions.setConflictedViewId(null)
+            }
+            if (values.activeViewId === id) {
+                actions.setAddedFilters(values.value.filters)
+                actions.setActiveViewId(BUILT_IN_WORKFLOW_VIEWS[0].id)
+            }
+        }
+        const handleFailure = (action: SavedViewAction, error: unknown, target?: WorkflowSavedView): unknown => {
+            lemonToast.error(savedViewFailureMessage(action, target?.name ?? 'this view', error))
+            if (target && error instanceof ApiError && error.status === 409) {
+                actions.setConflictedViewId(target.id)
+            }
+            if (target && isMissingViewError(error)) {
+                forgetDeletedView(target.id)
+                return null
+            }
+            return error
+        }
         const runMutation = async (
+            action: SavedViewAction,
             run: (stillCurrent: () => boolean) => Promise<void>,
-            rethrow = false,
-            permission: 'read' | 'write' = 'write'
-        ): Promise<void> => {
-            if (!values.available || values.saving || (permission === 'write' && values.writeDisabledReason)) {
-                return
+            target?: WorkflowSavedView
+        ): Promise<unknown> => {
+            const needsWriteAccess = action !== 'reset'
+            if (!values.available || values.saving || (needsWriteAccess && values.writeDisabledReason)) {
+                return null
             }
             actions.setSaving(true)
             const teamId = values.currentTeamId
-            const viewId = values.activeViewId
             const generation = cache.contextGeneration ?? 0
             const stillCurrent = (): boolean =>
                 values.enabled && values.currentTeamId === teamId && (cache.contextGeneration ?? 0) === generation
             try {
                 await run(stillCurrent)
+                return null
             } catch (error) {
-                if (!stillCurrent()) {
-                    return
-                }
-                if (error instanceof ApiError && error.status === 409) {
-                    actions.setConflictedViewId(viewId)
-                    lemonToast.error(
-                        'This view changed since you opened it. Your changes are still here. Save as a new view or reset to the latest version.'
-                    )
-                } else {
-                    lemonToast.error("Couldn't save your changes. Check your connection and try again.")
-                }
-                if (rethrow) {
-                    throw error
-                }
+                return stillCurrent() ? handleFailure(action, error, target) : null
             } finally {
                 actions.setSaving(false)
             }
@@ -610,6 +627,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                 if (values.conflictedViewId === values.activeViewId) {
                     const currentViewId = values.activeViewId
                     await runMutation(
+                        'reset',
                         async (stillCurrent) => {
                             try {
                                 const latest = await api.workflowViewsRetrieve(
@@ -626,7 +644,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                                     actions.applyView(latest)
                                 }
                             } catch (error) {
-                                if (!(error instanceof ApiError) || error.status !== 404) {
+                                if (!isMissingViewError(error)) {
                                     throw error
                                 }
                                 if (!stillCurrent()) {
@@ -640,8 +658,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                             }
                             actions.setConflictedViewId(null)
                         },
-                        false,
-                        'read'
+                        values.activeView
                     )
                 } else {
                     clearAddedFiltersUnless(keepAddedFilters)
@@ -704,7 +721,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                 }
             },
             saveViewAs: async ({ name }) =>
-                await runMutation(async (stillCurrent) => {
+                await runMutation('save-as', async (stillCurrent) => {
                     const sourceViewId = values.activeViewId
                     const view = await api.workflowViewsCreate(String(values.currentTeamId), {
                         name: name.trim(),
@@ -719,65 +736,82 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                         actions.setActiveViewId(view.id)
                     }
                     lemonToast.success(`Saved ${view.name} as a new view`)
-                }, true),
-            updateActiveView: async () =>
-                await runMutation(async (stillCurrent) => {
-                    const current = values.activeView
-                    if (current.builtIn || values.sharedSaveDisabledReason) {
-                        return
-                    }
-                    const view = await api.workflowViewsPartialUpdate(String(values.currentTeamId), current.id, {
-                        version: current.version,
-                        state: workflowViewState(values.value, values.shownColumns),
-                    })
-                    if (!stillCurrent()) {
-                        return
-                    }
-                    actions.upsertSavedView(view)
-                    if (values.activeViewId === current.id) {
-                        keepAdditionsMadeWhileSaving(view)
-                        writeUrl()
-                    }
-                    lemonToast.success(`Updated ${view.name} for everyone`)
                 }),
-            renameView: async ({ id, name }) =>
-                await runMutation(async (stillCurrent) => {
-                    const current = values.views.find((view) => view.id === id)
-                    if (!current || current.builtIn) {
-                        return
-                    }
-                    const updated = await api.workflowViewsPartialUpdate(String(values.currentTeamId), id, {
-                        version: current.version,
-                        name: name.trim(),
-                    })
-                    if (!stillCurrent()) {
-                        return
-                    }
-                    actions.upsertSavedView(updated)
-                }, true),
-            deleteView: async ({ id }) =>
-                await runMutation(async (stillCurrent) => {
-                    const current = values.views.find((view) => view.id === id)
-                    if (!current || current.builtIn) {
-                        return
-                    }
-                    await api.workflowViewsDestroy(String(values.currentTeamId), id, { version: current.version })
-                    if (!stillCurrent()) {
-                        return
-                    }
-                    actions.removeSavedView(id)
-                    if (values.activeViewId === id) {
-                        actions.applyView(BUILT_IN_WORKFLOW_VIEWS[0])
-                    }
-                    if (current.default_key === 'my-workflows') {
-                        actions.setDefaultView({ ...values.defaultView!, deleted: true })
-                        lemonToast.success('Deleted My workflows for everyone', {
-                            button: { label: 'Undo', action: () => actions.restoreMyWorkflows() },
+            updateActiveView: async () => {
+                const current = values.activeView
+                if (current.builtIn || values.sharedSaveDisabledReason) {
+                    return null
+                }
+                return await runMutation(
+                    'update',
+                    async (stillCurrent) => {
+                        const view = await api.workflowViewsPartialUpdate(String(values.currentTeamId), current.id, {
+                            version: current.version,
+                            state: workflowViewState(values.value, values.shownColumns),
                         })
-                    }
-                }),
+                        if (!stillCurrent()) {
+                            return
+                        }
+                        actions.upsertSavedView(view)
+                        if (values.activeViewId === current.id) {
+                            keepAdditionsMadeWhileSaving(view)
+                            writeUrl()
+                        }
+                        lemonToast.success(`Updated ${view.name} for everyone`)
+                    },
+                    current
+                )
+            },
+            renameView: async ({ id, name }) => {
+                const current = values.views.find((view) => view.id === id)
+                if (!current || current.builtIn) {
+                    return null
+                }
+                return await runMutation(
+                    'rename',
+                    async (stillCurrent) => {
+                        const updated = await api.workflowViewsPartialUpdate(String(values.currentTeamId), id, {
+                            version: current.version,
+                            name: name.trim(),
+                        })
+                        if (!stillCurrent()) {
+                            return
+                        }
+                        actions.upsertSavedView(updated)
+                    },
+                    current
+                )
+            },
+            deleteView: async ({ id }) => {
+                const current = values.views.find((view) => view.id === id)
+                if (!current || current.builtIn) {
+                    return null
+                }
+                return await runMutation(
+                    'delete',
+                    async (stillCurrent) => {
+                        await api
+                            .workflowViewsDestroy(String(values.currentTeamId), id, { version: current.version })
+                            .catch(ignoreMissingView)
+                        if (!stillCurrent()) {
+                            return
+                        }
+                        actions.removeSavedView(id)
+                        if (values.activeViewId === id) {
+                            actions.applyView(BUILT_IN_WORKFLOW_VIEWS[0])
+                        }
+                        if (current.default_key === 'my-workflows') {
+                            actions.setDefaultView({ ...values.defaultView!, deleted: true })
+                            lemonToast.success('Deleted My workflows for everyone', {
+                                button: { label: 'Undo', action: () => actions.restoreMyWorkflows() },
+                            })
+                        }
+                    },
+                    current
+                )
+            },
             restoreMyWorkflows: async () =>
-                await runMutation(async (stillCurrent) => {
+                await runMutation('restore', async (stillCurrent) => {
                     const view = await api.workflowViewsRestoreDefaultCreate(String(values.currentTeamId))
                     if (!stillCurrent()) {
                         return

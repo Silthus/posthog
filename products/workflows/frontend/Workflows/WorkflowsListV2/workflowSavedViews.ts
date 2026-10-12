@@ -1,3 +1,5 @@
+import { ApiError } from 'lib/api-error'
+
 import type { WorkflowViewApi, WorkflowViewFilterApi, WorkflowViewStateApi } from '../../generated/api.schemas'
 import { WorkflowViewFacetEnumApi } from '../../generated/api.schemas'
 import {
@@ -128,4 +130,49 @@ export function filtersFromView(
     const viewKeys = new Set(viewFilters.map(facetFilterKey))
     const addedKeys = new Set(added.map(facetFilterKey))
     return filters.filter((filter) => viewKeys.has(facetFilterKey(filter)) && !addedKeys.has(facetFilterKey(filter)))
+}
+
+export type SavedViewAction = 'save-as' | 'update' | 'rename' | 'delete' | 'restore' | 'reset'
+
+export function isMissingViewError(error: unknown): boolean {
+    return error instanceof ApiError && error.status === 404
+}
+
+export function savedViewFailureMessage(action: SavedViewAction, viewName: string, error: unknown): string {
+    return `${failedActionMessage(action, viewName)} ${failureReason(action, error)}`
+}
+
+function failedActionMessage(action: SavedViewAction, viewName: string): string {
+    const messages: Record<SavedViewAction, string> = {
+        'save-as': "Couldn't save the new view.",
+        update: `Couldn't update ${viewName}.`,
+        rename: `Couldn't rename ${viewName}.`,
+        delete: `Couldn't delete ${viewName}.`,
+        restore: "Couldn't restore My workflows.",
+        reset: `Couldn't load the latest version of ${viewName}.`,
+    }
+    return messages[action]
+}
+
+function failureReason(action: SavedViewAction, error: unknown): string {
+    const status = error instanceof ApiError ? error.status : undefined
+    if (status === 403) {
+        return action === 'reset'
+            ? 'You need viewer access to workflows to see shared views.'
+            : 'You need editor access to workflows to change shared views.'
+    }
+    if (status === 404) {
+        return action === 'update'
+            ? 'It was deleted by someone else. Your changes are still here. Save them as a new view to keep them.'
+            : 'It was deleted by someone else.'
+    }
+    if (status === 409) {
+        return action === 'update'
+            ? 'This view changed since you opened it. Your changes are still here. Save them as a new view or reset to the latest version.'
+            : 'This view changed since you opened it. Reset to the latest version and try again.'
+    }
+    if (error instanceof ApiError && status === 400 && error.detail) {
+        return error.detail
+    }
+    return 'Check your connection and try again.'
 }
