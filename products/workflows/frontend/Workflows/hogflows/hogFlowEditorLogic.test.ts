@@ -635,8 +635,8 @@ describe('hogFlowEditorLogic', () => {
 
             const outgoing = logic.values.edges.filter((graphEdge) => graphEdge.source === flagStep.id)
             expect(outgoing.map((graphEdge) => [graphEdge.sourceHandle, graphEdge.data?.label])).toEqual([
-                ['outcome_flag_needs_approval', 'Needs approval'],
-                ['outcome_flag_changed_elsewhere', 'Changed elsewhere'],
+                ['branch_flag_needs_approval', 'Needs approval'],
+                ['branch_flag_changed_elsewhere', 'Changed elsewhere'],
                 ['continue_flag', 'Done'],
             ])
             expect(new Set(outgoing.map((graphEdge) => graphEdge.id)).size).toBe(3)
@@ -646,9 +646,9 @@ describe('hogFlowEditorLogic', () => {
                 ?.filter((handle) => handle.type === 'source')
                 .map((handle) => handle.id)
             expect(sourceHandleIds?.sort()).toEqual([
+                'branch_flag_changed_elsewhere',
+                'branch_flag_needs_approval',
                 'continue_flag',
-                'outcome_flag_changed_elsewhere',
-                'outcome_flag_needs_approval',
             ])
         })
     })

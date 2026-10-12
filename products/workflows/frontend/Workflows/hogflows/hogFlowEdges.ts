@@ -17,11 +17,13 @@ export function isSameEdgeSlot(left: HogFlowEdge, right: HogFlowEdge): boolean {
     )
 }
 
+// The graph layout orders a node's ports by handle id, so these ids must sort the way
+// compareOutgoingEdges orders the edges: branches first, by outcome, then continue.
 export function getSourceHandleId(edge: HogFlowEdge): string {
     if (edge.type === 'continue') {
         return `continue_${edge.from}`
     }
-    return edge.outcome ? `outcome_${edge.from}_${edge.outcome}` : `branch_${edge.from}_${edge.index}`
+    return `branch_${edge.from}_${edge.outcome ?? edge.index}`
 }
 
 export function compareOutgoingEdges(left: HogFlowEdge, right: HogFlowEdge): number {
