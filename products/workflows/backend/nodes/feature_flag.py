@@ -1,7 +1,9 @@
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 from rest_framework.exceptions import APIException, PermissionDenied
+
+from posthog.models.team.team import Team
 
 from products.feature_flags.backend.facade.api import (
     create_flag as create_gated_flag,
@@ -27,6 +29,8 @@ DONE = "done"
 CHANGED_ELSEWHERE = "changed_elsewhere"
 NEEDS_APPROVAL = "needs_approval"
 ALREADY_EXISTS = "already_exists"
+
+MAX_TAG_LENGTH = 255
 
 EDITOR_ACCESS = "feature_flag:editor"
 APPROVAL_POLICY = "approval_policy"
@@ -59,11 +63,11 @@ class SetRolloutPercentageInputs(BaseModel):
 
 
 class CreateFlagInputs(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     flag_key: str = Field(min_length=1, title="Flag key", description="Key of the feature flag to create.")
     name: str = Field(default="", title="Description", description="What the flag is for.")
-    tags: list[str] = Field(
+    tags: list[Annotated[str, StringConstraints(max_length=MAX_TAG_LENGTH)]] = Field(
         default_factory=list,
         title="Tags",
         description="Comma-separated tags, for example rollout, checkout. Required when the project requires tags.",
@@ -129,9 +133,9 @@ def create_flag(context: NodeRunContext, inputs: CreateFlagInputs) -> NodeOutcom
             missing_permission=EDITOR_ACCESS,
             reason="The workflow's publisher needs editor access to feature flags to create one.",
         )
-    existing = FeatureFlag.objects.filter(team=context.team, key=inputs.flag_key).first()
+    existing = _flag_with_key(context.team, inputs.flag_key)
     if existing is not None:
-        return NodeOutcome(outcome=ALREADY_EXISTS, result=_existing_flag_result(existing))
+        return _already_exists(existing)
     try:
         flag = create_gated_flag(
             {
@@ -161,8 +165,17 @@ def create_flag(context: NodeRunContext, inputs: CreateFlagInputs) -> NodeOutcom
     except (PolicyConflict, ApprovalDetectionFailed) as error:
         return NodeOutcome.failed(str(error))
     except APIException as error:
-        return _rejected(error)
+        created_concurrently = _flag_with_key(context.team, inputs.flag_key)
+        return _already_exists(created_concurrently) if created_concurrently else _rejected(error)
     return NodeOutcome(outcome=DONE, result=_flag_result(flag, 0))
+
+
+def _flag_with_key(team: Team, key: str) -> FeatureFlag | None:
+    return FeatureFlag.objects.filter(team_id=team.id, key=key).first()
+
+
+def _already_exists(flag: FeatureFlag) -> NodeOutcome:
+    return NodeOutcome(outcome=ALREADY_EXISTS, result=_existing_flag_result(flag))
 
 
 def _rejected(error: APIException) -> NodeOutcome:

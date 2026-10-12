@@ -21,7 +21,7 @@ from products.access_control.backend.models.access_control import AccessControl
 from products.approvals.backend.exceptions import ApprovalDetectionFailed, PolicyConflict
 from products.approvals.backend.models import ApprovalPolicy, ChangeRequest
 from products.feature_flags.backend.api.feature_flag import REQUIRE_TAGS_ON_CREATE_ERROR
-from products.feature_flags.backend.facade.api import user_can_edit_flag
+from products.feature_flags.backend.facade.api import create_flag, user_can_edit_flag
 from products.feature_flags.backend.models.feature_flag import FeatureFlag
 from products.feature_flags.backend.models.team_feature_flag_policy_config import TeamFeatureFlagPolicyConfig
 from products.workflows.backend.models import HogFlow
@@ -32,6 +32,7 @@ ACTION_ID = "action_set_rollout"
 DISPATCH_KEY = "invocation-1:action_set_rollout:3:0"
 _CAN_EDIT_FLAG = "products.workflows.backend.nodes.feature_flag.user_can_edit_flag"
 _SET_ROLLOUT = "products.workflows.backend.nodes.feature_flag.set_release_condition_rollout"
+_CREATE_FLAG = "products.workflows.backend.nodes.feature_flag.create_gated_flag"
 
 
 @override_settings(WORKFLOW_NODES_RUN_JWT_SECRETS=[SECRET])
@@ -386,8 +387,8 @@ class TestCreateFeatureFlagNodeRunAPI(WorkflowNodeRunTestBase):
             "payload": {"run": DISPATCH_KEY, "action": ACTION_ID},
         }
 
-    def test_an_existing_key_is_already_exists_with_that_flags_result_and_creates_nothing(self) -> None:
-        existing = FeatureFlag.objects.create(
+    def _create_existing_flag(self) -> FeatureFlag:
+        return FeatureFlag.objects.create(
             team=self.team,
             created_by=self.user,
             key="new-checkout",
@@ -395,14 +396,44 @@ class TestCreateFeatureFlagNodeRunAPI(WorkflowNodeRunTestBase):
             version=3,
         )
 
-        response = self._run()
+    def _make_the_flow_team_an_environment(self) -> None:
+        root_team = Team.objects.create(organization=self.organization, project=self.project, name="Production")
+        self.team.parent_team = root_team
+        self.team.save()
+        HogFlowRevision.objects.unscoped().filter(hog_flow=self.hog_flow).update(team=root_team)
+
+    @parameterized.expand(
+        [
+            ("retry", "new-checkout", "before_the_run", False),
+            ("retry_with_a_padded_key", " new-checkout ", "before_the_run", False),
+            ("retry_in_an_environment", "new-checkout", "before_the_run", True),
+            ("concurrent_create", "new-checkout", "after_the_lookup", False),
+        ]
+    )
+    def test_an_existing_key_is_already_exists_with_that_flags_result_and_creates_nothing(
+        self, _name: str, flag_key: str, created: str, in_environment: bool
+    ) -> None:
+        if in_environment:
+            self._make_the_flow_team_an_environment()
+        existing: list[FeatureFlag] = []
+        if created == "before_the_run":
+            existing.append(self._create_existing_flag())
+
+        def flag_lands_after_the_lookup(*args: Any, **kwargs: Any) -> FeatureFlag:
+            existing.append(self._create_existing_flag())
+            return create_flag(*args, **kwargs)
+
+        with patch(
+            _CREATE_FLAG, side_effect=flag_lands_after_the_lookup if created == "after_the_lookup" else create_flag
+        ):
+            response = self._run({"flag_key": flag_key})
 
         assert response.json() == {
             "status": "outcome",
             "outcome": "already_exists",
-            "result": {"flag_id": existing.id, "flag_key": "new-checkout", "rollout_percentage": 40, "version": 3},
+            "result": {"flag_id": existing[0].id, "flag_key": "new-checkout", "rollout_percentage": 40, "version": 3},
         }
-        assert FeatureFlag.objects.filter(team=self.team).count() == 1
+        assert FeatureFlag.objects.filter(key__contains="new-checkout").count() == 1
 
     @patch("products.approvals.backend.decorators._is_approvals_enabled", return_value=True)
     def test_an_approval_policy_on_enabling_answers_needs_approval_without_a_flag(self, _approvals_enabled) -> None:
@@ -433,14 +464,19 @@ class TestCreateFeatureFlagNodeRunAPI(WorkflowNodeRunTestBase):
         assert response.json()["result"]["missing_permission"] == "feature_flag:editor"
         assert not FeatureFlag.objects.filter(team=self.team).exists()
 
-    def test_a_project_that_requires_tags_fails_an_untagged_create_with_the_policy_message(self) -> None:
-        TeamFeatureFlagPolicyConfig.objects.create(team=self.team, require_tags=True)
+    @parameterized.expand(
+        [
+            ("untagged_where_tags_are_required", "", True, REQUIRE_TAGS_ON_CREATE_ERROR),
+            ("tag_longer_than_a_tag_can_be", "x" * 256, False, "The step inputs are not valid"),
+        ]
+    )
+    def test_a_create_the_flag_cannot_take_fails_with_a_reason_and_creates_nothing(
+        self, _name: str, tags: str, require_tags: bool, reason: str
+    ) -> None:
+        TeamFeatureFlagPolicyConfig.objects.create(team=self.team, require_tags=require_tags)
 
-        response = self._run({"tags": ""})
+        response = self._run({"tags": tags})
 
-        assert response.json() == {
-            "status": "outcome",
-            "outcome": "failed",
-            "result": {"reason": f"The feature flag rejected the change: {REQUIRE_TAGS_ON_CREATE_ERROR}"},
-        }
+        assert response.json()["outcome"] == "failed", response.content
+        assert reason in response.json()["result"]["reason"]
         assert not FeatureFlag.objects.filter(team=self.team).exists()
