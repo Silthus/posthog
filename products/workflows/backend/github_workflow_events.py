@@ -21,6 +21,7 @@ import structlog
 
 from posthog.cdp.internal_events import InternalEventEvent, produce_internal_event
 from posthog.egress.github.transport import github_request
+from posthog.egress.limiter.policies import Priority
 from posthog.github.installations import SCOPE_DB_ALIAS, InstallationIntegration, installation_integrations
 from posthog.ingress.dispatch.database import bounded_statement_timeout, is_statement_timeout
 from posthog.models.instance_setting import get_instance_setting
@@ -252,17 +253,17 @@ def _installation_access_token(integration: InstallationIntegration) -> str | No
 
 
 def _pull_request_labels(
-    access_token: str, installation_id: str, repository: str, number: int, deadline: float
+    access_token: str, installation_id: str, repository: str, number: int, remaining_seconds: float
 ) -> list[str]:
-    remaining_seconds = deadline - _clock()
-    if remaining_seconds <= 0:
-        raise TimeoutError("label lookup budget spent")
     response = github_request(
         "GET",
         f"https://api.github.com/repos/{repository}/issues/{number}/labels",
         source="workflows",
         headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
         installation_id=installation_id,
+        # Labels are optional enrichment, so the limiter may shed this call before it spends budget
+        # the installation's critical calls need. A denial raises and counts as a failed lookup.
+        priority=Priority.NORMAL,
         endpoint="/repos/{owner}/{repo}/issues/{issue_number}/labels",
         # GitHub caps a pull request at 100 labels, so one page holds them all.
         params={"per_page": 100},
@@ -270,6 +271,19 @@ def _pull_request_labels(
     )
     response.raise_for_status()
     return [label["name"] for label in response.json() if isinstance(label.get("name"), str)]
+
+
+def _log_label_lookup_failure(
+    installation_id: object, repository: str, delivery_id: str, *, number: int | None = None
+) -> None:
+    logger.warning(
+        "github_workflow_event_label_lookup_failed",
+        installation_id=installation_id,
+        repository=repository,
+        number=number,
+        delivery_id=delivery_id,
+        exc_info=True,
+    )
 
 
 def _failing_suite_labels(
@@ -288,24 +302,27 @@ def _failing_suite_labels(
         return {}
 
     deadline = _clock() + _LABEL_LOOKUP_BUDGET_SECONDS
-    labels_by_number: dict[int | None, list[str]] = {}
     try:
         # Every connected project reads the same installation, so one token answers for all of them.
         access_token = _installation_access_token(integrations[0])
-        if not access_token:
-            raise ValueError("installation has no stored access token")
-        for number in numbers:
-            labels_by_number[number] = _pull_request_labels(
-                access_token, str(installation_id), repository, number, deadline
-            )
     except Exception:
-        logger.warning(
-            "github_workflow_event_label_lookup_failed",
-            installation_id=installation_id,
-            repository=repository,
-            delivery_id=delivery_id,
-            exc_info=True,
-        )
+        access_token = None
+    if not access_token:
+        _log_label_lookup_failure(installation_id, repository, delivery_id)
+        return {}
+
+    labels_by_number: dict[int | None, list[str]] = {}
+    for number in numbers:
+        remaining_seconds = deadline - _clock()
+        if remaining_seconds <= 0:
+            _log_label_lookup_failure(installation_id, repository, delivery_id, number=number)
+            break
+        try:
+            labels_by_number[number] = _pull_request_labels(
+                access_token, str(installation_id), repository, number, remaining_seconds
+            )
+        except Exception:
+            _log_label_lookup_failure(installation_id, repository, delivery_id, number=number)
     return labels_by_number
 
 

@@ -198,17 +198,20 @@ def test_a_failed_label_lookup_still_emits_the_event_without_labels(
     produce, integration, github, failure: dict[str, Any]
 ) -> None:
     github.get(_labels_url(7), **failure)
+    github.get(_labels_url(8), json=[{"name": "babysit"}])
 
     with (
         patch("django.conf.settings.GITHUB_WORKFLOW_TRIGGERS_ENABLED", True),
         patch("products.workflows.backend.github_workflow_events.logger") as logger,
     ):
-        emit_github_event("check_suite", _check_suite_payload([7]), "ci-delivery")
+        emit_github_event("check_suite", _check_suite_payload([7, 8]), "ci-delivery")
 
-    assert produce.call_count == 1
-    assert "labels" not in produce.call_args.args[1].properties
+    properties_by_number = {
+        call.args[1].properties["number"]: call.args[1].properties for call in produce.call_args_list
+    }
+    assert "labels" not in properties_by_number[7]
+    assert properties_by_number[8]["labels"] == ["babysit"]
     assert logger.warning.call_args.args[0] == "github_workflow_event_label_lookup_failed"
-    assert len(github.calls) == 1
 
 
 def test_an_expiring_or_rejected_token_is_not_refreshed_inside_the_delivery(produce, integration, github) -> None:
