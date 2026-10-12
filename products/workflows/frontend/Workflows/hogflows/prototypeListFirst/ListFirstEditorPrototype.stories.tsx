@@ -84,19 +84,31 @@ function MockNav(): JSX.Element {
     )
 }
 
-function MockAiPanel(): JSX.Element {
+const AI_CHAT: Record<string, [string, string]> = {
+    [AB_ID]: [
+        'Build a launch flow for the Larkspur boot that tests three email angles.',
+        'I created the Larkspur launch flow with three email variants. Each sends a launch email in the morning send window, waits five days for a purchase, and follows up with anyone who has not bought. It is saved as a draft.',
+    ],
+    [WELCOME_ID]: [
+        'Set up a welcome series for new newsletter readers.',
+        'I created a two-email welcome series: a greeting right away, then a getting started guide two days later. It is saved as a draft.',
+    ],
+    [REGIONAL_ID]: [
+        'Send the season opener by region, tier and interest.',
+        'I created the regional season opener. It routes people by region, membership tier and interest, then sends a season email and a nudge if they do not open the trail guide. It is saved as a draft.',
+    ],
+}
+
+function MockAiPanel({ id }: { id: string }): JSX.Element {
+    const [ask, answer] = AI_CHAT[id]
     return (
         <aside className="flex w-[420px] shrink-0 flex-col border-l bg-surface-secondary">
             <div className="border-b px-3 py-2 text-[13px] font-semibold">PostHog AI</div>
             <div className="flex flex-1 flex-col gap-3 overflow-hidden p-3 text-[13px]">
                 <div className="self-end rounded-lg bg-surface-primary px-3 py-2">
-                    Build a launch flow for the Larkspur boot that tests three email angles.
+                    {ask}
                 </div>
-                <div className="rounded-lg px-1 py-1 leading-snug">
-                    I created <strong>Larkspur boot launch: three email variants</strong>. It routes people by the email
-                    variant, sends a launch email in the morning send window, waits five days for a purchase, and
-                    follows up with anyone who has not bought. It is saved as a draft.
-                </div>
+                <div className="rounded-lg px-1 py-1 leading-snug">{answer}</div>
             </div>
             <div className="m-3 rounded-md border bg-surface-primary px-3 py-2 text-[13px] text-tertiary">
                 Ask PostHog AI…
@@ -112,7 +124,7 @@ function Frame({ id, aiPanel }: { id: string; aiPanel: boolean }): JSX.Element {
             <main className="flex min-w-0 flex-1 flex-col">
                 <ListFirstEditorPrototype id={id} />
             </main>
-            {aiPanel && <MockAiPanel />}
+            {aiPanel && <MockAiPanel id={id} />}
         </div>
     )
 }

@@ -626,7 +626,9 @@ function EmailRow({ action, time }: { action: HogFlowAction; time: TimeRange }):
             <Eyebrow>Sends email</Eyebrow>
             <div className="text-[15px] font-semibold leading-snug">{email.subject}</div>
             {email.preheader && <div className="text-[13px] text-secondary">{email.preheader}</div>}
-            <div className="mt-1 line-clamp-2 border-l-2 pl-2 text-[13px] leading-snug text-secondary">{email.glimpse}</div>
+            <div className="mt-1 line-clamp-2 border-l-2 pl-2 text-[13px] leading-snug text-secondary">
+                {email.glimpse}
+            </div>
             {email.cta && (
                 <div className="mt-1.5 text-[12px] text-tertiary">
                     Button:{' '}
@@ -731,7 +733,7 @@ function Branches({ node, time, depth }: { node: WorkflowTreeNode; time: TimeRan
     const anyFollowed = keys.some((k) => followed.has(k))
 
     return (
-        <div className="flex flex-col gap-2 pl-[5rem] @max-[40rem]/doc:pl-4">
+        <div className={clsx('flex flex-col gap-2 @max-[40rem]/doc:pl-4', depth === 0 ? 'pl-[5rem]' : 'pl-1')}>
             {nonEmpty.map((branch, index) => {
                 const key = keys[index]
                 const color = PATH_COLORS[index % PATH_COLORS.length]
@@ -844,14 +846,31 @@ function PathStrip({
                 }
                 return
             } else if (node.branches.length > 0) {
+                const leaves = collectLeafSequences(node)
+                const signatures = new Set(leaves.map(shapeOf))
+                const splits = collectSplitNames(workflow, node)
+                if (leaves.length > 1 && signatures.size === 1) {
+                    chip(
+                        action.id,
+                        () => openStep(action.id),
+                        <>
+                            by {splits.join(', then ')} into <strong>{leaves.length} paths</strong>, each:
+                        </>
+                    )
+                    walk(leaves[0])
+                    items.push(
+                        <span key="vary" className="px-1 text-[12px] italic text-tertiary">
+                            (subjects vary by path)
+                        </span>
+                    )
+                    return
+                }
                 const emails = node.branches.reduce((sum, b) => sum + collectEmails(b.sequence).length, 0)
-                const first = collectEmails(node.branches[0].sequence)[0]
                 chip(
                     action.id,
                     () => openStep(action.id),
                     <>
-                        {describeSplit(workflow, action).toLowerCase()} → {emails} emails
-                        {first ? <>, e.g. ✉ {getEmailContent(first)?.subject}</> : null}
+                        {describeSplit(workflow, action).toLowerCase()} → {emails} emails across {leaves.length} paths
                     </>
                 )
                 return
@@ -873,6 +892,35 @@ function PathStrip({
             )}
         </div>
     )
+}
+
+function collectLeafSequences(node: WorkflowTreeNode): WorkflowTreeSequence[] {
+    return node.branches
+        .filter((branch) => branch.sequence.nodes.length > 0)
+        .flatMap((branch) => {
+            const nestedSplit = branch.sequence.nodes.find(
+                (n) => n.branches.length > 0 && n.action.type !== 'wait_until_condition'
+            )
+            return nestedSplit ? collectLeafSequences(nestedSplit) : [branch.sequence]
+        })
+}
+
+function shapeOf(sequence: WorkflowTreeSequence): string {
+    return sequence.nodes
+        .map((n) => `${n.action.type}(${n.branches.map((b) => shapeOf(b.sequence)).join('|')})`)
+        .join('>')
+}
+
+function collectSplitNames(workflow: HogFlow, node: WorkflowTreeNode): string[] {
+    const names = [
+        describeSplit(workflow, node.action)
+            .replace(/^Split by /, '')
+            .toLowerCase(),
+    ]
+    const nested = node.branches
+        .flatMap((b) => b.sequence.nodes)
+        .find((n) => n.branches.length > 0 && n.action.type !== 'wait_until_condition')
+    return nested ? [...names, ...collectSplitNames(workflow, nested)] : names
 }
 
 function PathEnd(): JSX.Element {

@@ -270,7 +270,7 @@ export function collectEndings(workflow: HogFlow, sequence: WorkflowTreeSequence
                 }
             }
         }
-        const last = seq.nodes.at(-1)
+        const last = seq.nodes.filter((n) => n.action.type !== 'exit').at(-1)
         if (last && endsAtExit && !isBranchingAction(last.action) && last.action.type !== 'exit') {
             add(last.action.type === 'function_email' ? 'After their last email' : `After “${last.action.name}”`)
         }
