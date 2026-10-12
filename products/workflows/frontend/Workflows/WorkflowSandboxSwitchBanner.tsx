@@ -16,7 +16,7 @@ export function WorkflowSandboxSwitchBanner(props: WorkflowLogicProps): JSX.Elem
     }
 
     return (
-        <LemonBanner type="info" alignItems="start" className="@container">
+        <LemonBanner type="info" alignItems="start" className="@container shrink-0">
             <div
                 className="flex flex-col gap-2 @xl:flex-row @xl:items-center"
                 data-attr="workflow-sandbox-switch-banner"
