@@ -170,6 +170,7 @@ export type CdpCoreServicesConfig = Pick<
         | 'EMAIL_TEAM_SENDING_CAP_DAILY_BY_TIER'
         | 'CDP_GOOGLE_ADWORDS_DEVELOPER_TOKEN'
         | 'CONVERSATIONS_TICKETS_JWT_SECRET'
+        | 'WORKFLOW_NODES_RUN_JWT_SECRET'
         | 'CUSTOMER_ANALYTICS_ACCOUNTS_JWT_SECRET'
         | 'CDP_FETCH_RETRIES'
         | 'CDP_FETCH_BACKOFF_BASE_MS'
@@ -537,7 +538,13 @@ export function createCdpCoreServices(
         deps.integrationManager,
         hogFlowDuplicateObserver,
         cdpUsageReporter,
-        { awaitedStepsEnabled: config.CDP_HOGFLOW_AWAITED_STEPS_ENABLED }
+        {
+            awaitedStepsEnabled: config.CDP_HOGFLOW_AWAITED_STEPS_ENABLED,
+            nativeSteps: {
+                jwt: new ScopedServiceJwt(PosthogJwtAudience.WORKFLOW_NODES_RUN, config.WORKFLOW_NODES_RUN_JWT_SECRET),
+                internalApiBaseUrl: config.INTERNAL_API_BASE_URL,
+            },
+        }
     )
 
     const hogFunctionMonitoringService = new HogFunctionMonitoringService(outputs)

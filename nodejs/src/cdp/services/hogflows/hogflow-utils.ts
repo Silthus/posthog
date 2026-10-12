@@ -13,6 +13,9 @@ import { captureException } from '~/common/utils/posthog'
 // executor catches it and finishes the run as a graceful exit instead of a failure.
 export class WorkflowChangedError extends Error {}
 
+// A step error that ends the run whatever the step's on_error says.
+export class RunEndingStepError extends Error {}
+
 export const findActionById = (hogFlow: HogFlow, id: string): HogFlowAction => {
     const action = hogFlow.actions.find((action) => action.id === id)
     if (!action) {
