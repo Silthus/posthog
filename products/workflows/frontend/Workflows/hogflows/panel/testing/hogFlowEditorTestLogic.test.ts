@@ -559,6 +559,15 @@ describe('hogFlowEditorTestLogic', () => {
             actions: [
                 WORKFLOW_FIXTURE.actions[0],
                 {
+                    id: 'function_node',
+                    type: 'function',
+                    name: 'Webhook',
+                    description: '',
+                    created_at: 0,
+                    updated_at: 0,
+                    config: { template_id: 'template-webhook', inputs: {} },
+                },
+                {
                     id: 'email_node',
                     type: 'function_email',
                     name: 'Welcome email',
@@ -577,6 +586,15 @@ describe('hogFlowEditorTestLogic', () => {
                     config: { template_id: 'template-twilio', inputs: {} },
                 },
                 {
+                    id: 'push_node',
+                    type: 'function_push',
+                    name: 'Welcome push',
+                    description: '',
+                    created_at: 0,
+                    updated_at: 0,
+                    config: { template_id: 'template-firebase', inputs: {} },
+                },
+                {
                     id: 'delay_node',
                     type: 'delay',
                     name: 'Wait a day',
@@ -588,9 +606,11 @@ describe('hogFlowEditorTestLogic', () => {
                 WORKFLOW_FIXTURE.actions[1],
             ],
             edges: [
-                { from: 'trigger_node', to: 'email_node', type: 'continue' },
+                { from: 'trigger_node', to: 'function_node', type: 'continue' },
+                { from: 'function_node', to: 'email_node', type: 'continue' },
                 { from: 'email_node', to: 'sms_node', type: 'continue' },
-                { from: 'sms_node', to: 'delay_node', type: 'continue' },
+                { from: 'sms_node', to: 'push_node', type: 'continue' },
+                { from: 'push_node', to: 'delay_node', type: 'continue' },
                 { from: 'delay_node', to: 'exit_node', type: 'continue' },
             ],
         }
@@ -603,16 +623,26 @@ describe('hogFlowEditorTestLogic', () => {
                   logs?: { level: string; message: string; timestamp: string }[]
               }
             | 'request fails'
-        const COMPLETE_STEPS = ['trigger_node', 'email_node', 'sms_node', 'delay_node', 'exit_node']
+        const COMPLETE_STEPS = [
+            'trigger_node',
+            'function_node',
+            'email_node',
+            'sms_node',
+            'push_node',
+            'delay_node',
+            'exit_node',
+        ]
         const COMPLETE_RUN: Record<string, StepResponse> = {
             trigger_node: {
                 status: 'success',
-                nextActionId: 'email_node',
+                nextActionId: 'function_node',
                 variables: { plan: 'pro' },
                 logs: [{ level: 'info', message: 'Trigger matched', timestamp: '2026-01-01T00:00:00Z' }],
             },
+            function_node: { status: 'success', nextActionId: 'email_node' },
             email_node: { status: 'success', nextActionId: 'sms_node' },
-            sms_node: { status: 'success', nextActionId: 'delay_node' },
+            sms_node: { status: 'success', nextActionId: 'push_node' },
+            push_node: { status: 'success', nextActionId: 'delay_node' },
             // The test endpoint parks a delay on its own step, and leaves an exit on its own step.
             delay_node: { status: 'success', nextActionId: 'delay_node' },
             exit_node: { status: 'success', nextActionId: 'exit_node' },
@@ -687,15 +717,19 @@ describe('hogFlowEditorTestLogic', () => {
 
             expect(requests).toMatchObject([
                 { step: 'trigger_node', mocked: false, variables: {} },
+                { step: 'function_node', mocked: false, variables: { plan: 'pro' } },
                 { step: 'email_node', mocked: true, variables: { plan: 'pro' } },
                 { step: 'sms_node', mocked: true, variables: { plan: 'pro' } },
+                { step: 'push_node', mocked: true, variables: { plan: 'pro' } },
                 { step: 'delay_node', mocked: false, variables: { plan: 'pro' } },
                 { step: 'exit_node', mocked: false, variables: { plan: 'pro' } },
             ])
             expect(logic.values.testRunSteps).toMatchObject([
                 { actionId: 'trigger_node', waitSkipped: false, result: { logs: [{ message: 'Trigger matched' }] } },
+                { actionId: 'function_node', waitSkipped: false },
                 { actionId: 'email_node', waitSkipped: false },
                 { actionId: 'sms_node', waitSkipped: false },
+                { actionId: 'push_node', waitSkipped: false },
                 { actionId: 'delay_node', waitSkipped: true },
                 { actionId: 'exit_node', waitSkipped: false },
             ])
@@ -703,7 +737,26 @@ describe('hogFlowEditorTestLogic', () => {
             expect(hogFlowEditorLogic({ id: 'test-workflow' }).values.selectedNodeId).toEqual('exit_node')
         })
 
-        it('runs with the person and request setting of the pane it starts from', async () => {
+        it('fails a function parked for retry without running downstream steps', async () => {
+            await runToTheEnd({
+                ...COMPLETE_RUN,
+                function_node: {
+                    status: 'success',
+                    nextActionId: 'function_node',
+                    logs: [{ level: 'warn', message: 'HTTP 503, retry scheduled', timestamp: '2026-01-01T00:00:00Z' }],
+                },
+            })
+
+            expect(requests.map(({ step }) => step)).toEqual(['trigger_node', 'function_node'])
+            expect(logic.values.testRunSteps?.[1]).toMatchObject({
+                actionId: 'function_node',
+                waitSkipped: false,
+                result: { status: 'error', nextActionId: null, logs: [{ message: 'HTTP 503, retry scheduled' }] },
+            })
+            expect(logic.values.testResult?.status).toBe('error')
+        })
+
+        it('keeps the email pane person and mocks every request in its full run', async () => {
             await mountWithRealRequests(COMPLETE_RUN)
             const emailPaneGlobals = {
                 ...createExampleEventForTrigger({ type: 'event' }, 1, 'wf'),
@@ -711,7 +764,10 @@ describe('hogFlowEditorTestLogic', () => {
             }
 
             await expectLogic(logic, () =>
-                logic.actions.runAllSteps({ globals: JSON.stringify(emailPaneGlobals), mock_async_functions: true })
+                logic.actions.runAllSteps(
+                    { globals: JSON.stringify(emailPaneGlobals), mock_async_functions: false },
+                    'email'
+                )
             ).toDispatchActions(['finishTestRun'])
 
             expect(requests.map(({ mocked, personId }) => ({ mocked, personId }))).toEqual(
@@ -724,19 +780,19 @@ describe('hogFlowEditorTestLogic', () => {
                 'a failing step that aborts the run',
                 // An aborted step stays on its own step, like a parked delay.
                 { status: 'error', nextActionId: 'email_node' } as const,
-                ['trigger_node', 'email_node'],
+                ['trigger_node', 'function_node', 'email_node'],
             ],
             [
                 'a failing step set to continue on error',
                 { status: 'error', nextActionId: 'sms_node' } as const,
-                ['trigger_node', 'email_node', 'sms_node', 'delay_node', 'exit_node'],
+                COMPLETE_STEPS,
             ],
-            ['a request that fails', 'request fails' as const, ['trigger_node', 'email_node']],
+            ['a request that fails', 'request fails' as const, ['trigger_node', 'function_node', 'email_node']],
         ])('records %s and goes only as far as a real run would', async (_, emailResponse, expectedSteps) => {
             await runToTheEnd({ ...COMPLETE_RUN, email_node: emailResponse })
 
             expect(requests.map((request) => request.step)).toEqual(expectedSteps)
-            expect(logic.values.testRunSteps?.[1]).toMatchObject({
+            expect(logic.values.testRunSteps?.[2]).toMatchObject({
                 actionId: 'email_node',
                 result: { status: 'error' },
             })

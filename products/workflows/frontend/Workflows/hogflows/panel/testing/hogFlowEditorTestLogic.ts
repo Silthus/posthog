@@ -60,6 +60,8 @@ export interface HogflowTestInvocation {
     mock_async_functions: boolean
 }
 
+export type TestRunSource = 'workflow' | 'email'
+
 export interface TestRunStep {
     actionId: string
     result: HogflowTestResult
@@ -107,24 +109,34 @@ async function requestTestStep({
 const continueTarget = (workflow: HogFlow, actionId: string): string | null =>
     workflow.edges.find((edge) => edge.from === actionId && edge.type === 'continue')?.to ?? null
 
-const nextTestRunStep = (
-    workflow: HogFlow,
-    actionId: string,
-    result: HogflowTestResult
-): { nextActionId: string | null; waitSkipped: boolean } => {
+const nextTestRunStep = (workflow: HogFlow, actionId: string, result: HogflowTestResult): TestRunStep => {
     const action = workflow.actions.find((candidate) => candidate.id === actionId)
+    const step = { actionId, result, waitSkipped: false }
     if (result.status === 'skipped' || action?.type === 'exit') {
-        return { nextActionId: null, waitSkipped: false }
+        return { ...step, result: { ...result, nextActionId: null } }
     }
     if (result.nextActionId !== actionId) {
-        return { nextActionId: result.nextActionId, waitSkipped: false }
+        return step
     }
     if (result.status === 'error') {
-        return { nextActionId: null, waitSkipped: false }
+        return { ...step, result: { ...result, nextActionId: null } }
     }
-    // A delay or wait parks the run on its own step. A test run does not wait it out, so it moves
-    // on along the step's continue edge, where the run would go once the wait ends.
-    return { nextActionId: continueTarget(workflow, actionId), waitSkipped: true }
+    if (
+        action?.type === 'delay' ||
+        action?.type === 'wait_until_condition' ||
+        action?.type === 'wait_until_time_window'
+    ) {
+        return { ...step, result: { ...result, nextActionId: continueTarget(workflow, actionId) }, waitSkipped: true }
+    }
+    return {
+        ...step,
+        result: {
+            ...result,
+            status: 'error',
+            nextActionId: null,
+            errors: [...(result.errors ?? []), 'This step did not finish. Check its logs and test it again.'],
+        },
+    }
 }
 
 // A full run reaches every message step with the sample person's contact details, so it never
@@ -365,11 +377,15 @@ export interface hogFlowEditorTestLogicActions {
     resetTestInvocation: (values?: HogflowTestInvocation) => {
         values?: HogflowTestInvocation
     }
+    runAllSteps: (
+        inputs: HogflowTestInvocation,
+        source?: TestRunSource
+    ) => {
+        inputs: HogflowTestInvocation
+        source: TestRunSource
+    }
     runRequestedTestWhenReady: () => {
         value: true
-    }
-    runAllSteps: (inputs: HogflowTestInvocation) => {
-        inputs: HogflowTestInvocation
     }
     runTestRunStep: (actionId: string) => {
         actionId: string
@@ -900,7 +916,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
         setLastSearchedEventName: (eventName: string | null) => ({ eventName }),
         resetAccumulatedVariables: true,
         runRequestedTestWhenReady: true,
-        runAllSteps: (inputs: HogflowTestInvocation) => ({ inputs }),
+        runAllSteps: (inputs: HogflowTestInvocation, source: TestRunSource = 'workflow') => ({ inputs, source }),
         runTestRunStep: (actionId: string) => ({ actionId }),
         stopTestRun: true,
         addTestRunStep: (step: TestRunStep) => ({ step }),
@@ -1386,7 +1402,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
             }
         },
         openTestPane: () => actions.runRequestedTestWhenReady(),
-        runAllSteps: async ({ inputs }, breakpoint) => {
+        runAllSteps: async ({ inputs, source }, breakpoint) => {
             if (!values.testingV2Enabled) {
                 actions.stopTestRun()
                 actions.clearTestRun()
@@ -1413,9 +1429,10 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
                         globalsJson,
                         variables,
                         mockAsyncFunctions:
-                            mockAsyncFunctions || (!!action && MESSAGE_ACTION_TYPES.includes(action.type)),
+                            source === 'email' ||
+                            mockAsyncFunctions ||
+                            (!!action && MESSAGE_ACTION_TYPES.includes(action.type)),
                         actionId,
-                        testingV2: true,
                     })
                 } catch (error: any) {
                     result = failedRequestResult(error)
@@ -1426,10 +1443,10 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
                 }
 
                 Object.assign(variables, result.variables)
-                const { nextActionId, waitSkipped } = nextTestRunStep(values.workflow, actionId, result)
-                actions.setTestResult({ ...result, nextActionId })
-                actions.addTestRunStep({ actionId, result, waitSkipped })
-                actionId = nextActionId
+                const step = nextTestRunStep(values.workflow, actionId, result)
+                actions.setTestResult(step.result)
+                actions.addTestRunStep(step)
+                actionId = step.result.nextActionId
             }
             actions.finishTestRun()
         },

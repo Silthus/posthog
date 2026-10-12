@@ -178,6 +178,7 @@ export function EmailActionTestContent(): JSX.Element | null {
                     <>
                         <div className="flex-1" />
                         <HogFlowRunAllStepsButton
+                            source="email"
                             testInvocation={testInvocation}
                             hasTestData={!!sampleGlobals}
                             isTestInvocationSubmitting={isTestInvocationSubmitting}

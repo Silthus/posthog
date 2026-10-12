@@ -3,26 +3,30 @@ import { useActions, useValues } from 'kea'
 import { IconPlay } from '@posthog/icons'
 import { LemonButton } from '@posthog/lemon-ui'
 
+import { FEATURE_FLAGS } from 'lib/constants'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
+
 import { workflowLogic } from '../../../workflowLogic'
-import { HogflowTestInvocation, hogFlowEditorTestLogic } from './hogFlowEditorTestLogic'
-import { testEmailRecipientLogic } from './testEmailRecipientLogic'
+import { HogflowTestInvocation, TestRunSource, hogFlowEditorTestLogic } from './hogFlowEditorTestLogic'
 
 interface HogFlowRunAllStepsButtonProps {
+    source?: TestRunSource
     testInvocation: HogflowTestInvocation
     hasTestData: boolean
     isTestInvocationSubmitting: boolean
 }
 
 export function HogFlowRunAllStepsButton({
+    source = 'workflow',
     testInvocation,
     hasTestData,
     isTestInvocationSubmitting,
 }: HogFlowRunAllStepsButtonProps): JSX.Element | null {
     const { logicProps } = useValues(workflowLogic)
-    const { testingV2Enabled } = useValues(testEmailRecipientLogic)
+    const { featureFlags } = useValues(featureFlagLogic)
     const { runAllSteps } = useActions(hogFlowEditorTestLogic(logicProps))
 
-    if (!testingV2Enabled) {
+    if (featureFlags[FEATURE_FLAGS.WORKFLOWS_TESTING_V2] !== true) {
         return null
     }
 
@@ -31,7 +35,7 @@ export function HogFlowRunAllStepsButton({
             type="secondary"
             icon={<IconPlay />}
             data-attr="run-all-workflow-test-steps"
-            onClick={() => runAllSteps(testInvocation)}
+            onClick={() => runAllSteps(testInvocation, source)}
             disabledReason={
                 !hasTestData
                     ? 'Load test data to run the steps'
