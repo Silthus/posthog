@@ -52,6 +52,7 @@ export interface workflowFoldersLogicValues {
     expandedFolders: string[]
     folderActionPending: boolean
     folderCounts: Record<string, number>
+    folderCreationError: unknown
     folderFacets: FacetDefinition<WorkflowFolderFileRow>[]
     folderFileRows: WorkflowFolderFileRow[]
     folderJumpPaths: string[]
@@ -142,6 +143,9 @@ export interface workflowFoldersLogicActions {
     setFolderActionPending: (pending: boolean) => {
         pending: boolean
     }
+    setFolderCreationError: (error: unknown) => {
+        error: unknown
+    }
     setFolderJumpSearch: (search: string) => {
         search: string
     }
@@ -173,7 +177,12 @@ export interface workflowFoldersLogicMeta {
             matchesText: MatchesText<WorkflowListRow>
         ) => WorkflowListRow[]
         hasActiveQuery: (value: FacetSearchValue) => boolean
-        matchingTemplates: (savedItems: FileSystemEntry[], value: FacetSearchValue) => FileSystemEntry[]
+        matchingTemplates: (
+            folderSearchItems: WorkflowFolderFileRow[],
+            value: FacetSearchValue,
+            folderFacets: FacetDefinition<WorkflowFolderFileRow>[],
+            folderMatchesText: MatchesText<WorkflowFolderFileRow>
+        ) => FileSystemEntry[]
         folderTemplates: (
             matchingTemplates: FileSystemEntry[],
             currentFolder: string | null,
@@ -236,8 +245,57 @@ export type workflowFoldersLogicType = MakeLogicType<
     workflowFoldersLogicMeta
 >
 
+const WORKFLOW_FILE_TYPES = ['hog_flow', 'message_template']
+
 function treeFolderId(folder: string | null): string {
     return `project://${folder ?? ''}`
+}
+
+function ancestorFolders(path: string): string[] {
+    const parts = splitPath(path)
+    return parts.map((_, index) => joinPath(parts.slice(0, index + 1)))
+}
+
+function displayedParent(path: string): string {
+    const parent = parentPath(path)
+    return parent === 'Unfiled' || parent.startsWith('Unfiled/') ? 'Unfiled' : parent
+}
+
+function isInScope(parent: string, folder: string | null, searching: boolean): boolean {
+    const scope = folder ?? ''
+    return searching ? !scope || parent === scope || parent.startsWith(`${scope}/`) : parent === scope
+}
+
+function relevantFolderPaths(items: FileSystemEntry[], hasUnfiledWorkflows: boolean): string[] {
+    const files = items.filter((entry) => entry.type !== 'folder' && !entry.shortcut)
+    const foldersWithFiles = new Set(files.flatMap((file) => ancestorFolders(parentPath(file.path))))
+    const foldersWithWorkflowFiles = new Set(
+        files
+            .filter((file) => WORKFLOW_FILE_TYPES.includes(file.type ?? ''))
+            .flatMap((file) => ancestorFolders(parentPath(file.path)))
+    )
+    const isRelevantEmptyFolder = (path: string): boolean => {
+        const nearestFilledAncestor = ancestorFolders(parentPath(path))
+            .reverse()
+            .find((ancestor) => foldersWithFiles.has(ancestor))
+        return !nearestFilledAncestor || foldersWithWorkflowFiles.has(nearestFilledAncestor)
+    }
+    const emptyFolders = items
+        .filter(
+            (entry) =>
+                entry.type === 'folder' &&
+                !entry.shortcut &&
+                !entry.path.startsWith('Unfiled/') &&
+                !foldersWithFiles.has(entry.path) &&
+                isRelevantEmptyFolder(entry.path)
+        )
+        .map((entry) => entry.path)
+    const paths = new Set(
+        [...foldersWithWorkflowFiles, ...emptyFolders, ...(hasUnfiledWorkflows ? ['Unfiled'] : [])].flatMap((path) =>
+            ancestorFolders(path === 'Unfiled' || path.startsWith('Unfiled/') ? 'Unfiled' : path)
+        )
+    )
+    return [...paths].sort((a, b) => a.localeCompare(b))
 }
 
 export const workflowFoldersLogic = kea<workflowFoldersLogicType>([
@@ -264,6 +322,7 @@ export const workflowFoldersLogic = kea<workflowFoldersLogicType>([
         dropFile: (activeId: string, overId: string | null) => ({ activeId, overId }),
         createFolder: (name: string, parent?: string) => ({ name, parent }),
         setCreatingFolder: (creating: boolean) => ({ creating }),
+        setFolderCreationError: (error: unknown) => ({ error }),
         setExpandedFolders: (folders: string[]) => ({ folders }),
         moveFileToFolder: (entry: FileSystemEntry) => ({ entry }),
         openFolder: (folder: string | null) => ({ folder }),
@@ -290,6 +349,10 @@ export const workflowFoldersLogic = kea<workflowFoldersLogicType>([
             { loadBrowser: () => false, loadBrowserFailure: () => true, loadBrowserSuccess: () => false },
         ],
         creatingFolder: [false, { setCreatingFolder: (_, { creating }) => creating }],
+        folderCreationError: [
+            null as unknown,
+            { createFolder: () => null, setFolderCreationError: (_, { error }) => error },
+        ],
         expandedFolders: [
             ['project://'] as string[],
             {
@@ -375,37 +438,8 @@ export const workflowFoldersLogic = kea<workflowFoldersLogicType>([
         ],
         folderPaths: [
             (s) => [s.savedItems, s.rows],
-            (items: FileSystemEntry[], rows: WorkflowListRow[]): string[] => {
-                const paths = new Set<string>()
-                for (const path of [
-                    ...items
-                        .filter(
-                            (entry) => !entry.shortcut && ['hog_flow', 'message_template'].includes(entry.type ?? '')
-                        )
-                        .map((entry) => parentPath(entry.path)),
-                    ...items
-                        .filter(
-                            (entry) =>
-                                entry.type === 'folder' &&
-                                !entry.shortcut &&
-                                !entry.path.startsWith('Unfiled/') &&
-                                !items.some(
-                                    (file) =>
-                                        file.type !== 'folder' &&
-                                        !file.shortcut &&
-                                        file.path.startsWith(`${entry.path}/`)
-                                )
-                        )
-                        .map((entry) => entry.path),
-                    ...(rows.length ? ['Unfiled'] : []),
-                ]) {
-                    const parts = splitPath(path.startsWith('Unfiled/') ? 'Unfiled' : path)
-                    for (let depth = 1; depth <= parts.length; depth++) {
-                        paths.add(joinPath(parts.slice(0, depth)))
-                    }
-                }
-                return [...paths].sort((a, b) => a.localeCompare(b))
-            },
+            (items: FileSystemEntry[], rows: WorkflowListRow[]): string[] =>
+                relevantFolderPaths(items, rows.length > 0),
         ],
         matchingRows: [
             (s) => [s.rows, s.value, s.facets, s.matchesText],
@@ -432,47 +466,26 @@ export const workflowFoldersLogic = kea<workflowFoldersLogicType>([
                 !!value.text.trim() || value.filters.some((filter) => filter.facet !== 'in' || filter.negated),
         ],
         matchingTemplates: [
-            (s) => [s.savedItems, s.value],
-            (items: FileSystemEntry[], value: FacetSearchValue): FileSystemEntry[] =>
-                items.filter((entry) => {
-                    if (entry.type !== 'message_template' || entry.shortcut) {
-                        return false
-                    }
-                    const matchesText = value.text
-                        .toLowerCase()
-                        .split(/\s+/)
-                        .filter(Boolean)
-                        .every((word) => (splitPath(entry.path).at(-1) ?? '').toLowerCase().includes(word))
-                    return (
-                        matchesText &&
-                        value.filters
-                            .filter((filter) => filter.facet !== 'in' || filter.negated)
-                            .every((filter) =>
-                                filter.facet === 'in'
-                                    ? !(
-                                          parentPath(entry.path) === filter.value ||
-                                          parentPath(entry.path).startsWith(`${filter.value}/`)
-                                      )
-                                    : filter.facet === 'type'
-                                      ? (filter.value === 'email-template') !== filter.negated
-                                      : filter.negated
-                            )
-                    )
-                }),
+            (s) => [s.folderSearchItems, s.value, s.folderFacets, s.folderMatchesText],
+            (
+                items: WorkflowFolderFileRow[],
+                value: FacetSearchValue,
+                facets: FacetDefinition<WorkflowFolderFileRow>[],
+                matchesText: MatchesText<WorkflowFolderFileRow>
+            ): FileSystemEntry[] => {
+                const matches = createFacetMatcher(
+                    { ...value, filters: value.filters.filter((filter) => filter.facet !== 'in' || filter.negated) },
+                    facets,
+                    matchesText
+                )
+                return items.flatMap((item) => (item.kind === 'email_template' && matches(item) ? [item.entry] : []))
+            },
         ],
         folderTemplates: [
             (s) => [s.matchingTemplates, s.currentFolder, s.hasActiveQuery],
             (items: FileSystemEntry[], folder: string | null, searching: boolean): FileSystemEntry[] =>
                 items
-                    .filter((entry) => {
-                        const parent = parentPath(entry.path)
-                        const scope = folder ?? ''
-                        return folder === 'Unfiled'
-                            ? parent.startsWith('Unfiled/')
-                            : searching
-                              ? !scope || parent === scope || parent.startsWith(`${scope}/`)
-                              : parent === scope
-                    })
+                    .filter((entry) => isInScope(displayedParent(entry.path), folder, searching))
                     .sort((a, b) => a.path.localeCompare(b.path)),
         ],
         folderCounts: [
@@ -522,16 +535,11 @@ export const workflowFoldersLogic = kea<workflowFoldersLogicType>([
                 itemsByRef: Record<string, FileSystemEntry>,
                 searching: boolean
             ): WorkflowListRow[] => {
-                const scope = folder ?? ''
                 return rows
                     .filter((row) => {
                         const entry = itemsByRef[`hog_flow::${row.id}`]
-                        const parent = entry && !entry.shortcut ? parentPath(entry.path) : 'Unfiled/Workflows'
-                        return folder === 'Unfiled'
-                            ? parent.startsWith('Unfiled/')
-                            : searching
-                              ? !scope || parent === scope || parent.startsWith(`${scope}/`)
-                              : parent === scope
+                        const parent = entry && !entry.shortcut ? displayedParent(entry.path) : 'Unfiled'
+                        return isInScope(parent, folder, searching)
                     })
                     .sort(
                         (a, b) =>
@@ -693,10 +701,16 @@ export const workflowFoldersLogic = kea<workflowFoldersLogicType>([
             }
         },
         dropFile: async ({ activeId, overId }) => {
-            const drop = resolveProjectTreeDrop(activeId, overId, values.savedItems, [])
+            const storedFolders = new Set(
+                values.savedItems.filter((entry) => entry.type === 'folder').map((entry) => entry.path)
+            )
+            const inferredFolders = values.folderPaths
+                .filter((path) => !storedFolders.has(path))
+                .map((path): FileSystemEntry => ({ id: `inferred:${path}`, path, type: 'folder' }))
+            const drop = resolveProjectTreeDrop(activeId, overId, [...values.savedItems, ...inferredFolders], [])
             if (
                 drop?.type !== 'move' ||
-                !['hog_flow', 'message_template'].includes(drop.item.type ?? '') ||
+                !WORKFLOW_FILE_TYPES.includes(drop.item.type ?? '') ||
                 ['viewer', 'none'].includes(drop.item.user_access_level ?? '')
             ) {
                 return
@@ -759,8 +773,9 @@ export const workflowFoldersLogic = kea<workflowFoldersLogicType>([
                     lastCount: 1,
                 })
                 actions.openFolder(path)
-            } catch {
+            } catch (error) {
                 lemonToast.error("Couldn't create the folder")
+                actions.setFolderCreationError(error)
             } finally {
                 actions.setCreatingFolder(false)
             }

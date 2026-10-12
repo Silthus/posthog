@@ -50,7 +50,13 @@ export function WorkflowNewFolderButton({
                                     ? 'A folder with this name already exists'
                                     : undefined,
                     },
-                    onSubmit: ({ name }) => workflowFoldersLogic.asyncActions.createFolder(name.trim(), parent),
+                    shouldAwaitSubmit: true,
+                    onSubmit: async ({ name }) => {
+                        await workflowFoldersLogic.asyncActions.createFolder(name.trim(), parent)
+                        if (workflowFoldersLogic.values.folderCreationError) {
+                            throw workflowFoldersLogic.values.folderCreationError
+                        }
+                    },
                 })
             }
             data-attr="workflows-new-folder"

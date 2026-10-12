@@ -17,16 +17,22 @@ export function WorkflowFolderActions({ path, count }: { path: string; count: nu
     const { moveItem } = useActions(projectTreeDataLogic)
     const { moveFileToFolder } = useActions(workflowFoldersLogic)
     const entry = savedItems.find((item) => item.type === 'folder' && item.path === path)
-    if (!entry || path === 'Unfiled') {
+    if (path === 'Unfiled') {
         return null
+    }
+    const newSubfolderButton = (
+        <span className="opacity-0 group-hover/row:opacity-100 focus-within:opacity-100">
+            <WorkflowNewFolderButton parent={path} iconOnly />
+        </span>
+    )
+    if (!entry) {
+        return <div className="flex justify-end items-center gap-1">{newSubfolderButton}</div>
     }
     const name = splitPath(path).at(-1) ?? path
     const empty = count === 0 && !folderPaths.some((folder) => folder.startsWith(`${path}/`))
     return (
         <div className="flex justify-end items-center gap-1">
-            <span className="opacity-0 group-hover/row:opacity-100 focus-within:opacity-100">
-                <WorkflowNewFolderButton parent={path} iconOnly />
-            </span>
+            {newSubfolderButton}
             <LemonMenu
                 items={[
                     { label: 'Move to…', onClick: () => moveFileToFolder(entry) },

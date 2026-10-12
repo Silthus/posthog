@@ -1,4 +1,5 @@
 import { useActions, useValues } from 'kea'
+import { router } from 'kea-router'
 
 import { IconArrowLeft, IconDrag, IconEllipsis, IconFolder, IconLetter } from '@posthog/icons'
 import { LemonButton, LemonCheckbox, LemonMenu, LemonTag, Link } from '@posthog/lemon-ui'
@@ -20,6 +21,14 @@ type ContentsRow =
     | WorkflowFolderFileRow
     | { kind: 'folder' | 'up'; id: string; name: string; path: string; count: number }
 
+const SORTING_URL_PARAM = 'order'
+
+const ROW_KIND_RANK: Record<ContentsRow['kind'], number> = { up: 0, folder: 1, workflow: 2, email_template: 3 }
+
+function isNavigationRow(row: ContentsRow): row is Extract<ContentsRow, { kind: 'folder' | 'up' }> {
+    return row.kind === 'folder' || row.kind === 'up'
+}
+
 export function WorkflowFolderContents(): JSX.Element {
     const {
         folderRows,
@@ -36,6 +45,12 @@ export function WorkflowFolderContents(): JSX.Element {
     } = useValues(workflowFoldersLogic)
     const { openFolder, moveFileToFolder, toggleSelectedFile, setSelectedFiles } = useActions(workflowFoldersLogic)
     const { shownColumns, metricsLoading, listLoaded, serverSearchStatus } = useValues(workflowsListV2Logic)
+    const { searchParams } = useValues(router)
+    const sortOrder = String(searchParams[SORTING_URL_PARAM] ?? '').startsWith('-') ? -1 : 1
+    const keepRowKindsInPlace =
+        (compareSameKind: (a: ContentsRow, b: ContentsRow) => number) =>
+        (a: ContentsRow, b: ContentsRow): number =>
+            sortOrder * (ROW_KIND_RANK[a.kind] - ROW_KIND_RANK[b.kind]) || compareSameKind(a, b)
     const rows: ContentsRow[] = [
         ...(currentFolder
             ? [{ kind: 'up' as const, id: 'up', name: '..', path: parentPath(currentFolder), count: 0 }]
@@ -81,10 +96,11 @@ export function WorkflowFolderContents(): JSX.Element {
                 align: column.align,
                 sorter:
                     typeof column.sorter === 'function'
-                        ? (a, b) =>
+                        ? keepRowKindsInPlace((a, b) =>
                               a.kind === 'workflow' && b.kind === 'workflow' && typeof column.sorter === 'function'
                                   ? column.sorter(a.row, b.row)
                                   : a.name.localeCompare(b.name)
+                          )
                         : undefined,
                 className: `${typeof column.className === 'string' ? column.className : ''} ${['owner', 'updated_at', 'created_by', 'last_7_days', 'health', 'trigger', 'type'].includes(column.key ?? '') ? 'hidden @min-[48rem]/main-content:table-cell' : ''}`,
                 render: (_, item, rowIndex, columnIndex) => {
@@ -195,6 +211,18 @@ export function WorkflowFolderContents(): JSX.Element {
                 columns={columns}
                 rowKey="id"
                 rowClassName="group/row"
+                onRow={(item) =>
+                    isNavigationRow(item)
+                        ? {
+                              className: 'cursor-pointer',
+                              onClick: (event) => {
+                                  if (!(event.target as HTMLElement).closest('button, a, input, [role="menu"]')) {
+                                      openFolder(item.path || null)
+                                  }
+                              },
+                          }
+                        : {}
+                }
                 size="small"
                 loading={!browserReady || browserReadyLoading || !listLoaded || serverSearchStatus === 'pending'}
                 pagination={{ pageSize: 100, useUrl: false }}

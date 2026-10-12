@@ -7,7 +7,9 @@ import { moveToLogic } from 'lib/components/FileSystem/MoveTo/moveToLogic'
 import { FEATURE_FLAGS } from 'lib/constants'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 
+import { projectTreeDataLogic } from '~/layout/panel-layout/ProjectTree/projectTreeDataLogic'
 import { useMocks } from '~/mocks/jest'
+import { FileSystemEntry } from '~/queries/schema/schema-general'
 import { initKeaTests } from '~/test/init'
 
 import { workflowFoldersLogic } from './workflowFoldersLogic'
@@ -16,6 +18,14 @@ import { workflowsListV2Logic } from './workflowsListV2Logic'
 
 describe('workflowFoldersLogic', () => {
     let logic: ReturnType<typeof workflowFoldersLogic.build>
+
+    const addProjectFiles = (results: FileSystemEntry[]): void =>
+        projectTreeDataLogic.actions.addLoadedResults({
+            searchTerm: '',
+            results,
+            hasMore: false,
+            lastCount: results.length,
+        })
 
     beforeEach(() => {
         useMocks({
@@ -149,6 +159,7 @@ describe('workflowFoldersLogic', () => {
         const toast = jest.spyOn(lemonToast, 'error')
         useMocks({ post: { '/api/projects/:team_id/file_system/': () => [500, { detail: 'Unavailable' }] } })
         await logic.asyncActions.createFolder('Invoices', 'Billing')
+        expect(logic.values.folderCreationError).toBeTruthy()
         expect(toast).toHaveBeenCalledWith("Couldn't create the folder")
         expect(logic.values.creatingFolder).toBe(false)
         toast.mockRestore()
@@ -185,6 +196,56 @@ describe('workflowFoldersLogic', () => {
         await logic.asyncActions.dropFile('project/direct', 'project://Unfiled')
         await expectLogic(logic).toFinishAllListeners()
         await waitFor(() => expect(movedPath).toBe('Unfiled/Workflows/Welcome'))
+    })
+
+    it('drops a workflow onto a folder that only exists as a file location', async () => {
+        let movedPath: string | undefined
+        useMocks({
+            post: {
+                '/api/projects/:team_id/file_system/direct/move/': async ({ request }) => {
+                    const body = (await request.json()) as { new_path: string }
+                    movedPath = body.new_path
+                    return [200, { id: 'direct', path: body.new_path, type: 'hog_flow', ref: FIXTURE_WORKFLOWS[0].id }]
+                },
+            },
+        })
+        await expectLogic(logic).toFinishAllListeners()
+        addProjectFiles([
+            { id: 'archived', path: 'Archive/Old receipt', type: 'message_template', ref: 'template-old' },
+        ])
+        expect(logic.values.folderPaths).toContain('Archive')
+        await logic.asyncActions.dropFile('project/direct', 'project://Archive')
+        await waitFor(() => expect(movedPath).toBe('Archive/Welcome'))
+    })
+
+    it('shows files moved directly into Unfiled inside the Unfiled folder', async () => {
+        await expectLogic(logic).toFinishAllListeners()
+        addProjectFiles([
+            { id: 'moved', path: 'Unfiled/Moved receipt', type: 'message_template', ref: 'template-moved' },
+        ])
+        logic.actions.openFolder('Unfiled')
+        expect(logic.values.folderTemplates.map((entry) => entry.ref)).toContain('template-moved')
+        expect(logic.values.folderCounts.Unfiled).toBe(logic.values.folderFileRows.length)
+    })
+
+    it('hides empty folders inside a branch that only holds other products', async () => {
+        await expectLogic(logic).toFinishAllListeners()
+        addProjectFiles([{ id: 'drafts', path: 'Reports/Drafts', type: 'folder' }])
+        expect(logic.values.folderPaths).not.toContain('Reports')
+        expect(logic.values.folderPaths).not.toContain('Reports/Drafts')
+        expect(logic.values.folderPaths).toContain('Empty')
+    })
+
+    it('matches email templates when either of two type pills applies', async () => {
+        await expectLogic(logic).toFinishAllListeners()
+        logic.actions.setValue({
+            filters: [
+                { facet: 'type', value: 'messaging', negated: false },
+                { facet: 'type', value: 'email-template', negated: false },
+            ],
+            text: '',
+        })
+        expect(logic.values.matchingTemplates.map((entry) => entry.ref)).toContain('template-receipt')
     })
 
     it('keeps folder scope and counts after the shared tree prunes its collapsed cache', async () => {
