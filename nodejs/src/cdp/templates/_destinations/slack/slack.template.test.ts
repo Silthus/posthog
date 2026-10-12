@@ -4,7 +4,7 @@ import { TemplateTester } from '../../test/test-helpers'
 import { template } from './slack.template'
 
 describe('slack template', () => {
-    const tester = new TemplateTester(template)
+    const tester = new TemplateTester(template, { executionTimeoutMs: 30000 })
 
     const commonInputs = {
         slack_workspace: { access_token: 'xoxb-1234' },
@@ -31,8 +31,38 @@ describe('slack template', () => {
         await tester.beforeEach()
     })
 
-    it('should post a message', async () => {
-        const response = await tester.invoke(commonInputs)
+    it('updates a message instead of replying or changing its appearance', async () => {
+        const response = await tester.invoke({
+            ...commonInputs,
+            message_ts: '1700000000.000100',
+            thread_ts: '1699999999.000000',
+        })
+
+        expect(response.error).toBeUndefined()
+        expect(response.invocation.queueParameters).toMatchObject({
+            url: 'https://slack.com/api/chat.update',
+            method: 'POST',
+            headers: { Authorization: 'Bearer xoxb-1234', 'Content-Type': 'application/json' },
+        })
+        expect(bodyOf(response.invocation.queueParameters)).toEqual({
+            channel: 'channel',
+            ts: '1700000000.000100',
+            blocks: [],
+            text: 'hello',
+        })
+
+        const fetchResponse = { status: 200, body: { ok: true, ts: '1700000000.000100', channel: 'channel' } }
+        const result = await tester.invokeFetchResponse(response.invocation, fetchResponse)
+        expect(result).toMatchObject({ finished: true, execResult: fetchResponse })
+        expect(result.error).toBeUndefined()
+    })
+
+    it.each([
+        ['unset', undefined],
+        ['empty', ''],
+        ['resolves to nothing', '{event.properties.message_ts}'],
+    ])('should post a message when message_ts is %s', async (_name, message_ts) => {
+        const response = await tester.invoke({ ...commonInputs, message_ts })
 
         expect(response.error).toBeUndefined()
         expect(response.invocation.queueParameters).toMatchObject({
@@ -51,12 +81,14 @@ describe('slack template', () => {
             text: 'hello',
         })
 
-        const fetchResponse = await tester.invokeFetchResponse(response.invocation, {
+        const slackResponse = {
             status: 200,
-            body: { ok: true },
-        })
+            body: { ok: true, ts: '1700000000.000100', channel: 'channel' },
+        }
+        const fetchResponse = await tester.invokeFetchResponse(response.invocation, slackResponse)
         expect(fetchResponse.finished).toBe(true)
         expect(fetchResponse.error).toBeUndefined()
+        expect(fetchResponse.execResult).toEqual(slackResponse)
     })
 
     it.each([
@@ -125,10 +157,32 @@ describe('slack template', () => {
     })
 
     it.each([
-        ['a non-200 status', { status: 400, body: { ok: true } }, "Failed to post message to Slack: 400: {'ok': true}"],
-        ['ok: false', { status: 200, body: { ok: false } }, "Failed to post message to Slack: 200: {'ok': false}"],
-    ])('should throw on %s', async (_name, fetchResponse, expectedError) => {
-        let response = await tester.invoke(commonInputs)
+        [
+            'posting with a non-200 status',
+            '',
+            { status: 400, body: { ok: true } },
+            "Failed to post message to Slack: 400: {'ok': true}",
+        ],
+        [
+            'posting with ok: false',
+            '',
+            { status: 200, body: { ok: false } },
+            "Failed to post message to Slack: 200: {'ok': false}",
+        ],
+        [
+            'updating with a non-200 status',
+            '1700000000.000100',
+            { status: 400, body: { ok: true } },
+            "Failed to update Slack message: 400: {'ok': true}",
+        ],
+        [
+            'updating with ok: false',
+            '1700000000.000100',
+            { status: 200, body: { ok: false, error: 'cant_update_message' } },
+            "Failed to update Slack message: 200: {'ok': false, 'error': 'cant_update_message'}",
+        ],
+    ])('should throw when %s', async (_name, message_ts, fetchResponse, expectedError) => {
+        let response = await tester.invoke({ ...commonInputs, message_ts })
         response = await tester.invokeFetchResponse(response.invocation, fetchResponse)
 
         expect(response.error).toEqual(expectedError)
