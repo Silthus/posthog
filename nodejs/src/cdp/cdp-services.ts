@@ -477,7 +477,8 @@ export function createCdpCoreServices(
                 configurationSetName: config.SES_SANDBOX_CONFIGURATION_SET,
                 fromAddress: config.SES_SANDBOX_FROM_ADDRESS,
             },
-            deps.teamManager
+            deps.teamManager,
+            redis
         ),
         new OrganizationMembersService(deps.postgres)
     )
