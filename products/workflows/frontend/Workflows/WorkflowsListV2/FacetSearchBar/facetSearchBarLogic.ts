@@ -1,4 +1,5 @@
 import { MakeLogicType, actions, kea, key, listeners, path, props, propsChanged, reducers, selectors } from 'kea'
+import posthog from 'posthog-js'
 
 import {
     FacetDefinition,
@@ -131,6 +132,23 @@ function noValuesLabel(draft: FacetDraft, value: FacetSearchValue): string {
     const reason = draft.partial ? `No value matches "${draft.partial}"` : 'No values to pick'
     const narrowing = narrowingOf(draft, value)
     return narrowing ? `${reason} with ${narrowing}` : reason
+}
+
+type FilterChangeSource = 'suggestion' | 'typed' | 'remove button' | 'backspace'
+
+function reportFilterChange(
+    searchBar: string,
+    change: 'added' | 'removed',
+    filter: FacetFilter,
+    source: FilterChangeSource
+): void {
+    posthog.capture('search bar filter changed', {
+        search_bar: searchBar,
+        change,
+        facet: filter.facet,
+        negated: filter.negated,
+        source,
+    })
 }
 
 function buildSuggestions(
@@ -441,6 +459,9 @@ export const facetSearchBarLogic = kea<facetSearchBarLogicType>([
             if (added.length || text !== props.value.text) {
                 props.onChange({ filters: [...props.value.filters, ...added], text })
             }
+            for (const filter of added) {
+                reportFilterChange(props.id, 'added', filter, 'typed')
+            }
         },
         moveHighlight: ({ delta }) => {
             const last = Math.max(0, values.suggestions.length - 1)
@@ -452,6 +473,7 @@ export const facetSearchBarLogic = kea<facetSearchBarLogicType>([
             } else if (suggestion.kind === 'value' && suggestion.filter) {
                 const rest = (suggestion.rest ?? '').trimEnd()
                 props.onChange({ filters: [...props.value.filters, suggestion.filter], text: rest.trim() })
+                reportFilterChange(props.id, 'added', suggestion.filter, 'suggestion')
                 actions.syncInput(rest ? `${rest} ` : '')
                 actions.setOpen(true)
             } else {
@@ -474,10 +496,13 @@ export const facetSearchBarLogic = kea<facetSearchBarLogicType>([
                 filters: props.value.filters.filter((f) => facetFilterKey(f) !== removed),
                 text: props.value.text,
             })
+            reportFilterChange(props.id, 'removed', filter, 'remove button')
         },
         removeLastFilter: () => {
-            if (props.value.filters.length) {
+            const last = props.value.filters.at(-1)
+            if (last) {
                 props.onChange({ filters: props.value.filters.slice(0, -1), text: props.value.text })
+                reportFilterChange(props.id, 'removed', last, 'backspace')
             }
         },
     })),

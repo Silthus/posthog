@@ -130,6 +130,7 @@ export function FacetSearchBar<TItem>({
                             tabIndex={-1}
                             fullWidth
                             size="small"
+                            data-attr={`${dataAttr}-suggestion-${suggestion.kind}`}
                             onClick={() => applySuggestion(suggestion)}
                         >
                             <span className="flex items-center gap-2 w-full min-w-0">
@@ -193,6 +194,7 @@ export function FacetSearchBar<TItem>({
                                         closeLabel={`Remove filter ${label}`}
                                         onClose={() => removePill(filter)}
                                         title={label}
+                                        data-attr={`${dataAttr}-pill`}
                                         className="max-w-80"
                                     >
                                         <span className={filter.negated ? 'text-danger' : undefined}>{label}</span>

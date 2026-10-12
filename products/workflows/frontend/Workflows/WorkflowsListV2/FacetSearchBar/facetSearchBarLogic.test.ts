@@ -1,3 +1,5 @@
+import posthog from 'posthog-js'
+
 import { initKeaTests } from '~/test/init'
 
 import { FacetDefinition, FacetSearchValue } from './facetQuery'
@@ -130,6 +132,42 @@ describe('facetSearchBarLogic', () => {
             filters: [{ facet: 'status', value: 'draft', negated: false }],
             text: '',
         })
+    })
+
+    it.each([
+        [
+            'picked from the suggestions',
+            { filters: [], text: '' },
+            () => {
+                logic.actions.setInput('status:')
+                logic.actions.applyHighlighted()
+            },
+            { change: 'added', facet: 'status', negated: false, source: 'suggestion' },
+        ],
+        [
+            'typed as a token',
+            { filters: [], text: '' },
+            () => logic.actions.setInput('-status:draft '),
+            { change: 'added', facet: 'status', negated: true, source: 'typed' },
+        ],
+        [
+            'removed with its button',
+            { filters: [{ facet: 'status', value: 'draft', negated: false }], text: '' },
+            () => logic.actions.removeFilter({ facet: 'status', value: 'draft', negated: false }),
+            { change: 'removed', facet: 'status', negated: false, source: 'remove button' },
+        ],
+        [
+            'removed with Backspace',
+            { filters: [{ facet: 'sends', value: 'Deals', negated: true }], text: '' },
+            () => logic.actions.removeLastFilter(),
+            { change: 'removed', facet: 'sends', negated: true, source: 'backspace' },
+        ],
+    ])('reports a pill %s', (_, value, act, properties) => {
+        const capture = jest.spyOn(posthog, 'capture').mockImplementation(() => undefined)
+        mountWith(value)
+        act()
+        expect(capture.mock.calls).toEqual([['search bar filter changed', { search_bar: 'test', ...properties }]])
+        capture.mockRestore()
     })
 
     it('adds a pill from a value row and keeps the text before the draft', () => {
