@@ -271,6 +271,24 @@ def _pull_request_labels(
         return None
 
 
+def _failing_suite_labels(
+    event_type: str,
+    payload: dict[str, Any],
+    integrations: tuple[InstallationIntegration, ...],
+    pull_request_numbers: list[int | None],
+    delivery_id: str,
+) -> dict[int | None, list[str] | None]:
+    repository = (payload.get("repository") or {}).get("full_name")
+    if not integrations or not repository or not _is_failing_check_suite(event_type, payload):
+        return {}
+    # Every connected project reads the same installation, so one lookup answers for all of them.
+    return {
+        number: _pull_request_labels(integrations[0], repository, number, delivery_id)
+        for number in pull_request_numbers
+        if number is not None
+    }
+
+
 def emit_github_event(event_type: str, payload: dict[str, Any], delivery_id: str) -> None:
     """Write one internal event per PostHog project connected to this GitHub installation.
 
@@ -302,15 +320,7 @@ def emit_github_event(event_type: str, payload: dict[str, Any], delivery_id: str
     if event_type == "check_suite":
         pull_request_numbers = _check_suite_pull_request_numbers(payload)
 
-    labels_by_number: dict[int | None, list[str] | None] = {}
-    repository = (payload.get("repository") or {}).get("full_name")
-    if integrations and repository and _is_failing_check_suite(event_type, payload):
-        # Every connected project reads the same installation, so one lookup answers for all of them.
-        labels_by_number = {
-            number: _pull_request_labels(integrations[0], repository, number, delivery_id)
-            for number in pull_request_numbers
-            if number is not None
-        }
+    labels_by_number = _failing_suite_labels(event_type, payload, integrations, pull_request_numbers, delivery_id)
 
     for integration in integrations:
         for pull_request_number in pull_request_numbers:
