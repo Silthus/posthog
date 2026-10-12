@@ -167,14 +167,14 @@ function buildSuggestions(
             facets,
             matchesText
         )(facet.key)
-        const rows = counts
-            .filter(
-                ({ value: v }) => !chosen.has(facetFilterKey({ facet: facet.key, value: v, negated: draft.negated }))
-            )
-            .filter(({ value: v }) => {
-                const label = formatFacetValue(facet, v).toLowerCase()
-                return !partial || label.includes(partial) || v.toLowerCase().includes(partial)
-            })
+        const matching = counts.filter(({ value: v }) => {
+            const label = formatFacetValue(facet, v).toLowerCase()
+            return !partial || label.includes(partial) || v.toLowerCase().includes(partial)
+        })
+        const isChosen = (v: string): boolean =>
+            chosen.has(facetFilterKey({ facet: facet.key, value: v, negated: draft.negated }))
+        const rows = matching
+            .filter(({ value: v }) => !isChosen(v))
             .slice(0, MAX_VALUE_SUGGESTIONS)
             .map(
                 ({ value: v, count }): FacetSuggestion => ({
@@ -187,7 +187,16 @@ function buildSuggestions(
                     rest: draft.rest,
                 })
             )
-        return rows.length ? rows : [{ id: 'none', kind: 'none', label: noValuesLabel(draft, value) }]
+        if (rows.length) {
+            return rows
+        }
+        const label =
+            counts.length === 0 && facet.emptyLabel
+                ? facet.emptyLabel
+                : matching.length
+                  ? `${formatFacetValue(facet, matching[0].value)} is already a filter`
+                  : noValuesLabel(draft, value)
+        return [{ id: 'none', kind: 'none', label }]
     }
 
     const ordered = sortFacets(facets)

@@ -90,6 +90,10 @@ export function buildWorkflowListFacets(rows: WorkflowListRow[]): FacetDefinitio
             showOnFocus: true,
             order: 5,
             getValues: (row) => (row.last7Days === null ? [] : [row.health]),
+            emptyLabel:
+                rows.length > 0 && rows.every((row) => row.last7Days === null)
+                    ? 'Health shows once run metrics load'
+                    : undefined,
             normalizeValue: valueFromLabel(HEALTH_LABELS),
             formatValue: labelFrom(HEALTH_LABELS),
         },

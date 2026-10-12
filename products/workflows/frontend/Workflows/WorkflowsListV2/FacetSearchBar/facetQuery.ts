@@ -15,6 +15,8 @@ export interface FacetDefinition<TItem> {
     resolveValue?: (value: string) => string
     /** Display form of a stored value: `active` → `Active`, a user uuid → a name. */
     formatValue?: (value: string) => string
+    /** Shown instead of the usual reason when no item has a value yet, such as while the values load. */
+    emptyLabel?: string
     /** Listed when the input is empty. Other facets are found by typing. */
     showOnFocus?: boolean
     /** Lower sorts first. */

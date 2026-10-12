@@ -32,6 +32,14 @@ const FACETS: FacetDefinition<Item>[] = [
         getValues: (item) => item.subjects,
     },
     { key: 'stage', label: 'Stage', description: 'Found by typing', order: 3, getValues: () => ['one'] },
+    {
+        key: 'health',
+        label: 'Health',
+        description: 'Known once metrics load',
+        order: 4,
+        getValues: () => [],
+        emptyLabel: 'Health shows once run metrics load',
+    },
 ]
 
 const ITEMS: Item[] = [
@@ -119,6 +127,13 @@ describe('facetSearchBarLogic', () => {
             'No value matches "renew" with your other filters',
         ],
         ['no values left for the search', [], 'zzz sends:', 'No values to pick with your search'],
+        [
+            'a value that is already a pill',
+            [{ facet: 'status', value: 'draft', negated: false }],
+            'status:dra',
+            'Draft is already a filter',
+        ],
+        ['a facet whose values have not loaded', [], 'health:', 'Health shows once run metrics load'],
     ])('says why no values are left for %s', (_, filters, input, label) => {
         mountWith({ filters, text: '' })
         logic.actions.setInput(input)
