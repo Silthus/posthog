@@ -17,7 +17,12 @@ export function WorkflowsListV2ColumnsMenu(): JSX.Element {
                 {
                     title: 'Columns',
                     items: OPTIONAL_COLUMNS.map((column) => ({
-                        label: OPTIONAL_COLUMN_TITLES[column],
+                        label: (
+                            <>
+                                {OPTIONAL_COLUMN_TITLES[column]}
+                                {shownColumns.includes(column) && <span className="sr-only">, shown</span>}
+                            </>
+                        ),
                         active: shownColumns.includes(column),
                         icon: shownColumns.includes(column) ? <IconCheck /> : <span className="w-4" />,
                         onClick: () => toggleColumn(column),
