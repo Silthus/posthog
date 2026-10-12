@@ -206,7 +206,7 @@ export function NativeEmailIntegrationChoice({
                 <LemonBanner
                     key={integration.id}
                     type="warning"
-                    className="m-1"
+                    className="m-1 break-words"
                     action={{
                         children: 'Verify sender',
                         type: 'primary',

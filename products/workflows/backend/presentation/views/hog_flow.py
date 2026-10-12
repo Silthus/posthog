@@ -867,7 +867,17 @@ def _live_email_from_by_action(instance: WorkflowEditState) -> dict[str, dict]:
     for workflow_action in instance.actions or []:
         if not isinstance(workflow_action, dict) or not workflow_action.get("id"):
             continue
-        email_input = ((workflow_action.get("config") or {}).get("inputs") or {}).get("email")
+        config = workflow_action.get("config") or {}
+        if workflow_action.get("type") != "function_email":
+            if workflow_action.get("type") != "function":
+                continue
+            template = get_function_template_schema(config.get("template_id") or "")
+            if template is None or not any(
+                schema.get("key") == "email" and schema.get("type") in {"email", "native_email"}
+                for schema in template.inputs_schema or []
+            ):
+                continue
+        email_input = (config.get("inputs") or {}).get("email")
         value = email_input.get("value") if isinstance(email_input, dict) else None
         from_value = value.get("from") if isinstance(value, dict) else None
         if isinstance(from_value, dict):
@@ -4755,6 +4765,7 @@ class HogFlowViewSet(
                 includes_staged_draft=bool(self.request.data.get("includes_staged_draft"))
                 and WRITABLE_DRAFT_CONTENT_FIELDS <= self.request.data.keys(),
                 validated_status=serializer.instance.status,
+                validate_live=lambda state: self._validate_locked_content(state, self.request.data),
             )
         except WorkflowStale:
             raise StaleWorkflowUpdateError()

@@ -18,6 +18,7 @@ import { publicWebhooksHostOrigin } from 'lib/utils/apiHost'
 import { LiquidRenderer } from 'lib/utils/liquid'
 import { objectsEqual } from 'lib/utils/objects'
 import { sanitizeInputs } from 'scenes/hog-functions/configuration/hogFunctionConfigurationLogic'
+import { selectedSenderIds } from 'scenes/hog-functions/email-templater/selectSenders'
 import type { EmailFieldErrors, EmailTemplateFrom } from 'scenes/hog-functions/email-templater/types'
 import { getUnverifiedEmailSenders } from 'scenes/hog-functions/email-templater/unverifiedEmailSenders'
 import { projectLogic } from 'scenes/projectLogic'
@@ -2918,12 +2919,12 @@ export interface workflowLogicMeta {
             hogFunctionTemplatesByIdLoading: boolean,
             scheduleStartsAt: string | null,
             saveAttemptedActionIds: string[] | null,
-            integrations: any,
+            integrations: IntegrationType[] | null,
             originalWorkflow: HogFlow | null
         ) => Record<string, HogFlowActionValidationResult | null>
         unverifiedEmailSenders: (
             workflow: HogFlow,
-            integrations: any,
+            integrations: IntegrationType[] | null,
             originalWorkflow: HogFlow | null
         ) => IntegrationType[]
         workflowHasActionErrors: (
@@ -3074,7 +3075,8 @@ export interface workflowLogicMeta {
         publishDisabledReason: (
             hasStagedDraft: boolean,
             hasUnsavedChanges: boolean,
-            draftActionPending: 'discard' | 'publish' | null
+            draftActionPending: 'discard' | 'publish' | null,
+            unverifiedEmailSenders: IntegrationType[]
         ) => string | undefined
         discardDisabledReason: (
             hasStagedDraft: boolean,
@@ -3905,10 +3907,16 @@ export const workflowLogic = kea<workflowLogicType>([
                 integrations: IntegrationType[] | null,
                 originalWorkflow: HogFlow | null
             ): IntegrationType[] => {
-                const sendersStillToVerify = sendersAwaitingVerification(originalWorkflow, integrations)
-                const unverified = workflow.actions.flatMap((action) =>
-                    getUnverifiedEmailSenders(emailFromOf(action), sendersStillToVerify)
-                )
+                const unverified = workflow.actions.flatMap((action) => {
+                    const liveAction =
+                        originalWorkflow?.status === 'active'
+                            ? originalWorkflow.actions.find((live) => live.id === action.id)
+                            : undefined
+                    const liveSenderIds = new Set(selectedSenderIds(liveAction ? emailFromOf(liveAction) : undefined))
+                    return getUnverifiedEmailSenders(emailFromOf(action), integrations).filter(
+                        (integration) => !liveSenderIds.has(integration.id)
+                    )
+                })
                 return [...new Map(unverified.map((integration) => [integration.id, integration])).values()]
             },
         ],
@@ -3993,11 +4001,12 @@ export const workflowLogic = kea<workflowLogicType>([
         ],
 
         publishDisabledReason: [
-            (s) => [s.hasStagedDraft, s.hasUnsavedChanges, s.draftActionPending],
+            (s) => [s.hasStagedDraft, s.hasUnsavedChanges, s.draftActionPending, s.unverifiedEmailSenders],
             (
                 hasStagedDraft: boolean,
                 hasUnsavedChanges: boolean,
-                draftActionPending: 'publish' | 'discard' | null
+                draftActionPending: 'publish' | 'discard' | null,
+                unverifiedEmailSenders: IntegrationType[]
             ): string | undefined => {
                 if (draftActionPending === 'discard') {
                     return 'Discarding is in progress'
@@ -4006,6 +4015,9 @@ export const workflowLogic = kea<workflowLogicType>([
                 // go out. Auto-save clears this a few seconds after the user stops typing.
                 if (hasUnsavedChanges) {
                     return 'Save your changes first'
+                }
+                if (unverifiedEmailSenders.length) {
+                    return 'Verify the email senders before publishing'
                 }
                 return hasStagedDraft ? undefined : 'No changes staged to publish'
             },

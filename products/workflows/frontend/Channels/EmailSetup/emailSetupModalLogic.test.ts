@@ -69,7 +69,10 @@ describe('emailSetupModalLogic', () => {
         })
         const { logic, onComplete, onClose } = await mountWithSavedSender()
 
-        await expectLogic(logic, () => logic.actions.saveAndFinish()).toDispatchActions(['submitEmailSenderSuccess'])
+        await expectLogic(logic, () => logic.actions.saveAndFinish()).toDispatchActions([
+            'submitEmailSenderSuccess',
+            'verifyDomainSuccess',
+        ])
 
         const called = { onClose, onComplete }[callback]
         const notCalled = callback === 'onClose' ? onComplete : onClose
@@ -87,6 +90,30 @@ describe('emailSetupModalLogic', () => {
         await expectLogic(logic, () => logic.actions.saveAndFinish()).toDispatchActions(['submitEmailSenderFailure'])
 
         expect(onComplete).not.toHaveBeenCalled()
+        expect(onClose).not.toHaveBeenCalled()
+    })
+
+    it('waits for fresh verification before completing a saved sender', async () => {
+        const { logic, onComplete, onClose } = await mountWithSavedSender()
+        let finishVerification!: (response: [number, { status: string; dnsRecords: [] }]) => void
+        const verificationResponse = new Promise<[number, { status: string; dnsRecords: [] }]>((resolve) => {
+            finishVerification = resolve
+        })
+        useMocks({
+            patch: { [EMAIL_CONFIG_URL]: { id: 7, kind: 'email', config: { email: 'hello@example.com' } } },
+            post: { [VERIFY_URL]: () => verificationResponse },
+        })
+
+        await expectLogic(logic, () => logic.actions.saveAndFinish()).toDispatchActions(['submitEmailSenderSuccess'])
+        try {
+            expect(onComplete).not.toHaveBeenCalled()
+            expect(onClose).not.toHaveBeenCalled()
+        } finally {
+            finishVerification([200, { status: 'success', dnsRecords: [] }])
+        }
+        await expectLogic(logic).toDispatchActions(['verifyDomainSuccess'])
+
+        expect(onComplete).toHaveBeenCalledWith(7)
         expect(onClose).not.toHaveBeenCalled()
     })
 })

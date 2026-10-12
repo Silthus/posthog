@@ -21,8 +21,7 @@ import {
 } from '../broadcastWizardLogic'
 
 export function BroadcastContentStep(): JSX.Element {
-    const { broadcast, email, name, stepValidationErrors, selectedSender, emailSettings } =
-        useValues(broadcastWizardLogic)
+    const { broadcast, email, name, stepValidationErrors, emailSettings } = useValues(broadcastWizardLogic)
     const { setEmail, setEmailSettings } = useActions(broadcastWizardLogic)
     const { integrations, integrationsLoading, ownEmailIntegrations } = useValues(integrationsLogic)
     const { loadIntegrations } = useActions(integrationsLogic)
@@ -31,7 +30,6 @@ export function BroadcastContentStep(): JSX.Element {
     const [senderSetup, setSenderSetup] = useState<'new' | IntegrationType | null>(null)
 
     const hasSenders = ownEmailIntegrations.length > 0
-    const senderUnverified = !!selectedSender && selectedSender.config?.verified !== true
     // A deleted sender would otherwise show as its bare id, so the picker leaves it out.
     const missingSenderIds = integrations ? getMissingSenderIds(email.from, integrations) : []
     const remainingSenderIds = getSenderIds(email.from).filter((id) => !missingSenderIds.includes(id))
@@ -98,18 +96,6 @@ export function BroadcastContentStep(): JSX.Element {
                 >
                     Broadcasts send from your own domain. Set up a sender, then verify the domain with a few DNS
                     records.
-                </LemonBanner>
-            ) : senderUnverified ? (
-                <LemonBanner
-                    type="warning"
-                    action={{
-                        children: 'Verify domain',
-                        onClick: () => setSenderSetup(selectedSender),
-                        'data-attr': 'broadcast-verify-sender',
-                    }}
-                >
-                    {selectedSender?.display_name} is not verified yet. You can keep writing, but the broadcast can't
-                    send until its domain is verified.
                 </LemonBanner>
             ) : null}
             {senderSetup ? (

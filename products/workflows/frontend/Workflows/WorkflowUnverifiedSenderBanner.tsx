@@ -15,6 +15,7 @@ export function WorkflowUnverifiedSenderBanner(): JSX.Element | null {
     const { unverifiedEmailSenders, originalWorkflow } = useValues(workflowLogic)
     const [senderToVerify, setSenderToVerify] = useState<IntegrationType | null>(null)
     const [firstSender] = unverifiedEmailSenders
+    const liveAction = originalWorkflow?.status === 'active' ? 'publish changes to' : 'enable'
 
     return (
         <>
@@ -37,8 +38,8 @@ export function WorkflowUnverifiedSenderBanner(): JSX.Element | null {
                     }}
                 >
                     {unverifiedEmailSenders.length === 1
-                        ? `Verify the email sender before you enable this workflow. ${getEmailSenderAddress(firstSender)} can't send until its domain is verified.`
-                        : `Verify the email senders before you enable this workflow. ${unverifiedEmailSenders
+                        ? `Verify the email sender before you ${liveAction} this workflow. ${getEmailSenderAddress(firstSender)} can't send until its domain is verified.`
+                        : `Verify the email senders before you ${liveAction} this workflow. ${unverifiedEmailSenders
                               .map(getEmailSenderAddress)
                               .join(', ')} can't send until their domains are verified.`}
                 </LemonBanner>

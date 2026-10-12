@@ -819,6 +819,51 @@ class TestHogFlowAPI(APIBaseTest):
 
         assert response.status_code == expected_status, response.json()
 
+    @parameterized.expand([("pending", False), ("deleted", True)])
+    def test_live_save_rechecks_sender_grandfathering_after_a_concurrent_switch(self, _name, delete_sender):
+        flow_url, previous_sender = self._create_live_email_workflow()
+        original_actions = self.client.get(flow_url).json()["actions"]
+        replacement = Integration.objects.create(
+            team=self.team,
+            kind="email",
+            config={"email": "replacement@example.com", "domain": "example.com", "verified": True},
+        )
+        if delete_sender:
+            previous_sender.delete()
+        else:
+            previous_sender.config = {**previous_sender.config, "verified": False}
+            previous_sender.save()
+        replacement_actions = self._actions_sending_from(original_actions, replacement.id)
+
+        def update_after_concurrent_switch(**kwargs):
+            HogFlow.objects.filter(pk=kwargs["hog_flow_id"]).update(actions=replacement_actions)
+            return update_workflow(**kwargs)
+
+        with patch(
+            "products.workflows.backend.presentation.views.hog_flow.update_workflow",
+            side_effect=update_after_concurrent_switch,
+        ):
+            response = self.client.patch(flow_url, {"actions": original_actions})
+
+        assert response.status_code == 400, response.json()
+        assert self.client.get(flow_url).json()["actions"] == replacement_actions
+
+    def test_inert_email_data_does_not_grandfather_a_new_live_sender(self):
+        flow_url, _integration = self._create_live_email_workflow()
+        actions = self._actions_sending_from(
+            self.client.get(flow_url).json()["actions"], self._create_unverified_sender().id
+        )
+        inert_actions = deepcopy(actions)
+        inert_actions[1]["type"] = "exit"
+        inert_actions[1]["config"]["reason"] = "finished"
+        stored = self.client.patch(flow_url, {"actions": inert_actions})
+        assert stored.status_code == 200, stored.json()
+
+        response = self.client.patch(flow_url, {"actions": actions})
+
+        assert response.status_code == 400, response.json()
+        assert "not verified yet" in response.json()["detail"]
+
     def test_publishing_a_staged_switch_to_a_pending_sender_is_rejected(self):
         flow_url, integration = self._create_live_email_workflow()
         actions = self._actions_sending_from(

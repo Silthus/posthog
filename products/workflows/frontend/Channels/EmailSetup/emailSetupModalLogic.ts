@@ -242,7 +242,9 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
                     }
                     actions.loadIntegrations()
                     actions.setSavedIntegration(integration)
-                    actions.verifyDomain()
+                    if (!values.finishAfterSave) {
+                        actions.verifyDomain()
+                    }
                     return config
                 } catch (error) {
                     if (error instanceof ApiError || (error && typeof error === 'object' && 'detail' in error)) {
@@ -292,7 +294,7 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
             },
         ],
     }),
-    listeners(({ actions, props, values }) => ({
+    listeners(({ actions, asyncActions, props, values }) => ({
         verifyDomainSuccess: ({ verification }) => {
             if (verification?.status === 'success') {
                 actions.loadIntegrations()
@@ -303,11 +305,17 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
         saveAndFinish: () => {
             actions.submitEmailSender()
         },
-        submitEmailSenderSuccess: () => {
+        submitEmailSenderSuccess: async () => {
             if (!values.finishAfterSave) {
                 return
             }
             const integrationId = values.savedIntegration?.id
+            try {
+                await asyncActions.verifyDomain()
+            } catch {
+                props.onClose(integrationId)
+                return
+            }
             if (values.isDomainVerified) {
                 props.onComplete(integrationId)
             } else {
