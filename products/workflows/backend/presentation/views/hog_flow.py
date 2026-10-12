@@ -186,6 +186,7 @@ from products.workflows.backend.facade.contracts import (
     WorkflowRevisionNotFound,
     WorkflowRevisionSummary,
     WorkflowScheduleNotFound,
+    WorkflowSearchMatch,
     WorkflowStale,
     WorkflowWriteResult,
 )
@@ -2822,7 +2823,7 @@ class HogFlowSearchResultSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def to_representation(self, instance: HogFlow) -> dict[str, Any]:
+    def to_representation(self, instance: WorkflowSearchMatch) -> dict[str, Any]:
         shape = self._shape
         self._step_matches: StepMatches | None = None
         if shape.output != WorkflowSearchOutput.NAMES:
@@ -2839,23 +2840,23 @@ class HogFlowSearchResultSerializer(serializers.ModelSerializer):
     @extend_schema_field(
         serializers.ListField(child=serializers.ChoiceField(choices=WorkflowMetadataField.choices), allow_null=True)
     )
-    def get_matched_fields(self, instance: HogFlow) -> list[str] | None:
+    def get_matched_fields(self, instance: WorkflowSearchMatch) -> list[str] | None:
         if self._step_matches is None:
             return None
         return [str(field) for field in matched_metadata_fields(instance.name, instance.description, self._shape.regex)]
 
     @extend_schema_field(serializers.IntegerField(allow_null=True))
-    def get_matched_step_count(self, instance: HogFlow) -> int | None:
+    def get_matched_step_count(self, instance: WorkflowSearchMatch) -> int | None:
         return None if self._step_matches is None else self._step_matches.count
 
     @extend_schema_field(HogFlowSearchStepMatchSerializer(many=True, allow_null=True))
-    def get_matched_steps(self, instance: HogFlow) -> list[dict[str, str]] | None:
+    def get_matched_steps(self, instance: WorkflowSearchMatch) -> list[dict[str, str]] | None:
         if self._step_matches is None or self._shape.output != WorkflowSearchOutput.MATCHES:
             return None
         return cast(list[dict[str, str]], HogFlowSearchStepMatchSerializer(self._step_matches.steps, many=True).data)
 
     @extend_schema_field(serializers.BooleanField(allow_null=True))
-    def get_matched_steps_truncated(self, instance: HogFlow) -> bool | None:
+    def get_matched_steps_truncated(self, instance: WorkflowSearchMatch) -> bool | None:
         if self._step_matches is None or self._shape.output != WorkflowSearchOutput.MATCHES:
             return None
         return self._step_matches.count > len(self._step_matches.steps)
