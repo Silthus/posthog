@@ -709,3 +709,7 @@ class WorkflowViewPage:
 
 class WorkflowViewConflict(Exception):
     pass
+
+
+class WorkflowViewNotFound(Exception):
+    pass

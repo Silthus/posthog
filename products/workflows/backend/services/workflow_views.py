@@ -1,11 +1,11 @@
 from typing import cast
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
-
-from rest_framework.generics import get_object_or_404
 
 from products.workflows.backend.facade.contracts import (
     WorkflowViewConflict,
+    WorkflowViewNotFound,
     WorkflowViewPage,
     WorkflowViewRecord,
     WorkflowViewState,
@@ -37,8 +37,16 @@ class WorkflowViewStore:
         )
 
     def get(self, view_id: str) -> WorkflowViewRecord:
-        view = get_object_or_404(WorkflowView.objects.for_team(self.team_id).filter(deleted=False), pk=view_id)
-        return self._record(view)
+        return self._record(self._find(view_id))
+
+    def _find(self, view_id: str, *, for_update: bool = False) -> WorkflowView:
+        views = WorkflowView.objects.for_team(self.team_id).filter(deleted=False)
+        if for_update:
+            views = views.select_for_update()
+        try:
+            return views.get(pk=view_id)
+        except (WorkflowView.DoesNotExist, ValidationError) as error:
+            raise WorkflowViewNotFound() from error
 
     def create(self, *, name: str, state: WorkflowViewState) -> WorkflowViewRecord:
         view = WorkflowView.objects.for_team(self.team_id).create(team_id=self.team_id, name=name, state=state)
@@ -72,12 +80,7 @@ class WorkflowViewStore:
         return self._record(view)
 
     def _lock(self, view_id: str, version: int) -> WorkflowView:
-        current = cast(
-            WorkflowView,
-            get_object_or_404(
-                WorkflowView.objects.for_team(self.team_id).filter(deleted=False).select_for_update(), pk=view_id
-            ),
-        )
+        current = self._find(view_id, for_update=True)
         if current.version != version:
             raise WorkflowViewConflict()
         return current

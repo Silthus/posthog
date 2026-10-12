@@ -8,7 +8,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, NotFound
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -26,7 +26,7 @@ from posthog.permissions import (
     posthog_feature_flag_enabled,
 )
 
-from products.workflows.backend.facade.contracts import WorkflowViewConflict, WorkflowViewState
+from products.workflows.backend.facade.contracts import WorkflowViewConflict, WorkflowViewNotFound, WorkflowViewState
 from products.workflows.backend.facade.workflow_views import (
     create_workflow_view,
     delete_workflow_view,
@@ -96,13 +96,7 @@ class WorkflowViewCreateSerializer(serializers.Serializer):
     state = WorkflowViewStateSerializer(help_text="Saved filters, text search, and visible columns.")
 
 
-class WorkflowViewUpdateSerializer(serializers.Serializer):
-    version = serializers.IntegerField(min_value=1, help_text="Version last read; stale edits are rejected with 409.")
-    name = serializers.CharField(max_length=128, required=False, help_text="Replacement shared workflow view name.")
-    state = WorkflowViewStateSerializer(
-        required=False, help_text="Replacement filters, text search, and visible columns."
-    )
-
+class RequiredFieldsOnPatchSerializer(serializers.Serializer):
     @property
     def partial(self) -> bool:
         return False
@@ -110,6 +104,14 @@ class WorkflowViewUpdateSerializer(serializers.Serializer):
     @partial.setter
     def partial(self, _value: bool) -> None:
         pass
+
+
+class WorkflowViewUpdateSerializer(RequiredFieldsOnPatchSerializer):
+    version = serializers.IntegerField(min_value=1, help_text="Version last read; stale edits are rejected with 409.")
+    name = serializers.CharField(max_length=128, required=False, help_text="Replacement shared workflow view name.")
+    state = WorkflowViewStateSerializer(
+        required=False, help_text="Replacement filters, text search, and visible columns."
+    )
 
 
 class WorkflowViewDeleteSerializer(serializers.Serializer):
@@ -182,6 +184,13 @@ class WorkflowViewViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
     lookup_field = "id"
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
+    def handle_exception(self, exc: Exception) -> Response:
+        if isinstance(exc, WorkflowViewNotFound):
+            return super().handle_exception(NotFound())
+        if isinstance(exc, WorkflowViewConflict):
+            return super().handle_exception(WorkflowViewConflictError())
+        return super().handle_exception(exc)
+
     @validated_request(responses={200: WorkflowViewSerializer(many=True)})
     def list(self, request: ValidatedRequest, *args: object, **kwargs: object) -> Response:
         paginator = cast(WorkflowViewPagination, self.paginator)
@@ -215,16 +224,13 @@ class WorkflowViewViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
         parameters=[OpenApiParameter("id", OpenApiTypes.UUID, OpenApiParameter.PATH)],
     )
     def partial_update(self, request: ValidatedRequest, *args: object, **kwargs: object) -> Response:
-        try:
-            updated = update_workflow_view(
-                self.team_id,
-                self.kwargs["id"],
-                request.validated_data["version"],
-                name=request.validated_data.get("name"),
-                state=cast(WorkflowViewState | None, request.validated_data.get("state")),
-            )
-        except WorkflowViewConflict as error:
-            raise WorkflowViewConflictError() from error
+        updated = update_workflow_view(
+            self.team_id,
+            self.kwargs["id"],
+            request.validated_data["version"],
+            name=request.validated_data.get("name"),
+            state=cast(WorkflowViewState | None, request.validated_data.get("state")),
+        )
         return Response(self.get_serializer(updated).data)
 
     @validated_request(
@@ -233,10 +239,7 @@ class WorkflowViewViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
         parameters=[OpenApiParameter("id", OpenApiTypes.UUID, OpenApiParameter.PATH)],
     )
     def destroy(self, request: ValidatedRequest, *args: object, **kwargs: object) -> Response:
-        try:
-            delete_workflow_view(self.team_id, self.kwargs["id"], request.validated_query_data["version"])
-        except WorkflowViewConflict as error:
-            raise WorkflowViewConflictError() from error
+        delete_workflow_view(self.team_id, self.kwargs["id"], request.validated_query_data["version"])
         return Response(status=204)
 
     @extend_schema(request=None, responses={200: WorkflowViewSerializer})
