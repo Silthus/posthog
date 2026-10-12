@@ -55,6 +55,9 @@ export const SupportSlaRouting: StoryFn = () => <WorkflowStory id="example-suppo
 export const RenewalWindowAlerts: StoryFn = () => <WorkflowStory id="example-renewal-window-alerts" />
 export const PendingTicketCleanup: StoryFn = () => <WorkflowStory id="example-pending-ticket-cleanup" />
 export const AddOnPromotionEmails: StoryFn = () => <WorkflowStory id="example-add-on-promotion-emails" />
+export const PrototypeLarkspurAbTest: StoryFn = () => <WorkflowStory id="prototype-larkspur-launch-ab-test" />
+export const PrototypeWelcome: StoryFn = () => <WorkflowStory id="prototype-fernwood-welcome" />
+export const PrototypeRegionalSeasonOpener: StoryFn = () => <WorkflowStory id="prototype-regional-season-opener" />
 
 // 32rem sits below the 48rem container-query breakpoint the editor uses to stack the settings
 // panel under the graph, so this story exercises the narrow layout.

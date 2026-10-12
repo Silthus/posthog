@@ -368,3 +368,8 @@ export const SupportSlaRouting: StoryFn = () => <InteractiveWorkflow id="example
 export const RenewalWindowAlerts: StoryFn = () => <InteractiveWorkflow id="example-renewal-window-alerts" />
 export const PendingTicketCleanup: StoryFn = () => <InteractiveWorkflow id="example-pending-ticket-cleanup" />
 export const AddOnPromotionEmails: StoryFn = () => <InteractiveWorkflow id="example-add-on-promotion-emails" />
+export const PrototypeLarkspurAbTest: StoryFn = () => <InteractiveWorkflow id="prototype-larkspur-launch-ab-test" />
+export const PrototypeWelcome: StoryFn = () => <InteractiveWorkflow id="prototype-fernwood-welcome" />
+export const PrototypeRegionalSeasonOpener: StoryFn = () => (
+    <InteractiveWorkflow id="prototype-regional-season-opener" />
+)

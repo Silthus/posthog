@@ -1,4 +1,5 @@
 import type { HogFlow, HogFlowAction } from '../types'
+import { PROTOTYPE_WORKFLOWS } from './prototypeWorkflows'
 
 type Edge = HogFlow['edges'][number]
 
@@ -732,5 +733,6 @@ export const EXAMPLE_WORKFLOWS: Record<string, HogFlow> = Object.fromEntries(
         flow,
     ])
 )
+Object.assign(EXAMPLE_WORKFLOWS, PROTOTYPE_WORKFLOWS)
 
 export const EXAMPLE_WORKFLOW_IDS = Object.keys(EXAMPLE_WORKFLOWS)
