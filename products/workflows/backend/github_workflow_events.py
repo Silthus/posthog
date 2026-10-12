@@ -94,9 +94,7 @@ def _is_own_app_sender(sender: dict[str, Any]) -> bool:
 
 
 def _redacted_github_event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """The payload embedded on the event, with a push delivery's commit messages stripped.
-
-    A push always gets ``actor_access: "write"``, because pushing needs write access. But a
+    """A push always gets ``actor_access: "write"``, because pushing needs write access. But a
     commit message is free text an external contributor can author (e.g. a squash-merged PR
     title), so a trusted pusher merging one would otherwise carry attacker-controlled text into a
     privileged step such as create-task. Mirrors the same redaction loops applies for the same
