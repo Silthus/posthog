@@ -482,6 +482,37 @@ describe('workflowsListV2Logic', () => {
         expect(logic.values.pendingRowActions).toEqual({})
     })
 
+    it('shows a copy that only the server search matches', async () => {
+        router.actions.push(urls.workflows())
+        logic = workflowsListV2Logic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadWorkflowsSuccess'])
+        serverSearch = async () => ['wf-sync']
+        await expectLogic(logic, () => logic.actions.setValue({ filters: [], text: 'ledger' })).toDispatchActions([
+            'searchWorkflowsSuccess',
+        ])
+        expect(shownIds(logic)).toEqual(['wf-sync'])
+
+        const copy = buildWorkflowRow({ id: 'wf-sync-copy', name: 'Sync accounts to CRM (copy)' })
+        useMocks({
+            get: {
+                '/api/projects/:team_id/hog_flows/summaries/': ({ request }) =>
+                    new URL(request.url).searchParams.get('search')
+                        ? [200, paginated([FIXTURE_WORKFLOWS[2], copy])]
+                        : [200, paginated([...FIXTURE_WORKFLOWS, copy])],
+                '/api/projects/:team_id/hog_flows/:id/': () => [
+                    200,
+                    { ...FIXTURE_WORKFLOWS[2], actions: [], edges: [] },
+                ],
+            },
+            post: { '/api/projects/:team_id/hog_flows/': () => [200, { id: copy.id }] },
+        })
+
+        logic.actions.duplicateWorkflow(logic.values.rows.find((row) => row.id === 'wf-sync')!)
+        await expectLogic(logic).toFinishAllListeners()
+        expect(shownIds(logic)).toEqual(['wf-sync', 'wf-sync-copy'])
+    })
+
     it.each([
         ['enable', 'wf-sync', 'active', (row: WorkflowListRow) => logic.actions.toggleWorkflowStatus(row)],
         ['restore', 'wf-old-promo', 'draft', (row: WorkflowListRow) => logic.actions.restoreWorkflow(row)],

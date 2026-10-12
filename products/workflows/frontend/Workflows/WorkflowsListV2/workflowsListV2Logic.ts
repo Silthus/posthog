@@ -570,6 +570,13 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
                 router.values.hashParams
             )
         }
+        // The copy has a new id, so a server search from before it existed can't match it.
+        const refreshServerSearch = (): void => {
+            const text = values.value.text.trim()
+            if (text.length >= MIN_SERVER_SEARCH_LENGTH) {
+                actions.searchWorkflows(text)
+            }
+        }
         return {
             clearFilters: writeUrl,
             setValue: ({ value }) => {
@@ -605,6 +612,7 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
                         await hogFlowsCreate(teamId, prepareWorkflowDuplicate(full))
                         lemonToast.success(`Workflow "${row.name}" duplicated`)
                         actions.loadWorkflows()
+                        refreshServerSearch()
                     } catch (error) {
                         lemonToast.error(`Failed to duplicate workflow: ${workflowActionErrorDetail(error)}`)
                     }
