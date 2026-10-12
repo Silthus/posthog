@@ -55,13 +55,13 @@ export function edgeLabel(workflow: HogFlow, edge: FlowEdge): string | undefined
                 : config.conditions?.[edge.index ?? 0]?.name || `Condition ${(edge.index ?? 0) + 1}`
         case 'random_cohort_branch': {
             const cohort = config.cohorts?.[edge.index ?? 0]
-            return edge.type === 'continue' ? 'Rest' : `${cohort?.name ? `${cohort.name} · ` : ''}${cohort?.percentage}%`
+            return edge.type === 'continue'
+                ? 'Rest'
+                : `${cohort?.name ? `${cohort.name} · ` : ''}${cohort?.percentage}%`
         }
         case 'wait_until_condition': {
             const eventName = config.condition?.name || 'condition met'
-            return edge.type === 'continue'
-                ? `✗ none in ${humanDuration(config.max_wait_duration)}`
-                : `✓ ${eventName}`
+            return edge.type === 'continue' ? `✗ none in ${humanDuration(config.max_wait_duration)}` : `✓ ${eventName}`
         }
         default:
             return edge.type === 'continue' ? 'Otherwise' : `Branch ${(edge.index ?? 0) + 1}`
@@ -96,9 +96,9 @@ export function exitRuleText(workflow: HogFlow): string {
     }
 }
 
-export function emailContent(action: HogFlowAction):
-    | { subject: string; preheader?: string; to: string; html?: string }
-    | undefined {
+export function emailContent(
+    action: HogFlowAction
+): { subject: string; preheader?: string; to: string; html?: string } | undefined {
     const config = configOf(action)
     if (config.template_id !== 'template-email') {
         return undefined
@@ -136,7 +136,7 @@ export function stepSentence(workflow: HogFlow, action: HogFlowAction, templateN
         case 'delay':
             return `Waits ${humanDuration(config.delay_duration)}`
         case 'wait_until_time_window':
-            return `Waits for a ${config.day === 'weekday' ? 'weekday' : config.day ?? 'any day'} between ${config.time?.[0]} and ${config.time?.[1]} (${config.timezone ?? 'UTC'})`
+            return `Waits for a ${config.day === 'weekday' ? 'weekday' : (config.day ?? 'any day')} between ${config.time?.[0]} and ${config.time?.[1]} (${config.timezone ?? 'UTC'})`
         case 'wait_until_condition':
             return `Waits up to ${humanDuration(config.max_wait_duration)} for ${config.condition?.name ?? 'a condition'}`
         case 'conditional_branch':
@@ -232,9 +232,7 @@ export function computeGroups(workflow: HogFlow): BranchGroup[] {
         })
 
     groups.forEach((group) => {
-        const parents = groups.filter(
-            (other) => other !== group && other.memberIds.includes(group.branchNodeId)
-        )
+        const parents = groups.filter((other) => other !== group && other.memberIds.includes(group.branchNodeId))
         const parent = parents.sort((a, b) => a.memberIds.length - b.memberIds.length)[0]
         group.parentId = parent?.id ?? null
     })
@@ -248,7 +246,9 @@ export function computeGroups(workflow: HogFlow): BranchGroup[] {
 
 // --- Visible graph after collapsing groups ---
 
-export type VisibleNode = { kind: 'action'; id: string; action: HogFlowAction } | { kind: 'summary'; id: string; group: BranchGroup }
+export type VisibleNode =
+    | { kind: 'action'; id: string; action: HogFlowAction }
+    | { kind: 'summary'; id: string; group: BranchGroup }
 
 export type VisibleEdge = {
     id: string
@@ -268,7 +268,7 @@ export function timingShort(action: HogFlowAction): string | undefined {
         return `wait ${humanDuration(config.delay_duration)}`
     }
     if (action.type === 'wait_until_time_window') {
-        const day = config.day === 'weekday' ? 'weekday' : config.day ?? 'any day'
+        const day = config.day === 'weekday' ? 'weekday' : (config.day ?? 'any day')
         return `next ${day} ${config.time?.[0]}–${config.time?.[1]} ${config.timezone ?? 'UTC'}`
     }
     return undefined
@@ -286,14 +286,19 @@ export function foldWaits(graph: { nodes: VisibleNode[]; edges: VisibleEdge[] })
             if (node.kind !== 'action' || !timingShort(node.action)) {
                 return false
             }
-            return edges.filter((e) => e.target === node.id).length === 1 && edges.filter((e) => e.source === node.id).length === 1
+            return (
+                edges.filter((e) => e.target === node.id).length === 1 &&
+                edges.filter((e) => e.source === node.id).length === 1
+            )
         })
         if (!wait || wait.kind !== 'action') {
             return { nodes, edges }
         }
         const incoming = edges.find((e) => e.target === wait.id)!
         const outgoing = edges.find((e) => e.source === wait.id)!
-        const text = [incoming.timing?.text, timingShort(wait.action), outgoing.timing?.text].filter(Boolean).join(', then ')
+        const text = [incoming.timing?.text, timingShort(wait.action), outgoing.timing?.text]
+            .filter(Boolean)
+            .join(', then ')
         const merged: VisibleEdge = {
             ...incoming,
             id: `${incoming.id}~${outgoing.id}`,
@@ -335,7 +340,7 @@ export function visibleGraph(
     const actionOrder = new Map(workflow.actions.map((action, index) => [action.id, index]))
     const orderOf = (node: VisibleNode): number =>
         node.kind === 'action'
-            ? actionOrder.get(node.id) ?? 0
+            ? (actionOrder.get(node.id) ?? 0)
             : Math.min(...node.group.memberIds.map((id) => actionOrder.get(id) ?? 0))
     const nodes: VisibleNode[] = [
         ...workflow.actions
@@ -352,7 +357,9 @@ export function visibleGraph(
             return
         }
         const sourceIsSummary = source !== edge.from
-        const id = sourceIsSummary ? `${source}->${target}` : `${edgeKey(edge)}${target !== edge.to ? `=>${target}` : ''}`
+        const id = sourceIsSummary
+            ? `${source}->${target}`
+            : `${edgeKey(edge)}${target !== edge.to ? `=>${target}` : ''}`
         const existing = merged.get(id)
         if (existing) {
             existing.originalKeys.push(edgeKey(edge))
@@ -413,7 +420,7 @@ export function computeTrace(workflow: HogFlow, choices: Record<string, string>)
             const action = byId[current]
             const fallback =
                 action.type === 'wait_until_condition'
-                    ? outgoing.find((edge) => edge.type === 'continue') ?? outgoing[0]
+                    ? (outgoing.find((edge) => edge.type === 'continue') ?? outgoing[0])
                     : outgoing[0]
             next = outgoing.find((edge) => choiceKey(edge) === choices[current!]) ?? fallback
             decisions.push({
@@ -429,7 +436,7 @@ export function computeTrace(workflow: HogFlow, choices: Record<string, string>)
                             ? edge.type === 'continue'
                                 ? 'No'
                                 : 'Yes'
-                            : edgeLabel(workflow, edge) ?? choiceKey(edge),
+                            : (edgeLabel(workflow, edge) ?? choiceKey(edge)),
                 })),
                 chosen: choiceKey(next),
             })

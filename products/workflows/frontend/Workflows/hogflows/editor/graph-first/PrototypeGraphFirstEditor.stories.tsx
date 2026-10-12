@@ -40,7 +40,11 @@ function SceneChromeMock(): JSX.Element {
                 {SCENE_TABS.map((tab, index) => (
                     <span
                         key={tab}
-                        className={index === 0 ? 'border-b-2 border-[var(--color-accent)] pb-1.5 font-semibold' : 'pb-1.5 text-secondary'}
+                        className={
+                            index === 0
+                                ? 'border-b-2 border-[var(--color-accent)] pb-1.5 font-semibold'
+                                : 'pb-1.5 text-secondary'
+                        }
                     >
                         {tab}
                     </span>
@@ -61,8 +65,8 @@ function AiPanelMock(): JSX.Element {
                     Build a launch flow for the Larkspur boot that tests three emails.
                 </div>
                 <div className="rounded-lg border px-3 py-2 leading-relaxed">
-                    I built a workflow with three email variants. Each person gets one launch email in a weekday
-                    morning window, then a follow-up if they have not bought within five days.
+                    I built a workflow with three email variants. Each person gets one launch email in a weekday morning
+                    window, then a follow-up if they have not bought within five days.
                 </div>
                 <div className="mt-auto rounded-lg border px-3 py-2 text-secondary">Ask a follow-up…</div>
             </div>

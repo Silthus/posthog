@@ -2,7 +2,15 @@
 import clsx from 'clsx'
 import { useActions, useValues } from 'kea'
 
-import { IconChevronDown, IconChevronRight, IconCopy, IconDrag, IconEllipsis, IconPlusSmall, IconTrash } from '@posthog/icons'
+import {
+    IconChevronDown,
+    IconChevronRight,
+    IconCopy,
+    IconDrag,
+    IconEllipsis,
+    IconPlusSmall,
+    IconTrash,
+} from '@posthog/icons'
 import { LemonButton, LemonMenu, LemonTag, Tooltip } from '@posthog/lemon-ui'
 
 import { EmailPreviewThumbnail } from 'lib/components/EmailPreviewThumbnail/EmailPreviewThumbnail'
@@ -141,7 +149,7 @@ function CardBody({
         case 'wait_until_time_window':
             return (
                 <p className="m-0 text-[13px] leading-snug">
-                    Until a <strong>{config.day === 'weekday' ? 'weekday' : config.day ?? 'day'}</strong> between{' '}
+                    Until a <strong>{config.day === 'weekday' ? 'weekday' : (config.day ?? 'day')}</strong> between{' '}
                     <strong>
                         {config.time?.[0]}–{config.time?.[1]}
                     </strong>{' '}
@@ -248,7 +256,7 @@ export function ActionCard({
     const isEnd = action.type === 'exit'
     const color = Step?.color || 'var(--color-text-secondary)'
     const invalid = actionValidationErrorsById[action.id]?.valid === false
-    const kicker = isEmail ? 'Email' : KICKERS[action.type] ?? 'Action'
+    const kicker = isEmail ? 'Email' : (KICKERS[action.type] ?? 'Action')
 
     return (
         <div
@@ -351,13 +359,7 @@ export function SummaryCard({
     )
 }
 
-export function GroupFrameHeader({
-    group,
-    onCollapse,
-}: {
-    group: BranchGroup
-    onCollapse: () => void
-}): JSX.Element {
+export function GroupFrameHeader({ group, onCollapse }: { group: BranchGroup; onCollapse: () => void }): JSX.Element {
     return (
         <div className="flex items-center gap-1.5">
             <LemonButton

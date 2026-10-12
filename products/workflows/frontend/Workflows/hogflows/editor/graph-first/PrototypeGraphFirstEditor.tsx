@@ -25,6 +25,7 @@ import { IconChevronDown, IconPerson, IconPlus, IconX } from '@posthog/icons'
 import { LemonBadge, LemonButton, LemonSegmentedButton, LemonSwitch } from '@posthog/lemon-ui'
 
 import { Popover } from 'lib/lemon-ui/Popover'
+
 import { themeLogic } from '~/layout/navigation-3000/themeLogic'
 
 import { workflowLogic } from '../../../workflowLogic'
@@ -193,7 +194,10 @@ function InsertButton({ edge, at, offsetX }: { edge: FlowEdge; at: Point; offset
     return (
         <div
             className="nodrag nopan absolute"
-            style={{ transform: `translate(-50%, -50%) translate(${at.x + offsetX}px, ${at.y}px)`, pointerEvents: 'all' }}
+            style={{
+                transform: `translate(-50%, -50%) translate(${at.x + offsetX}px, ${at.y}px)`,
+                pointerEvents: 'all',
+            }}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
                 e.preventDefault()
@@ -224,7 +228,9 @@ function InsertButton({ edge, at, offsetX }: { edge: FlowEdge; at: Point; offset
                     onClick={() => (placing ? place() : setOpen(!open))}
                     className={clsx(
                         'flex size-5 cursor-pointer items-center justify-center rounded-full border bg-surface-primary text-secondary transition-all hover:scale-125 hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]',
-                        eager ? 'scale-125 border-[var(--color-accent)] text-[var(--color-accent)] shadow' : 'opacity-60'
+                        eager
+                            ? 'scale-125 border-[var(--color-accent)] text-[var(--color-accent)] shadow'
+                            : 'opacity-60'
                     )}
                 >
                     <IconPlus className="text-xs" />
@@ -244,9 +250,7 @@ function RoutedEdge({ data }: EdgeProps): JSX.Element | null {
     }
     const onPath = view.trace ? vedge.originalKeys.some((key) => view.trace!.edgeKeys.has(key)) : false
     const dimmed = !!view.trace && !onPath
-    const people = view.metrics
-        ? (view.metrics.peopleByEdge[vedge.originalKeys[0]] ?? null)
-        : null
+    const people = view.metrics ? (view.metrics.peopleByEdge[vedge.originalKeys[0]] ?? null) : null
     const end = routed.points[routed.points.length - 1]
     const insertAt = insertPoint(routed.points, label ? routed.label : undefined)
     const canTraceChoice = !!view.trace && !!vedge.original && !!vedge.label && !vedge.timing
@@ -255,7 +259,13 @@ function RoutedEdge({ data }: EdgeProps): JSX.Element | null {
 
     return (
         <>
-            <path d={roundedPath(routed.points)} fill="none" stroke={stroke} strokeWidth={onPath ? 2.5 : 1.5} opacity={dimmed ? 0.25 : 1} />
+            <path
+                d={roundedPath(routed.points)}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={onPath ? 2.5 : 1.5}
+                opacity={dimmed ? 0.25 : 1}
+            />
             <path
                 d={`M ${end.x - 4} ${end.y - 7} L ${end.x} ${end.y} L ${end.x + 4} ${end.y - 7}`}
                 fill="none"
@@ -418,7 +428,9 @@ function PersonTracePanel({
                 <IconPerson className="text-lg" />
                 <div className="flex-1">
                     <div className="text-sm font-semibold">Follow a person</div>
-                    <div className="text-xs text-secondary">Pick their answers. Click a path label on the canvas too.</div>
+                    <div className="text-xs text-secondary">
+                        Pick their answers. Click a path label on the canvas too.
+                    </div>
                 </div>
                 <LemonButton size="small" icon={<IconX />} onClick={onClose} tooltip="Stop following" />
             </div>
@@ -441,7 +453,11 @@ function PersonTracePanel({
                                     />
                                 </div>
                             ) : (
-                                stepSentence(workflow, action, template ? hogFunctionTemplatesById[template]?.name : undefined)
+                                stepSentence(
+                                    workflow,
+                                    action,
+                                    template ? hogFunctionTemplatesById[template]?.name : undefined
+                                )
                             )}
                         </li>
                     )
@@ -639,7 +655,10 @@ function GraphFirstCanvas(): JSX.Element {
             ...edgePoints.map((p) => p.x),
         ]
         const ys = [
-            ...rfNodes.flatMap((n) => [n.position.y, n.position.y + ((n as any).height ?? sizes?.[n.id]?.height ?? 80)]),
+            ...rfNodes.flatMap((n) => [
+                n.position.y,
+                n.position.y + ((n as any).height ?? sizes?.[n.id]?.height ?? 80),
+            ]),
             ...edgePoints.map((p) => p.y),
         ]
         const minX = Math.min(...xs) - 24
@@ -744,10 +763,18 @@ function GraphFirstCanvas(): JSX.Element {
                             >
                                 Variables
                             </LemonButton>
-                            <LemonButton size="small" onClick={() => openPanel('test')} active={panelOpen && mode === 'test'}>
+                            <LemonButton
+                                size="small"
+                                onClick={() => openPanel('test')}
+                                active={panelOpen && mode === 'test'}
+                            >
                                 Test
                             </LemonButton>
-                            <LemonButton size="small" onClick={() => openPanel('logs')} active={panelOpen && mode === 'logs'}>
+                            <LemonButton
+                                size="small"
+                                onClick={() => openPanel('logs')}
+                                active={panelOpen && mode === 'logs'}
+                            >
                                 Logs
                             </LemonButton>
                             <div className="mx-1 h-5 w-px bg-border" />
@@ -804,7 +831,10 @@ function GraphFirstCanvas(): JSX.Element {
                 </div>
             )}
             {panelOpen && (
-                <div className="relative h-full shrink-0 border-l bg-surface-primary" style={{ width: panelWidth ?? PANEL_WIDTH }}>
+                <div
+                    className="relative h-full shrink-0 border-l bg-surface-primary"
+                    style={{ width: panelWidth ?? PANEL_WIDTH }}
+                >
                     <HogFlowEditorPanel />
                     <div className="absolute -left-4 top-3 z-20">
                         <LemonButton

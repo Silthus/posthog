@@ -8,7 +8,10 @@ import type { VisibleEdge } from './graphFirstModel'
 export type Point = { x: number; y: number }
 export type LayoutResult = {
     positions: Record<string, Point>
-    edgePoints: Record<string, { points: Point[]; label?: Point; labelBox?: { x: number; y: number; width: number; height: number } }>
+    edgePoints: Record<
+        string,
+        { points: Point[]; label?: Point; labelBox?: { x: number; y: number; width: number; height: number } }
+    >
     width: number
     height: number
 }
