@@ -787,7 +787,8 @@ function GithubTriggerFields({
             />
             <span className="text-[12px] text-gray-10">
               Runs only on pull requests with this label. Remove the label to
-              stop it. Starts at most one task per pull request every 2 hours.
+              stop it. By default, starts at most one task per pull request
+              every 2 hours.
             </span>
           </div>
         </SubField>

@@ -517,6 +517,7 @@ function githubConfigFromTrigger(
   let conclusions: string[] = [];
   let label: string | null = null;
   let trustedActorsOnly = false;
+  const seenKeys = new Set<unknown>();
   for (const property of Array.isArray(properties) ? properties : []) {
     if (!isRecord(property)) return null;
     if (property.type === "hogql") {
@@ -527,6 +528,10 @@ function githubConfigFromTrigger(
     }
     const values = filterValues(property);
     if (!values) return null;
+    // The form holds one value list per key; a repeated key is an AND it
+    // cannot show, and a save would keep only the last one.
+    if (seenKeys.has(property.key)) return null;
+    seenKeys.add(property.key);
     switch (property.key) {
       case "actor_access":
         if (values.length !== 1 || values[0] !== "write") return null;

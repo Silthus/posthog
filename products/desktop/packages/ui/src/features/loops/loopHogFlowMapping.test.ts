@@ -297,6 +297,18 @@ describe("loopHogFlowMapping", () => {
             : property,
         ),
     ],
+    [
+      "a repeated conclusion filter",
+      (properties: Record<string, unknown>[]) => [
+        {
+          key: "conclusion",
+          value: ["failure"],
+          operator: "exact",
+          type: "event",
+        },
+        ...properties,
+      ],
+    ],
   ])("marks a CI failed loop with %s as foreign", (_label, mutate) => {
     const flow = flowFromWrite(ciFailedValues());
     const trigger = (flow.actions as Array<Record<string, unknown>>)[0];
