@@ -912,7 +912,8 @@ wrappers:
             Answer "is flag X hurting users?" for a person-based boolean flag. Compares the share of users who hit a
             browser $exception after their first exposure, between users who saw the flag on and users who saw it off.
             Pass flagKey. dateRange defaults to the last 24 hours (start there), spans at most 7 days, and ends 5
-            minutes before now. The single result holds verdict, reason, per-arm counts, rates and bounds for on and
+            minutes before now. Its bounds are exact instants: use relative values such as -24h or -7d, or ISO
+            timestamps. A bare date such as 2026-01-01 means midnight at the start of that day, not the whole day. The single result holds verdict, reason, per-arm counts, rates and bounds for on and
             off, excessBounds (on minus off), crossovers (users seen with both values, excluded), and the window and
             thresholds used. Read verdict like this. harm: the flag-on rate is above the flag-off rate by more than
             toleratedExcess (default 0.01, one percentage point), with confidence; recommend rolling the flag back.
@@ -922,7 +923,8 @@ wrappers:
             more exposures or a longer window. telemetry_failure: the check cannot run (unknown flag, multivariate or
             group-aggregated flag, no browser event carries the flag value, or exception capture is off); report the
             reason and do not read it as healthy. Always quote reason and the exposed and affected counts of both arms.
-            alpha (default 0.05) sets the confidence of the bounds.
+            alpha (default 0.05, between 0 and 1 exclusive) sets the confidence of the bounds. toleratedExcess must
+            be between 0 and 1.
         system_prompt_hint: Is a boolean flag hurting users? Harm, pass, insufficient data, or telemetry failure
         url_prefix: /feature_flags?search={flagKey}
         exclude_properties:

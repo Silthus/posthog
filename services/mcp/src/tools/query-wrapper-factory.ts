@@ -166,8 +166,11 @@ function resolveUrlPrefix(urlPrefix: string, query: Record<string, unknown>): st
     if (!urlPrefix.includes('{')) {
         return urlPrefix
     }
-    const [path = '', search] = urlPrefix.split('?', 2)
-    return resolvePath(path, query) + (search === undefined ? '' : resolveSearch(search, query))
+    const searchStart = urlPrefix.indexOf('?')
+    if (searchStart === -1) {
+        return resolvePath(urlPrefix, query)
+    }
+    return resolvePath(urlPrefix.slice(0, searchStart), query) + resolveSearch(urlPrefix.slice(searchStart + 1), query)
 }
 
 function buildInsightUrl(
