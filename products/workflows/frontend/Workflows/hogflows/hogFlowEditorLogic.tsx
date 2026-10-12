@@ -47,7 +47,7 @@ import {
 import { getSmartStepPath } from './react_flow_utils/SmartEdge'
 import { getHogFlowStep } from './steps/HogFlowSteps'
 import { CyclotronInputType, StepViewNodeHandle } from './steps/types'
-import { isBranchingAction, isWorkflowTreeComplete } from './tree/workflowTree'
+import { isBranchingStep, isWorkflowTreeComplete } from './tree/workflowTree'
 import type { DropzoneNode, HogFlow, HogFlowAction, HogFlowActionEdge, HogFlowActionNode } from './types'
 import type { HogFlowEdge } from './types'
 
@@ -67,21 +67,17 @@ export function computeInsertEdges(
         return null
     }
 
+    const insertionTarget = matchingEdges[0].to
     return [
         ...edges.filter((edge) => !edgeIdsToReplace.has(getEdgeId(edge))),
         ...matchingEdges.map((edge) => ({ ...edge, to: newActionId })),
         ...Array.from({ length: branchEdges }, (_, index) => ({
-            ...matchingEdges[0],
-            index,
+            from: newActionId,
+            to: insertionTarget,
             type: 'branch' as const,
-            from: newActionId,
+            index,
         })),
-        {
-            ...matchingEdges[0],
-            index: undefined,
-            type: 'continue' as const,
-            from: newActionId,
-        },
+        { from: newActionId, to: insertionTarget, type: 'continue' as const, index: undefined },
     ]
 }
 
@@ -2270,7 +2266,8 @@ export interface hogFlowEditorLogicMeta {
         ) => boolean
         selectedNodeCanBeCopiedOrMoved: (
             selectedNode: HogFlowActionNode | null,
-            selectedNodeCanBeDeleted: boolean
+            selectedNodeCanBeDeleted: boolean,
+            workflow: HogFlow
         ) => boolean
     }
 }
@@ -2536,13 +2533,13 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
             },
         ],
         selectedNodeCanBeCopiedOrMoved: [
-            (s) => [s.selectedNode, s.selectedNodeCanBeDeleted],
-            (selectedNode: HogFlowActionNode | null, selectedNodeCanBeDeleted: boolean) => {
+            (s) => [s.selectedNode, s.selectedNodeCanBeDeleted, s.workflow],
+            (selectedNode: HogFlowActionNode | null, selectedNodeCanBeDeleted: boolean, workflow: HogFlow) => {
                 if (!selectedNodeCanBeDeleted) {
                     return false
                 }
 
-                return !(selectedNode && isBranchingAction(selectedNode.data))
+                return !(selectedNode && isBranchingStep(selectedNode.data, workflow.edges))
             },
         ],
     }),
@@ -2696,7 +2693,13 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                             data: migratedAction,
                             position: { x: 0, y: 0 },
                             handles: Object.values(handlesByIdByNodeId[migratedAction.id] ?? {}),
-                            deletable: !['trigger', 'exit'].includes(migratedAction.type),
+                            deletable:
+                                !['trigger', 'exit'].includes(migratedAction.type) &&
+                                new Set(
+                                    hogFlow.edges
+                                        .filter((edge) => edge.from === migratedAction.id)
+                                        .map((edge) => edge.to)
+                                ).size <= 1,
                             selectable: true,
                             draggable: false,
                             connectable: false,

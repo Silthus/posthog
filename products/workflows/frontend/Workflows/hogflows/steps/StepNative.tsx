@@ -70,8 +70,8 @@ export function StepNativeConfiguration({ action }: { action: NativeAction }): J
             <div className="flex flex-col gap-2">
                 <LemonLabel>Outcome paths</LemonLabel>
                 <p className="mb-0 text-xs text-secondary">
-                    {getOutcomeLabel(NATIVE_PRIMARY_OUTCOME)} continues on the main path. Any other outcome without its
-                    own path ends the run with an error.
+                    {getOutcomeLabel(NATIVE_PRIMARY_OUTCOME)} continues on the main path. Failed follows the step's
+                    error handling. Any other outcome without its own path ends the run with an error.
                 </p>
                 {outcomePaths.map((path) => (
                     <div key={path.outcome} className="flex items-center justify-between gap-2">

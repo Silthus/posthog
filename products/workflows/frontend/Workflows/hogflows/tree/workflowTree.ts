@@ -1,12 +1,7 @@
 import { compareOutgoingEdges, getOutcomeLabel, isSameEdgeSlot, NATIVE_PRIMARY_OUTCOME } from '../hogFlowEdges'
 import type { HogFlow, HogFlowAction, HogFlowEdge } from '../types'
 
-export const BRANCHING_ACTION_TYPES = [
-    'conditional_branch',
-    'random_cohort_branch',
-    'wait_until_condition',
-    'native',
-] as const
+export const BRANCHING_ACTION_TYPES = ['conditional_branch', 'random_cohort_branch', 'wait_until_condition'] as const
 
 export interface WorkflowTreeSequence {
     nodes: WorkflowTreeNode[]
@@ -47,6 +42,11 @@ const MAX_WAIT_AMOUNT_FOR_UNIT: Record<string, number> = {
 
 export function isBranchingAction(action: Pick<HogFlowAction, 'type'>): boolean {
     return BRANCHING_ACTION_TYPES.includes(action.type as (typeof BRANCHING_ACTION_TYPES)[number])
+}
+
+// A native step branches only once it has an outcome path, so its edges decide, not its type.
+export function isBranchingStep(action: Pick<HogFlowAction, 'id' | 'type'>, edges: HogFlowEdge[]): boolean {
+    return isBranchingAction(action) || edges.filter((edge) => edge.from === action.id).length > 1
 }
 
 export function getWaitTimeoutLabel(maxWaitDuration: string | undefined): string | null {

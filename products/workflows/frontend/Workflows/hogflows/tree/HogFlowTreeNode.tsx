@@ -13,6 +13,7 @@ import { HogFlowTreeDropzone } from './HogFlowTreeDropzone'
 import { HogFlowTreeStep } from './HogFlowTreeStep'
 import type { WorkflowTreeNode } from './workflowTree'
 import {
+    getWorkflowTreeBranchKey,
     getWorkflowTreeOccurrenceKey,
     getWorkflowTreeStepId,
     WORKFLOW_TREE_BRANCH_LIMIT,
@@ -152,7 +153,7 @@ export function HogFlowTreeNode({
                                 data-workflow-tree-branch-content={node.action.id}
                             >
                                 {visibleBranches.map((branch, index) => {
-                                    const branchKey = `${branch.edge.from}-${branch.edge.type}-${branch.edge.index ?? 'continue'}`
+                                    const branchKey = getWorkflowTreeBranchKey(branch.edge)
                                     return (
                                         <Fragment key={branchKey}>
                                             <HogFlowTreeBranch

@@ -96,6 +96,22 @@ describe('computeMoveEdges', () => {
         expect(result).toEqual(expected)
     })
 
+    it('inserts a branching step into an outcome path without copying the outcome onto its own edges', () => {
+        const edges = [
+            edge('trigger', 'flag', 'continue'),
+            outcomeEdge('flag', 'exit', 'needs_approval'),
+            edge('flag', 'exit', 'continue'),
+        ]
+
+        expect(computeInsertEdges(edges, 'cond', 1, [outcomeEdge('flag', 'exit', 'needs_approval')])).toEqual([
+            edge('trigger', 'flag', 'continue'),
+            edge('flag', 'exit', 'continue'),
+            outcomeEdge('flag', 'cond', 'needs_approval'),
+            edge('cond', 'exit', 'branch', 0),
+            edge('cond', 'exit', 'continue'),
+        ])
+    })
+
     it('inserts a step after only the nested split paths', () => {
         const edges = [
             edge('trigger', 'outer', 'continue'),
@@ -642,6 +658,7 @@ describe('hogFlowEditorLogic', () => {
             expect(new Set(outgoing.map((graphEdge) => graphEdge.id)).size).toBe(3)
 
             const flagNode = logic.values.nodes.find((node) => node.id === flagStep.id)
+            expect(flagNode?.deletable).toBe(true)
             const sourceHandleIds = flagNode?.handles
                 ?.filter((handle) => handle.type === 'source')
                 .map((handle) => handle.id)
@@ -650,6 +667,27 @@ describe('hogFlowEditorLogic', () => {
                 'branch_flag_needs_approval',
                 'continue_flag',
             ])
+        })
+
+        it('keeps a native step whose paths lead to different steps from being deleted', async () => {
+            await expectLogic(logic).toDispatchActions(['setNodesRaw'])
+            const flow = makeFlow([
+                { from: flagStep.id, to: EXIT_NODE_ID, type: 'branch', outcome: 'needs_approval' },
+                edge(flagStep.id, 'delay', 'continue'),
+                edge('delay', EXIT_NODE_ID, 'continue'),
+            ])
+            flow.actions.splice(2, 0, {
+                id: 'delay',
+                name: 'Delay',
+                description: '',
+                type: 'delay',
+                created_at: 1,
+                updated_at: 1,
+                config: { delay_duration: '1d' },
+            })
+            await expectLogic(logic, () => logic.actions.resetFlowFromHogFlow(flow)).toDispatchActions(['setNodesRaw'])
+
+            expect(logic.values.nodes.find((node) => node.id === flagStep.id)?.deletable).toBe(false)
         })
     })
 
