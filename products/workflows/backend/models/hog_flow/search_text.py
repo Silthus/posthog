@@ -1,6 +1,7 @@
 import re
 from collections.abc import Iterator
 from typing import Final
+from uuid import UUID
 
 import re2
 import posthoganalytics
@@ -17,14 +18,14 @@ from products.workflows.backend.facade.enums import (
 MAX_SEARCH_TERM_LENGTH: Final = 200
 
 
-def workflow_search_enabled(team_id: int) -> bool:
+def workflow_search_enabled(team_id: int, team_uuid: UUID) -> bool:
     try:
         return (
             posthoganalytics.feature_enabled(
                 "workflows-search-mcp-tool",
-                f"team_{team_id}",
-                groups={"project": str(team_id)},
-                group_properties={"project": {"id": str(team_id)}},
+                str(team_uuid),
+                groups={"project": str(team_uuid)},
+                group_properties={"project": {"id": team_id, "uuid": str(team_uuid)}},
                 only_evaluate_locally=True,
                 send_feature_flag_events=False,
             )

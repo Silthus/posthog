@@ -4767,7 +4767,7 @@ class HogFlowViewSet(
     )
     @action(detail=False, methods=["GET"], url_path="search", pagination_class=HogFlowSearchPagination)
     def search(self, request: ValidatedRequest, *args: Any, **kwargs: Any) -> Response:
-        if not workflow_search_enabled(self.team_id):
+        if not workflow_search_enabled(self.team.id, self.team.uuid):
             raise exceptions.PermissionDenied("Workflow search is not available for this project.")
         query = request.validated_query_data
         term: str = query["q"]

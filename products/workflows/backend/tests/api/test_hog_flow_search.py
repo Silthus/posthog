@@ -4,6 +4,7 @@ import unicodedata
 from datetime import UTC, datetime
 from io import StringIO
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from posthog.test.base import APIBaseTest
 from unittest.mock import MagicMock, patch
@@ -496,10 +497,12 @@ class TestFindStepMatches(SimpleTestCase):
         ]
     )
     def test_search_activation_fails_closed(self, _name: str, result: object, enabled: bool) -> None:
+        team_uuid = UUID("0190c1a2-0000-7000-8000-000000000042")
         with patch("posthoganalytics.feature_enabled", side_effect=[result]) as flag:
-            assert workflow_search_enabled(42) is enabled
+            assert workflow_search_enabled(42, team_uuid) is enabled
 
         assert flag.call_args.kwargs["only_evaluate_locally"] is True
+        assert flag.call_args.kwargs["groups"] == {"project": str(team_uuid)}
 
     def test_term_of_many_separators_matches_without_backtracking(self) -> None:
         target = "e" + " -" * 14 + " q"

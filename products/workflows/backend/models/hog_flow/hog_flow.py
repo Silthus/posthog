@@ -227,10 +227,7 @@ class HogFlow(UUIDTModel):
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
-        team_id = self.__dict__.get("team_id")
-        if team_id is None and self.pk:
-            team_id = type(self).objects.using(using).filter(pk=self.pk).values_list("team_id", flat=True).first()
-        if team_id is None or not workflow_search_enabled(team_id):
+        if not self._search_enabled(using):
             self.search_text = None
             if kwargs.get("update_fields"):
                 kwargs["update_fields"] = set(kwargs["update_fields"]) | {"search_text"}
@@ -250,6 +247,20 @@ class HogFlow(UUIDTModel):
             if update_fields is not None:
                 kwargs["update_fields"] = update_fields | {"search_text"}
         super().save(*args, **kwargs)
+
+    def _search_enabled(self, using: str) -> bool:
+        team = self._team_for_search_gate(using)
+        return team is not None and workflow_search_enabled(team.id, team.uuid)
+
+    def _team_for_search_gate(self, using: str) -> Team | None:
+        if HogFlow.team.is_cached(self):
+            return self.team
+        team_id = self.__dict__.get("team_id")
+        if team_id is None and self.pk:
+            team_id = HogFlow.objects.using(using).filter(pk=self.pk).values_list("team_id", flat=True).first()
+        if team_id is None:
+            return None
+        return Team.objects.using(using).only("id", "uuid").filter(pk=team_id).first()
 
     def _search_text_sources(self, update_fields: set[str] | None, using: str) -> dict[str, Any]:
         """The source values that the row holds after this save: this instance's values for the fields the save
