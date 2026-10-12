@@ -46,4 +46,35 @@ describe('sandbox setup in the channel catalog', () => {
         await expectLogic(integrationsLogic).toFinishAllListeners()
         expect(logic.values.sandboxSetupError).toBeNull()
     })
+
+    it('keeps a channel load failure separate from sandbox setup and reloads on retry', async () => {
+        let loadStatus = 500
+        const sandbox = { id: 9, kind: 'email', config: { provider: 'sandbox', verified: true } }
+        useMocks({
+            get: {
+                '/api/projects/:team_id/integrations/': () =>
+                    loadStatus === 200
+                        ? [200, { results: [sandbox] }]
+                        : [500, { detail: 'Could not load your channels.' }],
+            },
+            post: { '/api/projects/:team_id/integrations/email_sandbox_sender/': [200, sandbox] },
+        })
+        featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER], {
+            [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,
+        })
+        logic = channelCatalogLogic()
+        logic.mount()
+        await expectLogic(integrationsLogic).toDispatchActions(['loadIntegrationsFailure'])
+        await expectLogic(integrationsLogic).toFinishAllListeners()
+        expect(logic.values.channels).toBeNull()
+        expect(logic.values.integrationsLoadFailed).toBe(true)
+        expect(logic.values.sandboxSetupError).toBeNull()
+
+        loadStatus = 200
+        await expectLogic(logic, () => logic.actions.retrySandboxSenderSetup()).toFinishAllListeners()
+        await expectLogic(integrationsLogic).toFinishAllListeners()
+        expect(logic.values.integrationsLoadFailed).toBe(false)
+        expect(logic.values.channels).not.toBeNull()
+        expect(logic.values.sandboxSetupError).toBeNull()
+    })
 })
