@@ -71,24 +71,6 @@ export interface messageTemplateTestSendLogicActions {
     clearTestSendResult: () => {
         value: true
     }
-    clearTestSendResultFailure: (
-        error: string,
-        errorObject?: any
-    ) => {
-        error: string
-        errorObject?: any
-    }
-    clearTestSendResultSuccess: (
-        testSendResult: null,
-        payload?: {
-            value: true
-        }
-    ) => {
-        testSendResult: null
-        payload?: {
-            value: true
-        }
-    }
     sendTestEmail: () => any
     sendTestEmailFailure: (
         error: string,
@@ -110,44 +92,8 @@ export interface messageTemplateTestSendLogicActions {
     setRecipientEmail: (email: string) => {
         email: string
     }
-    setRecipientEmailFailure: (
-        error: string,
-        errorObject?: any
-    ) => {
-        error: string
-        errorObject?: any
-    }
-    setRecipientEmailSuccess: (
-        testSendResult: null,
-        payload?: {
-            email: string
-        }
-    ) => {
-        testSendResult: null
-        payload?: {
-            email: string
-        }
-    }
     setSenderIntegrationId: (id: number | null) => {
         id: number | null
-    }
-    setSenderIntegrationIdFailure: (
-        error: string,
-        errorObject?: any
-    ) => {
-        error: string
-        errorObject?: any
-    }
-    setSenderIntegrationIdSuccess: (
-        testSendResult: null,
-        payload?: {
-            id: number | null
-        }
-    ) => {
-        testSendResult: null
-        payload?: {
-            id: number | null
-        }
     }
 }
 
@@ -240,14 +186,15 @@ export const messageTemplateTestSendLogic = kea<messageTemplateTestSendLogicType
         isModalOpen: [false, { setModalOpen: (_, { open }) => open }],
         recipientEmail: ['', { setRecipientEmail: (_, { email }) => email }],
         senderIntegrationIdOverride: [null as number | null, { setSenderIntegrationId: (_, { id }) => id }],
+        testSendResult: [
+            null as HogflowTestResult | null,
+            { clearTestSendResult: () => null, setRecipientEmail: () => null, setSenderIntegrationId: () => null },
+        ],
     }),
     loaders(({ values }) => ({
         testSendResult: [
             null as HogflowTestResult | null,
             {
-                clearTestSendResult: () => null,
-                setRecipientEmail: () => null,
-                setSenderIntegrationId: () => null,
                 sendTestEmail: async (): Promise<HogflowTestResult> => {
                     const { template, recipientEmail, senderIntegrationId, currentTeamId, isSandboxSenderSelected } =
                         values

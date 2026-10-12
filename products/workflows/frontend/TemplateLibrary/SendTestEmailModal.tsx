@@ -97,6 +97,7 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
                         <LemonInputSelect
                             mode="single"
                             allowCustomValues
+                            disabled={testSendResultLoading}
                             value={recipientEmail ? [recipientEmail] : []}
                             onChange={(values) => setRecipientEmail(values[0] ?? '')}
                             options={recipientSuggestions.map((email) => ({ key: email, label: email }))}
@@ -108,6 +109,7 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
                     ) : (
                         <LemonInput
                             type="email"
+                            disabled={testSendResultLoading}
                             value={recipientEmail}
                             onChange={setRecipientEmail}
                             placeholder="you@example.com"
@@ -150,6 +152,7 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
                     ) : emailIntegrations.length > 0 ? (
                         <>
                             <LemonSelect
+                                disabled={testSendResultLoading}
                                 value={senderIntegrationId}
                                 onChange={(id) => setSenderIntegrationId(id)}
                                 options={emailIntegrations.map((integration) =>

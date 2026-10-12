@@ -2504,6 +2504,7 @@ describe('EmailService', () => {
                 expect(sendEmailSpy).not.toHaveBeenCalled()
                 expect(result.metrics.map((m) => m.metric_name)).toContain('email_suppressed')
                 expect(result.metrics.map((m) => m.metric_name)).not.toContain('email_sent')
+                expect(result.skipped).toBe(true)
             })
 
             it('calls SES when the recipient is not suppressed', async () => {
@@ -2576,6 +2577,7 @@ describe('EmailService', () => {
 
                 expect(sendEmailSpy).not.toHaveBeenCalled()
                 expect(result.metrics).toEqual([])
+                expect(result.skipped).toBe(true)
             })
 
             // A per-workflow pause holds one workflow's email while the rest of the project keeps

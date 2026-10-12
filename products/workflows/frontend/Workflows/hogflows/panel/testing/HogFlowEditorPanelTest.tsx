@@ -339,7 +339,9 @@ export function HogFlowEditorPanelTest(): JSX.Element | null {
                                 {testResult.status === 'success'
                                     ? 'Success'
                                     : testResult.status === 'skipped'
-                                      ? 'Workflow was skipped because the event did not match the filter criteria'
+                                      ? testResult.nextActionId
+                                          ? 'This step was skipped. See the logs for details.'
+                                          : 'Workflow was skipped because the event did not match the filter criteria'
                                       : 'Error: ' + testResult.errors?.join(', ')}
                             </LemonBanner>
 

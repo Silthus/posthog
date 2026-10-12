@@ -188,6 +188,35 @@ describe('messageTemplateTestSendLogic', () => {
         await expectLogic(logic).toMatchValues({ testSendResult: null })
     })
 
+    it.each(['recipient', 'sender'])('keeps the send in flight when the %s changes', async (field) => {
+        let releaseSend: () => void = () => {}
+        const pendingSend = new Promise<void>((resolve) => {
+            releaseSend = resolve
+        })
+        useMocks({
+            post: {
+                '/api/environments/:team_id/hog_flows/:id/invocations/': async () => {
+                    await pendingSend
+                    return [200, { status: 'success', nextActionId: null }]
+                },
+            },
+        })
+        logic.actions.setRecipientEmail('recipient@example.com')
+        logic.actions.sendTestEmail()
+        try {
+            await expectLogic(logic).toMatchValues({ testSendResultLoading: true })
+            if (field === 'recipient') {
+                logic.actions.setRecipientEmail('teammate@example.com')
+            } else {
+                logic.actions.setSenderIntegrationId(5)
+            }
+            await expectLogic(logic).toMatchValues({ testSendResultLoading: true })
+        } finally {
+            releaseSend()
+            await expectLogic(logic).toFinishAllListeners()
+        }
+    })
+
     describe('sandbox sender', () => {
         const SANDBOX_SENDER = {
             id: 7,

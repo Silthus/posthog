@@ -2390,7 +2390,7 @@ describe('CDP API', () => {
             emailSpy.mockRestore()
         })
 
-        it('reports a skipped email delivery without a next action', async () => {
+        it('reports a skipped email delivery and preserves step-through continuation', async () => {
             emailSpy.mockImplementation((invocation: any) =>
                 Promise.resolve({
                     invocation,
@@ -2419,7 +2419,7 @@ describe('CDP API', () => {
 
             expect(res.status).toBe(200)
             expect(res.body.status).toBe('skipped')
-            expect(res.body.nextActionId).toBeNull()
+            expect(res.body.nextActionId).toBe('exit')
             expect(res.body.logs).toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({ message: expect.stringContaining('Sandbox daily cap reached.') }),
