@@ -70,7 +70,11 @@ export const GITHUB_EVENT_TYPE_OPTIONS: { value: string; label: string }[] = [
     { value: 'pull_request', label: 'Pull request activity' },
     { value: 'pull_request_review', label: 'Pull request reviewed' },
     { value: 'push', label: 'Push activity' },
+    { value: 'check_suite', label: 'CI checks finished' },
 ]
+
+export const CHECK_SUITE_EVENT_TYPE = 'check_suite'
+const FAILING_CONCLUSIONS = ['failure', 'timed_out', 'action_required']
 
 /**
  * Property keys the native controls own. Anything else a person adds survives untouched in the
@@ -83,6 +87,7 @@ export interface GithubTriggerFilters {
     eventTypes: string[]
     actorMode: GithubActorMode
     actorLogins: string[]
+    onlyFailures: boolean
     additional: Record<string, any>[]
 }
 
@@ -96,6 +101,17 @@ function values(entry: Record<string, any> | undefined): string[] {
     }
     const value = Array.isArray(entry.value) ? entry.value : [entry.value]
     return value.filter((item: unknown): item is string => typeof item === 'string' && item !== '')
+}
+
+function isOnlyFailuresFilter(property: Record<string, any> | undefined): boolean {
+    if (property?.key !== 'conclusion' || property.operator !== PropertyOperator.Exact) {
+        return false
+    }
+    const conclusions = values(property)
+    return (
+        conclusions.length === FAILING_CONCLUSIONS.length &&
+        FAILING_CONCLUSIONS.every((conclusion) => conclusions.includes(conclusion))
+    )
 }
 
 function exact(key: string, value: string[]): Record<string, any> {
@@ -132,7 +148,8 @@ export function decodeGithubFilters(properties: Record<string, any>[] | undefine
         eventTypes: values(eventTypes),
         actorMode,
         actorLogins,
-        additional: list.filter((property) => !OWNED_KEYS.has(property?.key)),
+        onlyFailures: list.some(isOnlyFailuresFilter),
+        additional: list.filter((property) => !OWNED_KEYS.has(property?.key) && !isOnlyFailuresFilter(property)),
     }
 }
 
@@ -159,6 +176,10 @@ export function encodeGithubFilters(filters: GithubTriggerFilters): Record<strin
             break
         case 'anyone':
             break
+    }
+
+    if (filters.onlyFailures && filters.eventTypes.includes(CHECK_SUITE_EVENT_TYPE)) {
+        properties.push(exact('conclusion', FAILING_CONCLUSIONS))
     }
 
     return [...properties, ...filters.additional]

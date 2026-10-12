@@ -1,7 +1,7 @@
 import { useActions, useValues } from 'kea'
 
 import { IconGithub } from '@posthog/icons'
-import { LemonBanner, LemonInputSelect, LemonSelect } from '@posthog/lemon-ui'
+import { LemonBanner, LemonCheckbox, LemonInputSelect, LemonSelect } from '@posthog/lemon-ui'
 
 import { TaxonomicFilterGroupType } from 'lib/components/TaxonomicFilter/types'
 import { GitHubRepositoryPicker } from 'lib/integrations/GitHubIntegrationHelpers'
@@ -17,6 +17,7 @@ import { registerTriggerType } from 'products/workflows/frontend/Workflows/hogfl
 import { workflowLogic } from 'products/workflows/frontend/Workflows/workflowLogic'
 
 import {
+    CHECK_SUITE_EVENT_TYPE,
     GITHUB_ACTOR_MODE_OPTIONS,
     GITHUB_EVENT_TYPE_OPTIONS,
     GithubActorMode,
@@ -122,6 +123,18 @@ function StepTriggerConfigurationGithubEvent({ node }: { node: any }): JSX.Eleme
                 />
             </LemonField.Pure>
 
+            {filters.eventTypes.includes(CHECK_SUITE_EVENT_TYPE) && (
+                <LemonField.Pure error={validationResult?.errors?.onlyFailures}>
+                    <LemonCheckbox
+                        checked={filters.onlyFailures}
+                        onChange={(onlyFailures) => update({ onlyFailures })}
+                        label="Only failures"
+                        info="Start a run only when CI checks fail, time out, or need action."
+                        data-attr="github-trigger-only-failures"
+                    />
+                </LemonField.Pure>
+            )}
+
             <LemonField.Pure
                 label="Who can start a run"
                 info="Anyone on the internet can open an issue or comment on a public repository, so this decides whose text a run is allowed to act on."
@@ -209,6 +222,7 @@ registerTriggerType({
                 eventTypes: [],
                 actorMode: 'write_access',
                 actorLogins: [],
+                onlyFailures: false,
                 additional: [],
             }),
         },
@@ -223,6 +237,15 @@ registerTriggerType({
         }
         if (!filters.eventTypes.length) {
             return { valid: false, errors: { eventTypes: 'Pick at least one event, or the trigger will never fire' } }
+        }
+        if (filters.onlyFailures && filters.eventTypes.some((eventType) => eventType !== CHECK_SUITE_EVENT_TYPE)) {
+            return {
+                valid: false,
+                errors: {
+                    onlyFailures:
+                        'Other events have no CI result, so they would never start a run. Turn off "Only failures", or remove the other events.',
+                },
+            }
         }
         if (filters.actorMode === 'specific_people' && !filters.actorLogins.length) {
             return {
