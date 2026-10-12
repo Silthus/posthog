@@ -29,6 +29,8 @@ import { hogFlowsResumeEmailSending } from 'products/workflows/frontend/generate
 
 import type { ResourceEditedEvent, UserBasicType, UserType } from '../../../../frontend/src/types'
 import { loadEntrySource, saveEntrySource } from '../Broadcasts/broadcastUsage'
+import { firstRunSenderLogic } from '../firstRun/firstRunSenderLogic'
+import { needsFirstRunSender, withFirstRunSender } from '../firstRun/withFirstRunSender'
 import { getRegisteredTriggerTypes } from './hogflows/registry/triggers/triggerTypeRegistry'
 import {
     DEFAULT_STATE,
@@ -3153,8 +3155,39 @@ export const workflowLogic = kea<workflowLogicType>([
                         if (props.templateId) {
                             const templateWorkflow = await api.hogFlowTemplates.getHogFlowTemplate(props.templateId)
 
+                            let templateActions = templateWorkflow.actions
+                            if (templateActions.some(needsFirstRunSender)) {
+                                const senderLogic = firstRunSenderLogic({
+                                    allowSandbox: templateActions.some(
+                                        (action) =>
+                                            needsFirstRunSender(action) && !action.config.inputs?.email?.value?.replyTo
+                                    ),
+                                })
+                                const unmount = senderLogic.mount()
+                                try {
+                                    await senderLogic.asyncActions.resolveFirstRunSender()
+                                    const sender = senderLogic.values.resolvedFirstRunSender
+                                    if (sender) {
+                                        const selectedActions = withFirstRunSender(templateActions, sender)
+                                        if (
+                                            selectedActions.some((action, index) => action !== templateActions[index])
+                                        ) {
+                                            // pinned: analytics event name
+                                            posthog.capture('email sender preselected', {
+                                                surface: 'workflow_template',
+                                                reason: sender.reason,
+                                            })
+                                        }
+                                        templateActions = selectedActions
+                                    }
+                                } finally {
+                                    unmount()
+                                }
+                            }
+
                             const newWorkflow = {
                                 ...templateWorkflow,
+                                actions: templateActions,
                                 name: templateWorkflow.name,
                                 status: 'draft' as const,
                                 version: 1,

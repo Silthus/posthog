@@ -25,6 +25,7 @@ Users cannot edit, verify, or remove the managed integration, or register their 
 The managed integration is excluded from project SES tenant migration, identity cleanup, and the reputation page's domain breakdown.
 Deploy the schema, recipient restrictions, daily caps, and tenant pause checks first. Configure the shared SES route, then enable `WORKFLOWS_SANDBOX_SENDER_ENABLED` on the worker and CDP API. Enable `workflows-sandbox-sender` last so provisioning and sender selection follow delivery readiness.
 The sandbox sender is available only in workflow email steps and test sends. Broadcasts, destinations, sender rotation, custom From values, and Reply-To overrides are rejected. Unchanged stored sender settings remain editable after the flag turns off.
+New workflow templates and inserted email steps choose their sender before the editor mounts. A verified project default or sole verified own sender takes precedence. When no own sender is verified, the flagged sandbox sender is provisioned and selected. Existing sender values and broadcasts keep their current policy.
 
 ### Sending tiers
 

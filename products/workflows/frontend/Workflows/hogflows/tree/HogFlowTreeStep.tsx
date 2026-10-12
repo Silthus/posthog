@@ -29,7 +29,7 @@ export function HogFlowTreeStep({
     stepId: string
     canDrag?: boolean
 }): JSX.Element {
-    const { animatingEdgePair, nodesById, selectedNode } = useValues(hogFlowEditorLogic)
+    const { animatingEdgePair, nodesById, selectedNode, emailInsertionPending } = useValues(hogFlowEditorLogic)
     const { duplicateNodeBelow, onNodesDelete, setSelectedNodeId } = useActions(hogFlowEditorLogic)
     const { setSelectedBranch } = useHogFlowBranchSelection()
     const { actionValidationErrorsById, workflow } = useValues(workflowLogic)
@@ -130,7 +130,8 @@ export function HogFlowTreeStep({
                                     variant="default"
                                     size="icon-sm"
                                     aria-label="Duplicate step"
-                                    title="Duplicate step"
+                                    title={emailInsertionPending ? 'Preparing the email sender…' : 'Duplicate step'}
+                                    disabled={emailInsertionPending}
                                     onClick={() => duplicateNodeBelow(action.id)}
                                     data-attr="workflow-tree-duplicate-step"
                                 >

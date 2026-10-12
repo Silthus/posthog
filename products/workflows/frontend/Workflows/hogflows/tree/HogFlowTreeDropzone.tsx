@@ -37,7 +37,7 @@ export function HogFlowTreeDropzone({
     insertionLabel?: string
     alwaysVisible?: boolean
 }): JSX.Element {
-    const { workflow } = useValues(hogFlowEditorLogic)
+    const { workflow, emailInsertionPending } = useValues(hogFlowEditorLogic)
     const {
         moveNodeToEdge,
         onDragOver,
@@ -55,6 +55,10 @@ export function HogFlowTreeDropzone({
         onDragOver(event)
     }
     const handleDrop = (event: DragEvent<HTMLElement>): void => {
+        event.preventDefault()
+        if (emailInsertionPending) {
+            return
+        }
         setHighlighted(false)
         const draggedActionId = draggedActionIdRef.current
         if (draggedActionId) {
@@ -85,6 +89,9 @@ export function HogFlowTreeDropzone({
         }
     }
     const handleInsertAction = (action: CreateActionType): void => {
+        if (emailInsertionPending) {
+            return
+        }
         setPickerOpen(false)
         setNodeToBeAdded(action)
 
@@ -102,7 +109,7 @@ export function HogFlowTreeDropzone({
                 alwaysVisible ? 'min-h-8' : compact ? 'h-2' : 'h-4'
             )}
             data-workflow-tree-dropzone-candidate
-            data-workflow-tree-dropzone-disabled={isAdjacentToDraggedAction || undefined}
+            data-workflow-tree-dropzone-disabled={isAdjacentToDraggedAction || emailInsertionPending || undefined}
         >
             <div
                 className={cn(
@@ -122,6 +129,7 @@ export function HogFlowTreeDropzone({
                     <PopoverTrigger
                         render={
                             <LemonButton
+                                disabledReason={emailInsertionPending ? 'Preparing the email sender…' : undefined}
                                 htmlType="button"
                                 type="tertiary"
                                 size="xsmall"
