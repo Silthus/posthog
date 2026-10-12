@@ -30,6 +30,7 @@ GITHUB_EVENT_TYPES = frozenset(
         "installation",
         "installation_repositories",
         "push",
+        "check_suite",
     }
 )
 

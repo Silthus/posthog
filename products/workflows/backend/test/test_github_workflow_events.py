@@ -88,6 +88,58 @@ def test_emits_nothing_for_an_unconnected_installation(produce, integration) -> 
     produce.assert_not_called()
 
 
+@pytest.mark.parametrize("pr_numbers,foreign_pr_numbers", [([7, 8], [9]), ([], [9]), ([], [])])
+def test_check_suite_emits_ci_results_per_pull_request(
+    produce, integration, pr_numbers: list[int], foreign_pr_numbers: list[int]
+) -> None:
+    payload = {
+        "action": "completed",
+        "installation": {"id": INSTALLATION_ID},
+        "repository": {"id": 42, "full_name": "example/project", "private": False},
+        "sender": {"login": "github-actions[bot]", "type": "Bot"},
+        "check_suite": {
+            "id": 123,
+            "conclusion": "failure",
+            "head_sha": "abc123",
+            "head_branch": "fix-build",
+            "app": {"slug": "github-actions"},
+            "pull_requests": [{"number": number, "base": {"repo": {"id": 42}}} for number in pr_numbers]
+            + [{"number": number, "base": {"repo": {"id": 99}}} for number in foreign_pr_numbers],
+            "head_commit": {"id": "abc123", "message": "Untrusted commit text"},
+        },
+    }
+
+    with patch("django.conf.settings.GITHUB_WORKFLOW_TRIGGERS_ENABLED", True):
+        emit_github_event("check_suite", payload, "ci-delivery")
+
+    events = [call.args[1] for call in produce.call_args_list]
+    assert len(events) == len(pr_numbers or [None])
+    assert [event.properties["number"] for event in events] == (pr_numbers or [None])
+    assert len({event.uuid for event in events}) == len(events)
+    for event in events:
+        assert event.event == "$github_event_received"
+        assert (
+            event.properties.items()
+            >= {
+                "event_type": "check_suite",
+                "action": "completed",
+                "conclusion": "failure",
+                "head_sha": "abc123",
+                "branch": "fix-build",
+                "check_suite_id": 123,
+                "ci_app": "github-actions",
+                "actor_access": "write" if pr_numbers else "read",
+            }.items()
+        )
+        assert event.properties["github_event"]["check_suite"]["head_commit"] == {"id": "abc123"}
+    first_uuids = [event.uuid for event in events]
+    produce.reset_mock()
+    with patch("django.conf.settings.GITHUB_WORKFLOW_TRIGGERS_ENABLED", True):
+        emit_github_event("check_suite", payload, "ci-delivery")
+    assert [call.args[1].uuid for call in produce.call_args_list] == first_uuids
+    assert payload["check_suite"]["head_commit"]["message"] == "Untrusted commit text"
+
+
 @pytest.mark.parametrize(
     "event_type,payload_overrides,expected",
     [

@@ -29,7 +29,7 @@ GITHUB_EVENT_RECEIVED_EVENT = "$github_event_received"
 # Event types a workflow can be triggered by. The fan-out delivers more than these to other
 # handlers, so the registration in posthog/urls.py is the real list; this mirrors it for the
 # trigger UI's sake.
-GITHUB_TRIGGER_EVENT_TYPES = ("issues", "issue_comment", "pull_request", "pull_request_review", "push")
+GITHUB_TRIGGER_EVENT_TYPES = ("issues", "issue_comment", "pull_request", "pull_request_review", "push", "check_suite")
 
 _GITHUB_EVENT_NAMESPACE = uuid.UUID("2c9f5d71-8e4a-4b6d-9f13-7a5e0c2b8d64")
 
@@ -94,15 +94,21 @@ def _is_own_app_sender(sender: dict[str, Any]) -> bool:
 
 
 def _redacted_github_event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """The payload embedded on the event, with a push delivery's commit messages stripped.
-
-    A push always gets ``actor_access: "write"``, because pushing needs write access. But a
+    """A push always gets ``actor_access: "write"``, because pushing needs write access. But a
     commit message is free text an external contributor can author (e.g. a squash-merged PR
     title), so a trusted pusher merging one would otherwise carry attacker-controlled text into a
     privileged step such as create-task. Mirrors the same redaction loops applies for the same
     reason (see ``products/tasks/backend/loop_github_events.py``), keeping only the non-free-text
     commit id.
     """
+    if event_type == "check_suite":
+        redacted = dict(payload)
+        suite = dict(payload.get("check_suite") or {})
+        head_commit = suite.get("head_commit")
+        if isinstance(head_commit, dict):
+            suite["head_commit"] = {"id": head_commit.get("id")}
+        redacted["check_suite"] = suite
+        return redacted
     if event_type != "push":
         return payload
 
@@ -116,7 +122,9 @@ def _redacted_github_event(event_type: str, payload: dict[str, Any]) -> dict[str
     return redacted
 
 
-def _event_properties(event_type: str, payload: dict[str, Any], *, integration_id: int) -> dict[str, Any]:
+def _event_properties(
+    event_type: str, payload: dict[str, Any], *, integration_id: int, pull_request_number: int | None = None
+) -> dict[str, Any]:
     repository = payload.get("repository") or {}
     sender = payload.get("sender") or {}
     subject = _subject(payload)
@@ -165,6 +173,20 @@ def _event_properties(event_type: str, payload: dict[str, Any], *, integration_i
         "github_event": _redacted_github_event(event_type, payload),
     }
 
+    if event_type == "check_suite":
+        suite = payload.get("check_suite") or {}
+        properties.update(
+            {
+                "conclusion": suite.get("conclusion"),
+                "head_sha": suite.get("head_sha"),
+                "branch": suite.get("head_branch"),
+                "number": pull_request_number,
+                "check_suite_id": suite.get("id"),
+                "ci_app": (suite.get("app") or {}).get("slug"),
+                "actor_access": "write" if pull_request_number is not None else "read",
+            }
+        )
+
     # A push's commits array grows without bound, so the embedded payload can push the message past
     # Kafka's limit; a silent broker drop is unrecoverable here because the fan-out's dedup mark
     # already blocks GitHub's redelivery. Drop the raw-payload escape hatch when the message would
@@ -173,6 +195,19 @@ def _event_properties(event_type: str, payload: dict[str, Any], *, integration_i
         properties["github_event"] = {"truncated": True}
 
     return properties
+
+
+def _check_suite_pull_request_numbers(payload: dict[str, Any]) -> list[int | None]:
+    repository_id = (payload.get("repository") or {}).get("id")
+    numbers: list[int | None] = []
+    for pull_request in (payload.get("check_suite") or {}).get("pull_requests") or []:
+        if not isinstance(pull_request, dict):
+            continue
+        number = pull_request.get("number")
+        base_repository_id = ((pull_request.get("base") or {}).get("repo") or {}).get("id")
+        if isinstance(number, int) and repository_id is not None and base_repository_id == repository_id:
+            numbers.append(number)
+    return numbers or [None]
 
 
 def emit_github_event(event_type: str, payload: dict[str, Any], delivery_id: str) -> None:
@@ -202,22 +237,31 @@ def emit_github_event(event_type: str, payload: dict[str, Any], delivery_id: str
         return
 
     distinct_id = str((payload.get("sender") or {}).get("login") or f"installation:{installation_id}")
+    pull_request_numbers: list[int | None] = [None]
+    if event_type == "check_suite":
+        pull_request_numbers = _check_suite_pull_request_numbers(payload)
 
     for integration in integrations:
-        try:
-            produce_internal_event(
-                integration.team_id,
-                InternalEventEvent(
-                    event=GITHUB_EVENT_RECEIVED_EVENT,
-                    distinct_id=distinct_id,
-                    properties=_event_properties(event_type, payload, integration_id=integration.id),
-                    uuid=str(uuid.uuid5(_GITHUB_EVENT_NAMESPACE, f"{integration.team_id}:{delivery_id or ''}")),
-                ),
-            )
-        except Exception:
-            logger.exception(
-                "github_workflow_event_produce_failed",
-                installation_id=installation_id,
-                team_id=integration.team_id,
-                delivery_id=delivery_id,
-            )
+        for pull_request_number in pull_request_numbers:
+            try:
+                event_key = f"{integration.team_id}:{delivery_id or ''}"
+                if event_type == "check_suite":
+                    event_key += f":{pull_request_number}"
+                produce_internal_event(
+                    integration.team_id,
+                    InternalEventEvent(
+                        event=GITHUB_EVENT_RECEIVED_EVENT,
+                        distinct_id=distinct_id,
+                        properties=_event_properties(
+                            event_type, payload, integration_id=integration.id, pull_request_number=pull_request_number
+                        ),
+                        uuid=str(uuid.uuid5(_GITHUB_EVENT_NAMESPACE, event_key)),
+                    ),
+                )
+            except Exception:
+                logger.exception(
+                    "github_workflow_event_produce_failed",
+                    installation_id=installation_id,
+                    team_id=integration.team_id,
+                    delivery_id=delivery_id,
+                )
