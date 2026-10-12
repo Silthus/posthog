@@ -50,6 +50,7 @@ export function buildWorkflowListFacets(rows: WorkflowLibraryRow[]): FacetDefini
     return [
         {
             key: 'tag',
+            matchAll: true,
             label: 'Tag',
             description: 'Tags attached to the workflow',
             showOnFocus: true,

@@ -23,6 +23,7 @@ export interface FacetDefinition<TItem> {
     showOnFocus?: boolean
     /** Lower sorts first. */
     order?: number
+    matchAll?: boolean
 }
 
 export interface FacetFilter {
@@ -150,7 +151,12 @@ function passesGroups<TItem>(item: TItem, groups: FacetFilterGroup<TItem>[], ski
             continue
         }
         const values = facet.getValues(item).map((value) => value.toLowerCase())
-        if (positive.size && !values.some((value) => positive.has(value))) {
+        if (
+            positive.size &&
+            !(facet.matchAll
+                ? [...positive].every((value) => values.includes(value))
+                : values.some((value) => positive.has(value)))
+        ) {
             return false
         }
         if (values.some((value) => negative.has(value))) {

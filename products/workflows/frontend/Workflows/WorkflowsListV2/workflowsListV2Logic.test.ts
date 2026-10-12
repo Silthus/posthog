@@ -33,6 +33,26 @@ describe('workflowsListV2Logic', () => {
     let serverSearch: (search: string) => Promise<string[]>
     let metricsResponse: () => Promise<[number, WorkflowStatsRowApi[] | { detail: string }]>
 
+    it('requires every tag pill on workflows and email templates', async () => {
+        const workflows = [
+            buildWorkflowRow({ id: 'both', tags: ['billing', 'eu'] }),
+            buildWorkflowRow({ id: 'billing-only', tags: ['billing'] }),
+            buildWorkflowRow({ id: 'eu-only', tags: ['eu'] }),
+        ]
+        const template = { id: 'template-both', name: 'Receipt', type: 'email', tags: ['billing', 'eu'] }
+        useMocks({
+            get: {
+                '/api/projects/:team_id/hog_flows/summaries/': () => [200, paginated(workflows)],
+                '/api/projects/:team_id/messaging_templates/': () => [200, paginated([template])],
+            },
+        })
+        router.actions.push(urls.workflows(), { q: 'tag:billing tag:eu' })
+        logic = workflowsListV2Logic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadWorkflowsSuccess', 'loadEmailTemplatesSuccess'])
+        expect(shownIds(logic).sort()).toEqual(['both', 'template-both'])
+    })
+
     beforeEach(() => {
         workflowRequests = []
         serverSearch = async () => []
