@@ -455,7 +455,7 @@ describe('HogMasker', () => {
                         trigger_masking: {
                             hash: '{event.properties.repository}#{event.properties.number}',
                             bytecode: await compileHog(
-                                "return concat(event.properties.repository, '#', toString(event.properties.number))"
+                                "return f'{event.properties.repository}#{event.properties.number}'"
                             ),
                             ttl: 7200,
                             threshold: null,
