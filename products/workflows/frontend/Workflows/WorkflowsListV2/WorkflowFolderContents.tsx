@@ -62,7 +62,7 @@ export function WorkflowFolderContents(): JSX.Element {
         submitFolderDraft,
         cancelFolderDraft,
     } = useActions(workflowFoldersLogic)
-    const showFolderDraft = !!folderDraft && !hasActiveQuery && folderDraft.parent === (currentFolder ?? '')
+    const showFolderDraft = !!folderDraft && folderDraft.parent === (currentFolder ?? '')
     const { shownColumns, metricsLoading, listLoaded, serverSearchStatus } = useValues(workflowsListV2Logic)
     const { searchParams } = useValues(router)
     const sortOrder = String(searchParams[SORTING_URL_PARAM] ?? '').startsWith('-') ? -1 : 1
@@ -142,6 +142,7 @@ export function WorkflowFolderContents(): JSX.Element {
                                         <LemonButton
                                             size="small"
                                             noPadding
+                                            className="flex-1 min-w-0"
                                             onClick={() => openFolder(item.path || null)}
                                             data-attr="workflows-folder-row"
                                         >
@@ -170,6 +171,9 @@ export function WorkflowFolderContents(): JSX.Element {
                                         value={folderDraft?.name ?? ''}
                                         onChange={setFolderDraftName}
                                         onKeyDown={(event) => {
+                                            if (event.nativeEvent.isComposing) {
+                                                return
+                                            }
                                             if (event.key === 'Enter') {
                                                 submitFolderDraft()
                                             } else if (event.key === 'Escape') {
@@ -255,6 +259,8 @@ export function WorkflowFolderContents(): JSX.Element {
                 </div>
             )}
             <LemonTable
+                // Remounting returns the table to page one, where the inline folder row is.
+                key={showFolderDraft ? 'folder-draft' : 'folder-contents'}
                 dataSource={rows}
                 columns={columns}
                 rowKey="id"

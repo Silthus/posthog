@@ -240,12 +240,12 @@ describe('WorkflowsScene', () => {
             return null
         }
 
-        const renderFolder = async (folder: string, visibleWorkflow: string): Promise<void> => {
+        const renderFolder = async (folder: string, visibleWorkflow: string, filters = ''): Promise<void> => {
             featureFlagLogic.actions.setFeatureFlags([], {
                 [FEATURE_FLAGS.WORKFLOWS_LIST_V2]: true,
                 [FEATURE_FLAGS.WORKFLOWS_PROJECT_FILES]: true,
             })
-            router.actions.push(urls.workflows(), { q: `in:${folder}` })
+            router.actions.push(urls.workflows(), { q: `in:${folder}${filters}` })
             render(
                 <Provider>
                     <DndContext>
@@ -334,6 +334,41 @@ describe('WorkflowsScene', () => {
             )
             expect(router.values.searchParams.q).toEqual('in:Billing')
             expect(document.querySelector('[role="tree"]')?.textContent).toContain('Invoices')
+        })
+
+        const draftInputAfterNewFolder = async (): Promise<HTMLInputElement | null> => {
+            await userEvent
+                .setup()
+                .click(
+                    document.querySelector<HTMLElement>(
+                        '[data-attr="workflows-folder-toolbar"] [data-attr="workflows-new-folder"]'
+                    )!
+                )
+            return document.querySelector<HTMLInputElement>('input[data-attr="workflows-new-folder-name"]')
+        }
+
+        it('shows the inline folder name while a filter narrows the folder', async () => {
+            await renderFolder('Billing', 'Welcome series', ' status:active')
+            expect(await draftInputAfterNewFolder()).not.toBeNull()
+        })
+
+        it('shows the inline folder name from a later page of the folder', async () => {
+            workflows = Array.from({ length: 120 }, (_, i) =>
+                buildWorkflowRow({ id: `wf-${i}`, name: `Flow ${String(i).padStart(3, '0')}` })
+            )
+            files = [
+                { id: 'billing', path: 'Billing', type: 'folder' },
+                ...workflows.map((workflow) => ({
+                    id: `file-${workflow.id}`,
+                    path: `Billing/${workflow.name}`,
+                    type: 'hog_flow',
+                    ref: workflow.id,
+                })),
+            ]
+            await renderFolder('Billing', 'Flow 000')
+            await userEvent.setup().click(document.querySelector('[aria-label="Next page"]')!)
+            await waitFor(() => expect(shownRowNames()).toContain('Flow 119'))
+            expect(await draftInputAfterNewFolder()).not.toBeNull()
         })
     })
 })
