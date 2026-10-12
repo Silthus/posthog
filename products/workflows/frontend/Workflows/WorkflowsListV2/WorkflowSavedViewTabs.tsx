@@ -24,7 +24,7 @@ export function WorkflowSavedViewTabs(): JSX.Element | null {
         activeViewChanges,
         activeView,
         canUpdateActiveView,
-        saving,
+        pendingAction,
         sharedSaveDisabledReason,
         writeDisabledReason,
         savedViewsLoadFailed,
@@ -69,7 +69,7 @@ export function WorkflowSavedViewTabs(): JSX.Element | null {
                     hasAddedFilters={addedFilters.length > 0}
                     canUpdateActiveView={canUpdateActiveView}
                     activeViewChanges={activeViewChanges}
-                    saving={saving}
+                    pendingAction={pendingAction}
                     sharedSaveDisabledReason={sharedSaveDisabledReason}
                     writeDisabledReason={writeDisabledReason}
                     onReset={() => resetView()}

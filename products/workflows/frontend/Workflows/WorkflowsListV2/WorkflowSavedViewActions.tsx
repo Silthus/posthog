@@ -1,7 +1,7 @@
 import { IconEllipsis } from '@posthog/icons'
 import { LemonButton, LemonMenu } from '@posthog/lemon-ui'
 
-import { WorkflowSavedView } from './workflowSavedViews'
+import { SavedViewAction, WorkflowSavedView } from './workflowSavedViews'
 
 export interface WorkflowSavedViewActionsProps {
     activeView: WorkflowSavedView
@@ -9,7 +9,7 @@ export interface WorkflowSavedViewActionsProps {
     hasAddedFilters: boolean
     canUpdateActiveView: boolean
     activeViewChanges: string[]
-    saving: boolean
+    pendingAction: SavedViewAction | null
     writeDisabledReason?: string
     sharedSaveDisabledReason?: string
     onReset: () => void
@@ -19,13 +19,22 @@ export interface WorkflowSavedViewActionsProps {
     onDelete: () => void
 }
 
+const PENDING_ACTION_REASONS: Record<SavedViewAction, string> = {
+    'save-as': 'Saving the new view',
+    update: 'Updating the view',
+    rename: 'Renaming the view',
+    delete: 'Deleting the view',
+    restore: 'Restoring My workflows',
+    reset: 'Loading the latest version of the view',
+}
+
 export function WorkflowSavedViewActions({
     activeView,
     isModified,
     hasAddedFilters,
     canUpdateActiveView,
     activeViewChanges,
-    saving,
+    pendingAction,
     writeDisabledReason,
     sharedSaveDisabledReason,
     onReset,
@@ -35,6 +44,9 @@ export function WorkflowSavedViewActions({
     onDelete,
 }: WorkflowSavedViewActionsProps): JSX.Element {
     const changed = activeViewChanges.join(', ')
+    const startedBy = (...actions: SavedViewAction[]): boolean =>
+        pendingAction !== null && actions.includes(pendingAction)
+    const pendingReason = pendingAction ? PENDING_ACTION_REASONS[pendingAction] : undefined
     return (
         <div className="flex flex-wrap items-center gap-1 pb-2 shrink-0" data-attr="workflows-combined-view-actions">
             {(isModified || hasAddedFilters) && (
@@ -42,7 +54,8 @@ export function WorkflowSavedViewActions({
                     size="small"
                     type="tertiary"
                     onClick={onReset}
-                    disabledReason={saving ? 'A view is being saved' : undefined}
+                    loading={startedBy('reset')}
+                    disabledReason={pendingReason}
                     tooltip={`Discard your changes and go back to ${activeView.name}`}
                     data-attr="workflows-combined-reset-view"
                 >
@@ -55,7 +68,8 @@ export function WorkflowSavedViewActions({
                         size="small"
                         type={canUpdateActiveView ? 'secondary' : 'primary'}
                         onClick={onSaveAs}
-                        disabledReason={saving ? 'A view is being saved' : writeDisabledReason}
+                        loading={startedBy('save-as')}
+                        disabledReason={pendingReason ?? writeDisabledReason}
                         tooltip={
                             canUpdateActiveView
                                 ? `Keep ${activeView.name} as it was and save your changes as a new view`
@@ -69,11 +83,11 @@ export function WorkflowSavedViewActions({
                         size="small"
                         type="primary"
                         onClick={onSave}
-                        loading={saving}
+                        loading={startedBy('update')}
                         disabledReason={
                             !canUpdateActiveView
                                 ? "Built-in views can't be changed. Save as a new view instead."
-                                : (sharedSaveDisabledReason ?? writeDisabledReason)
+                                : (pendingReason ?? sharedSaveDisabledReason ?? writeDisabledReason)
                         }
                         tooltip={`Update ${activeView.name} for everyone in this project. Changed: ${changed}.`}
                         data-attr="workflows-combined-update-view"
@@ -95,8 +109,8 @@ export function WorkflowSavedViewActions({
                         size="small"
                         type="tertiary"
                         icon={<IconEllipsis />}
-                        loading={saving && !isModified}
-                        disabledReason={saving ? 'A view is being saved' : writeDisabledReason}
+                        loading={startedBy('rename', 'delete')}
+                        disabledReason={pendingReason ?? writeDisabledReason}
                         data-attr="workflows-combined-view-more"
                         aria-label="More options"
                     />

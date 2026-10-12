@@ -69,6 +69,7 @@ export interface workflowsSavedViewsLogicValues {
     enabled: boolean
     isModified: boolean
     myWorkflowsDeleted: boolean
+    pendingAction: SavedViewAction | null
     savedViews: WorkflowViewApi[] | null
     savedViewsLoadFailed: boolean
     savedViewsLoading: boolean
@@ -179,8 +180,8 @@ export interface workflowsSavedViewsLogicActions {
     setSavedViewsLoadFailed: (failed: boolean) => {
         failed: boolean
     }
-    setSaving: (saving: boolean) => {
-        saving: boolean
+    setPendingAction: (action: SavedViewAction | null) => {
+        action: SavedViewAction | null
     }
     syncViewFromUrl: () => {
         value: true
@@ -216,6 +217,7 @@ export interface workflowsSavedViewsLogicMeta {
         canUpdateActiveView: (activeView: WorkflowSavedView) => boolean
         sharedSaveDisabledReason: (conflictedViewId: string | null, activeViewId: string) => string | undefined
         myWorkflowsDeleted: (defaultView: WorkflowViewApi | null) => boolean
+        saving: (pendingAction: SavedViewAction | null) => boolean
         viewCounts: (
             views: WorkflowSavedView[],
             rows: WorkflowListRow[],
@@ -280,7 +282,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
         upsertSavedView: (view: WorkflowViewApi) => ({ view }),
         removeSavedView: (id: string) => ({ id }),
         setDefaultView: (view: WorkflowViewApi | null) => ({ view }),
-        setSaving: (saving: boolean) => ({ saving }),
+        setPendingAction: (action: SavedViewAction | null) => ({ action }),
         setConflictedViewId: (id: string | null) => ({ id }),
         syncViewFromUrl: true,
         clearSavedViews: true,
@@ -367,7 +369,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
             'all',
             { setActiveViewId: (_, { id }) => id, applyView: (_, { view }) => view.id, clearSavedViews: () => 'all' },
         ],
-        saving: [false, { setSaving: (_, { saving }) => saving }],
+        pendingAction: [null as SavedViewAction | null, { setPendingAction: (_, { action }) => action }],
         conflictedViewId: [
             null as string | null,
             { setConflictedViewId: (_, { id }) => id, clearSavedViews: () => null },
@@ -443,6 +445,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                     : undefined,
         ],
         myWorkflowsDeleted: [(s) => [s.defaultView], (view: WorkflowViewApi | null): boolean => view?.deleted === true],
+        saving: [(s) => [s.pendingAction], (pendingAction: SavedViewAction | null): boolean => pendingAction !== null],
         viewCounts: [
             (s) => [s.views, s.rows, s.facets, s.matchesText, s.serverSearch, s.metricsLoaded, s.listLoaded],
             (
@@ -546,7 +549,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
             if (!values.available || values.saving || (needsWriteAccess && values.writeDisabledReason)) {
                 return null
             }
-            actions.setSaving(true)
+            actions.setPendingAction(action)
             const teamId = values.currentTeamId
             const generation = cache.contextGeneration ?? 0
             const stillCurrent = (): boolean =>
@@ -557,7 +560,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
             } catch (error) {
                 return stillCurrent() ? handleFailure(action, error, target) : null
             } finally {
-                actions.setSaving(false)
+                actions.setPendingAction(null)
             }
         }
         return {
