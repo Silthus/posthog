@@ -114,7 +114,6 @@ export interface integrationsLogicValues {
     accessRequestLoading: boolean
     accessRequestReason: string
     domainGroupedEmailIntegrations: EmailIntegrationDomainGroupedType[]
-    emailIntegrationsLoading: boolean
     getGitHubRepositories: (integrationId: number) => string[]
     getGitHubRepositoriesFull: (integrationId: number) => GitHubRepoApi[]
     getGitHubRepositoriesTotal: (integrationId: number) => number | null
@@ -739,7 +738,7 @@ export interface integrationsLogicMeta {
             githubAvailableInstallationsResponse: GitHubAvailableInstallationsResponseApi | null
         ) => boolean | null
         getIntegrationsByKind: (
-            integrations: IntegrationType[] | null
+            userManagedIntegrations: IntegrationType[] | null
         ) => (
             kinds: (
                 | 'apns'
@@ -807,10 +806,6 @@ export interface integrationsLogicMeta {
         ) => IntegrationType | null
         userManagedIntegrations: (integrations: IntegrationType[] | null) => IntegrationType[] | null
         ownEmailIntegrations: (userManagedIntegrations: IntegrationType[] | null) => IntegrationType[]
-        emailIntegrationsLoading: (
-            integrationsLoading: boolean,
-            sandboxEmailSenderProvisionResultLoading: boolean
-        ) => boolean
         domainGroupedEmailIntegrations: (ownEmailIntegrations: IntegrationType[]) => EmailIntegrationDomainGroupedType[]
     }
 }
@@ -892,7 +887,10 @@ export const integrationsLogic = kea<integrationsLogicType>([
         integrations: [null as IntegrationType[] | null, { clearIntegrations: () => null }],
         sandboxEmailSenderProvisionResult: [
             null as SandboxEmailSenderProvisionResult | null,
-            { clearIntegrations: () => null },
+            {
+                clearIntegrations: () => null,
+                ensureSandboxEmailSender: (state) => (state === 'failed' ? null : state),
+            },
         ],
         githubDisconnecting: [false, { setGithubDisconnecting: (_, { disconnecting }) => disconnecting }],
         githubDiscoveryGeneration: [
@@ -1574,7 +1572,7 @@ export const integrationsLogic = kea<integrationsLogicType>([
             },
         ],
         getIntegrationsByKind: [
-            (s) => [s.integrations],
+            (s) => [s.userManagedIntegrations],
             (integrations: IntegrationType[] | null) => {
                 return (kinds: IntegrationKind[]) => integrations?.filter((i) => kinds.includes(i.kind)) || []
             },
@@ -1624,11 +1622,6 @@ export const integrationsLogic = kea<integrationsLogicType>([
             (s) => [s.userManagedIntegrations],
             (userManagedIntegrations: IntegrationType[] | null): IntegrationType[] =>
                 userManagedIntegrations?.filter((x) => x.kind === 'email') ?? [],
-        ],
-        emailIntegrationsLoading: [
-            (s) => [s.integrationsLoading, s.sandboxEmailSenderProvisionResultLoading],
-            (integrationsLoading: boolean, sandboxEmailSenderProvisionResultLoading: boolean): boolean =>
-                integrationsLoading || sandboxEmailSenderProvisionResultLoading,
         ],
         domainGroupedEmailIntegrations: [
             (s) => [s.ownEmailIntegrations],

@@ -5,7 +5,6 @@ import { SetupTaskId } from 'lib/components/ProductSetup'
 import { EmailIntegrationsList } from 'lib/integrations/EmailIntegrationsList'
 import { IntegrationsList } from 'lib/integrations/IntegrationsList'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
-import { isSandboxEmailSender } from 'lib/integrations/utils'
 
 import { ChannelCatalog } from './ChannelCatalog'
 import { ChannelSetupModal } from './ChannelSetupModal'
@@ -15,8 +14,14 @@ const MESSAGING_CHANNEL_TYPES = ['email', 'slack', 'twilio', 'firebase', 'apns']
 export type ChannelType = (typeof MESSAGING_CHANNEL_TYPES)[number]
 
 export function MessageChannels(): JSX.Element {
-    const { setupModalOpen, integrations, setupModalType, selectedIntegration, sandboxEmailSender, currentProjectId } =
-        useValues(integrationsLogic)
+    const {
+        setupModalOpen,
+        userManagedIntegrations,
+        setupModalType,
+        selectedIntegration,
+        sandboxEmailSender,
+        currentProjectId,
+    } = useValues(integrationsLogic)
     const { closeSetupModal, markTaskAsCompleted, ensureSandboxEmailSender } = useActions(integrationsLogic)
 
     useEffect(() => {
@@ -24,9 +29,8 @@ export function MessageChannels(): JSX.Element {
     }, [ensureSandboxEmailSender, currentProjectId])
 
     const ownWorkflowIntegrations =
-        integrations?.filter(
-            (integration) =>
-                MESSAGING_CHANNEL_TYPES.includes(integration.kind as ChannelType) && !isSandboxEmailSender(integration)
+        userManagedIntegrations?.filter((integration) =>
+            MESSAGING_CHANNEL_TYPES.includes(integration.kind as ChannelType)
         ) ?? []
 
     return (
@@ -44,10 +48,10 @@ export function MessageChannels(): JSX.Element {
 
             <div className="flex flex-col gap-4" data-attr="message-channels">
                 <ChannelCatalog />
+                {sandboxEmailSender && <SandboxEmailSenderRow integration={sandboxEmailSender} />}
                 {ownWorkflowIntegrations.length > 0 && (
                     <h3 className="mb-0 text-base font-semibold">Your connections</h3>
                 )}
-                {sandboxEmailSender && <SandboxEmailSenderRow integration={sandboxEmailSender} />}
                 <EmailIntegrationsList />
                 <IntegrationsList titleText="" onlyKinds={MESSAGING_CHANNEL_TYPES.filter((type) => type !== 'email')} />
             </div>

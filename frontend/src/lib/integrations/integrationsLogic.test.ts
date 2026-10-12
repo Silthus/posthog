@@ -200,7 +200,6 @@ describe('integrationsLogic', () => {
                     .toNotHaveDispatchedActions(['provisionSandboxEmailSenderFailure'])
 
                 await expectLogic(logic, () => {
-                    logic.actions.ensureSandboxEmailSender()
                     logic.actions.loadIntegrations()
                 })
                     .toDispatchActions(['loadIntegrationsSuccess'])
@@ -208,8 +207,27 @@ describe('integrationsLogic', () => {
 
                 expect(ensureCalls).toBe(1)
                 expect(logic.values.sandboxEmailSender).toBeNull()
+                if (status === 404) {
+                    await expectLogic(logic, () => logic.actions.ensureSandboxEmailSender()).toFinishAllListeners()
+                    expect(ensureCalls).toBe(1)
+                }
             }
         )
+
+        it('retries a failed provision when a surface explicitly asks again', async () => {
+            enableFlag()
+            ensureStatus = 500
+            await expectLogic(logic, () => logic.actions.ensureSandboxEmailSender()).toDispatchActions([
+                'provisionSandboxEmailSenderSuccess',
+            ])
+
+            ensureStatus = 200
+            await expectLogic(logic, () => logic.actions.ensureSandboxEmailSender())
+                .toDispatchActions(['provisionSandboxEmailSenderSuccess', 'loadIntegrationsSuccess'])
+                .toMatchValues({ sandboxEmailSender: expect.objectContaining({ id: sandboxSender.id }) })
+
+            expect(ensureCalls).toBe(2)
+        })
 
         it('provisions once the flag arrives after a surface asked for the sandbox sender', async () => {
             await expectLogic(logic, () => {
@@ -284,6 +302,9 @@ describe('integrationsLogic', () => {
                             },
                         ],
                     })
+                expect(logic.values.getIntegrationsByKind(['email'])).toEqual([
+                    expect.objectContaining({ id: ownSender.id }),
+                ])
             }
         )
     })

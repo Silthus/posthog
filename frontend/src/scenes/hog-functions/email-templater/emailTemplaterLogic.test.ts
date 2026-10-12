@@ -121,6 +121,37 @@ describe('emailTemplaterLogic', () => {
             expect(logic.values.senderIntegrations.map((integration) => integration.id)).toEqual([5, 7])
         })
 
+        it.each([{ ownSenders: [] }, { ownSenders: [OWN_SENDER] }])(
+            'keeps the saved sandbox restrictions after flag rollback with own senders $ownSenders',
+            async ({ ownSenders }) => {
+                useMocks({
+                    get: { '/api/projects/:team_id/integrations/': { results: [SANDBOX_SENDER, ...ownSenders] } },
+                })
+                const onChange = jest.fn()
+                logic = emailTemplaterLogic(
+                    makeProps({
+                        sandboxSenderAllowed: true,
+                        liveChanges: true,
+                        onChange,
+                        value: { ...DEFAULT_EMAIL_TEMPLATE, from: { integrationId: 7 } },
+                    })
+                )
+                logic.mount()
+                await expectLogic(integrationsLogic).toDispatchActions(['loadIntegrationsSuccess'])
+
+                expect(logic.values.senderIntegrations).toContainEqual(expect.objectContaining({ id: 7 }))
+                expect(logic.values.isSandboxSenderSelected).toBe(true)
+                expect(logic.values.hiddenAdvancedFields.map((field) => field.key)).not.toContain('replyTo')
+                if (ownSenders.length) {
+                    logic.actions.chooseSenders([7, 5])
+                    expect(onChange).toHaveBeenLastCalledWith(
+                        expect.objectContaining({ from: { integrationId: 5, integrationIds: undefined } })
+                    )
+                    expect(logic.values.senderIntegrations).not.toContainEqual(expect.objectContaining({ id: 7 }))
+                }
+            }
+        )
+
         it.each([
             {
                 surface: 'a workflow email step with no own sender yet',

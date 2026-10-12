@@ -1,14 +1,20 @@
 import { useActions } from 'kea'
 
 import { IconLetter, IconPlus } from '@posthog/icons'
-import { LemonButton, LemonTag } from '@posthog/lemon-ui'
+import { LemonButton } from '@posthog/lemon-ui'
 
+import { RestrictionScope, useRestrictedArea } from 'lib/components/RestrictedArea'
+import { TeamMembershipLevel } from 'lib/constants'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 
 import { IntegrationType } from '~/types'
 
 export function SandboxEmailSenderRow({ integration }: { integration: IntegrationType }): JSX.Element {
     const { openSetupModal } = useActions(integrationsLogic)
+    const restrictedReason = useRestrictedArea({
+        scope: RestrictionScope.Project,
+        minimumAccessLevel: TeamMembershipLevel.Admin,
+    })
 
     return (
         <div className="rounded border bg-surface-primary p-2 @container" data-attr="sandbox-email-sender">
@@ -18,7 +24,6 @@ export function SandboxEmailSenderRow({ integration }: { integration: Integratio
                     <div className="flex flex-col gap-1 min-w-0">
                         <div className="flex flex-wrap gap-2 items-center">
                             <strong>Sandbox sender</strong>
-                            <LemonTag type="highlight">Sandbox</LemonTag>
                             <span className="text-xs text-secondary truncate" translate="no">
                                 {`${integration.config.name} <${integration.config.email}>`}
                             </span>
@@ -35,6 +40,7 @@ export function SandboxEmailSenderRow({ integration }: { integration: Integratio
                     icon={<IconPlus />}
                     className="shrink-0 self-start @lg:self-center"
                     onClick={() => openSetupModal(undefined, 'email')}
+                    disabledReason={restrictedReason}
                     data-attr="sandbox-email-sender-add-own"
                 >
                     Add your own sender
