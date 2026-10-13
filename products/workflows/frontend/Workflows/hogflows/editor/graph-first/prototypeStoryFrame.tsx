@@ -5,6 +5,7 @@ import { IconSparkles } from '@posthog/icons'
 import { LemonButton, LemonTag, SpinnerOverlay } from '@posthog/lemon-ui'
 
 import { workflowLogic } from '../../../workflowLogic'
+import { SceneActionsSlot } from './CanvasCommands'
 import { PrototypeGraphFirstEditor } from './PrototypeGraphFirstEditor'
 
 type EditorProps = React.ComponentProps<typeof PrototypeGraphFirstEditor>
@@ -29,6 +30,7 @@ function SceneChromeMock(): JSX.Element {
                     )}
                 </div>
                 <div className="flex-1" />
+                <SceneActionsSlot />
                 <LemonButton size="small" type="secondary">
                     Save draft
                 </LemonButton>

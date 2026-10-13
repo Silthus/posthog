@@ -27,7 +27,10 @@ export const TILE_FLOWS: { value: TileFlow; label: string; tooltip: string }[] =
 export const TILE = 64
 const PAD = 14
 const CARD_WIDTH = 400
+// The email thumbnail at card size, plus its 2px border on each side.
+const EMAIL_FACE = { width: 164, height: 116 }
 const SIDE_CARD_WIDTH = 440
+const KIND_LABEL_ROOM = 72
 const CAPTION_WIDTH = 220
 const RAIL_CAPTION_WIDTH = 230
 const OPEN_DELAY_MS = 260
@@ -158,13 +161,15 @@ export function StepCardBody({
     workflow,
     kind,
     state,
+    emailShown = false,
 }: {
     action: HogFlowAction
     workflow: HogFlow
     kind: TileKind
     state: CardState
+    emailShown?: boolean
 }): JSX.Element {
-    const hasPreview = kind.preview !== 'fields'
+    const hasPreview = kind.preview !== 'fields' && !(emailShown && kind.preview === 'email')
     return (
         <div className="flex flex-col gap-2.5">
             {hasPreview && <TilePreview action={action} workflow={workflow} kind={kind} />}
@@ -181,6 +186,7 @@ export function StepCardHead({
     state,
     width,
     side = false,
+    showEmail = false,
     trailing,
 }: {
     action: HogFlowAction
@@ -188,10 +194,17 @@ export function StepCardHead({
     state: CardState
     width: number
     side?: boolean
+    showEmail?: boolean
     trailing?: React.ReactNode
 }): JSX.Element {
     const face = (
-        <TileFace kind={kind} state={state} entered={state.metrics?.enteredByNode[action.id]} action={action} />
+        <TileFace
+            kind={kind}
+            state={state}
+            entered={state.metrics?.enteredByNode[action.id]}
+            action={action}
+            showEmail={showEmail}
+        />
     )
     const label = (
         <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: kind.color }}>
@@ -229,6 +242,7 @@ function HoverCard({
     workflow,
     kind,
     state,
+    showEmail,
 }: {
     open: boolean
     side: boolean
@@ -236,16 +250,20 @@ function HoverCard({
     workflow: HogFlow
     kind: TileKind
     state: CardState
+    showEmail: boolean
 }): JSX.Element {
-    const width = side ? SIDE_CARD_WIDTH : CARD_WIDTH
-    const inset = (width - TILE) / 2
-    const [right, left] = side ? [width - PAD - TILE, PAD] : [inset, inset]
-    const closedClip = `inset(${PAD}px ${right}px calc(100% - ${PAD + TILE}px) ${left}px round 12px)`
+    const face = showEmail ? EMAIL_FACE : { width: TILE, height: TILE }
+    const width = side
+        ? Math.max(SIDE_CARD_WIDTH, face.width + 12 + RAIL_CAPTION_WIDTH + PAD * 2 + KIND_LABEL_ROOM)
+        : CARD_WIDTH
+    const inset = (width - face.width) / 2
+    const [right, left] = side ? [width - PAD - face.width, PAD] : [inset, inset]
+    const closedClip = `inset(${PAD}px ${right}px calc(100% - ${PAD + face.height}px) ${left}px round 12px)`
     return (
         <div
             className="absolute z-10 rounded-2xl border bg-surface-primary text-primary shadow-xl"
             style={{
-                left: side ? -PAD : TILE / 2 - width / 2,
+                left: side ? -PAD : face.width / 2 - width / 2,
                 top: -PAD,
                 width,
                 padding: PAD,
@@ -254,7 +272,7 @@ function HoverCard({
                 borderColor: kind.color,
             }}
         >
-            <StepCardHead action={action} kind={kind} state={state} width={width} side={side} />
+            <StepCardHead action={action} kind={kind} state={state} width={width} side={side} showEmail={showEmail} />
             <div
                 className="mt-3 border-t pt-3 transition-opacity"
                 style={{
@@ -263,7 +281,7 @@ function HoverCard({
                     transitionDelay: open ? '90ms' : '0ms',
                 }}
             >
-                <StepCardBody action={action} workflow={workflow} kind={kind} state={state} />
+                <StepCardBody action={action} workflow={workflow} kind={kind} state={state} emailShown={showEmail} />
                 <div className="mt-2.5 border-t pt-2 text-[11px] text-secondary">Click to open the step</div>
             </div>
         </div>
@@ -363,8 +381,9 @@ export function TileNode({
                 )}
             >
                 <TileFace kind={kind} state={state} entered={entered} showEmail={showEmail} action={action} />
-                {expansion.mounted && !showEmail && (
+                {expansion.mounted && (
                     <HoverCard
+                        showEmail={showEmail}
                         open={expansion.open}
                         side={side}
                         action={action}
@@ -557,6 +576,19 @@ function miniLayout(
     }
 }
 
+type Pt = { x: number; y: number }
+
+function inTriangle(p: Pt, a: Pt, b: Pt, c: Pt): boolean {
+    const side = (p1: Pt, p2: Pt, p3: Pt): number => (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y)
+    const d1 = side(p, a, b)
+    const d2 = side(p, b, c)
+    const d3 = side(p, c, a)
+    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))
+}
+
+const SAFE_TRIANGLE_SLACK = 12
+const SWITCH_AFTER_MS = 140
+
 function MiniFlow({
     workflow,
     members,
@@ -575,6 +607,40 @@ function MiniFlow({
     const [unfolded, setUnfolded] = useState(false)
     const dwell = useRef<number>()
     const unfoldTimer = useRef<number>()
+    const switchTimer = useRef<number>()
+    const pointer = useRef<Pt>({ x: 0, y: 0 })
+    const apex = useRef<Pt | null>(null)
+    const over = useRef<string | null>(null)
+    const cardRef = useRef<HTMLDivElement>(null)
+
+    // While the pointer travels from a step toward its open preview, it stays inside the triangle between
+    // where it left the step and the preview's top edge. Steps it crosses on the way do not steal the hover.
+    const headingToCard = (): boolean => {
+        const card = cardRef.current?.getBoundingClientRect()
+        if (!card || !apex.current) {
+            return false
+        }
+        return inTriangle(
+            pointer.current,
+            apex.current,
+            { x: card.left - SAFE_TRIANGLE_SLACK, y: card.top },
+            { x: card.right + SAFE_TRIANGLE_SLACK, y: card.top }
+        )
+    }
+
+    const enterStep = (id: string): void => {
+        over.current = id
+        window.clearTimeout(switchTimer.current)
+        if (hovered && hovered !== id && headingToCard()) {
+            switchTimer.current = window.setTimeout(() => {
+                if (over.current === id) {
+                    setHovered(id)
+                }
+            }, SWITCH_AFTER_MS)
+            return
+        }
+        setHovered(id)
+    }
 
     useEffect(() => {
         window.clearTimeout(dwell.current)
@@ -612,8 +678,16 @@ function MiniFlow({
                     unfoldTimer.current = window.setTimeout(() => setUnfolded(true), UNFOLD_MS)
                 }
             }}
+            onMouseMove={(e) => {
+                pointer.current = { x: e.clientX, y: e.clientY }
+                if (over.current && over.current === hovered) {
+                    apex.current = pointer.current
+                }
+            }}
             onMouseLeave={() => {
                 window.clearTimeout(unfoldTimer.current)
+                window.clearTimeout(switchTimer.current)
+                over.current = null
                 setHovered(null)
             }}
         >
@@ -651,7 +725,12 @@ function MiniFlow({
                     key={node.action.id}
                     className="absolute"
                     data-mini-step={node.action.id}
-                    onMouseEnter={() => setHovered(node.action.id)}
+                    onMouseEnter={() => enterStep(node.action.id)}
+                    onMouseLeave={() => {
+                        if (over.current === node.action.id) {
+                            over.current = null
+                        }
+                    }}
                     style={{
                         left: node.x,
                         top: node.y,
@@ -672,14 +751,16 @@ function MiniFlow({
             ))}
             {spotlight && (
                 <div
-                    className="absolute z-20 animate-[gf-fade-in_160ms_ease_both]"
-                    style={{
-                        left: spotlight.x + MINI / 2,
-                        top: spotlight.y + MINI + 22,
-                        transform: 'translateX(-50%)',
+                    className="absolute z-20 animate-[gf-fade-in_160ms_ease_both] pt-[22px]"
+                    style={{ left: spotlight.x + MINI / 2, top: spotlight.y + MINI, transform: 'translateX(-50%)' }}
+                    onMouseEnter={() => {
+                        over.current = spotlight.action.id
+                        window.clearTimeout(switchTimer.current)
                     }}
                 >
-                    <SpotlightCard action={spotlight.action} workflow={workflow} state={state} deep={deep} />
+                    <div ref={cardRef}>
+                        <SpotlightCard action={spotlight.action} workflow={workflow} state={state} deep={deep} />
+                    </div>
                 </div>
             )}
         </div>
@@ -687,6 +768,7 @@ function MiniFlow({
 }
 
 const VIEW_MARGIN = 12
+const PEEK_CLOSE_MS = 220
 
 /** Moves a growing card back inside the canvas when it would run past an edge. */
 function useKeepInView(ref: React.RefObject<HTMLElement>, active: boolean): { x: number; y: number } {
@@ -754,6 +836,8 @@ export function TileGroupNode({
     const border = state.onPath ? 'var(--color-accent)' : (color ?? 'var(--color-border-bold, #9ca3af)')
     const entered = state.metrics?.enteredByNode[members[0]?.id]
     const cardRef = useRef<HTMLDivElement>(null)
+    const closeTimer = useRef<number>()
+    useEffect(() => () => window.clearTimeout(closeTimer.current), [])
     const shift = useKeepInView(cardRef, peek)
 
     useEffect(() => {
@@ -776,8 +860,13 @@ export function TileGroupNode({
                 state.dimmed && 'opacity-30'
             )}
             title={peek ? undefined : 'Open this path'}
-            onMouseEnter={() => setPeek(true)}
-            onMouseLeave={() => setPeek(false)}
+            onMouseEnter={() => {
+                window.clearTimeout(closeTimer.current)
+                setPeek(true)
+            }}
+            onMouseLeave={() => {
+                closeTimer.current = window.setTimeout(() => setPeek(false), PEEK_CLOSE_MS)
+            }}
             onClick={(e) => {
                 e.stopPropagation()
                 onExpand?.()

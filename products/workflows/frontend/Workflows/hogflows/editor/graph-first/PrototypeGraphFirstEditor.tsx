@@ -22,7 +22,7 @@ import { BindLogic, useActions, useValues } from 'kea'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { IconChevronDown, IconPerson, IconPlus, IconX } from '@posthog/icons'
-import { LemonButton, LemonSegmentedButton, LemonSwitch } from '@posthog/lemon-ui'
+import { LemonButton, LemonSegmentedButton } from '@posthog/lemon-ui'
 
 import { Popover } from 'lib/lemon-ui/Popover'
 
@@ -32,9 +32,9 @@ import { workflowLogic } from '../../../workflowLogic'
 import { HogFlowBranchSelectionProvider } from '../../HogFlowBranchSelection'
 import { hogFlowEditorLogic, HogFlowEditorMode } from '../../hogFlowEditorLogic'
 import { HogFlowEditorPanel } from '../../panel/HogFlowEditorPanel'
-import { HogFlowEditorPanelBuild } from '../../panel/HogFlowEditorPanelBuild'
 import type { HogFlow } from '../../types'
-import { LogsDrawer, simulateRun, TestRunPanel, VariablesPopover } from './CanvasDrawer'
+import { CanvasCommands, CanvasCommandState, paletteCommands, TOOLBAR_VARIANTS, ToolbarVariant } from './CanvasCommands'
+import { LogsDrawer, simulateRun, TestRunPanel } from './CanvasDrawer'
 import { SummaryCard } from './GraphFirstCards'
 import { Compound, LABEL_HEIGHT, labelWidth, layoutGraph, LayoutResult, Point, PortSpec } from './graphFirstLayout'
 import {
@@ -54,9 +54,10 @@ import {
     visibleGraph,
 } from './graphFirstModel'
 import { NODE_STYLES, NodeStyle, StepNode } from './GraphFirstNodeStyles'
+import { StepPalette } from './StepPalette'
 import { StepPanel } from './StepPanel'
 import { pathColor } from './tileKinds'
-import { PEEK_DETAILS, PeekDetail, TILE, TILE_FLOWS, TileFlow, TileGroupNode } from './TileNode'
+import { PeekDetail, TILE, TileFlow, TileGroupNode } from './TileNode'
 
 const PANEL_WIDTH = 460
 const FRAME_PADDING = { top: 30, side: 16, bottom: 16 }
@@ -332,23 +333,20 @@ function InsertButton({ edge, at, offsetX }: { edge: FlowEdge; at: Point; offset
                 onClickOutside={() => setOpen(false)}
                 placement="right-start"
                 overlay={
-                    <div className="w-80">
-                        <HogFlowEditorPanelBuild
-                            className="max-h-96 p-2"
-                            onActionSelect={(action) => {
-                                setNodeToBeAdded(action)
-                                onDrop(undefined, edge)
-                                setOpen(false)
-                            }}
-                        />
-                    </div>
+                    <StepPalette
+                        onSelect={(action) => {
+                            setNodeToBeAdded(action)
+                            onDrop(undefined, edge)
+                        }}
+                        onClose={() => setOpen(false)}
+                    />
                 }
             >
                 <button
                     type="button"
                     aria-label="Add a step here"
-                    title={placing ? 'Place the step here' : 'Add a step here'}
-                    onClick={() => (placing ? place() : setOpen(!open))}
+                    title={placing || nodeToBeAdded ? 'Place the step here' : 'Add a step here'}
+                    onClick={() => (placing ? place() : nodeToBeAdded ? onDrop(undefined, edge) : setOpen(!open))}
                     className={clsx(
                         'flex size-5 cursor-pointer items-center justify-center rounded-full border bg-surface-primary text-secondary transition-all hover:scale-125 hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]',
                         eager
@@ -373,7 +371,6 @@ function RoutedEdge({ data }: EdgeProps): JSX.Element | null {
     }
     const onPath = view.trace ? vedge.originalKeys.some((key) => view.trace!.edgeKeys.has(key)) : false
     const dimmed = !!view.trace && !onPath
-    const people = view.metrics ? (view.metrics.peopleByEdge[vedge.originalKeys[0]] ?? null) : null
     const insertAt = insertPoint(routed.points, label ? routed.label : undefined)
     const canTraceChoice = !!view.trace && !!vedge.original && !!vedge.label && !vedge.timing
     const timingSelected = !!vedge.timing && vedge.timing.stepIds.includes(view.selectedNodeId ?? '')
@@ -425,15 +422,6 @@ function RoutedEdge({ data }: EdgeProps): JSX.Element | null {
                         }}
                     >
                         {label.replace('🕘 ', '')}
-                        {people !== null && <span className="font-normal opacity-70">· {people.toLocaleString()}</span>}
-                    </div>
-                )}
-                {!label && people !== null && (
-                    <div
-                        className="absolute rounded bg-surface-primary px-1 text-[11px] text-secondary"
-                        style={{ transform: `translate(14px, -50%) translate(${insertAt.x}px, ${insertAt.y}px)` }}
-                    >
-                        {people.toLocaleString()} people
                     </div>
                 )}
                 {vedge.original && (
@@ -760,28 +748,6 @@ function PersonTracePanel({
     )
 }
 
-function ViewMenu({ toggles }: { toggles: [string, boolean, (value: boolean) => void][] }): JSX.Element {
-    const [open, setOpen] = useState(false)
-    return (
-        <Popover
-            visible={open}
-            onClickOutside={() => setOpen(false)}
-            placement="bottom-start"
-            overlay={
-                <div className="flex flex-col gap-1 p-1">
-                    {toggles.map(([label, checked, onChange]) => (
-                        <LemonSwitch key={label} label={label} checked={checked} onChange={onChange} fullWidth />
-                    ))}
-                </div>
-            }
-        >
-            <LemonButton size="small" sideIcon={<IconChevronDown />} onClick={() => setOpen(!open)} active={open}>
-                View
-            </LemonButton>
-        </Popover>
-    )
-}
-
 function GraphFirstCanvas({
     initialNodeStyle,
     initialTileFlow,
@@ -789,6 +755,7 @@ function GraphFirstCanvas({
     initialGroupStyle,
     initialCollapsed,
     initialPeek,
+    initialToolbar,
     showStyleSwitch,
 }: {
     initialNodeStyle: NodeStyle
@@ -797,12 +764,21 @@ function GraphFirstCanvas({
     initialGroupStyle: GroupStyle
     initialCollapsed: 'all' | 'auto'
     initialPeek: PeekDetail
+    initialToolbar: ToolbarVariant
     showStyleSwitch: boolean
 }): JSX.Element {
     const { isDarkModeOn } = useValues(themeLogic)
-    const { workflow, selectedNodeId, panelWidth, isMovingNode, isCopyingNode } = useValues(hogFlowEditorLogic)
-    const { setSelectedNodeId, setMode, setPanelWidth, handlePaneClick, stopMovingNode, stopCopyingNode } =
-        useActions(hogFlowEditorLogic)
+    const { workflow, selectedNodeId, panelWidth, isMovingNode, isCopyingNode, nodeToBeAdded } =
+        useValues(hogFlowEditorLogic)
+    const {
+        setSelectedNodeId,
+        setMode,
+        setPanelWidth,
+        handlePaneClick,
+        stopMovingNode,
+        stopCopyingNode,
+        setNodeToBeAdded,
+    } = useActions(hogFlowEditorLogic)
     const reactFlow = useReactFlow()
     const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -817,14 +793,14 @@ function GraphFirstCanvas({
     )
     const [traceOn, setTraceOn] = useState(false)
     const [choices, setChoices] = useState<Record<string, string>>({})
-    const [showMetrics, setShowMetrics] = useState(true)
-    const [previews, setPreviews] = useState(
-        () => workflow.actions.filter((action) => emailContent(action)).length <= 3
-    )
+    const showMetrics = true
+    const previews = true
+    const [toolbar, setToolbar] = useState<ToolbarVariant>(initialToolbar)
+    const [palette, setPalette] = useState<{ query: string } | null>(null)
     const [nodeStyle, setNodeStyle] = useState<NodeStyle>(initialNodeStyle)
-    const [tileFlow, setTileFlow] = useState<TileFlow>(initialTileFlow)
-    const [tileHover, setTileHover] = useState(initialTileHover)
-    const [peekDetail, setPeekDetail] = useState<PeekDetail>(initialPeek)
+    const tileFlow = initialTileFlow
+    const tileHover = initialTileHover
+    const peekDetail = initialPeek
     const tile = useMemo(
         () => ({ flow: tileFlow, hover: tileHover, peek: peekDetail }),
         [tileFlow, tileHover, peekDetail]
@@ -1084,16 +1060,45 @@ function GraphFirstCanvas({
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent): void => {
+            const target = e.target as HTMLElement | null
+            const typing = !!target?.closest('input, textarea, select, [contenteditable="true"]')
             if (e.key === 'Escape') {
                 setPanelOpen(false)
                 setSelectedNodeId(null)
+                setPalette(null)
+                setNodeToBeAdded(null)
                 isMovingNode && stopMovingNode()
                 isCopyingNode && stopCopyingNode()
+            } else if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && /\S/.test(e.key)) {
+                e.preventDefault()
+                setPalette({ query: e.key })
             }
         }
         window.addEventListener('keydown', onKey)
         return () => window.removeEventListener('keydown', onKey)
-    }, [isMovingNode, isCopyingNode, setSelectedNodeId, stopMovingNode, stopCopyingNode])
+    }, [isMovingNode, isCopyingNode, setSelectedNodeId, stopMovingNode, stopCopyingNode, setNodeToBeAdded])
+
+    const commandState: CanvasCommandState = {
+        workflow,
+        testOpen,
+        logsOpen,
+        following: traceOn,
+        hasGroups: groups.length > 0,
+        allCollapsed: groups.length > 0 && groups.every((g) => collapsed.has(g.id)),
+        toggleTest: () => {
+            setTestOpen(!testOpen)
+            setTestTrace(null)
+        },
+        toggleLogs: () => setLogsOpen(!logsOpen),
+        toggleFollow: () => {
+            setTraceOn(!traceOn)
+            setPanelOpen(false)
+        },
+        toggleCollapse: () =>
+            setCollapsed(new Set(groups.every((g) => collapsed.has(g.id)) ? [] : groups.map((g) => g.id))),
+        fit: () => fitWidth(),
+        openPalette: (query = '') => setPalette({ query }),
+    }
 
     const closePanel = (): void => {
         setPanelOpen(false)
@@ -1123,8 +1128,6 @@ function GraphFirstCanvas({
             }, 60)
         }
     }
-
-    const allCollapsed = groups.length > 0 && groups.every((g) => collapsed.has(g.id))
 
     return (
         <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden" data-attr="workflow-editor">
@@ -1179,96 +1182,17 @@ function GraphFirstCanvas({
                         proOptions={{ hideAttribution: true }}
                     >
                         <Background gap={36} variant={BackgroundVariant.Dots} />
-                        <Panel position="top-left" className="!m-3">
-                            <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-surface-primary p-1 shadow-sm">
-                                <LemonButton
-                                    size="small"
-                                    type="primary"
-                                    icon={<IconPlus />}
-                                    onClick={() => openPanel('build')}
-                                >
-                                    Add step
-                                </LemonButton>
-                                <VariablesPopover workflow={workflow} />
-                                <LemonButton
-                                    size="small"
-                                    onClick={() => {
-                                        setTestOpen(!testOpen)
-                                        setTestTrace(null)
-                                    }}
-                                    active={testOpen}
-                                >
-                                    Test
-                                </LemonButton>
-                                <LemonButton size="small" onClick={() => setLogsOpen(!logsOpen)} active={logsOpen}>
-                                    Logs
-                                </LemonButton>
-                                <div className="mx-1 h-5 w-px bg-border" />
-                                <LemonButton
-                                    size="small"
-                                    icon={<IconPerson />}
-                                    active={traceOn}
-                                    onClick={() => {
-                                        setTraceOn(!traceOn)
-                                        setPanelOpen(false)
-                                    }}
-                                >
-                                    Follow a person
-                                </LemonButton>
-                                <ViewMenu
-                                    toggles={[
-                                        ['Email previews', previews, setPreviews],
-                                        ['Sample metrics', showMetrics, setShowMetrics],
-                                        ...(nodeStyle === 'tiles'
-                                            ? [
-                                                  ['Hover cards', tileHover, setTileHover] as [
-                                                      string,
-                                                      boolean,
-                                                      (value: boolean) => void,
-                                                  ],
-                                              ]
-                                            : []),
-                                    ]}
-                                />
-                                {groups.length > 0 && !sideOpen && (
-                                    <LemonButton
-                                        size="small"
-                                        onClick={() =>
-                                            setCollapsed(new Set(allCollapsed ? [] : groups.map((g) => g.id)))
-                                        }
-                                    >
-                                        {allCollapsed ? 'Open all paths' : 'Collapse paths'}
-                                    </LemonButton>
-                                )}
-                                <LemonButton size="small" onClick={() => fitWidth()}>
-                                    Fit
-                                </LemonButton>
-                            </div>
-                        </Panel>
-                        <Panel position="bottom-right" className="!m-3">
+                        <CanvasCommands variant={toolbar} state={commandState} />
+                        <Panel position="top-right" className="!m-3">
                             <div className="flex flex-col items-end gap-1.5">
-                                {nodeStyle === 'tiles' && (
-                                    <>
-                                        {groups.length > 0 && (
-                                            <SwitchRow label="Peek">
-                                                <LemonSegmentedButton
-                                                    size="small"
-                                                    value={peekDetail}
-                                                    onChange={setPeekDetail}
-                                                    options={PEEK_DETAILS}
-                                                />
-                                            </SwitchRow>
-                                        )}
-                                        <SwitchRow label="Flow">
-                                            <LemonSegmentedButton
-                                                size="small"
-                                                value={tileFlow}
-                                                onChange={setTileFlow}
-                                                options={TILE_FLOWS}
-                                            />
-                                        </SwitchRow>
-                                    </>
-                                )}
+                                <SwitchRow label="Prototype · toolbar">
+                                    <LemonSegmentedButton
+                                        size="small"
+                                        value={toolbar}
+                                        onChange={setToolbar}
+                                        options={TOOLBAR_VARIANTS}
+                                    />
+                                </SwitchRow>
                                 {showStyleSwitch && (
                                     <SwitchRow label="Nodes">
                                         <LemonSegmentedButton
@@ -1281,6 +1205,35 @@ function GraphFirstCanvas({
                                 )}
                             </div>
                         </Panel>
+                        {palette && (
+                            <Panel
+                                position={toolbar === 'command' ? 'bottom-center' : 'top-center'}
+                                className={toolbar === 'command' ? '!mb-20' : '!mt-16'}
+                            >
+                                <StepPalette
+                                    key={palette.query}
+                                    initialQuery={palette.query}
+                                    placeholder={toolbar === 'command' ? 'Add a step or run a command' : 'Search steps'}
+                                    commands={toolbar === 'command' ? paletteCommands(commandState) : []}
+                                    onSelect={(step) => setNodeToBeAdded(step)}
+                                    onClose={() => setPalette(null)}
+                                />
+                            </Panel>
+                        )}
+                        {nodeToBeAdded && !palette && (
+                            <Panel position="top-center" className="!mt-16">
+                                <div className="flex items-center gap-2 rounded-full border bg-surface-primary py-1 pl-3 pr-1 text-sm shadow">
+                                    Click a highlighted + to add{' '}
+                                    <strong>{'name' in nodeToBeAdded ? nodeToBeAdded.name : 'the step'}</strong> there ·
+                                    Esc to cancel
+                                    <LemonButton
+                                        size="xsmall"
+                                        icon={<IconX />}
+                                        onClick={() => setNodeToBeAdded(null)}
+                                    />
+                                </div>
+                            </Panel>
+                        )}
                         {(isMovingNode || isCopyingNode) && (
                             <Panel position="top-center" className="!mt-16">
                                 <div className="rounded-full border bg-surface-primary px-3 py-1 text-sm shadow">
@@ -1356,6 +1309,7 @@ export function PrototypeGraphFirstEditor({
     initialGroupStyle = 'tint',
     initialCollapsed = 'auto',
     initialPeek = 'spotlight',
+    initialToolbar = 'floating',
     showStyleSwitch = true,
 }: {
     initialNodeStyle?: NodeStyle
@@ -1364,6 +1318,7 @@ export function PrototypeGraphFirstEditor({
     initialGroupStyle?: GroupStyle
     initialCollapsed?: 'all' | 'auto'
     initialPeek?: PeekDetail
+    initialToolbar?: ToolbarVariant
     showStyleSwitch?: boolean
 }): JSX.Element {
     const { logicProps } = useValues(workflowLogic)
@@ -1379,6 +1334,7 @@ export function PrototypeGraphFirstEditor({
                             initialGroupStyle={initialGroupStyle}
                             initialCollapsed={initialCollapsed}
                             initialPeek={initialPeek}
+                            initialToolbar={initialToolbar}
                             showStyleSwitch={showStyleSwitch}
                         />
                     </ReactFlowProvider>

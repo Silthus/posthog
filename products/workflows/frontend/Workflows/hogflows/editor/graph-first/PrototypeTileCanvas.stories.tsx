@@ -7,6 +7,7 @@ import { workflowLogic } from '../../../workflowLogic'
 import { TILE_WORKFLOWS } from '../../tree/prototypeTileWorkflows'
 import type { HogFlow, HogFlowAction } from '../../types'
 import { workflowEditorStoryDecorator } from '../workflowEditorStoryFixtures'
+import type { ToolbarVariant } from './CanvasCommands'
 import { sampleMetrics } from './graphFirstModel'
 import type { GroupStyle } from './PrototypeGraphFirstEditor'
 import { Frame } from './prototypeStoryFrame'
@@ -31,6 +32,7 @@ type TileOptions = {
     chat?: { ask: string; answer: string }
     groups?: GroupStyle
     peek?: PeekDetail
+    toolbar?: ToolbarVariant
 }
 
 function tiles(id: string, options: TileOptions = {}): StoryFn {
@@ -45,6 +47,7 @@ function tiles(id: string, options: TileOptions = {}): StoryFn {
                 initialGroupStyle: options.groups,
                 initialCollapsed: options.open ? 'auto' : 'all',
                 initialPeek: options.peek,
+                initialToolbar: options.toolbar,
                 showStyleSwitch: false,
             }}
         />
@@ -59,6 +62,10 @@ const TRIAGE_CHAT = {
 
 export const AiSupportTriageWithAiPanel = tiles('prototype-tile-ai-triage', { aiPanel: true, chat: TRIAGE_CHAT })
 export const AiSupportTriage = tiles('prototype-tile-ai-triage')
+export const ToolbarFloating = tiles('prototype-tile-trial-to-paid', { toolbar: 'floating' })
+export const ToolbarHeader = tiles('prototype-tile-trial-to-paid', { toolbar: 'header' })
+export const ToolbarRail = tiles('prototype-tile-trial-to-paid', { toolbar: 'rail' })
+export const ToolbarCommand = tiles('prototype-tile-trial-to-paid', { toolbar: 'command' })
 export const AiSupportTriageOpen = tiles('prototype-tile-ai-triage', { open: true })
 export const WelcomeSequence = tiles('prototype-tile-welcome-sequence')
 export const SpringDripCampaign = tiles('prototype-tile-spring-drip')

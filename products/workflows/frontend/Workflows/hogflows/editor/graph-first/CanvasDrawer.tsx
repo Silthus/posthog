@@ -232,7 +232,13 @@ export function LogsDrawer({
 }
 
 /** Workflow variables, plus the ones steps write (AI outputs), in a popover instead of the side panel. */
-export function VariablesPopover({ workflow }: { workflow: HogFlow }): JSX.Element {
+export function VariablesPopover({
+    workflow,
+    trigger,
+}: {
+    workflow: HogFlow
+    trigger?: (open: boolean, toggle: () => void) => JSX.Element
+}): JSX.Element {
     const [open, setOpen] = useState(false)
     const written = workflow.actions.flatMap((action) => {
         const inputs = ((action.config as AnyConfig).inputs ?? {}) as AnyConfig
@@ -247,7 +253,7 @@ export function VariablesPopover({ workflow }: { workflow: HogFlow }): JSX.Eleme
         <Popover
             visible={open}
             onClickOutside={() => setOpen(false)}
-            placement="bottom-start"
+            placement={trigger ? 'right-start' : 'bottom-start'}
             overlay={
                 <div className="flex w-80 flex-col gap-3 p-2 text-[13px]">
                     <div>
@@ -283,12 +289,16 @@ export function VariablesPopover({ workflow }: { workflow: HogFlow }): JSX.Eleme
                 </div>
             }
         >
-            <LemonButton size="small" onClick={() => setOpen(!open)} active={open}>
-                Variables
-                {declared.length + written.length > 0 && (
-                    <span className="ml-1 text-secondary">{declared.length + written.length}</span>
-                )}
-            </LemonButton>
+            {trigger ? (
+                trigger(open, () => setOpen(!open))
+            ) : (
+                <LemonButton size="small" onClick={() => setOpen(!open)} active={open}>
+                    Variables
+                    {declared.length + written.length > 0 && (
+                        <span className="ml-1 text-secondary">{declared.length + written.length}</span>
+                    )}
+                </LemonButton>
+            )}
         </Popover>
     )
 }
