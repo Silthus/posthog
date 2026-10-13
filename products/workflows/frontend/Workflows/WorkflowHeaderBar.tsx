@@ -21,13 +21,27 @@ type WorkflowHeaderBarProps = WorkflowLogicProps & {
     commands?: JSX.Element
 }
 
+const BAR_CLASS_NAME =
+    'flex flex-wrap items-start justify-between gap-x-4 gap-y-2 rounded-t-md border-b bg-surface-secondary px-2 py-2'
+
+function WorkflowHeaderBarLoading(): JSX.Element {
+    return (
+        <div className={BAR_CLASS_NAME}>
+            <div className="flex min-w-0 flex-1 basis-72 items-start gap-1">
+                <SceneBreadcrumbBackButton className="mt-0.5 shrink-0" />
+                <SceneName isLoading />
+            </div>
+        </div>
+    )
+}
+
 export function WorkflowHeaderBar({
     editorLayout,
     showEditorLayoutToggle,
     onEditorLayoutChange,
     commands,
     ...props
-}: WorkflowHeaderBarProps): JSX.Element | null {
+}: WorkflowHeaderBarProps): JSX.Element {
     const logic = workflowLogic(props)
     const {
         originalWorkflow,
@@ -43,7 +57,7 @@ export function WorkflowHeaderBar({
     const showSaving = useDebouncedValue(isAutoSavePending || workflowLoading, 1000)
 
     if (!originalWorkflow) {
-        return null
+        return <WorkflowHeaderBarLoading />
     }
 
     const showWorkflowStatus = !props.editTemplateId
@@ -51,7 +65,7 @@ export function WorkflowHeaderBar({
     const isEditingDraftOfLive = isActive && (hasStagedDraft || hasUnsavedChanges)
 
     return (
-        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 rounded-t-md border-b bg-surface-secondary px-2 py-2">
+        <div className={BAR_CLASS_NAME}>
             <div className="flex min-w-0 flex-1 basis-72 items-start gap-1">
                 <SceneBreadcrumbBackButton className="mt-0.5 shrink-0" />
                 {showEditorLayoutToggle && (
