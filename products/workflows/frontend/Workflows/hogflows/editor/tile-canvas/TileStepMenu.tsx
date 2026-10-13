@@ -5,7 +5,6 @@ import { IconCopy, IconDrag, IconTrash } from '@posthog/icons'
 
 import { LemonMenu } from 'lib/lemon-ui/LemonMenu'
 
-import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
 import type { HogFlowAction } from '../../types'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import { hasStepMenu } from './tileCanvasModel'
@@ -15,10 +14,10 @@ function captureMenuUse(choice: 'copy' | 'move' | 'delete'): void {
 }
 
 export function TileStepMenu({ action, children }: { action: HogFlowAction; children: JSX.Element }): JSX.Element {
-    const { stepMenuActionId } = useValues(tileCanvasLogic)
-    const { openStepMenu, closeStepMenu } = useActions(tileCanvasLogic)
-    const { selectedNode, selectedNodeCanBeDeleted, selectedNodeCanBeCopiedOrMoved } = useValues(hogFlowEditorLogic)
-    const { startCopyingNode, startMovingNode, onNodesDelete } = useActions(hogFlowEditorLogic)
+    const { stepMenuActionId, selectedNode, selectedNodeCanBeDeleted, selectedNodeCanBeCopiedOrMoved } =
+        useValues(tileCanvasLogic)
+    const { openStepMenu, closeStepMenu, startCopyingNode, startMovingNode, onNodesDelete } =
+        useActions(tileCanvasLogic)
     const node = selectedNode?.id === action.id ? selectedNode : null
 
     if (!hasStepMenu(action)) {

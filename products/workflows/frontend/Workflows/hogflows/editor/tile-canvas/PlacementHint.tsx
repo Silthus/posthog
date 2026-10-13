@@ -3,11 +3,10 @@ import { useActions, useValues } from 'kea'
 import { IconX } from '@posthog/icons'
 import { LemonButton } from '@posthog/lemon-ui'
 
-import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
 import { tileCanvasLogic } from './tileCanvasLogic'
 
 export function PlacementHint(): JSX.Element | null {
-    const { nodeToBeAdded, isMovingNode, isCopyingNode } = useValues(hogFlowEditorLogic)
+    const { nodeToBeAdded, isMovingNode, isCopyingNode } = useValues(tileCanvasLogic)
     const { cancel } = useActions(tileCanvasLogic)
     const action = isMovingNode ? 'move the step there' : isCopyingNode ? 'copy the step there' : null
     if (!action && !nodeToBeAdded) {

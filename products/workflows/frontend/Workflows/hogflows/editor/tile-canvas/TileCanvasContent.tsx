@@ -6,7 +6,6 @@ import { cn } from 'lib/utils/css-classes'
 
 import { themeLogic } from '~/layout/navigation-3000/themeLogic'
 
-import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
 import { CommandBar } from './CommandBar'
 import { PathChip } from './PathChip'
 import { PathFrame } from './PathFrame'
@@ -14,7 +13,7 @@ import { PlacementHint } from './PlacementHint'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import { TileCanvasMeasureLayer } from './TileCanvasMeasureLayer'
 import { CANVAS_MIN_ZOOM, hasStepMenu } from './tileCanvasModel'
-import { buildCanvasEdges, buildCanvasNodes, TileCanvasNode, TileEdgeType } from './tileCanvasNodes'
+import { buildCanvasEdges, buildCanvasNodes, keepUnchangedNodes, TileCanvasNode, TileEdgeType } from './tileCanvasNodes'
 import { TileCanvasPanel } from './TileCanvasPanel'
 import { TileEdge } from './TileEdge'
 import { TileFlowNode } from './TileFlowNode'
@@ -42,12 +41,54 @@ function focusedTileId(event: KeyboardEvent<HTMLElement>): string | undefined {
 export function TileCanvasContent(): JSX.Element {
     const wrapperRef = useRef<HTMLDivElement>(null)
     const { isDarkModeOn } = useValues(themeLogic)
-    const { visibleGraph, frameSpecs, layout, motion, isPanelOpen, commandPaletteQuery } = useValues(tileCanvasLogic)
-    const { activateNode, openStepMenu } = useActions(tileCanvasLogic)
-    const { handlePaneClick } = useActions(hogFlowEditorLogic)
+    const {
+        visibleGraph,
+        frameSpecs,
+        layout,
+        motion,
+        isPanelOpen,
+        commandPaletteQuery,
+        workflow,
+        pathGroups,
+        measuredSizes,
+        selectedStepId,
+        stepMenuActionId,
+        countOf,
+        templateNameOf,
+    } = useValues(tileCanvasLogic)
+    const { activateNode, openStepMenu, handlePaneClick } = useActions(tileCanvasLogic)
     useCanvasViewport(wrapperRef)
 
-    const nodes = useMemo(() => buildCanvasNodes(layout, frameSpecs, visibleGraph), [layout, frameSpecs, visibleGraph])
+    const previousNodes = useRef<TileCanvasNode[]>([])
+    const nodes = useMemo(() => {
+        const state = {
+            workflow,
+            groups: pathGroups,
+            motion,
+            sizes: measuredSizes,
+            selectedStepId,
+            menuStepId: stepMenuActionId,
+            countOf,
+            templateNameOf,
+        }
+        previousNodes.current = keepUnchangedNodes(
+            previousNodes.current,
+            buildCanvasNodes(layout, frameSpecs, visibleGraph, state)
+        )
+        return previousNodes.current
+    }, [
+        layout,
+        frameSpecs,
+        visibleGraph,
+        workflow,
+        pathGroups,
+        motion,
+        measuredSizes,
+        selectedStepId,
+        stepMenuActionId,
+        countOf,
+        templateNameOf,
+    ])
     const edges = useMemo(() => buildCanvasEdges(visibleGraph, layout), [visibleGraph, layout])
 
     const hasMenu = (nodeId: string): boolean =>

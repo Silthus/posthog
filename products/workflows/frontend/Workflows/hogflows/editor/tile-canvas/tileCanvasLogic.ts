@@ -41,6 +41,7 @@ import {
     PaletteSection,
     PathGroup,
     Point,
+    stepCount,
     stepCountsRequest,
     VisibleGraph,
 } from './tileCanvasModel'
@@ -48,6 +49,8 @@ import {
 export type TileCanvasPanelMode = HogFlowEditorMode | 'history'
 
 export type StepAddSource = 'palette' | 'command bar' | 'quick add'
+export type StepCountOf = (actionId: string) => number | undefined
+export type TemplateNameOf = (templateId: string) => string | undefined
 
 const PATH_LEAVE_MS = 260
 const PATH_MOTION_MS = 1100
@@ -109,6 +112,9 @@ export interface tileCanvasLogicValues {
     isMovingNode: boolean // hogFlowEditorLogic
     nodeToBeAdded: CreateActionType | HogFlowActionNode | null // hogFlowEditorLogic
     selectedNodeId: string | null // hogFlowEditorLogic
+    selectedNode: HogFlowActionNode | null // hogFlowEditorLogic
+    selectedNodeCanBeDeleted: boolean // hogFlowEditorLogic
+    selectedNodeCanBeCopiedOrMoved: boolean // hogFlowEditorLogic
     sceneTakeoverActive: boolean // sceneLayoutLogic
     currentTeam: TeamPublicType | TeamType | null // teamLogic
     mode: 'build' | 'logs' | 'metrics' | 'test' | 'variables' // hogFlowEditorLogic
@@ -140,6 +146,9 @@ export interface tileCanvasLogicValues {
     stepCountsLoading: boolean
     stepMenuActionId: string | null
     stepMetrics: Record<string, HogFlowEditorActionMetrics> | null
+    countOf: StepCountOf
+    templateNameOf: TemplateNameOf
+    selectedStepId: string | null
     visibleGraph: VisibleGraph
 }
 
@@ -150,6 +159,15 @@ export interface tileCanvasLogicActions {
     } // hogFlowEditorLogic
     handlePaneClick: () => {
         value: true
+    } // hogFlowEditorLogic
+    onNodesDelete: (deleted: HogFlowActionNode[]) => {
+        deleted: HogFlowActionNode[]
+    } // hogFlowEditorLogic
+    startCopyingNode: (node: HogFlowActionNode) => {
+        node: HogFlowActionNode
+    } // hogFlowEditorLogic
+    startMovingNode: (node: HogFlowActionNode) => {
+        node: HogFlowActionNode
     } // hogFlowEditorLogic
     moveNodeToHighlightedDropzone: () => {
         value: true
@@ -322,6 +340,9 @@ export interface tileCanvasLogicMeta {
             workflow: HogFlow,
             stepCounts: Record<string, HogFlowEditorActionMetrics> | null
         ) => Record<string, HogFlowEditorActionMetrics> | null
+        countOf: (stepMetrics: Record<string, HogFlowEditorActionMetrics> | null) => StepCountOf
+        templateNameOf: (templates: Record<string, HogFunctionTemplateType>) => TemplateNameOf
+        selectedStepId: (isPanelOpen: boolean, selectedNodeId: string | null) => string | null
     }
 }
 
@@ -341,7 +362,17 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             workflowLogic,
             ['workflow', 'originalWorkflow', 'isRowScopedTrigger', 'hogFunctionTemplatesById'],
             hogFlowEditorLogic,
-            ['nodeToBeAdded', 'isMovingNode', 'isCopyingNode', 'dropzoneNodes', 'selectedNodeId', 'mode'],
+            [
+                'nodeToBeAdded',
+                'isMovingNode',
+                'isCopyingNode',
+                'dropzoneNodes',
+                'selectedNodeId',
+                'selectedNode',
+                'selectedNodeCanBeDeleted',
+                'selectedNodeCanBeCopiedOrMoved',
+                'mode',
+            ],
             featureFlagLogic,
             ['featureFlags'],
             sceneLayoutLogic,
@@ -362,6 +393,9 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 'moveNodeToHighlightedDropzone',
                 'copyNodeToHighlightedDropzone',
                 'handlePaneClick',
+                'startCopyingNode',
+                'startMovingNode',
+                'onNodesDelete',
             ],
         ],
     })),
@@ -492,6 +526,23 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 workflow: HogFlow,
                 stepCounts: Record<string, HogFlowEditorActionMetrics> | null
             ): Record<string, HogFlowEditorActionMetrics> | null => countableStepMetrics(workflow, stepCounts),
+        ],
+        countOf: [
+            (s) => [s.stepMetrics],
+            (stepMetrics: Record<string, HogFlowEditorActionMetrics> | null): StepCountOf =>
+                (actionId) =>
+                    stepCount(stepMetrics, actionId),
+        ],
+        templateNameOf: [
+            (s) => [s.hogFunctionTemplatesById],
+            (templates: Record<string, HogFunctionTemplateType>): TemplateNameOf =>
+                (templateId) =>
+                    templates[templateId]?.name,
+        ],
+        selectedStepId: [
+            (s) => [s.isPanelOpen, s.selectedNodeId],
+            (isPanelOpen: boolean, selectedNodeId: string | null): string | null =>
+                isPanelOpen ? selectedNodeId : null,
         ],
         visibleGraph: [
             (s) => [s.workflow, s.pathGroups, s.openPathIds],

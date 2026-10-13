@@ -1,5 +1,5 @@
 import { NodeProps } from '@xyflow/react'
-import { useActions, useValues } from 'kea'
+import { useActions } from 'kea'
 
 import { IconChevronDown } from '@posthog/icons'
 import { LemonButton } from '@posthog/lemon-ui'
@@ -8,14 +8,13 @@ import { cn } from 'lib/utils/css-classes'
 
 import { motionProps } from './motionProps'
 import { tileCanvasLogic } from './tileCanvasLogic'
-import { frameMotion, pathColor } from './tileCanvasModel'
+import { pathColor } from './tileCanvasModel'
 import type { PathChipNodeType } from './tileCanvasNodes'
 
 export function PathChip({ data }: NodeProps<PathChipNodeType>): JSX.Element {
-    const { motion, pathGroups } = useValues(tileCanvasLogic)
     const { collapsePath } = useActions(tileCanvasLogic)
     const color = pathColor(data.group.entryEdge)
-    const motionStyle = motionProps(frameMotion(motion, data.group, pathGroups))
+    const motionStyle = motionProps(data.motion)
     return (
         <div className={cn('-translate-y-1/2', motionStyle.className)} style={motionStyle.style}>
             <div
