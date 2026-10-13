@@ -1,5 +1,5 @@
 import type { HogFlow, HogFlowAction } from '../../types'
-import { pathSummary, stepBadge, stepFacts } from './stepFacts'
+import { pathSummary, stepBadge, stepFacts, timeWindowSpans } from './stepFacts'
 import { computePathGroups } from './tileCanvasModel'
 
 type Config = Record<string, unknown>
@@ -216,5 +216,30 @@ describe('stepFacts', () => {
         const [group] = computePathGroups(flow)
 
         expect(pathSummary(flow, group)).toBe('Welcome to Example Co., then Wait 1 day, then Post to #sales')
+    })
+
+    it.each([
+        {
+            name: 'keeps the minutes of a short window',
+            config: { day: 'weekday', time: ['09:30', '09:45'] },
+            expected: [...Array(5).fill([{ start: 9.5, end: 9.75 }]), [], []],
+        },
+        {
+            name: 'splits an overnight window, carrying the morning part to the next day',
+            config: { day: ['friday'], time: ['23:00', '01:00'] },
+            expected: [[], [], [], [], [{ start: 23, end: 24 }], [{ start: 0, end: 1 }], []],
+        },
+        {
+            name: 'fills a whole open day',
+            config: { day: 'weekend', time: 'any' },
+            expected: [[], [], [], [], [], [{ start: 0, end: 24 }], [{ start: 0, end: 24 }]],
+        },
+    ])('maps a time window onto the week: $name', ({ config, expected }) => {
+        const action = step('window', 'wait_until_time_window', config) as Extract<
+            HogFlowAction,
+            { type: 'wait_until_time_window' }
+        >
+
+        expect(timeWindowSpans(action.config)).toEqual(expected)
     })
 })

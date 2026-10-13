@@ -321,6 +321,44 @@ function timeWindowText(config: ActionOf<'wait_until_time_window'>['config']): {
     return { day, time }
 }
 
+export interface TimeSpan {
+    start: number
+    end: number
+}
+
+const WEEKDAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+
+function isWindowDay(day: ActionOf<'wait_until_time_window'>['config']['day'], weekday: number): boolean {
+    return (
+        day === 'any' ||
+        (day === 'weekday' && weekday < 5) ||
+        (day === 'weekend' && weekday >= 5) ||
+        (Array.isArray(day) && (day as string[]).includes(WEEKDAY_NAMES[weekday]))
+    )
+}
+
+function hoursOf(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number)
+    return hours + (minutes || 0) / 60
+}
+
+/** The open hours of each weekday, Monday first. Matches the workflow runner: a window whose end is not after
+ * its start runs past midnight, and that morning part belongs to the day the window started. */
+export function timeWindowSpans(config: ActionOf<'wait_until_time_window'>['config']): TimeSpan[][] {
+    return WEEKDAY_NAMES.map((_, weekday) => {
+        const isOpenOn = (offset: number): boolean => isWindowDay(config.day, (weekday + 7 - offset) % 7)
+        if (config.time === 'any') {
+            return isOpenOn(0) ? [{ start: 0, end: 24 }] : []
+        }
+        const start = hoursOf(config.time[0])
+        const end = hoursOf(config.time[1])
+        if (end > start) {
+            return isOpenOn(0) ? [{ start, end }] : []
+        }
+        return [...(isOpenOn(1) && end > 0 ? [{ start: 0, end }] : []), ...(isOpenOn(0) ? [{ start, end: 24 }] : [])]
+    })
+}
+
 function splitKey(conditions: ActionOf<'conditional_branch'>['config']['conditions']): string | undefined {
     const keys = new Set(
         conditions.flatMap((condition) =>

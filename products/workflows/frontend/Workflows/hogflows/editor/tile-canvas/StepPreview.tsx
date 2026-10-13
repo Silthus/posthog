@@ -1,7 +1,15 @@
 import { EmailPreviewThumbnail } from 'lib/components/EmailPreviewThumbnail/EmailPreviewThumbnail'
 
 import type { HogFlow, HogFlowAction } from '../../types'
-import { conditionText, emailContent, humanDuration, outputKeys, plainVariables, stepInput } from './stepFacts'
+import {
+    conditionText,
+    emailContent,
+    humanDuration,
+    outputKeys,
+    plainVariables,
+    stepInput,
+    timeWindowSpans,
+} from './stepFacts'
 import { StepFieldList } from './StepFieldList'
 import { outgoingEdges, pathColor, tint } from './tileCanvasModel'
 import type { TileStep } from './useTileStep'
@@ -224,35 +232,29 @@ function WaitPreview({ action }: { action: HogFlowAction }): JSX.Element {
 }
 
 const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const WEEKDAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
 function TimeWindowPreview({ action, color }: { action: HogFlowAction; color: string }): JSX.Element | null {
     if (action.type !== 'wait_until_time_window') {
         return null
     }
-    const { day, time } = action.config
-    const [start, end] = time === 'any' ? [0, 24] : [parseInt(time[0], 10), parseInt(time[1], 10)]
-    const isOpenOn = (index: number): boolean =>
-        day === 'any' ||
-        (day === 'weekday' && index < 5) ||
-        (day === 'weekend' && index >= 5) ||
-        (Array.isArray(day) && (day as string[]).includes(WEEKDAY_NAMES[index]))
+    const spansByDay = timeWindowSpans(action.config)
     return (
         <div className="flex flex-col gap-1 text-left text-[11px]">
             {WEEK.map((name, index) => (
                 <div key={name} className="flex items-center gap-1.5">
                     <span className="w-7 text-secondary">{name}</span>
                     <span className="relative h-2 flex-1 rounded-full bg-surface-secondary">
-                        {isOpenOn(index) && (
+                        {spansByDay[index].map(({ start, end }) => (
                             <span
+                                key={start}
                                 className="absolute inset-y-0 rounded-full"
                                 style={{
                                     backgroundColor: color,
                                     left: `${(start / 24) * 100}%`,
-                                    width: `${(Math.max(end - start, 0) / 24) * 100}%`,
+                                    width: `${((end - start) / 24) * 100}%`,
                                 }}
                             />
-                        )}
+                        ))}
                     </span>
                 </div>
             ))}
