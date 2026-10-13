@@ -1,4 +1,4 @@
-import { RefObject, useEffect, useMemo, useRef, useState } from 'react'
+import { RefObject, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { LemonButton, LemonInput } from '@posthog/lemon-ui'
 
@@ -23,6 +23,25 @@ function StepIcon({ step }: { step: CreateActionType }): JSX.Element {
             {look?.icon}
         </span>
     )
+}
+
+/** LemonInput takes no ARIA props, so the combobox roles go on its input directly. */
+function useComboboxInput(inputRef: RefObject<HTMLInputElement>, listId: string, activeOptionId?: string): void {
+    useEffect(() => {
+        const input = inputRef.current
+        if (!input) {
+            return
+        }
+        input.setAttribute('role', 'combobox')
+        input.setAttribute('aria-expanded', 'true')
+        input.setAttribute('aria-autocomplete', 'list')
+        input.setAttribute('aria-controls', listId)
+        if (activeOptionId) {
+            input.setAttribute('aria-activedescendant', activeOptionId)
+        } else {
+            input.removeAttribute('aria-activedescendant')
+        }
+    }, [inputRef, listId, activeOptionId])
 }
 
 /**
@@ -50,7 +69,11 @@ export function StepPalette({
     const [activeIndex, setActiveIndex] = useState(0)
     const rootRef = useRef<HTMLDivElement>(null)
     const listRef = useRef<HTMLDivElement>(null)
+    const inputRef = useRef<HTMLInputElement>(null)
+    const listId = useId()
+    const optionId = (index: number): string => `${listId}-option-${index}`
     const items = useMemo(() => filterPaletteItems(query, sections, commands), [query, sections, commands])
+    useComboboxInput(inputRef, listId, items.length ? optionId(activeIndex) : undefined)
 
     useEffect(() => {
         const onPointerDown = (event: PointerEvent): void => {
@@ -92,19 +115,33 @@ export function StepPalette({
                 } else if (event.key === 'ArrowUp') {
                     event.preventDefault()
                     setActiveIndex(Math.max(activeIndex - 1, 0))
-                } else if (event.key === 'Enter') {
+                } else if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
                     event.preventDefault()
                     choose(items[activeIndex])
                 } else if (event.key === 'Escape') {
                     event.stopPropagation()
                     onClose()
+                    trigger?.current?.focus()
                 }
             }}
         >
             <div className="border-b p-2">
-                <LemonInput autoFocus fullWidth placeholder={placeholder} value={query} onChange={setQuery} />
+                <LemonInput
+                    autoFocus
+                    fullWidth
+                    inputRef={inputRef}
+                    placeholder={placeholder}
+                    value={query}
+                    onChange={setQuery}
+                />
             </div>
-            <div ref={listRef} className="max-h-90 overflow-y-auto p-1">
+            <div
+                ref={listRef}
+                id={listId}
+                role="listbox"
+                aria-label={placeholder}
+                className="max-h-90 overflow-y-auto p-1"
+            >
                 {items.length === 0 && <div className="p-3 text-sm text-secondary">Nothing matches your search.</div>}
                 {items.map((item, index) => (
                     <div key={item.key}>
@@ -116,6 +153,9 @@ export function StepPalette({
                         <LemonButton
                             fullWidth
                             size="small"
+                            id={optionId(index)}
+                            role="option"
+                            {...{ 'aria-selected': index === activeIndex }}
                             data-index={index}
                             active={index === activeIndex}
                             icon={
