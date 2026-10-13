@@ -146,13 +146,16 @@ function TileCanvasContent(): JSX.Element {
     return (
         <div
             className={cn(
-                'TileCanvas relative flex min-h-0 min-w-0 flex-1 overflow-hidden',
+                'TileCanvas relative flex min-h-0 min-w-0 flex-1 overflow-hidden @max-[48rem]/workflow-editor:flex-col @max-[48rem]/workflow-editor:overflow-y-auto',
                 motion && 'TileCanvas--moving'
             )}
             data-attr="workflow-editor"
         >
             <TileCanvasMeasureLayer />
-            <div ref={wrapperRef} className="flex min-h-0 min-w-0 grow">
+            <div
+                ref={wrapperRef}
+                className="flex min-h-0 min-w-0 grow @max-[48rem]/workflow-editor:min-h-80 @max-[48rem]/workflow-editor:shrink-0"
+            >
                 <ReactFlow<TileCanvasNode, TileEdgeType>
                     className="grow"
                     nodes={nodes}
@@ -191,10 +194,10 @@ function TileCanvasContent(): JSX.Element {
                 </ReactFlow>
             </div>
             {isPanelOpen && (
-                <>
+                <div className="contents @max-[48rem]/workflow-editor:relative @max-[48rem]/workflow-editor:block @max-[48rem]/workflow-editor:shrink-0">
                     <HogFlowEditorPanel />
                     <div
-                        className="absolute top-3 z-20"
+                        className="absolute top-3 z-20 @max-[48rem]/workflow-editor:!right-4"
                         style={{ right: (panelWidth ?? HOG_FLOW_EDITOR_DEFAULT_PANEL_WIDTH) + PANEL_CLOSE_GAP }}
                     >
                         <LemonButton
@@ -207,7 +210,7 @@ function TileCanvasContent(): JSX.Element {
                             onClick={closePanel}
                         />
                     </div>
-                </>
+                </div>
             )}
         </div>
     )
