@@ -167,6 +167,8 @@ export type CdpCoreServicesConfig = Pick<
         | 'SES_TRACKED_CONFIGURATION_SET'
         | 'SES_UNTRACKED_CONFIGURATION_SET'
         | 'WORKFLOWS_SANDBOX_SENDER_ENABLED'
+        | 'WORKFLOWS_SANDBOX_DAILY_TEAM_CAP'
+        | 'WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP'
         | 'SES_SANDBOX_TENANT_NAME'
         | 'SES_SANDBOX_CONFIGURATION_SET'
         | 'SES_SANDBOX_FROM_ADDRESS'
@@ -448,6 +450,9 @@ export function createCdpCoreServices(
     const teamEmailRateLimiter = deps.emailValidationValkey
         ? new RateLimiterService(deps.emailValidationValkey, { name: 'team-email' })
         : null
+    const sandboxEmailRateLimiter = deps.emailValidationValkey
+        ? new RateLimiterService(deps.emailValidationValkey, { name: 'sandbox-email' })
+        : null
     const emailService = new EmailService(
         {
             sesAccessKeyId: config.SES_ACCESS_KEY_ID,
@@ -476,8 +481,11 @@ export function createCdpCoreServices(
                 tenantName: config.SES_SANDBOX_TENANT_NAME,
                 configurationSetName: config.SES_SANDBOX_CONFIGURATION_SET,
                 fromAddress: config.SES_SANDBOX_FROM_ADDRESS,
+                dailyTeamCap: config.WORKFLOWS_SANDBOX_DAILY_TEAM_CAP,
+                dailyRecipientCap: config.WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP,
             },
             deps.teamManager,
+            sandboxEmailRateLimiter,
             redis
         ),
         new OrganizationMembersService(deps.postgres)
