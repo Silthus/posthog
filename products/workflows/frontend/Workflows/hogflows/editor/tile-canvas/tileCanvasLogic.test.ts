@@ -1,4 +1,5 @@
 import { expectLogic } from 'kea-test-utils'
+import posthog from 'posthog-js'
 
 import { loadAppMetricsTotals } from 'lib/components/AppMetrics/appMetricsLogic'
 
@@ -203,6 +204,35 @@ describe('tileCanvasLogic', () => {
             initKeaTests()
             logic = tileCanvasLogic()
             logic.mount()
+        })
+
+        it.each([
+            {
+                source: 'palette',
+                add: (): void => {
+                    logic.actions.openCommandPalette('d')
+                    logic.actions.startPlacing(delayStep)
+                    logic.actions.placeAt(logic.values.workflow.edges[0])
+                },
+            },
+            {
+                source: 'command bar',
+                add: (): void => {
+                    logic.actions.openCommandPalette()
+                    logic.actions.startPlacing(delayStep)
+                    logic.actions.placeAt(logic.values.workflow.edges[0])
+                },
+            },
+            {
+                source: 'quick add',
+                add: (): void => logic.actions.addStepAt(delayStep, logic.values.workflow.edges[0]),
+            },
+        ])('counts a step added from the $source', ({ source, add }) => {
+            const capture = jest.spyOn(posthog, 'capture')
+
+            add()
+
+            expect(capture).toHaveBeenCalledWith('workflows tile canvas step added', { source, step_type: 'delay' })
         })
 
         it.each(['startMovingNode', 'startCopyingNode'] as const)(

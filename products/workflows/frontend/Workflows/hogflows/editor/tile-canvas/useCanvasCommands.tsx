@@ -1,4 +1,5 @@
 import { useActions, useValues } from 'kea'
+import posthog from 'posthog-js'
 import { useMemo } from 'react'
 
 import {
@@ -25,12 +26,22 @@ export interface CanvasCommands {
     view: CanvasCommand[]
 }
 
+function tracked<Command extends CanvasCommand>(command: Command): Command {
+    return {
+        ...command,
+        run: () => {
+            posthog.capture('workflows tile canvas command run', { command: command.id })
+            command.run()
+        },
+    }
+}
+
 export function useCanvasCommands(): CanvasCommands {
     const { pathGroups, allPathsCollapsed, hasHistory } = useValues(tileCanvasLogic)
     const { openPanel, toggleAllPaths, requestFit } = useActions(tileCanvasLogic)
 
-    return useMemo(
-        (): CanvasCommands => ({
+    return useMemo((): CanvasCommands => {
+        const commands: CanvasCommands = {
             panel: [
                 {
                     id: 'test',
@@ -98,7 +109,11 @@ export function useCanvasCommands(): CanvasCommands {
                     run: requestFit,
                 },
             ],
-        }),
-        [openPanel, hasHistory, pathGroups.length, allPathsCollapsed, toggleAllPaths, requestFit]
-    )
+        }
+        return {
+            panel: commands.panel.map(tracked),
+            morePanels: commands.morePanels.map(tracked),
+            view: commands.view.map(tracked),
+        }
+    }, [openPanel, hasHistory, pathGroups.length, allPathsCollapsed, toggleAllPaths, requestFit])
 }

@@ -1,6 +1,7 @@
 import { actions, afterMount, connect, kea, key, listeners, MakeLogicType, path, props, reducers, selectors } from 'kea'
 import { loaders } from 'kea-loaders'
 import { subscriptions } from 'kea-subscriptions'
+import posthog from 'posthog-js'
 import type { DragEvent } from 'react'
 
 import { loadAppMetricsTotals } from 'lib/components/AppMetrics/appMetricsLogic'
@@ -46,8 +47,14 @@ import {
 
 export type TileCanvasPanelMode = HogFlowEditorMode | 'history'
 
+export type StepAddSource = 'palette' | 'command bar' | 'quick add'
+
 const PATH_LEAVE_MS = 260
 const PATH_MOTION_MS = 1100
+
+function captureStepAdded(source: StepAddSource, stepType: string): void {
+    posthog.capture('workflows tile canvas step added', { source, step_type: stepType })
+}
 
 const SURFACES_WITH_THEIR_OWN_KEYS = [
     'input',
@@ -89,6 +96,7 @@ export interface tileCanvasLogicValues {
     isRowScopedTrigger: boolean // workflowLogic
     hogFunctionTemplatesById: Record<string, HogFunctionTemplateType> // workflowLogic
     workflow: HogFlow // workflowLogic
+    originalWorkflow: HogFlow | null // workflowLogic
     allPathsCollapsed: boolean
     commandPaletteQuery: string | null
     edgeLabels: Record<string, string | undefined>
@@ -105,6 +113,7 @@ export interface tileCanvasLogicValues {
     measuredSizes: Record<string, NodeSize> | null
     motion: CanvasMotion | null
     panelMode: 'build' | 'logs' | 'metrics' | 'test' | 'variables' | 'history' | null
+    placingSource: StepAddSource
     openPathIds: string[]
     paletteSections: PaletteSection[]
     pathGroups: PathGroup[]
@@ -313,7 +322,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
     connect(() => ({
         values: [
             workflowLogic,
-            ['workflow', 'isRowScopedTrigger', 'hogFunctionTemplatesById'],
+            ['workflow', 'originalWorkflow', 'isRowScopedTrigger', 'hogFunctionTemplatesById'],
             hogFlowEditorLogic,
             ['nodeToBeAdded', 'isMovingNode', 'isCopyingNode', 'dropzoneNodes', 'selectedNodeId', 'mode'],
             featureFlagLogic,
@@ -386,6 +395,10 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             { focusFrame: (state, { box }) => ({ box, request: (state?.request ?? 0) + 1 }) },
         ],
         motion: [null as CanvasMotion | null, { setMotion: (_, { motion }) => motion }],
+        placingSource: [
+            'command bar' as StepAddSource,
+            { openCommandPalette: (_, { query }) => (query ? 'palette' : 'command bar') },
+        ],
         commandPaletteQuery: [
             null as string | null,
             {
@@ -535,6 +548,10 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             const box = values.layout?.frames[frameId(group)]
             return box ? { x: box.x + box.width / 2, y: box.y + 40 } : { x: 0, y: 0 }
         }
+        const capturePathToggled = (change: 'opened' | 'collapsed', groupId: string): void => {
+            const depth = values.pathGroups.find((group) => group.id === groupId)?.depth ?? 0
+            posthog.capture(`workflows tile canvas path ${change}`, { depth })
+        }
         const dropPendingMoveOrCopy = (): void => {
             if (values.isMovingNode) {
                 actions.stopMovingNode()
@@ -553,6 +570,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 }
             },
             openPath: ({ groupId }) => {
+                capturePathToggled('opened', groupId)
                 animate({ kind: 'expand', groupId, origin: stackOrigin(groupId) })
                 actions.setOpenPathIds([...values.openPathIds, groupId])
             },
@@ -562,6 +580,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                     return
                 }
                 const origin = frameOrigin(group)
+                capturePathToggled('collapsed', groupId)
                 animate({ kind: 'collapse', groupId, origin })
                 cache.disposables.add(() => {
                     const timer = window.setTimeout(() => {
@@ -604,6 +623,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 dropPendingMoveOrCopy()
                 actions.setNodeToBeAdded(step)
                 actions.onDrop(undefined, edge)
+                captureStepAdded('quick add', step.type)
             },
             placeAt: ({ edge }) => {
                 if (values.isMovingNode || values.isCopyingNode) {
@@ -618,7 +638,10 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                         actions.copyNodeToHighlightedDropzone()
                     }
                 } else if (values.nodeToBeAdded) {
+                    const stepType =
+                        'data' in values.nodeToBeAdded ? values.nodeToBeAdded.data.type : values.nodeToBeAdded.type
                     actions.onDrop(undefined, edge)
+                    captureStepAdded(values.placingSource, stepType)
                 }
             },
             openStepMenu: ({ actionId }) => {
@@ -637,6 +660,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 }
             },
             togglePanel: ({ mode }) => {
+                posthog.capture('workflows tile canvas panel toggled', { mode, open: values.panelMode !== mode })
                 if (values.panelMode === mode) {
                     actions.closePanel()
                 } else {
@@ -677,7 +701,15 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             },
         }
     }),
-    subscriptions(({ actions }) => ({
+    subscriptions(({ actions, values }) => ({
+        originalWorkflow: (workflow: HogFlow | null, previous: HogFlow | null | undefined): void => {
+            if (workflow && !previous) {
+                posthog.capture('workflows tile canvas opened', {
+                    step_count: workflow.actions.length,
+                    path_count: values.pathGroups.length,
+                })
+            }
+        },
         workflow: (workflow: HogFlow, previous: HogFlow | undefined): void => {
             if (workflow.id !== previous?.id || workflow.trigger?.type !== previous?.trigger?.type) {
                 actions.loadStepCounts()

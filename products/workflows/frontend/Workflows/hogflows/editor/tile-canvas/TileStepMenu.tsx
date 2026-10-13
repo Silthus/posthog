@@ -1,4 +1,5 @@
 import { useActions, useValues } from 'kea'
+import posthog from 'posthog-js'
 
 import { IconCopy, IconDrag, IconTrash } from '@posthog/icons'
 
@@ -8,6 +9,10 @@ import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
 import type { HogFlowAction } from '../../types'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import { hasStepMenu } from './tileCanvasModel'
+
+function captureMenuUse(choice: 'copy' | 'move' | 'delete'): void {
+    posthog.capture('workflows tile canvas step menu used', { choice })
+}
 
 export function TileStepMenu({ action, children }: { action: HogFlowAction; children: JSX.Element }): JSX.Element {
     const { stepMenuActionId } = useValues(tileCanvasLogic)
@@ -33,7 +38,10 @@ export function TileStepMenu({ action, children }: { action: HogFlowAction; chil
                                     label: 'Copy',
                                     icon: <IconCopy />,
                                     'data-attr': 'workflow-tile-step-copy',
-                                    onClick: () => startCopyingNode(node),
+                                    onClick: () => {
+                                        captureMenuUse('copy')
+                                        startCopyingNode(node)
+                                    },
                                 }
                               : null,
                           selectedNodeCanBeCopiedOrMoved
@@ -41,7 +49,10 @@ export function TileStepMenu({ action, children }: { action: HogFlowAction; chil
                                     label: 'Move',
                                     icon: <IconDrag />,
                                     'data-attr': 'workflow-tile-step-move',
-                                    onClick: () => startMovingNode(node),
+                                    onClick: () => {
+                                        captureMenuUse('move')
+                                        startMovingNode(node)
+                                    },
                                 }
                               : null,
                           {
@@ -49,7 +60,10 @@ export function TileStepMenu({ action, children }: { action: HogFlowAction; chil
                               status: 'danger',
                               icon: <IconTrash />,
                               'data-attr': 'workflow-tile-step-delete',
-                              onClick: () => onNodesDelete([node]),
+                              onClick: () => {
+                                  captureMenuUse('delete')
+                                  onNodesDelete([node])
+                              },
                               disabledReason: selectedNodeCanBeDeleted ? undefined : 'Clean up branching steps first',
                           },
                       ]
