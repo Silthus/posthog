@@ -26,6 +26,7 @@ export function StepView({ action }: { action: HogFlowAction }): JSX.Element {
         nodesById,
         selectedNodeCanBeDeleted,
         selectedNodeCanBeCopiedOrMoved,
+        emailInsertionPending,
         animatingEdgePair,
         workflow,
         isZoomedOutFar,
@@ -208,6 +209,9 @@ export function StepView({ action }: { action: HogFlowAction }): JSX.Element {
                                 selectedNodeCanBeCopiedOrMoved
                                     ? {
                                           label: 'Copy',
+                                          disabledReason: emailInsertionPending
+                                              ? 'Preparing the email sender…'
+                                              : undefined,
                                           icon: <IconCopy />,
                                           status: 'default',
                                           onClick: () => startCopyingNode(node),
@@ -216,6 +220,9 @@ export function StepView({ action }: { action: HogFlowAction }): JSX.Element {
                                 selectedNodeCanBeCopiedOrMoved
                                     ? {
                                           label: 'Move',
+                                          disabledReason: emailInsertionPending
+                                              ? 'Preparing the email sender…'
+                                              : undefined,
                                           icon: <IconDrag />,
                                           status: 'default',
                                           onClick: () => startMovingNode(node),
