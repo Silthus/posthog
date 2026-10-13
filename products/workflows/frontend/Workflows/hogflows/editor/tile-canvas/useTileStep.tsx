@@ -12,8 +12,8 @@ import { useHogFlowStep } from '../../steps/HogFlowSteps'
 import { isFunctionAction } from '../../steps/types'
 import type { HogFlow, HogFlowAction } from '../../types'
 import { customStepName, stepKindName } from '../../workflowStepCatalog'
-import { StepFacts, stepBadge, stepFacts } from './stepFacts'
-import { StepPresentation, stepPresentation } from './stepPresentation'
+import { StepFacts, stepView } from './stepFacts'
+import type { StepPresentation } from './stepPresentation'
 
 export type TileShape = 'start' | 'end' | 'step'
 
@@ -71,14 +71,15 @@ export function useTileStep(action: HogFlowAction, workflow: HogFlow): TileStep 
             action.type === 'trigger' && 'template_id' in action.config ? action.config.template_id : undefined
         const templateName = hogFunctionTemplatesById[templateId ?? triggerTemplateId ?? '']?.name
         const look = templateId ? TEMPLATE_LOOKS[templateId] : undefined
+        const view = stepView(workflow, action, templateName)
         return {
             label: ENDPOINT_LABELS[action.type] ?? stepKindName(action) ?? templateName ?? 'Step',
             customName: customStepName(action, templateName),
             icon: look?.icon ?? step?.icon,
             color: look?.color?.[isDarkModeOn ? 1 : 0] ?? readableStepColor(step?.color, isDarkModeOn),
-            badge: stepBadge(workflow, action),
-            facts: stepFacts(workflow, action, templateName),
-            presentation: stepPresentation(action),
+            badge: view.badge,
+            facts: view.facts,
+            presentation: view.presentation,
             invalid: actionValidationErrorsById[action.id]?.valid === false,
             shape: action.type === 'trigger' ? 'start' : action.type === 'exit' ? 'end' : 'step',
         }

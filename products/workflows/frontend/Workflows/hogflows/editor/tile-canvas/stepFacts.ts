@@ -15,7 +15,7 @@ import {
     plainVariables,
     templateIdOf,
 } from './stepValues'
-import { FlowGraph, outgoingEdges, pathActions, PathGroup } from './tileCanvasModel'
+import { outgoingEdges, pathActions, PathGroup } from './tileCanvasModel'
 
 type Field = [label: string, value: string]
 
@@ -321,14 +321,19 @@ function exitFacts(workflow: Pick<HogFlow, 'exit_condition'>, action: ActionOf<'
     }
 }
 
-export function stepFacts(workflow: HogFlow, action: HogFlowAction, templateName?: string): StepFacts {
+function factsOf(
+    workflow: Pick<HogFlow, 'exit_condition'>,
+    action: HogFlowAction,
+    presentation: StepPresentation,
+    templateName: string | undefined
+): StepFacts {
     switch (action.type) {
         case 'trigger':
             return triggerFacts(action.config, templateName)
         case 'exit':
             return exitFacts(workflow, action)
         default:
-            return presentationFacts(stepPresentation(action), action, templateName)
+            return presentationFacts(presentation, action, templateName)
     }
 }
 
@@ -359,11 +364,10 @@ function waitBadge(wait: WaitPresentation): string | undefined {
 
 const countText = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`
 
-export function stepBadge(workflow: FlowGraph, action: HogFlowAction): string | undefined {
+function badgeOf(action: HogFlowAction, presentation: StepPresentation, pathCount: number): string | undefined {
     if (action.type === 'trigger') {
         return TRIGGER_SOURCES[action.config.type]
     }
-    const presentation = stepPresentation(action)
     switch (presentation.kind) {
         case 'wait':
             return waitBadge(presentation.wait)
@@ -372,7 +376,7 @@ export function stepBadge(workflow: FlowGraph, action: HogFlowAction): string | 
             return hours ? `${shortTime(hours[0])}-${shortTime(hours[1])}` : undefined
         }
         case 'branch':
-            return `${outgoingEdges(workflow, action.id).length} paths`
+            return `${pathCount} paths`
         case 'webhook':
             return presentation.method
         case 'ai-task':
@@ -380,6 +384,59 @@ export function stepBadge(workflow: FlowGraph, action: HogFlowAction): string | 
         default:
             return undefined
     }
+}
+
+export interface StepView {
+    presentation: StepPresentation
+    facts: StepFacts
+    badge?: string
+}
+
+interface CachedStepView {
+    inputs: unknown[]
+    view: StepView
+}
+
+const stepViews = new WeakMap<HogFlowAction, CachedStepView>()
+
+const sameInputs = (a: unknown[], b: unknown[]): boolean =>
+    a.length === b.length && a.every((value, i) => value === b[i])
+
+/**
+ * What a tile shows for a step: read once per step object and kept until the step or the few workflow facts it
+ * reads change, however many tiles, cards and previews show it.
+ */
+export function stepView(
+    workflow: Pick<HogFlow, 'edges' | 'exit_condition' | 'actions'>,
+    action: HogFlowAction,
+    templateName?: string
+): StepView {
+    const pathCount = outgoingEdges(workflow, action.id).length
+    const inputs = [pathCount, action.type === 'exit' ? workflow.exit_condition : undefined, templateName]
+    const cached = stepViews.get(action)
+    if (cached && sameInputs(cached.inputs, inputs)) {
+        return cached.view
+    }
+    const presentation: StepPresentation =
+        action.type === 'trigger' || action.type === 'exit' ? { kind: 'fields' } : stepPresentation(action)
+    const view = {
+        presentation,
+        facts: factsOf(workflow, action, presentation, templateName),
+        badge: badgeOf(action, presentation, pathCount),
+    }
+    stepViews.set(action, { inputs, view })
+    return view
+}
+
+export function stepFacts(workflow: HogFlow, action: HogFlowAction, templateName?: string): StepFacts {
+    return stepView(workflow, action, templateName).facts
+}
+
+export function stepBadge(
+    workflow: Pick<HogFlow, 'edges' | 'exit_condition' | 'actions'>,
+    action: HogFlowAction
+): string | undefined {
+    return stepView(workflow, action).badge
 }
 
 const SUMMARY_LENGTH = 3

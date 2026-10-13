@@ -1,5 +1,5 @@
 import type { HogFlow, HogFlowAction } from '../../types'
-import { pathSummary, stepBadge, stepFacts } from './stepFacts'
+import { pathSummary, stepBadge, stepFacts, stepView } from './stepFacts'
 import { timeWindowSpans } from './stepPresentation'
 import { computePathGroups } from './tileCanvasModel'
 
@@ -218,6 +218,21 @@ describe('stepFacts', () => {
         const action = fn('mark', 'template-posthog-update-person-properties', { set_properties: { [key]: value } })
 
         expect(stepFacts(workflow([action]), action).headline).toBe(headline)
+    })
+
+    it('reads a step once for all its tiles, and again when its paths change', () => {
+        const twoPaths = workflow([split], {
+            edges: [
+                { from: 'by_plan', to: 'a', type: 'branch', index: 0 },
+                { from: 'by_plan', to: 'b', type: 'continue' },
+            ],
+        })
+        const threePaths = workflow([split], {
+            edges: [...twoPaths.edges, { from: 'by_plan', to: 'c', type: 'branch', index: 1 }],
+        })
+
+        expect(stepView(twoPaths, split)).toBe(stepView(workflow([split], { edges: twoPaths.edges }), split))
+        expect(stepView(threePaths, split).badge).toBe('3 paths')
     })
 
     it('falls back to the template name for a template it does not know', () => {
