@@ -13,15 +13,12 @@ import {
 import { BindLogic, useActions, useValues } from 'kea'
 import { useEffect, useMemo, useRef } from 'react'
 
-import { IconX } from '@posthog/icons'
-import { LemonButton } from '@posthog/lemon-ui'
-
 import { cn } from 'lib/utils/css-classes'
 
 import { themeLogic } from '~/layout/navigation-3000/themeLogic'
 
 import { workflowLogic } from '../../../workflowLogic'
-import { HOG_FLOW_EDITOR_DEFAULT_PANEL_WIDTH, hogFlowEditorLogic } from '../../hogFlowEditorLogic'
+import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
 import { HogFlowEditorPanel } from '../../panel/HogFlowEditorPanel'
 import { CommandBar } from './CommandBar'
 import { PathChip } from './PathChip'
@@ -30,7 +27,7 @@ import { PlacementHint } from './PlacementHint'
 import { canvasBounds, entryX, frameChipWidth } from './tileCanvasLayout'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import { TileCanvasMeasureLayer } from './TileCanvasMeasureLayer'
-import { edgeKey } from './tileCanvasModel'
+import { edgeKey, Point, Size, viewportAfterResize } from './tileCanvasModel'
 import type { TileCanvasNode, TileEdgeType } from './tileCanvasNodes'
 import { TileEdge } from './TileEdge'
 import { TileFlowNode } from './TileFlowNode'
@@ -42,17 +39,56 @@ const MAX_ZOOM = 1.5
 const MIN_READABLE_ZOOM = 0.66
 const FIT_MARGIN = { side: 24, top: 32, bottom: 96 }
 const CHIP_INSET = 8
-const PANEL_CLOSE_GAP = 4
 
 function TileCanvasContent(): JSX.Element {
     const wrapperRef = useRef<HTMLDivElement>(null)
     const reactFlow = useReactFlow()
     const { isDarkModeOn } = useValues(themeLogic)
-    const { visibleGraph, frameSpecs, layout, measuredSizes, motion, isPanelOpen, fitRequest, commandPaletteQuery } =
-        useValues(tileCanvasLogic)
+    const {
+        visibleGraph,
+        frameSpecs,
+        layout,
+        measuredSizes,
+        motion,
+        isPanelOpen,
+        fitRequest,
+        commandPaletteQuery,
+        selectedNodeId,
+    } = useValues(tileCanvasLogic)
     const { selectStep, openPath, closePanel } = useActions(tileCanvasLogic)
-    const { panelWidth } = useValues(hogFlowEditorLogic)
     const { handlePaneClick } = useActions(hogFlowEditorLogic)
+
+    const selectedPosition = selectedNodeId ? layout?.positions[selectedNodeId] : undefined
+    const selectedSize = selectedNodeId ? measuredSizes?.[selectedNodeId] : undefined
+    const focusRef = useRef<(Point & Size) | undefined>()
+    focusRef.current =
+        selectedPosition && selectedSize
+            ? { ...selectedPosition, width: selectedSize.width, height: selectedSize.height }
+            : undefined
+
+    useEffect(() => {
+        const wrapper = wrapperRef.current
+        if (!wrapper) {
+            return
+        }
+        let previous: Size = { width: wrapper.clientWidth, height: wrapper.clientHeight }
+        // Without this, the graph stays pinned to the left edge as the docked panel opens and closes, so it
+        // slides out of view or off center.
+        const observer = new ResizeObserver(() => {
+            const next = { width: wrapper.clientWidth, height: wrapper.clientHeight }
+            if (next.width === previous.width && next.height === previous.height) {
+                return
+            }
+            if (previous.width > 0 && previous.height > 0) {
+                void reactFlow.setViewport(
+                    viewportAfterResize(reactFlow.getViewport(), previous, next, focusRef.current)
+                )
+            }
+            previous = next
+        })
+        observer.observe(wrapper)
+        return () => observer.disconnect()
+    }, [reactFlow])
 
     const nodes = useMemo((): TileCanvasNode[] => {
         if (!layout) {
@@ -193,25 +229,7 @@ function TileCanvasContent(): JSX.Element {
                     <Controls showInteractive={false} />
                 </ReactFlow>
             </div>
-            {isPanelOpen && (
-                <div className="contents @max-[48rem]/workflow-editor:relative @max-[48rem]/workflow-editor:block @max-[48rem]/workflow-editor:shrink-0">
-                    <HogFlowEditorPanel />
-                    <div
-                        className="absolute top-3 z-20 @max-[48rem]/workflow-editor:!right-4"
-                        style={{ right: (panelWidth ?? HOG_FLOW_EDITOR_DEFAULT_PANEL_WIDTH) + PANEL_CLOSE_GAP }}
-                    >
-                        <LemonButton
-                            size="small"
-                            type="secondary"
-                            className="bg-surface-primary"
-                            icon={<IconX />}
-                            tooltip="Close the panel (Esc)"
-                            data-attr="workflow-tile-close-panel"
-                            onClick={closePanel}
-                        />
-                    </div>
-                </div>
-            )}
+            {isPanelOpen && <HogFlowEditorPanel layout="docked" onClose={closePanel} />}
         </div>
     )
 }

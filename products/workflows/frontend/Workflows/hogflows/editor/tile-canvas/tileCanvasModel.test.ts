@@ -10,6 +10,7 @@ import {
     PaletteSection,
     stepCount,
     stepCountsRequest,
+    viewportAfterResize,
 } from './tileCanvasModel'
 
 const step = (id: string, type: HogFlowAction['type'] = 'function'): HogFlowAction =>
@@ -224,6 +225,60 @@ describe('tileCanvasModel', () => {
         expect(stepCount(metrics, 'delay')).toBe(0)
         expect(stepCount(null, 'email')).toBeUndefined()
         expect(stepCount({}, 'email')).toBeUndefined()
+    })
+
+    it.each([
+        {
+            name: 'keeps the middle of the view when the panel opens',
+            startX: 100,
+            previousWidth: 1200,
+            nextWidth: 600,
+            focus: undefined,
+            expected: { x: -200, y: 50, zoom: 0.5 },
+        },
+        {
+            name: 'gives the view back when the panel closes',
+            startX: -200,
+            previousWidth: 600,
+            nextWidth: 1200,
+            focus: undefined,
+            expected: { x: 100, y: 50, zoom: 0.5 },
+        },
+        {
+            name: 'leaves a selected step that is still in view alone',
+            startX: 100,
+            previousWidth: 1200,
+            nextWidth: 600,
+            focus: { x: 1000, y: 0, width: 64, height: 64 },
+            expected: { x: -200, y: 50, zoom: 0.5 },
+        },
+        {
+            name: 'pulls a selected step back in from the right edge',
+            startX: 100,
+            previousWidth: 1200,
+            nextWidth: 600,
+            focus: { x: 1600, y: 0, width: 64, height: 64 },
+            expected: { x: -256, y: 50, zoom: 0.5 },
+        },
+        {
+            name: 'pulls a selected step back in from the left edge',
+            startX: 100,
+            previousWidth: 1200,
+            nextWidth: 600,
+            focus: { x: 0, y: 0, width: 64, height: 64 },
+            expected: { x: 24, y: 50, zoom: 0.5 },
+        },
+    ])('moves the viewport on a canvas resize: $name', ({ startX, previousWidth, nextWidth, focus, expected }) => {
+        const viewport = { x: startX, y: 50, zoom: 0.5 }
+
+        expect(
+            viewportAfterResize(
+                viewport,
+                { width: previousWidth, height: 800 },
+                { width: nextWidth, height: 800 },
+                focus
+            )
+        ).toEqual(expected)
     })
 })
 

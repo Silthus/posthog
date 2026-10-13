@@ -290,6 +290,44 @@ export interface Point {
     y: number
 }
 
+export interface Viewport {
+    x: number
+    y: number
+    zoom: number
+}
+
+export interface Size {
+    width: number
+    height: number
+}
+
+const VIEWPORT_MARGIN = 24
+
+function shiftIntoView(offset: number, start: number, length: number, zoom: number, extent: number): number {
+    const near = start * zoom + offset
+    const far = (start + length) * zoom + offset
+    if (near < VIEWPORT_MARGIN) {
+        return offset + VIEWPORT_MARGIN - near
+    }
+    if (far > extent - VIEWPORT_MARGIN) {
+        return offset - Math.min(far - (extent - VIEWPORT_MARGIN), near - VIEWPORT_MARGIN)
+    }
+    return offset
+}
+
+export function viewportAfterResize(viewport: Viewport, previous: Size, next: Size, focus?: Point & Size): Viewport {
+    const x = viewport.x + (next.width - previous.width) / 2
+    const y = viewport.y + (next.height - previous.height) / 2
+    if (!focus) {
+        return { x, y, zoom: viewport.zoom }
+    }
+    return {
+        x: shiftIntoView(x, focus.x, focus.width, viewport.zoom, next.width),
+        y: shiftIntoView(y, focus.y, focus.height, viewport.zoom, next.height),
+        zoom: viewport.zoom,
+    }
+}
+
 export interface MiniFlowLayout {
     nodes: { actionId: string; x: number; y: number; layer: number }[]
     edges: { from: Point; to: Point }[]
