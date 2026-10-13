@@ -2,29 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 
 import { humanFriendlyLargeNumber } from 'lib/utils/numbers'
 
-import type { HogFlow, HogFlowAction } from '../../types'
+import type { HogFlow } from '../../types'
+import { StackCoverIcon } from './StackCoverIcon'
 import { StackPeek } from './StackPeek'
 import { pathSummary } from './stepFacts'
 import { TileBadge } from './TileBadge'
 import { TILE_SIZE } from './tileCanvasLayout'
 import { pathActions, PathGroup, pathColor } from './tileCanvasModel'
 import { useRaisedNode } from './useRaisedNode'
-import { useTileStep } from './useTileStep'
 
 const PEEK_CLOSE_MS = 220
 const STACK_OFFSETS = [8, 4]
-
-function StackCoverIcon({ action, workflow }: { action: HogFlowAction; workflow: HogFlow }): JSX.Element {
-    const tile = useTileStep(action, workflow)
-    return (
-        <span
-            className="flex size-[22px] items-center justify-center rounded text-[14px]"
-            style={{ color: tile.color, backgroundColor: `color-mix(in srgb, ${tile.color} 10%, transparent)` }}
-        >
-            {tile.icon}
-        </span>
-    )
-}
 
 export function TileStackNode({
     group,

@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-/**
- * Opens after the pointer rests for `openDelayMs`, so passing over a tile does not flash a card. `mounted`
- * turns on first and `open` a frame later, which lets a CSS transition run from the closed state.
- */
+/** `open` turns on a frame after `mounted`, so the card's CSS transition runs from its closed state. */
 export function useHoverIntent(
     enabled: boolean,
     openDelayMs: number,

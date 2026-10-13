@@ -3,9 +3,9 @@ import { useMemo, useRef } from 'react'
 
 import { IconPlus } from '@posthog/icons'
 
-import { CanvasCommand, StepPalette } from './StepPalette'
+import { StepPalette } from './StepPalette'
 import { tileCanvasLogic } from './tileCanvasLogic'
-import { useCanvasCommands } from './useCanvasCommands'
+import { CanvasCommand, useCanvasCommands } from './useCanvasCommands'
 
 export function CommandBar(): JSX.Element {
     const triggerRef = useRef<HTMLButtonElement>(null)

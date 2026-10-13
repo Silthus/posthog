@@ -13,8 +13,13 @@ import {
     IconScreen,
 } from '@posthog/icons'
 
-import type { CanvasCommand } from './StepPalette'
 import { tileCanvasLogic, TileCanvasPanelMode } from './tileCanvasLogic'
+import type { PaletteCommand } from './tileCanvasModel'
+
+export interface CanvasCommand extends PaletteCommand {
+    icon: JSX.Element
+    run: () => void
+}
 
 export interface PanelCommand extends CanvasCommand {
     mode: TileCanvasPanelMode

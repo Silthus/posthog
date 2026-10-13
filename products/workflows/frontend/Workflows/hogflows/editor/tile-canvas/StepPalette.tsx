@@ -1,53 +1,51 @@
-import { RefObject, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { KeyboardEvent, RefObject, useEffect, useId, useMemo, useRef, useState } from 'react'
 
-import { LemonButton, LemonInput } from '@posthog/lemon-ui'
+import { LemonInput } from '@posthog/lemon-ui'
 
 import type { CreateActionType } from '../../hogFlowEditorLogic'
-import { useHogFlowStep } from '../../steps/HogFlowSteps'
-import type { HogFlowAction } from '../../types'
-import { filterPaletteItems, PaletteCommand, PaletteItem, PaletteSection, tint } from './tileCanvasModel'
+import { StepPaletteRow } from './StepPaletteRow'
+import { filterPaletteItems, PaletteItem, PaletteSection } from './tileCanvasModel'
+import type { CanvasCommand } from './useCanvasCommands'
+import { useComboboxInput } from './useComboboxInput'
 
-export interface CanvasCommand extends PaletteCommand {
-    icon: JSX.Element
-    run: () => void
+type PaletteKeyCommand = 'next' | 'previous' | 'choose' | 'close'
+
+function paletteKeyCommand(event: KeyboardEvent<HTMLElement>): PaletteKeyCommand | null {
+    switch (event.key) {
+        case 'ArrowDown':
+            return 'next'
+        case 'ArrowUp':
+            return 'previous'
+        case 'Enter':
+            return event.nativeEvent.isComposing ? null : 'choose'
+        case 'Escape':
+            return 'close'
+        default:
+            return null
+    }
 }
 
-function StepIcon({ step }: { step: CreateActionType }): JSX.Element {
-    const look = useHogFlowStep(step as HogFlowAction)
-    const color = look?.color ?? 'var(--color-text-secondary)'
-    return (
-        <span
-            className="flex size-6 shrink-0 items-center justify-center rounded text-[14px]"
-            style={{ color, backgroundColor: tint(color, 10) }}
-        >
-            {look?.icon}
-        </span>
-    )
-}
-
-/** LemonInput takes no ARIA props, so the combobox roles go on its input directly. */
-function useComboboxInput(inputRef: RefObject<HTMLInputElement>, listId: string, activeOptionId?: string): void {
+/** A click on the trigger is left to the trigger, which toggles the palette. */
+function useCloseOnPointerOutside(
+    rootRef: RefObject<HTMLElement>,
+    trigger: RefObject<HTMLElement> | undefined,
+    onClose: () => void
+): void {
     useEffect(() => {
-        const input = inputRef.current
-        if (!input) {
-            return
+        const onPointerDown = (event: PointerEvent): void => {
+            const target = event.target as Node
+            if (!rootRef.current?.contains(target) && !trigger?.current?.contains(target)) {
+                onClose()
+            }
         }
-        input.setAttribute('role', 'combobox')
-        input.setAttribute('aria-expanded', 'true')
-        input.setAttribute('aria-autocomplete', 'list')
-        input.setAttribute('aria-controls', listId)
-        if (activeOptionId) {
-            input.setAttribute('aria-activedescendant', activeOptionId)
-        } else {
-            input.removeAttribute('aria-activedescendant')
-        }
-    }, [inputRef, listId, activeOptionId])
+        document.addEventListener('pointerdown', onPointerDown, true)
+        return () => document.removeEventListener('pointerdown', onPointerDown, true)
+    }, [rootRef, onClose, trigger])
 }
 
-/**
- * One search over every step kind, and over canvas commands when it opens from the command bar. It closes
- * on Escape and on a click outside it. A click on `trigger` is left to the trigger, which toggles it.
- */
+const startsSection = (items: PaletteItem<CanvasCommand>[], index: number): boolean =>
+    index === 0 || items[index - 1].section !== items[index].section
+
 export function StepPalette({
     sections,
     commands = [],
@@ -74,17 +72,7 @@ export function StepPalette({
     const optionId = (index: number): string => `${listId}-option-${index}`
     const items = useMemo(() => filterPaletteItems(query, sections, commands), [query, sections, commands])
     useComboboxInput(inputRef, listId, items.length ? optionId(activeIndex) : undefined)
-
-    useEffect(() => {
-        const onPointerDown = (event: PointerEvent): void => {
-            const target = event.target as Node
-            if (!rootRef.current?.contains(target) && !trigger?.current?.contains(target)) {
-                onClose()
-            }
-        }
-        document.addEventListener('pointerdown', onPointerDown, true)
-        return () => document.removeEventListener('pointerdown', onPointerDown, true)
-    }, [onClose, trigger])
+    useCloseOnPointerOutside(rootRef, trigger, onClose)
 
     useEffect(() => setActiveIndex(0), [query])
     useEffect(() => {
@@ -103,27 +91,33 @@ export function StepPalette({
         }
     }
 
+    const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+        const command = paletteKeyCommand(event)
+        if (command === 'close') {
+            event.stopPropagation()
+            onClose()
+            trigger?.current?.focus()
+            return
+        }
+        if (!command) {
+            return
+        }
+        event.preventDefault()
+        if (command === 'next') {
+            setActiveIndex(Math.min(activeIndex + 1, items.length - 1))
+        } else if (command === 'previous') {
+            setActiveIndex(Math.max(activeIndex - 1, 0))
+        } else {
+            choose(items[activeIndex])
+        }
+    }
+
     return (
         <div
             ref={rootRef}
             className="flex w-95 max-w-[calc(100cqw-2rem)] flex-col overflow-hidden rounded-lg border bg-surface-primary shadow-xl"
             data-attr="workflow-step-palette"
-            onKeyDown={(event) => {
-                if (event.key === 'ArrowDown') {
-                    event.preventDefault()
-                    setActiveIndex(Math.min(activeIndex + 1, items.length - 1))
-                } else if (event.key === 'ArrowUp') {
-                    event.preventDefault()
-                    setActiveIndex(Math.max(activeIndex - 1, 0))
-                } else if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-                    event.preventDefault()
-                    choose(items[activeIndex])
-                } else if (event.key === 'Escape') {
-                    event.stopPropagation()
-                    onClose()
-                    trigger?.current?.focus()
-                }
-            }}
+            onKeyDown={onKeyDown}
         >
             <div className="border-b p-2">
                 <LemonInput
@@ -145,40 +139,19 @@ export function StepPalette({
                 {items.length === 0 && <div className="p-3 text-sm text-secondary">Nothing matches your search.</div>}
                 {items.map((item, index) => (
                     <div key={item.key}>
-                        {(index === 0 || items[index - 1].section !== item.section) && (
+                        {startsSection(items, index) && (
                             <div className="px-2 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-secondary">
                                 {item.section}
                             </div>
                         )}
-                        <LemonButton
-                            fullWidth
-                            size="small"
+                        <StepPaletteRow
+                            item={item}
                             id={optionId(index)}
-                            role="option"
-                            {...{ 'aria-selected': index === activeIndex }}
-                            data-index={index}
+                            index={index}
                             active={index === activeIndex}
-                            icon={
-                                item.kind === 'step' ? (
-                                    <StepIcon step={item.step} />
-                                ) : (
-                                    <span className="flex size-6 shrink-0 items-center justify-center rounded bg-surface-secondary text-[14px]">
-                                        {item.command.icon}
-                                    </span>
-                                )
-                            }
-                            onMouseEnter={() => setActiveIndex(index)}
-                            onClick={() => choose(item)}
-                        >
-                            <span className="flex min-w-0 flex-col text-left">
-                                <span className="text-[13px] font-semibold">{item.label}</span>
-                                {item.description && (
-                                    <span className="truncate text-[11.5px] font-normal text-secondary">
-                                        {item.description}
-                                    </span>
-                                )}
-                            </span>
-                        </LemonButton>
+                            onHover={() => setActiveIndex(index)}
+                            onChoose={() => choose(item)}
+                        />
                     </div>
                 ))}
             </div>

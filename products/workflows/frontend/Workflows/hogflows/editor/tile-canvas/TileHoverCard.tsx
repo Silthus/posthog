@@ -30,10 +30,7 @@ const PREVIEWS_THAT_SHOW_SETTINGS = new Set<StepPresentationKind>([
     'window',
 ])
 
-/**
- * The tile grows right and down into this card. The card starts clipped to the tile's own box, so the
- * icon and caption stay exactly where they were and only the new content appears around them.
- */
+/** The card starts clipped to the tile's own box, so the icon and caption stay put as it opens around them. */
 export function TileHoverCard({
     open,
     action,

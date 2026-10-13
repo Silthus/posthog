@@ -277,7 +277,7 @@ const PICKABLE_WORKFLOWS: Record<string, HogFlow> = {
     ...EXAMPLE_WORKFLOWS,
 }
 
-/** Serves the editor's API from fixtures. Pass more workflows to make them loadable by id in a story. */
+/** Pass more workflows to make them loadable by id in a story. */
 export function createWorkflowEditorStoryDecorator(
     extraWorkflows: Record<string, HogFlow> = {}
 ): ReturnType<typeof mswDecorator> {
