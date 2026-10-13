@@ -122,63 +122,54 @@ function frameDepth(frames: PathFrameSpec[], frame: PathFrameSpec): number {
     return parent ? frameDepth(frames, parent) + 1 : 0
 }
 
-function buildElkGraph(
-    sizes: Record<string, NodeSize>,
-    edges: VisibleEdge[],
-    labels: Record<string, string | undefined>,
-    frames: PathFrameSpec[]
-): ElkNode {
-    const nested = frames.length > 0
-    const root: ElkNode = {
-        id: 'root',
+const FRAME_PADDING_OPTION = `[left=${FRAME_PADDING.side}, top=${FRAME_PADDING.top}, right=${FRAME_PADDING.side}, bottom=${FRAME_PADDING.bottom}]`
+
+function elkRootOptions(nested: boolean): Record<string, string> {
+    return {
+        ...LAYOUT_OPTIONS,
+        ...(nested
+            ? {
+                  'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
+                  'elk.json.shapeCoords': 'ROOT',
+                  'elk.json.edgeCoords': 'ROOT',
+              }
+            : FLAT_ONLY_OPTIONS),
+        'elk.padding': '[left=0, top=0, right=0, bottom=0]',
+    }
+}
+
+function elkEdge(edge: VisibleEdge, label: string | undefined): ElkExtendedEdge {
+    return {
+        id: edge.id,
+        sources: [`${edge.source}:out:${edge.portIndex}`],
+        targets: [`${edge.target}:in`],
+        labels: label
+            ? [{ id: `${edge.id}:label`, text: label, width: edgeLabelWidth(label), height: EDGE_LABEL_HEIGHT }]
+            : [],
+    }
+}
+
+function elkFrame(frame: PathFrameSpec): ElkNode {
+    return {
+        id: frame.id,
+        children: [],
         layoutOptions: {
             ...LAYOUT_OPTIONS,
-            ...(nested
-                ? {
-                      'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
-                      'elk.json.shapeCoords': 'ROOT',
-                      'elk.json.edgeCoords': 'ROOT',
-                  }
-                : FLAT_ONLY_OPTIONS),
-            'elk.padding': '[left=0, top=0, right=0, bottom=0]',
+            'elk.padding': FRAME_PADDING_OPTION,
+            'elk.nodeSize.constraints': 'MINIMUM_SIZE',
+            'elk.nodeSize.minimum': `(${frame.minWidth}, 40)`,
         },
-        children: [],
-        edges: edges
-            .filter((edge) => sizes[edge.source] && sizes[edge.target])
-            .map((edge): ElkExtendedEdge => {
-                const label = labels[edge.id]
-                return {
-                    id: edge.id,
-                    sources: [`${edge.source}:out:${edge.portIndex}`],
-                    targets: [`${edge.target}:in`],
-                    labels: label
-                        ? [
-                              {
-                                  id: `${edge.id}:label`,
-                                  text: label,
-                                  width: edgeLabelWidth(label),
-                                  height: EDGE_LABEL_HEIGHT,
-                              },
-                          ]
-                        : [],
-                }
-            }),
     }
-    const containers = new Map(
-        frames.map((frame): [string, ElkNode] => [
-            frame.id,
-            {
-                id: frame.id,
-                children: [],
-                layoutOptions: {
-                    ...LAYOUT_OPTIONS,
-                    'elk.padding': `[left=${FRAME_PADDING.side}, top=${FRAME_PADDING.top}, right=${FRAME_PADDING.side}, bottom=${FRAME_PADDING.bottom}]`,
-                    'elk.nodeSize.constraints': 'MINIMUM_SIZE',
-                    'elk.nodeSize.minimum': `(${frame.minWidth}, 40)`,
-                },
-            },
-        ])
-    )
+}
+
+/** Each node goes into the deepest open frame that holds it, and each frame into its parent frame. */
+function assignFrameChildren(
+    root: ElkNode,
+    sizes: Record<string, NodeSize>,
+    edges: VisibleEdge[],
+    frames: PathFrameSpec[]
+): void {
+    const containers = new Map(frames.map((frame) => [frame.id, elkFrame(frame)]))
     const deepestFirst = [...frames].sort((a, b) => frameDepth(frames, b) - frameDepth(frames, a))
     const ownerOf = (id: string): ElkNode => {
         const frame = deepestFirst.find((candidate) => candidate.memberIds.includes(id))
@@ -189,6 +180,23 @@ function buildElkGraph(
         const parent = (frame.parentId && containers.get(frame.parentId)) || root
         parent.children?.push(containers.get(frame.id) as ElkNode)
     })
+}
+
+function buildElkGraph(
+    sizes: Record<string, NodeSize>,
+    edges: VisibleEdge[],
+    labels: Record<string, string | undefined>,
+    frames: PathFrameSpec[]
+): ElkNode {
+    const root: ElkNode = {
+        id: 'root',
+        layoutOptions: elkRootOptions(frames.length > 0),
+        children: [],
+        edges: edges
+            .filter((edge) => sizes[edge.source] && sizes[edge.target])
+            .map((edge) => elkEdge(edge, labels[edge.id])),
+    }
+    assignFrameChildren(root, sizes, edges, frames)
     return root
 }
 

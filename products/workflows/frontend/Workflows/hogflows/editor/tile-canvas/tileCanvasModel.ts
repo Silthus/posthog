@@ -132,16 +132,30 @@ export function pathGroupId(edge: HogFlowEdge): string {
     return `path:${edge.from}:${edge.type}:${edge.index ?? ''}`
 }
 
+/** The steps only this path reaches before it joins the others, in the order people move through them. */
+function exclusivePathMembers(
+    workflow: FlowGraph,
+    entryId: string,
+    otherPaths: Set<string>[],
+    afterJoin: Set<string>
+): string[] {
+    return executionOrder(workflow, [entryId]).filter(
+        (id) => !afterJoin.has(id) && !otherPaths.some((reach) => reach.has(id))
+    )
+}
+
+function stepsAfterJoin(workflow: FlowGraph, outgoing: HogFlowEdge[], reaches: Set<string>[]): Set<string> {
+    const joinId = breadthFirstOrder(workflow, outgoing[0]?.to).find((id) => reaches.every((reach) => reach.has(id)))
+    return joinId ? reachableFrom(workflow, joinId) : new Set<string>()
+}
+
 function pathsOf(workflow: FlowGraph, splitAction: HogFlowAction): PathGroup[] {
     const outgoing = outgoingEdges(workflow, splitAction.id)
     const reaches = outgoing.map((edge) => reachableFrom(workflow, edge.to))
-    const joinId = breadthFirstOrder(workflow, outgoing[0]?.to).find((id) => reaches.every((reach) => reach.has(id)))
-    const afterJoin = joinId ? reachableFrom(workflow, joinId) : new Set<string>()
+    const afterJoin = stepsAfterJoin(workflow, outgoing, reaches)
     return outgoing.flatMap((edge, index) => {
         const otherPaths = reaches.filter((_, other) => other !== index)
-        const memberIds = executionOrder(workflow, [edge.to]).filter(
-            (id) => !afterJoin.has(id) && !otherPaths.some((reach) => reach.has(id))
-        )
+        const memberIds = exclusivePathMembers(workflow, edge.to, otherPaths, afterJoin)
         // A single step reads better on the canvas as itself than inside a group of one.
         if (memberIds.length < 2) {
             return []
@@ -243,28 +257,34 @@ export interface VisibleGraph {
     edges: VisibleEdge[]
 }
 
-export function computeVisibleGraph(
-    workflow: FlowGraph,
-    groups: PathGroup[],
-    openGroupIds: readonly string[]
-): VisibleGraph {
-    const stacks = collapsedPathStacks(groups, openGroupIds)
-    const frames = openPathFrames(groups, openGroupIds)
-    const stackOf = new Map(stacks.flatMap((group) => group.memberIds.map((id): [string, string] => [id, group.id])))
-    const shown = (id: string): string => stackOf.get(id) ?? id
-    const namedElsewhere = new Set([...stacks, ...frames].map((group) => edgeKey(group.entryEdge)))
-    const actionsById = new Map(workflow.actions.map((action) => [action.id, action]))
-    const actionOrder = workflowOrder(workflow)
-    const orderOf = (node: VisibleNode): number =>
-        actionOrder.get(node.kind === 'step' ? node.id : node.group.memberIds[0]) ?? 0
+interface Collapsed {
+    stackOf: Map<string, string>
+    namedElsewhere: Set<string>
+    actionsById: Map<string, HogFlowAction>
+}
 
-    const nodes: VisibleNode[] = [
+function visibleNodes(workflow: FlowGraph, stacks: PathGroup[], { stackOf }: Collapsed): VisibleNode[] {
+    const order = workflowOrder(workflow)
+    const orderOf = (node: VisibleNode): number =>
+        order.get(node.kind === 'step' ? node.id : node.group.memberIds[0]) ?? 0
+    return [
         ...workflow.actions
             .filter((action) => !stackOf.has(action.id))
             .map((action): VisibleNode => ({ kind: 'step', id: action.id, action })),
         ...stacks.map((group): VisibleNode => ({ kind: 'stack', id: group.id, group })),
     ].sort((a, b) => orderOf(a) - orderOf(b))
+}
 
+function edgeLabel(workflow: FlowGraph, edge: HogFlowEdge, collapsed: Collapsed): string | undefined {
+    const isPathChoice = outgoingEdges(workflow, edge.from).length > 1
+    return isPathChoice && !collapsed.namedElsewhere.has(edgeKey(edge))
+        ? getWorkflowBranchLabel(collapsed.actionsById.get(edge.from), edge)
+        : undefined
+}
+
+/** Arrows that a collapsed path turns into the same arrow become one, which no step can be inserted into. */
+function mergeVisibleEdges(workflow: FlowGraph, collapsed: Collapsed): VisibleEdge[] {
+    const shown = (id: string): string => collapsed.stackOf.get(id) ?? id
     const edgesById = new Map<string, VisibleEdge>()
     workflow.edges.forEach((edge) => {
         const source = shown(edge.from)
@@ -280,34 +300,52 @@ export function computeVisibleGraph(
             existing.insertEdge = undefined
             return
         }
-        const isPathChoice = !fromStack && outgoingEdges(workflow, edge.from).length > 1
         edgesById.set(id, {
             id,
             source,
             target,
             portIndex: 0,
             portCount: 1,
-            label:
-                isPathChoice && !namedElsewhere.has(edgeKey(edge))
-                    ? getWorkflowBranchLabel(actionsById.get(edge.from), edge)
-                    : undefined,
+            label: fromStack ? undefined : edgeLabel(workflow, edge, collapsed),
             insertEdge: fromStack || target !== edge.to ? undefined : edge,
             originalEdgeKeys: [edgeKey(edge)],
         })
     })
+    return [...edgesById.values()]
+}
 
-    const edges = [...edgesById.values()]
-    new Set(edges.map((edge) => edge.source)).forEach((sourceId) => {
+/** Each arrow leaves its step from its own port, in path order, so the arrows of a split never cross. */
+function assignSourcePorts(workflow: FlowGraph, edges: VisibleEdge[]): VisibleEdge[] {
+    const bySource = new Map<string, VisibleEdge[]>()
+    edges.forEach((edge) => bySource.set(edge.source, [...(bySource.get(edge.source) ?? []), edge]))
+    bySource.forEach((fromSource, sourceId) => {
         const order = outgoingEdges(workflow, sourceId).map(edgeKey)
-        const fromSource = edges
-            .filter((edge) => edge.source === sourceId)
+        fromSource
             .sort((a, b) => order.indexOf(a.originalEdgeKeys[0]) - order.indexOf(b.originalEdgeKeys[0]))
-        fromSource.forEach((edge, index) => {
-            edge.portIndex = index
-            edge.portCount = fromSource.length
-        })
+            .forEach((edge, index) => {
+                edge.portIndex = index
+                edge.portCount = fromSource.length
+            })
     })
-    return { nodes, edges }
+    return edges
+}
+
+export function computeVisibleGraph(
+    workflow: FlowGraph,
+    groups: PathGroup[],
+    openGroupIds: readonly string[]
+): VisibleGraph {
+    const stacks = collapsedPathStacks(groups, openGroupIds)
+    const frames = openPathFrames(groups, openGroupIds)
+    const collapsed: Collapsed = {
+        stackOf: new Map(stacks.flatMap((group) => group.memberIds.map((id): [string, string] => [id, group.id]))),
+        namedElsewhere: new Set([...stacks, ...frames].map((group) => edgeKey(group.entryEdge))),
+        actionsById: new Map(workflow.actions.map((action) => [action.id, action])),
+    }
+    return {
+        nodes: visibleNodes(workflow, stacks, collapsed),
+        edges: assignSourcePorts(workflow, mergeVisibleEdges(workflow, collapsed)),
+    }
 }
 
 /** The people a step handled. Unknown until the metrics load, so the tile shows no number rather than a wrong one.
@@ -577,6 +615,22 @@ export interface NodeMotion {
     dy: number
 }
 
+function movingPathGroup(motion: CanvasMotion, groups: PathGroup[]): PathGroup | undefined {
+    return groups.find((candidate) => candidate.id === motion.groupId)
+}
+
+/** Steps fly out of the stack's tile when a path opens, and back into it when the path collapses. */
+function motionTowardStack(
+    motion: CanvasMotion,
+    box: { x: number; y: number; width: number; height: number }
+): NodeMotion {
+    return {
+        type: motion.kind === 'expand' ? 'enter' : 'leave',
+        dx: motion.origin.x - (box.x + box.width / 2),
+        dy: motion.origin.y - (box.y + box.height / 2),
+    }
+}
+
 export function nodeMotion(
     motion: CanvasMotion | null,
     node: VisibleNode,
@@ -589,15 +643,8 @@ export function nodeMotion(
     if (motion.kind === 'settle') {
         return node.id === motion.groupId ? { type: 'pop', dx: 0, dy: 0 } : undefined
     }
-    const group = groups.find((candidate) => candidate.id === motion.groupId)
-    if (!group || !isInPathGroup(group, node)) {
-        return undefined
-    }
-    return {
-        type: motion.kind === 'expand' ? 'enter' : 'leave',
-        dx: motion.origin.x - (box.x + box.width / 2),
-        dy: motion.origin.y - (box.y + box.height / 2),
-    }
+    const group = movingPathGroup(motion, groups)
+    return group && isInPathGroup(group, node) ? motionTowardStack(motion, box) : undefined
 }
 
 export function frameMotion(
