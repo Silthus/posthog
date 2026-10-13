@@ -158,40 +158,37 @@ describe('tileCanvasLogic', () => {
     })
 
     describe('typing anywhere', () => {
+        let scene: HTMLElement
+        let canvas: HTMLElement
+
         beforeEach(() => {
             initKeaTests()
             logic = tileCanvasLogic()
             logic.mount()
+            scene = document.body.appendChild(document.createElement('main'))
+            canvas = scene.appendChild(document.createElement('div'))
+            canvas.className = 'TileCanvas__flow'
         })
 
         afterEach(() => {
             document.body.innerHTML = ''
         })
 
-        const typeOn = (target: HTMLElement): void => {
-            target.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', bubbles: true }))
-        }
-
         it.each([
             { name: 'the page itself', place: (): HTMLElement => document.body, opens: true },
+            { name: 'the scene that holds the canvas', place: (): HTMLElement => scene, opens: true },
             {
                 name: 'the canvas',
-                place: (): HTMLElement => {
-                    const canvas = document.createElement('div')
-                    canvas.className = 'TileCanvas__flow'
-                    const pane = canvas.appendChild(document.createElement('div'))
-                    document.body.appendChild(canvas)
-                    return pane
-                },
+                place: (): HTMLElement => canvas.appendChild(document.createElement('div')),
                 opens: true,
             },
             {
                 name: 'a button in the step panel',
-                place: (): HTMLElement => document.body.appendChild(document.createElement('button')),
+                place: (): HTMLElement => scene.appendChild(document.createElement('button')),
                 opens: false,
             },
         ])('opens the command palette from a key typed on $name: $opens', ({ place, opens }) => {
-            typeOn(place())
+            place().dispatchEvent(new KeyboardEvent('keydown', { key: 'd', bubbles: true }))
 
             expect(logic.values.commandPaletteQuery).toBe(opens ? 'd' : null)
         })
