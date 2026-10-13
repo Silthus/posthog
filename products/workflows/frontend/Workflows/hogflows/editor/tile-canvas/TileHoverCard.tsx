@@ -1,11 +1,15 @@
+import { useRef } from 'react'
+
 import type { HogFlowAction } from '../../types'
 import { StepPreview } from './step-preview/StepPreview'
 import { StepCountLine } from './StepCountLine'
 import { StepFieldList } from './StepFieldList'
 import type { StepPresentationKind } from './stepPresentation'
 import { TILE_SIZE } from './tileCanvasLayout'
+import { FIT_MARGIN } from './tileCanvasModel'
 import { CAPTION_WIDTH, TileCaption } from './TileCaption'
 import { TileFace } from './TileFace'
+import { useKeepInView } from './useKeepInView'
 import type { TileStep } from './useTileStep'
 
 const PADDING = 14
@@ -51,12 +55,16 @@ export function TileHoverCard({
     const closedClip = `inset(${faceTop}px ${width - PADDING - face.width}px calc(100% - ${faceTop + face.height}px) ${PADDING}px round 12px)`
     const kind = tile.presentation.kind
     const showPreview = kind !== 'fields' && !(showEmail && kind === 'email')
+    const ref = useRef<HTMLDivElement>(null)
+    const shift = useKeepInView(ref, open, FIT_MARGIN.bottom)
     return (
         <div
-            className="absolute z-10 rounded-2xl border bg-surface-primary text-primary shadow-xl transition-[clip-path] ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
+            ref={ref}
+            className="absolute z-10 rounded-2xl border bg-surface-primary text-primary shadow-xl transition-[clip-path,transform] ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
             style={{
                 left: -PADDING,
                 top: -faceTop,
+                transform: `translate(${shift.x}px, ${shift.y}px)`,
                 width,
                 padding: PADDING,
                 borderColor: tile.color,

@@ -4,7 +4,8 @@ import type { Point } from './tileCanvasModel'
 
 const VIEW_MARGIN = 12
 
-export function useKeepInView(ref: RefObject<HTMLElement>, active: boolean): Point {
+/** Shifts a card back inside the canvas. `bottomMargin` keeps it clear of what floats over the canvas bottom. */
+export function useKeepInView(ref: RefObject<HTMLElement>, active: boolean, bottomMargin: number = VIEW_MARGIN): Point {
     const [shift, setShift] = useState<Point>({ x: 0, y: 0 })
     useEffect(() => {
         const card = ref.current
@@ -24,7 +25,7 @@ export function useKeepInView(ref: RefObject<HTMLElement>, active: boolean): Poi
                 const left = box.left - current.x * scale
                 const top = box.top - current.y * scale
                 const overRight = left + box.width - (canvas.right - VIEW_MARGIN)
-                const overBottom = top + box.height - (canvas.bottom - VIEW_MARGIN)
+                const overBottom = top + box.height - (canvas.bottom - bottomMargin)
                 const x = overRight > 0 ? -Math.min(overRight, left - canvas.left - VIEW_MARGIN) : 0
                 const y = overBottom > 0 ? -Math.min(overBottom, top - canvas.top - VIEW_MARGIN) : 0
                 const next = { x: x / scale, y: y / scale }
@@ -35,6 +36,6 @@ export function useKeepInView(ref: RefObject<HTMLElement>, active: boolean): Poi
         observer.observe(card)
         measure()
         return () => observer.disconnect()
-    }, [ref, active])
+    }, [ref, active, bottomMargin])
     return shift
 }
