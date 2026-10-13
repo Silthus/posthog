@@ -230,7 +230,10 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
     const headerInWorkflowBar = tileCanvasEnabled && isSavedWorkflow && activeTab === 'workflow'
 
     return (
-        <SceneContent className="h-full flex flex-col grow" data-attr="workflow-scene">
+        <SceneContent
+            className={clsx('h-full flex flex-col grow', headerInWorkflowBar && '@container/workflow-scene')}
+            data-attr="workflow-scene"
+        >
             <BindLogic logic={workflowLogic} props={workflowProps}>
                 <WorkflowSceneHeader {...props} headerInWorkflowBar={headerInWorkflowBar} />
                 <WorkflowEmailPauseBanner />
