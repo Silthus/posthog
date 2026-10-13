@@ -330,7 +330,7 @@ describe('workflowLogic email step "from" validation', () => {
     )
 
     const PUBLISH_STEP_ERROR =
-        'step \'Send email\': The email sender "hello@example.dev" is not verified yet. Verify its domain under Channels, or choose a verified sender.'
+        'The email sender "hello@example.dev" is not verified yet. Verify its domain under Channels, or choose a verified sender'
 
     it.each([1, 2])('allows saving %s staged pending senders while blocking publication', async (count) => {
         const live = makeWorkflow({ integrationId: 42 }, 'active')

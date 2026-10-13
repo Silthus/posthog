@@ -196,14 +196,14 @@ def _validate_email_sender_verified(from_value: dict, context: dict) -> None:
         sender = senders[integration_id]
         if sender is None:
             raise serializers.ValidationError(
-                {"input": "The email sender no longer exists. Choose a different sender for this step."}
+                {"input": "The email sender no longer exists. Choose a different sender for this step"}
             )
         config = sender.config or {}
         if config.get("verified") is not True:
             raise serializers.ValidationError(
                 {
                     "input": f'The email sender "{config.get("email") or ""}" is not verified yet. Verify its domain under '
-                    "Channels, or choose a verified sender."
+                    "Channels, or choose a verified sender"
                 }
             )
 

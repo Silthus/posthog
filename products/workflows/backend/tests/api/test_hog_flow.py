@@ -783,9 +783,11 @@ class TestHogFlowAPI(APIBaseTest):
         )
 
         assert enabled.status_code == 400, enabled.json()
-        detail = enabled.json()["detail"]
-        assert "step 'Welcome email'" in detail
-        assert 'The email sender "hello@example.dev" is not verified yet' in detail
+        assert enabled.json()["detail"] == (
+            "Can't enable this workflow. Fix step 'Welcome email': "
+            'The email sender "hello@example.dev" is not verified yet. '
+            "Verify its domain under Channels, or choose a verified sender and try again."
+        )
 
     def _create_live_email_workflow(self) -> tuple[str, Integration]:
         sync_template_to_db(_email_function_template())
@@ -877,13 +879,27 @@ class TestHogFlowAPI(APIBaseTest):
         assert response.status_code == 400, response.json()
         assert "not verified yet" in response.json()["detail"]
 
-    def test_publishing_a_staged_switch_to_a_pending_sender_is_rejected(self):
+    @parameterized.expand(
+        [
+            (
+                "pending",
+                False,
+                'The email sender "hello@example.dev" is not verified yet. '
+                "Verify its domain under Channels, or choose a verified sender",
+            ),
+            ("deleted", True, "The email sender no longer exists. Choose a different sender for this step"),
+        ]
+    )
+    def test_publishing_a_staged_switch_to_a_pending_sender_is_rejected(
+        self, _name: str, delete_sender: bool, expected_error: str
+    ) -> None:
         flow_url, integration = self._create_live_email_workflow()
-        actions = self._actions_sending_from(
-            self.client.get(flow_url).json()["actions"], self._create_unverified_sender().id
-        )
+        pending_sender = self._create_unverified_sender()
+        actions = self._actions_sending_from(self.client.get(flow_url).json()["actions"], pending_sender.id)
         staged = self.client.patch(flow_url, {"actions": actions, "stage_draft": True})
         assert staged.status_code == 200, staged.json()
+        if delete_sender:
+            pending_sender.delete()
         preview = self.client.post(f"{flow_url}/publish", {"confirm": False})
         assert preview.status_code == 200, preview.json()
 
@@ -892,7 +908,7 @@ class TestHogFlowAPI(APIBaseTest):
         )
 
         assert published.status_code == 400, published.json()
-        assert 'The email sender "hello@example.dev" is not verified yet' in published.json()["detail"]
+        assert published.json()["detail"] == expected_error
         live_from = HogFlow.objects.get(pk=flow_url.rsplit("/", 1)[1]).actions[1]["config"]["inputs"]["email"]
         assert live_from["value"]["from"]["integrationId"] == integration.id
 
