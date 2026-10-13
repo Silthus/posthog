@@ -106,3 +106,15 @@
         transition: none;
     }
 }
+
+// React Flow focuses the node wrapper, whose box spans the tile and its caption, so the default
+// outline draws a square around both. The ring goes on the tile face instead.
+.TileCanvas .react-flow__node:focus-visible {
+    outline: none;
+}
+
+.TileCanvas .react-flow__node:focus-visible [data-tile-anchor] {
+    border-radius: 14px;
+    outline: 2px solid var(--color-text-tertiary);
+    outline-offset: 3px;
+}
