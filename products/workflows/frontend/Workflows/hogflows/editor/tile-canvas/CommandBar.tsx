@@ -35,13 +35,15 @@ export function CommandBar(): JSX.Element {
                 ref={triggerRef}
                 data-attr="workflow-tile-command-bar"
                 onClick={() => (commandPaletteQuery !== null ? closeCommandPalette() : openCommandPalette())}
-                className="flex w-105 cursor-pointer items-center gap-2 rounded-full border bg-surface-primary px-3 py-2 text-left text-sm shadow-lg hover:border-[var(--color-accent)]"
+                className="flex w-105 max-w-[calc(100cqw-7rem)] cursor-pointer items-center gap-2 rounded-full border bg-surface-primary px-3 py-2 text-left text-sm shadow-lg hover:border-[var(--color-accent)]"
             >
-                <span className="flex size-6 items-center justify-center rounded-full bg-[var(--color-accent)] text-white">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-white">
                     <IconPlus />
                 </span>
-                <span className="flex-1 text-secondary">Add a step or run a command…</span>
-                <span className="rounded border px-1.5 text-[11px] text-secondary">Type anywhere</span>
+                <span className="min-w-0 flex-1 truncate text-secondary">Add a step or run a command…</span>
+                <span className="shrink-0 rounded border px-1.5 text-[11px] text-secondary @max-[32rem]/tile-canvas:hidden">
+                    Type anywhere
+                </span>
             </button>
         </div>
     )

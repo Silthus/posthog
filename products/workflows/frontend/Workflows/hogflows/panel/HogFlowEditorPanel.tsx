@@ -78,7 +78,7 @@ export function HogFlowEditorPanel({
                 layout === 'panel' &&
                     'relative h-full shrink-0 bg-surface-primary @max-[48rem]/workflow-editor:border-t',
                 layout === 'docked' &&
-                    'relative h-full max-w-[70%] shrink-0 border-l bg-surface-primary @max-[48rem]/workflow-editor:border-t @max-[48rem]/workflow-editor:border-l-0'
+                    'relative h-full min-w-80 max-w-[calc(100%-30rem)] shrink-0 border-l bg-surface-primary @max-[48rem]/workflow-editor:border-t @max-[48rem]/workflow-editor:border-l-0'
             )}
             style={
                 layout === 'panel'

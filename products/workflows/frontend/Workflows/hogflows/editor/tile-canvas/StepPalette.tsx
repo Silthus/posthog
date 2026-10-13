@@ -83,7 +83,7 @@ export function StepPalette({
     return (
         <div
             ref={rootRef}
-            className="flex w-95 flex-col overflow-hidden rounded-lg border bg-surface-primary shadow-xl"
+            className="flex w-95 max-w-[calc(100cqw-2rem)] flex-col overflow-hidden rounded-lg border bg-surface-primary shadow-xl"
             data-attr="workflow-step-palette"
             onKeyDown={(event) => {
                 if (event.key === 'ArrowDown') {
