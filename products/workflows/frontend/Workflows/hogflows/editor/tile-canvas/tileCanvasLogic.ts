@@ -52,6 +52,21 @@ export type StepAddSource = 'palette' | 'command bar' | 'quick add'
 const PATH_LEAVE_MS = 260
 const PATH_MOTION_MS = 1100
 
+/** Where steps fly out of when a path opens: the middle of the stack's tile. */
+function stackOrigin(layout: CanvasLayout | null, sizes: Record<string, NodeSize> | null, groupId: string): Point {
+    const position = layout?.positions[groupId]
+    const size = sizes?.[groupId]
+    return position
+        ? { x: position.x + (size?.anchor?.x ?? (size?.width ?? 0) / 2), y: position.y + (size?.anchor?.y ?? 0) }
+        : { x: 0, y: 0 }
+}
+
+/** Where steps fly back to when a path collapses: the top of its open frame, where the stack will be. */
+function frameOrigin(layout: CanvasLayout | null, group: PathGroup): Point {
+    const box = layout?.frames[frameId(group)]
+    return box ? { x: box.x + box.width / 2, y: box.y + 40 } : { x: 0, y: 0 }
+}
+
 function captureStepAdded(source: StepAddSource, stepType: string): void {
     posthog.capture('workflows tile canvas step added', { source, step_type: stepType })
 }
@@ -527,26 +542,12 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         ],
     }),
     listeners(({ actions, values, cache }) => {
-        const animate = (motion: CanvasMotion): void => {
+        const beginPathMotion = (motion: CanvasMotion): void => {
             actions.setMotion(motion)
             cache.disposables.add(() => {
                 const timer = window.setTimeout(() => actions.setMotion(null), PATH_MOTION_MS)
                 return () => window.clearTimeout(timer)
             }, 'motion')
-        }
-        const stackOrigin = (groupId: string): Point => {
-            const position = values.layout?.positions[groupId]
-            const size = values.measuredSizes?.[groupId]
-            return position
-                ? {
-                      x: position.x + (size?.anchor?.x ?? (size?.width ?? 0) / 2),
-                      y: position.y + (size?.anchor?.y ?? 0),
-                  }
-                : { x: 0, y: 0 }
-        }
-        const frameOrigin = (group: PathGroup): Point => {
-            const box = values.layout?.frames[frameId(group)]
-            return box ? { x: box.x + box.width / 2, y: box.y + 40 } : { x: 0, y: 0 }
         }
         const capturePathToggled = (change: 'opened' | 'collapsed', groupId: string): void => {
             const depth = values.pathGroups.find((group) => group.id === groupId)?.depth ?? 0
@@ -560,6 +561,35 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 actions.stopCopyingNode()
             }
         }
+        /** A step that was just added or picked elsewhere must not stay hidden inside a stack. */
+        const revealContainingPaths = (actionId: string): void => {
+            const isHidden = collapsedPathStacks(values.pathGroups, values.openPathIds).some((group) =>
+                group.memberIds.includes(actionId)
+            )
+            if (!isHidden) {
+                return
+            }
+            const containing = values.pathGroups.filter((group) => group.memberIds.includes(actionId))
+            const innermost = containing.reduce((deepest, group) => (group.depth > deepest.depth ? group : deepest))
+            actions.setOpenPathIds([...new Set([...values.openPathIds, ...containing.map((group) => group.id)])])
+            actions.focusPathAfterLayout(innermost.id)
+        }
+        const placeExistingStep = (edge: HogFlowEdge): void => {
+            const dropzone = values.dropzoneNodes.find((zone) => zone.data.edge.id === edgeKey(edge))
+            if (!dropzone) {
+                return
+            }
+            actions.setHighlightedDropzoneNodeId(dropzone.id)
+            if (values.isMovingNode) {
+                actions.moveNodeToHighlightedDropzone()
+            } else {
+                actions.copyNodeToHighlightedDropzone()
+            }
+        }
+        const placeNewStep = (edge: HogFlowEdge, step: CreateActionType | HogFlowActionNode): void => {
+            actions.onDrop(undefined, edge)
+            captureStepAdded(values.placingSource, 'data' in step ? step.data.type : step.type)
+        }
         return {
             activateNode: ({ nodeId }) => {
                 const node = values.visibleGraph.nodes.find((candidate) => candidate.id === nodeId)
@@ -571,7 +601,11 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             },
             openPath: ({ groupId }) => {
                 capturePathToggled('opened', groupId)
-                animate({ kind: 'expand', groupId, origin: stackOrigin(groupId) })
+                beginPathMotion({
+                    kind: 'expand',
+                    groupId,
+                    origin: stackOrigin(values.layout, values.measuredSizes, groupId),
+                })
                 actions.setOpenPathIds([...values.openPathIds, groupId])
             },
             collapsePath: ({ groupId }) => {
@@ -579,13 +613,13 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 if (!group) {
                     return
                 }
-                const origin = frameOrigin(group)
+                const origin = frameOrigin(values.layout, group)
                 capturePathToggled('collapsed', groupId)
-                animate({ kind: 'collapse', groupId, origin })
+                beginPathMotion({ kind: 'collapse', groupId, origin })
                 cache.disposables.add(() => {
                     const timer = window.setTimeout(() => {
                         actions.setOpenPathIds(values.openPathIds.filter((id) => id !== groupId))
-                        animate({ kind: 'settle', groupId, origin })
+                        beginPathMotion({ kind: 'settle', groupId, origin })
                     }, PATH_LEAVE_MS)
                     return () => window.clearTimeout(timer)
                 }, `collapse:${groupId}`)
@@ -599,22 +633,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                     actions.revealStep(selectedNodeId, values.stepMenuActionId !== selectedNodeId)
                 }
             },
-            revealStep: ({ actionId }) => {
-                // A step that was just added or picked elsewhere must not stay hidden inside a stack.
-                const isHidden = collapsedPathStacks(values.pathGroups, values.openPathIds).some((group) =>
-                    group.memberIds.includes(actionId)
-                )
-                if (isHidden) {
-                    const containing = values.pathGroups.filter((group) => group.memberIds.includes(actionId))
-                    const innermost = containing.reduce((deepest, group) =>
-                        group.depth > deepest.depth ? group : deepest
-                    )
-                    actions.setOpenPathIds([
-                        ...new Set([...values.openPathIds, ...containing.map((group) => group.id)]),
-                    ])
-                    actions.focusPathAfterLayout(innermost.id)
-                }
-            },
+            revealStep: ({ actionId }) => revealContainingPaths(actionId),
             startPlacing: ({ step }) => {
                 dropPendingMoveOrCopy()
                 actions.setNodeToBeAdded(step)
@@ -627,21 +646,9 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             },
             placeAt: ({ edge }) => {
                 if (values.isMovingNode || values.isCopyingNode) {
-                    const dropzone = values.dropzoneNodes.find((zone) => zone.data.edge.id === edgeKey(edge))
-                    if (!dropzone) {
-                        return
-                    }
-                    actions.setHighlightedDropzoneNodeId(dropzone.id)
-                    if (values.isMovingNode) {
-                        actions.moveNodeToHighlightedDropzone()
-                    } else {
-                        actions.copyNodeToHighlightedDropzone()
-                    }
+                    placeExistingStep(edge)
                 } else if (values.nodeToBeAdded) {
-                    const stepType =
-                        'data' in values.nodeToBeAdded ? values.nodeToBeAdded.data.type : values.nodeToBeAdded.type
-                    actions.onDrop(undefined, edge)
-                    captureStepAdded(values.placingSource, stepType)
+                    placeNewStep(edge, values.nodeToBeAdded)
                 }
             },
             openStepMenu: ({ actionId }) => {
