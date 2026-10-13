@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom'
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useValues } from 'kea'
+import posthog from 'posthog-js'
 
 import { NativeEmailIntegrationChoice } from './NativeEmailIntegrationChoice'
 
@@ -17,6 +18,10 @@ jest.mock('kea', () => ({
     useActions: () => ({ chooseSenders: jest.fn() }),
 }))
 
+jest.mock('products/workflows/frontend/Channels/EmailSetup/EmailSetupModal', () => ({
+    EmailSetupModal: () => <div>Configure email sender</div>,
+}))
+
 jest.mock('@posthog/lemon-ui', () => ({
     ...jest.requireActual('@posthog/lemon-ui'),
     LemonInputSelect: () => <div data-attr="multiple-email-sender-select" />,
@@ -24,8 +29,18 @@ jest.mock('@posthog/lemon-ui', () => ({
 }))
 
 const OWN_SENDERS = [
-    { id: 1, kind: 'email', display_name: 'Alice <alice@example.com>' },
-    { id: 2, kind: 'email', display_name: 'Bob <bob@example.com>' },
+    {
+        id: 1,
+        kind: 'email',
+        display_name: 'Alice <alice@example.com>',
+        config: { email: 'alice@example.com', verified: true },
+    },
+    {
+        id: 2,
+        kind: 'email',
+        display_name: 'Bob <bob@example.com>',
+        config: { email: 'bob@example.dev', verified: false },
+    },
 ]
 const SANDBOX_SENDER = { id: 7, kind: 'email', display_name: 'Acme via PostHog <sandbox@example.com>' }
 
@@ -119,5 +134,25 @@ describe('NativeEmailIntegrationChoice', () => {
 
         expect(screen.getByText('Could not load your senders.')).toBeInTheDocument()
         expect(screen.getByText('Connect email sender').closest('a')).toHaveAttribute('href', '/workflows/channels')
+    })
+
+    it.each([
+        ['an unverified sender', 2, true],
+        ['a verified sender', 1, false],
+    ])('asks to verify the domain under the sender for %s', (_name, integrationId, expectsNotice) => {
+        render(<NativeEmailIntegrationChoice label="From" value={{ integrationId }} onChange={jest.fn()} />)
+
+        expect(!!screen.queryByText("bob@example.dev can't send until its domain is verified.")).toBe(expectsNotice)
+        expect(screen.queryAllByText('Verify sender').length > 0).toBe(expectsNotice)
+    })
+
+    it('opens the sender setup and records where verification started', () => {
+        const capture = jest.spyOn(posthog, 'capture').mockClear()
+        render(<NativeEmailIntegrationChoice label="From" value={{ integrationId: 2 }} onChange={jest.fn()} />)
+
+        fireEvent.click(screen.getAllByText('Verify sender')[0])
+
+        expect(screen.getByText('Configure email sender')).toBeInTheDocument()
+        expect(capture).toHaveBeenCalledWith('workflows verify sender clicked', { source: 'sender_field' })
     })
 })

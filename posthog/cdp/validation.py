@@ -177,6 +177,37 @@ def _validate_not_posthog_connection(integration_ids: list[int], context: dict) 
         )
 
 
+def _sending_integration_ids(from_value: dict) -> set[int]:
+    rotation = _sender_integration_ids({"integrationIds": from_value.get("integrationIds")})
+    return rotation or _sender_integration_ids({"integrationId": from_value.get("integrationId")})
+
+
+def _validate_email_sender_verified(from_value: dict, context: dict) -> None:
+    get_team = context.get("get_team")
+    if not context.get("require_verified_email_sender") or get_team is None:
+        return
+    new_sender_ids = _sending_integration_ids(from_value) - _sending_integration_ids(
+        context.get("live_email_from") or {}
+    )
+    if not new_sender_ids:
+        return
+    senders = _email_integrations(new_sender_ids, context)
+    for integration_id in sorted(new_sender_ids):
+        sender = senders[integration_id]
+        if sender is None:
+            raise serializers.ValidationError(
+                {"input": "The email sender no longer exists. Choose a different sender for this step"}
+            )
+        config = sender.config or {}
+        if config.get("verified") is not True:
+            raise serializers.ValidationError(
+                {
+                    "input": f'The email sender "{config.get("email") or ""}" is not verified yet. Verify its domain under '
+                    "Channels, or choose a verified sender"
+                }
+            )
+
+
 def _validate_email_sender_override(from_value: dict, context: dict) -> None:
     """Reject a literal custom sender address the send path would refuse.
 
@@ -931,6 +962,7 @@ class InputsItemSerializer(serializers.Serializer):
                         )
 
                 _validate_email_sender_override(from_value, self.context)
+                _validate_email_sender_verified(from_value, self.context)
 
             if isinstance(value.get("html"), str) and value["html"] and not value.get("design"):
                 # Programmatically authored emails often supply html without a design, which the

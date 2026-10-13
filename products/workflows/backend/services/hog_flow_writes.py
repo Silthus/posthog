@@ -294,6 +294,7 @@ def update_workflow(
     base_live_updated_at: Optional[str],
     includes_staged_draft: bool,
     validated_status: str,
+    validate_live: Callable[[WorkflowEditState], dict] | None = None,
 ) -> WorkflowWriteResult:
     # Optimistic concurrency: a client may send the `updated_at` it last loaded as `base_updated_at`.
     # If the stored row is strictly newer, another channel (a second UI tab, MCP, or the API) wrote in
@@ -354,6 +355,8 @@ def update_workflow(
                     raise WorkflowStale()
                 _save_live(instance, remaining)
         else:
+            if validate_live is not None:
+                validated_data = validate_live(to_edit_state(before_update))
             validated_data = _derive_from_locked_graph(before_update, validated_data)
             _refresh_action_redirects(instance, before_update, validated_data.get("actions"))
             bump = _stage_revision_bump(instance, before_update, validated_data)

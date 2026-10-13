@@ -79,12 +79,13 @@ export interface emailSetupModalLogicValues {
     emailSenderTouched: boolean
     emailSenderTouches: Record<string, boolean>
     emailSenderValidationErrors: DeepPartialMap<EmailSenderFormType, ValidationErrorType>
+    finishAfterSave: boolean
     isDomainVerified: boolean
     isEmailSenderSubmitting: boolean
     isEmailSenderValid: boolean
     savedIntegration: IntegrationType | null
     showEmailSenderErrors: boolean
-    verification: any
+    verification: EmailSenderDomainStatus | null
     verificationLoading: boolean
 }
 
@@ -93,6 +94,9 @@ export interface emailSetupModalLogicActions {
     loadIntegrations: (_?: any) => any // integrationsLogic
     resetEmailSender: (values?: EmailSenderFormType) => {
         values?: EmailSenderFormType
+    }
+    saveAndFinish: () => {
+        value: true
     }
     setEmailSenderManualErrors: (errors: Record<string, any>) => {
         errors: Record<string, any>
@@ -140,12 +144,12 @@ export interface emailSetupModalLogicActions {
         errorObject?: any
     }
     verifyDomainSuccess: (
-        verification: EmailSenderDomainStatus | undefined,
+        verification: EmailSenderDomainStatus | null,
         payload?: {
             value: true
         }
     ) => {
-        verification: EmailSenderDomainStatus | undefined
+        verification: EmailSenderDomainStatus | null
         payload?: {
             value: true
         }
@@ -156,9 +160,12 @@ export interface emailSetupModalLogicActions {
 export interface emailSetupModalLogicMeta {
     key: string
     __keaTypeGenInternalSelectorTypes: {
-        dnsRecords: (verification: any, savedIntegration: IntegrationType | null) => DnsRecord[]
+        dnsRecords: (
+            verification: EmailSenderDomainStatus | null,
+            savedIntegration: IntegrationType | null
+        ) => DnsRecord[]
         domain: (emailSender: EmailSenderFormType) => string
-        isDomainVerified: (verification: any) => boolean
+        isDomainVerified: (verification: EmailSenderDomainStatus | null) => boolean
     }
 }
 
@@ -180,12 +187,26 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
     actions({
         setSavedIntegration: (integration: IntegrationType | null) => ({ integration }),
         verifyDomain: true,
+        saveAndFinish: true,
     }),
     reducers({
+        finishAfterSave: [
+            false,
+            {
+                saveAndFinish: () => true,
+                submitEmailSenderFailure: () => false,
+            },
+        ],
         savedIntegration: [
             null as IntegrationType | null,
             {
                 setSavedIntegration: (_, { integration }) => integration || null,
+            },
+        ],
+        verification: [
+            null as EmailSenderDomainStatus | null,
+            {
+                verifyDomainFailure: () => null,
             },
         ],
     }),
@@ -230,7 +251,9 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
                     }
                     actions.loadIntegrations()
                     actions.setSavedIntegration(integration)
-                    actions.verifyDomain()
+                    if (!values.finishAfterSave) {
+                        actions.verifyDomain()
+                    }
                     return config
                 } catch (error) {
                     if (error instanceof ApiError || (error && typeof error === 'object' && 'detail' in error)) {
@@ -247,6 +270,7 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
                 if (values.savedIntegration) {
                     return api.integrations.verifyEmail(values.savedIntegration.id)
                 }
+                return null
             },
         },
     })),
@@ -280,12 +304,27 @@ export const emailSetupModalLogic = kea<emailSetupModalLogicType>([
             },
         ],
     }),
-    listeners(({ actions }) => ({
+    listeners(({ actions, asyncActions, props, values }) => ({
         verifyDomainSuccess: ({ verification }) => {
             if (verification?.status === 'success') {
                 actions.loadIntegrations()
                 // Verifying the first sender makes it the project default on the server.
                 teamLogic.findMounted()?.actions.loadCurrentTeam()
+            }
+        },
+        saveAndFinish: () => {
+            actions.submitEmailSender()
+        },
+        submitEmailSenderSuccess: async () => {
+            if (!values.finishAfterSave) {
+                return
+            }
+            const integrationId = values.savedIntegration?.id
+            await asyncActions.verifyDomain()
+            if (values.isDomainVerified) {
+                props.onComplete(integrationId)
+            } else {
+                props.onClose(integrationId)
             }
         },
     })),
