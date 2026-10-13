@@ -903,6 +903,23 @@ describe('workflowsSavedViewsLogic', () => {
         expect(logic.values.myWorkflowsDeleted).toBe(true)
     })
 
+    it('offers to restore My workflows when reset finds it deleted by someone else', async () => {
+        useMocks({
+            patch: { '/api/projects/:team_id/workflow_views/:id/': () => [409, { detail: 'Conflict.' }] },
+            get: { '/api/projects/:team_id/workflow_views/:id/': () => [404, { detail: 'Not found.' }] },
+        })
+        router.actions.push(urls.workflows(), { view: myWorkflows.id })
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+        await logic.asyncActions.renameView(myWorkflows.id, 'Mine')
+
+        await logic.asyncActions.resetView()
+
+        expect(logic.values.views.some((view) => view.id === myWorkflows.id)).toBe(false)
+        expect(logic.values.myWorkflowsDeleted).toBe(true)
+    })
+
     it('restores the deletable My workflows view from its original default state after reload', async () => {
         let tombstone = myWorkflows
         let restores = 0

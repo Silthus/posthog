@@ -554,13 +554,16 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                 )
             )
         }
-        const forgetDeletedView = (id: string): void => {
+        const removeDeletedView = (id: string): void => {
             actions.removeSavedView(id)
-            if (values.conflictedViewId === id) {
-                actions.setConflictedViewId(null)
-            }
             if (values.defaultView?.id === id) {
                 actions.setDefaultView({ ...values.defaultView, deleted: true })
+            }
+        }
+        const forgetDeletedView = (id: string): void => {
+            removeDeletedView(id)
+            if (values.conflictedViewId === id) {
+                actions.setConflictedViewId(null)
             }
             if (values.activeViewId === id) {
                 actions.setAddedFilters(values.value.filters)
@@ -692,7 +695,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                                 if (!stillCurrent()) {
                                     return
                                 }
-                                actions.removeSavedView(currentViewId)
+                                removeDeletedView(currentViewId)
                                 if (values.activeViewId === currentViewId) {
                                     clearAddedFiltersUnless(keepAddedFilters)
                                     actions.applyView(BUILT_IN_WORKFLOW_VIEWS[0])
