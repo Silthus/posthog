@@ -507,6 +507,14 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             const box = values.layout?.frames[frameId(group)]
             return box ? { x: box.x + box.width / 2, y: box.y + 40 } : { x: 0, y: 0 }
         }
+        const dropPendingMoveOrCopy = (): void => {
+            if (values.isMovingNode) {
+                actions.stopMovingNode()
+            }
+            if (values.isCopyingNode) {
+                actions.stopCopyingNode()
+            }
+        }
         return {
             openPath: ({ groupId }) => {
                 animate({ kind: 'expand', groupId, origin: stackOrigin(groupId) })
@@ -549,9 +557,11 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 }
             },
             startPlacing: ({ step }) => {
+                dropPendingMoveOrCopy()
                 actions.setNodeToBeAdded(step)
             },
             addStepAt: ({ step, edge }) => {
+                dropPendingMoveOrCopy()
                 actions.setNodeToBeAdded(step)
                 actions.onDrop(undefined, edge)
             },
@@ -602,12 +612,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             cancel: () => {
                 actions.setSelectedNodeId(null)
                 actions.setNodeToBeAdded(null)
-                if (values.isMovingNode) {
-                    actions.stopMovingNode()
-                }
-                if (values.isCopyingNode) {
-                    actions.stopCopyingNode()
-                }
+                dropPendingMoveOrCopy()
             },
             setMeasuredSizes: async ({ sizes }, breakpoint) => {
                 await breakpoint(10)

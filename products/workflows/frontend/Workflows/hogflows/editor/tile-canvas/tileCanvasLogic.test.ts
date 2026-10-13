@@ -7,6 +7,7 @@ import { initKeaTests } from '~/test/init'
 
 import { workflowLogic } from '../../../workflowLogic'
 import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
+import type { HogFlowActionNode } from '../../types'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import { stepCount } from './tileCanvasModel'
 
@@ -87,6 +88,31 @@ describe('tileCanvasLogic', () => {
                 selectedNodeId: stepId,
             })
         })
+    })
+
+    describe('placing a step', () => {
+        const delayStep = { type: 'delay', name: 'Delay', description: '', config: { delay_duration: '1h' } } as const
+
+        beforeEach(() => {
+            initKeaTests()
+            logic = tileCanvasLogic()
+            logic.mount()
+        })
+
+        it.each(['startMovingNode', 'startCopyingNode'] as const)(
+            'drops a pending %s when someone starts adding a step',
+            async (startPending) => {
+                const editorLogic = hogFlowEditorLogic()
+                const pendingNode = { id: 'exit_node', data: logic.values.workflow.actions[1] } as HogFlowActionNode
+                editorLogic.actions[startPending](pendingNode)
+
+                await expectLogic(logic, () => logic.actions.startPlacing(delayStep)).toMatchValues({
+                    isMovingNode: false,
+                    isCopyingNode: false,
+                    nodeToBeAdded: delayStep,
+                })
+            }
+        )
     })
 
     describe('step counts', () => {
