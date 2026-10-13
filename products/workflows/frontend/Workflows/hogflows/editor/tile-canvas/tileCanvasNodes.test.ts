@@ -44,4 +44,15 @@ describe('keepUnchangedNodes', () => {
         expect(after.map((node, index) => node === before[index])).toEqual([false, false])
         expect(moved.map((node, index) => node === before[index])).toEqual([true, false])
     })
+
+    it('tells React Flow the size of each tile, so a replaced tile stays visible', () => {
+        const sizes = { a: { width: 306, height: 84 }, b: { width: 306, height: 120 } }
+
+        const nodes = buildCanvasNodes(layoutWith(120), [], graph, { ...state, sizes })
+
+        expect(nodes.map((node) => node.measured)).toEqual([
+            { width: 306, height: 84 },
+            { width: 306, height: 120 },
+        ])
+    })
 })

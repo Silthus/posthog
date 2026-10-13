@@ -104,7 +104,9 @@ function tileNode(node: VisibleNode, layout: CanvasLayout, state: CanvasNodeStat
         countOf: state.countOf,
         templateNameOf: state.templateNameOf,
     }
-    return [{ id: node.id, type: 'tile', position, data, ...STATIC }]
+    // React Flow hides a replaced node until it measures it again, unless the node says its size.
+    const measured = size && { width: size.width, height: size.height }
+    return [{ id: node.id, type: 'tile', position, data, measured, ...STATIC }]
 }
 
 export function buildCanvasNodes(
