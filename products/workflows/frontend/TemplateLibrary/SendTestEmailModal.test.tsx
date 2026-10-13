@@ -96,6 +96,10 @@ describe('SendTestEmailModal', () => {
             await expectLogic(integrationsLogic).toFinishAllListeners()
             await waitFor(() => expect(screen.getByText(detail)).toBeInTheDocument())
             expect(screen.queryByText('No email senders configured yet')).not.toBeInTheDocument()
+            expect(screen.getByText('Connect email sender').closest('a')).toHaveAttribute(
+                'href',
+                '/project/997/workflows/channels'
+            )
             status = 200
             fireEvent.click(screen.getAllByText('Try again')[0])
             await waitFor(() => expect(requests).toBe(2))
@@ -103,7 +107,11 @@ describe('SendTestEmailModal', () => {
             expect(screen.queryByText(detail)).not.toBeInTheDocument()
             logic.actions.setRecipientEmail('outside@example.com')
             await waitFor(() =>
-                expect(screen.getByText(/isn't a verified member of your organization/)).toBeInTheDocument()
+                expect(
+                    screen.getByText(
+                        /isn't among the verified members you can see\. The sandbox sender may not deliver to it\. Add your own sender to email anyone\./
+                    )
+                ).toBeInTheDocument()
             )
         }
     )
@@ -120,6 +128,10 @@ describe('SendTestEmailModal', () => {
         openModal()
         await waitFor(() => expect(screen.getByText(detail)).toBeInTheDocument())
         expect(screen.queryByText('No email senders configured yet')).not.toBeInTheDocument()
+        expect(screen.getByText('Connect email sender').closest('a')).toHaveAttribute(
+            'href',
+            '/project/997/workflows/channels'
+        )
         status = 200
         fireEvent.click(screen.getAllByText('Try again')[0])
         await expectLogic(integrationsLogic).toFinishAllListeners()

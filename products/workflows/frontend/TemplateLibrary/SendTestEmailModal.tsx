@@ -127,7 +127,7 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
                             <span translate="no" className="break-all">
                                 {recipientEmail}
                             </span>{' '}
-                            isn't a verified member of your organization, so the sandbox sender won't deliver to it. Add
+                            isn't among the verified members you can see. The sandbox sender may not deliver to it. Add
                             your own sender to email anyone.
                         </LemonBanner>
                     )}
@@ -164,9 +164,9 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
                                 <span className="text-xs text-secondary">{SANDBOX_EMAIL_SENDER_NOTE}</span>
                             )}
                         </>
-                    ) : emailSendersError ? null : (
-                        <div className="flex gap-2 items-center">
-                            <span className="text-muted">No email senders configured yet</span>
+                    ) : (
+                        <div className="flex flex-wrap gap-2 items-center">
+                            {!emailSendersError && <span className="text-muted">No email senders configured yet</span>}
                             <LemonButton
                                 size="small"
                                 type="secondary"
