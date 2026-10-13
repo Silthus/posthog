@@ -19,7 +19,11 @@ import type { DragEvent, RefObject } from 'react'
 
 import { lemonToast } from '@posthog/lemon-ui'
 
-import { AppMetricsTotalsRequest, loadAppMetricsTotals } from 'lib/components/AppMetrics/appMetricsLogic'
+import {
+    AppMetricsTotalsRequest,
+    AppMetricsTotalsResponse,
+    loadAppMetricsTotals,
+} from 'lib/components/AppMetrics/appMetricsLogic'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { trackedActionToUrl } from 'lib/logic/scenes/trackedActionToUrl'
 import { uuid } from 'lib/utils/dom'
@@ -190,6 +194,47 @@ export type HogFlowEditorActionMetrics = {
     succeeded: number
     failed: number
     filtered: number
+}
+
+/** Turns metric totals broken down by step and metric into one entry per step. */
+export function actionMetricsFromTotals(
+    response: AppMetricsTotalsResponse
+): Record<string, HogFlowEditorActionMetrics> {
+    const res: Record<string, HogFlowEditorActionMetrics> = {}
+    Object.values(response).forEach((value) => {
+        let [instanceId, metricName] = value.breakdowns
+
+        if (!metricName) {
+            return
+        }
+
+        if (!instanceId) {
+            // TRICKY: Trigger and exit dont get their own metrics so we pull from the overall metrics
+            if (['succeeded', 'failed'].includes(metricName)) {
+                instanceId = EXIT_NODE_ID
+            } else if (['rate_limited', 'triggered'].includes(metricName)) {
+                instanceId = TRIGGER_NODE_ID
+                if (['rate_limited'].includes(metricName)) {
+                    metricName = 'failed'
+                }
+                if (['triggered'].includes(metricName)) {
+                    metricName = 'succeeded'
+                }
+            }
+        }
+
+        res[instanceId] = res[instanceId] || {
+            actionId: instanceId,
+            succeeded: 0,
+            failed: 0,
+            filtered: 0,
+        }
+        if (metricName in res[instanceId]) {
+            ;(res[instanceId] as any)[metricName] = value.total
+        }
+    })
+
+    return res
 }
 
 export type OutputMappingSuggestion = {
@@ -2463,41 +2508,7 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                     const response = await loadAppMetricsTotals(_params, timezone)
                     await breakpoint(10)
 
-                    const res: Record<string, HogFlowEditorActionMetrics> = {}
-                    Object.values(response).forEach((value) => {
-                        let [instanceId, metricName] = value.breakdowns
-
-                        if (!metricName) {
-                            return
-                        }
-
-                        if (!instanceId) {
-                            // TRICKY: Trigger and exit dont get their own metrics so we pull from the overall metrics
-                            if (['succeeded', 'failed'].includes(metricName)) {
-                                instanceId = EXIT_NODE_ID
-                            } else if (['rate_limited', 'triggered'].includes(metricName)) {
-                                instanceId = TRIGGER_NODE_ID
-                                if (['rate_limited'].includes(metricName)) {
-                                    metricName = 'failed'
-                                }
-                                if (['triggered'].includes(metricName)) {
-                                    metricName = 'succeeded'
-                                }
-                            }
-                        }
-
-                        res[instanceId] = res[instanceId] || {
-                            actionId: instanceId,
-                            succeeded: 0,
-                            failed: 0,
-                            filtered: 0,
-                        }
-                        if (metricName in res[instanceId]) {
-                            ;(res[instanceId] as any)[metricName] = value.total
-                        }
-                    })
-
-                    return res
+                    return actionMetricsFromTotals(response)
                 },
             },
         ],

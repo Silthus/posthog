@@ -9,7 +9,7 @@ import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
 
 import { workflowLogic } from '../../../workflowLogic'
 import { HogFlowEditor } from '../../HogFlowEditor'
-import { hogFlowEditorLogic, HogFlowEditorActionMetrics } from '../../hogFlowEditorLogic'
+import type { HogFlowEditorActionMetrics } from '../../hogFlowEditorLogic'
 import { createWorkflowEditorStoryDecorator } from '../workflowEditorStoryFixtures'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import {
@@ -44,16 +44,15 @@ function StoryState({
     openAllPaths?: boolean
 }): null {
     const { logicProps } = useValues(workflowLogic)
-    const { loadActionMetricsByIdSuccess } = useActions(hogFlowEditorLogic(logicProps))
-    const { toggleAllPaths } = useActions(tileCanvasLogic(logicProps))
+    const { loadStepCountsSuccess, toggleAllPaths } = useActions(tileCanvasLogic(logicProps))
     useEffect(() => {
         if (metrics) {
-            loadActionMetricsByIdSuccess(metrics)
+            loadStepCountsSuccess(metrics)
         }
         if (openAllPaths) {
             toggleAllPaths()
         }
-    }, [metrics, openAllPaths, loadActionMetricsByIdSuccess, toggleAllPaths])
+    }, [metrics, openAllPaths, loadStepCountsSuccess, toggleAllPaths])
     return null
 }
 

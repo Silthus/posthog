@@ -319,8 +319,7 @@ export function stepCount(
 }
 
 const STEP_COUNT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
-
-export type StepCountsRequest = Pick<AppMetricsTotalsRequest, 'appSource' | 'appSourceId' | 'dateFrom' | 'dateTo'>
+const STEP_COUNT_METRICS = ['succeeded', 'failed', 'filtered', 'rate_limited', 'triggered']
 
 /** Batch workflows report metrics per run, not per step, so they get no step counts. */
 function canCountSteps(workflow: Pick<HogFlow, 'id' | 'trigger'>): boolean {
@@ -335,7 +334,16 @@ export function countableStepMetrics(
     return canCountSteps(workflow) ? metrics : null
 }
 
-export function stepCountsRequest(workflow: Pick<HogFlow, 'id' | 'trigger'>, now: Date): StepCountsRequest | null {
+/** One row per step and metric, plus the trigger and exit rows that have no step. Without a limit the query
+ * stops at 100 rows, and a big workflow loses the counts of its last steps. */
+function stepCountRowLimit(workflow: Pick<HogFlow, 'actions'>): number {
+    return (workflow.actions.length + 1) * STEP_COUNT_METRICS.length
+}
+
+export function stepCountsRequest(
+    workflow: Pick<HogFlow, 'id' | 'trigger' | 'actions'>,
+    now: Date
+): AppMetricsTotalsRequest | null {
     if (!canCountSteps(workflow)) {
         return null
     }
@@ -344,6 +352,9 @@ export function stepCountsRequest(workflow: Pick<HogFlow, 'id' | 'trigger'>, now
         appSourceId: workflow.id,
         dateFrom: new Date(now.getTime() - STEP_COUNT_WINDOW_MS).toISOString(),
         dateTo: now.toISOString(),
+        breakdownBy: ['instance_id', 'metric_name'],
+        metricName: STEP_COUNT_METRICS,
+        limit: stepCountRowLimit(workflow),
     }
 }
 

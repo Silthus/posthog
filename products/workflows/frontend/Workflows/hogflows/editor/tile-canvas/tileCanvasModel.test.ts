@@ -349,12 +349,17 @@ describe('tileCanvasModel', () => {
 describe('stepCountsRequest', () => {
     const now = new Date('2026-10-13T12:00:00Z')
 
-    it('asks for the last seven days of a saved workflow', () => {
-        expect(stepCountsRequest({ id: 'flow-1', trigger: { type: 'event' } } as HogFlow, now)).toEqual({
+    it('asks for every step and metric of the last seven days of a saved workflow', () => {
+        const workflow = { id: 'flow-1', trigger: { type: 'event' }, actions: Array(40).fill(step('a')) } as HogFlow
+
+        expect(stepCountsRequest(workflow, now)).toEqual({
             appSource: 'hog_flow',
             appSourceId: 'flow-1',
             dateFrom: '2026-10-06T12:00:00.000Z',
             dateTo: '2026-10-13T12:00:00.000Z',
+            breakdownBy: ['instance_id', 'metric_name'],
+            metricName: ['succeeded', 'failed', 'filtered', 'rate_limited', 'triggered'],
+            limit: 205,
         })
     })
 
