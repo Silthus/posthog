@@ -188,6 +188,7 @@ describe('tileCanvasModel', () => {
         expect(stepCount(metrics, 'email')).toBe(50)
         expect(stepCount(metrics, 'delay')).toBe(0)
         expect(stepCount(null, 'email')).toBeUndefined()
+        expect(stepCount({}, 'email')).toBeUndefined()
     })
 })
 

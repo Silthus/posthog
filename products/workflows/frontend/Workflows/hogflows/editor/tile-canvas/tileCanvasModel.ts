@@ -228,12 +228,13 @@ export function computeVisibleGraph(
     return { nodes, edges }
 }
 
-/** The people a step handled. Unknown until the metrics load, so the tile shows no number rather than a wrong one. */
+/** The people a step handled. Unknown until the metrics load, so the tile shows no number rather than a wrong one.
+ * A workflow with no runs in the window shows no numbers either, so a draft is not covered in zeros. */
 export function stepCount(
     metrics: Record<string, HogFlowEditorActionMetrics> | null,
     actionId: string
 ): number | undefined {
-    if (!metrics) {
+    if (!metrics || Object.keys(metrics).length === 0) {
         return undefined
     }
     const entry = metrics[actionId]
