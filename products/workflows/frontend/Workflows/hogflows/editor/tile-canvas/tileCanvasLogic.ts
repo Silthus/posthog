@@ -1,10 +1,24 @@
-import { actions, afterMount, connect, kea, key, listeners, MakeLogicType, path, props, reducers, selectors } from 'kea'
+import {
+    actions,
+    afterMount,
+    connect,
+    isBreakpoint,
+    kea,
+    key,
+    listeners,
+    MakeLogicType,
+    path,
+    props,
+    reducers,
+    selectors,
+} from 'kea'
 import { loaders } from 'kea-loaders'
 import { subscriptions } from 'kea-subscriptions'
 import posthog from 'posthog-js'
 import type { DragEvent } from 'react'
 
 import { loadAppMetricsTotals } from 'lib/components/AppMetrics/appMetricsLogic'
+import { FEATURE_FLAGS } from 'lib/constants'
 import { FeatureFlagsSet, featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { objectsEqual } from 'lib/utils/objects'
 import { teamLogic } from 'scenes/teamLogic'
@@ -17,9 +31,11 @@ import {
     actionMetricsFromTotals,
     CreateActionType,
     HogFlowEditorActionMetrics,
+    HogFlowEditorLayout,
     HogFlowEditorMode,
     hogFlowEditorLogic,
 } from '../../hogFlowEditorLogic'
+import { isWorkflowTreeComplete } from '../../tree/workflowTree'
 import type { DropzoneNode, HogFlow, HogFlowActionNode, HogFlowEdge } from '../../types'
 import { destinationSteps, workflowStepSections } from '../../workflowStepCatalog'
 import {
@@ -134,6 +150,7 @@ export interface tileCanvasLogicValues {
     isPanelOpen: boolean
     isPlacing: boolean
     layout: CanvasLayout | null
+    layoutError: string | null
     measuredSizes: Record<string, NodeSize> | null
     motion: CanvasMotion | null
     panelMode: 'build' | 'logs' | 'metrics' | 'test' | 'variables' | 'history' | null
@@ -149,6 +166,7 @@ export interface tileCanvasLogicValues {
     countOf: StepCountOf
     templateNameOf: TemplateNameOf
     selectedStepId: string | null
+    canShowListView: boolean
     visibleGraph: VisibleGraph
 }
 
@@ -168,6 +186,9 @@ export interface tileCanvasLogicActions {
     } // hogFlowEditorLogic
     startMovingNode: (node: HogFlowActionNode) => {
         node: HogFlowActionNode
+    } // hogFlowEditorLogic
+    setEditorLayout: (editorLayout: HogFlowEditorLayout) => {
+        editorLayout: HogFlowEditorLayout
     } // hogFlowEditorLogic
     moveNodeToHighlightedDropzone: () => {
         value: true
@@ -291,6 +312,12 @@ export interface tileCanvasLogicActions {
     setLayout: (layout: CanvasLayout) => {
         layout: CanvasLayout
     }
+    setLayoutError: (message: string) => {
+        message: string
+    }
+    retryLayout: () => {
+        value: true
+    }
     setMeasuredSizes: (sizes: Record<string, NodeSize>) => {
         sizes: Record<string, NodeSize>
     }
@@ -343,6 +370,7 @@ export interface tileCanvasLogicMeta {
         countOf: (stepMetrics: Record<string, HogFlowEditorActionMetrics> | null) => StepCountOf
         templateNameOf: (templates: Record<string, HogFunctionTemplateType>) => TemplateNameOf
         selectedStepId: (isPanelOpen: boolean, selectedNodeId: string | null) => string | null
+        canShowListView: (featureFlags: FeatureFlagsSet, workflow: HogFlow) => boolean
     }
 }
 
@@ -396,6 +424,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 'startCopyingNode',
                 'startMovingNode',
                 'onNodesDelete',
+                'setEditorLayout',
             ],
         ],
     })),
@@ -425,6 +454,8 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         cancel: true,
         setMeasuredSizes: (sizes: Record<string, NodeSize>) => ({ sizes }),
         setLayout: (layout: CanvasLayout) => ({ layout }),
+        setLayoutError: (message: string) => ({ message }),
+        retryLayout: true,
         requestFit: true,
         fitNextLayout: true,
         loadStepCounts: true,
@@ -498,6 +529,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         ],
         measuredSizes: [null as Record<string, NodeSize> | null, { setMeasuredSizes: (_, { sizes }) => sizes }],
         layout: [null as CanvasLayout | null, { setLayout: (_, { layout }) => layout }],
+        layoutError: [null as string | null, { setLayoutError: (_, { message }) => message, setLayout: () => null }],
         fitRequest: [0, { requestFit: (count) => count + 1 }],
         fitsNextLayout: [true, { fitNextLayout: () => true, requestFit: () => false, focusFrame: () => false }],
     }),
@@ -538,6 +570,11 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             (templates: Record<string, HogFunctionTemplateType>): TemplateNameOf =>
                 (templateId) =>
                     templates[templateId]?.name,
+        ],
+        canShowListView: [
+            (s) => [s.featureFlags, s.workflow],
+            (featureFlags: FeatureFlagsSet, workflow: HogFlow): boolean =>
+                !!featureFlags[FEATURE_FLAGS.WORKFLOWS_LINEAR_VIEW] && isWorkflowTreeComplete(workflow),
         ],
         selectedStepId: [
             (s) => [s.isPanelOpen, s.selectedNodeId],
@@ -740,10 +777,24 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 if (objectsEqual(input, cache.layoutInput)) {
                     return
                 }
-                const layout = await layoutTileCanvas(sizes, input.edges, input.frames)
-                breakpoint()
-                cache.layoutInput = input
-                actions.setLayout(layout)
+                try {
+                    const layout = await layoutTileCanvas(sizes, input.edges, input.frames)
+                    breakpoint()
+                    cache.layoutInput = input
+                    actions.setLayout(layout)
+                } catch (error) {
+                    if (isBreakpoint(error as Error)) {
+                        throw error
+                    }
+                    cache.layoutInput = input
+                    actions.setLayoutError(error instanceof Error ? error.message : String(error))
+                }
+            },
+            retryLayout: () => {
+                cache.layoutInput = undefined
+                if (values.measuredSizes) {
+                    actions.setMeasuredSizes(values.measuredSizes)
+                }
             },
             setLayout: ({ layout }) => {
                 const focusGroup = values.pathGroups.find((group) => group.id === values.focusGroupId)

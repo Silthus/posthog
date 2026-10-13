@@ -10,6 +10,7 @@ import { CommandBar } from './CommandBar'
 import { PathChip } from './PathChip'
 import { PathFrame } from './PathFrame'
 import { PlacementHint } from './PlacementHint'
+import { TileCanvasLayoutError } from './TileCanvasLayoutError'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import { TileCanvasMeasureLayer } from './TileCanvasMeasureLayer'
 import { CANVAS_MIN_ZOOM, hasStepMenu } from './tileCanvasModel'
@@ -48,6 +49,7 @@ export function TileCanvasContent(): JSX.Element {
         motion,
         isPanelOpen,
         commandPaletteQuery,
+        layoutError,
         workflow,
         pathGroups,
         measuredSizes,
@@ -120,7 +122,7 @@ export function TileCanvasContent(): JSX.Element {
             <div
                 ref={wrapperRef}
                 onKeyDown={onKeyDown}
-                className="TileCanvas__flow @container/tile-canvas flex min-h-0 min-w-0 grow @max-[48rem]/workflow-editor:min-h-80 @max-[48rem]/workflow-editor:shrink-0"
+                className="TileCanvas__flow @container/tile-canvas relative flex min-h-0 min-w-0 grow @max-[48rem]/workflow-editor:min-h-80 @max-[48rem]/workflow-editor:shrink-0"
             >
                 <ReactFlow<TileCanvasNode, TileEdgeType>
                     className="grow"
@@ -149,6 +151,7 @@ export function TileCanvasContent(): JSX.Element {
                     </Panel>
                     <Controls showInteractive={false} />
                 </ReactFlow>
+                {layoutError && <TileCanvasLayoutError message={layoutError} />}
             </div>
             {isPanelOpen && <TileCanvasPanel />}
         </div>

@@ -9,6 +9,7 @@ import { initKeaTests } from '~/test/init'
 import { workflowLogic } from '../../../workflowLogic'
 import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
 import type { HogFlowActionNode } from '../../types'
+import * as tileCanvasLayout from './tileCanvasLayout'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import { stepCount } from './tileCanvasModel'
 
@@ -297,6 +298,31 @@ describe('tileCanvasLogic', () => {
             jest.advanceTimersByTime(1000)
 
             expect(logic.values.openPathIds).toEqual([])
+        })
+    })
+
+    describe('layout failure', () => {
+        beforeEach(async () => {
+            jest.mocked(loadAppMetricsTotals).mockResolvedValue({})
+            logic = await mountSavedCanvas()
+        })
+
+        it('shows why the canvas could not lay out the workflow, and clears it once a layout works', async () => {
+            const layout = jest
+                .spyOn(tileCanvasLayout, 'layoutTileCanvas')
+                .mockRejectedValueOnce(new RangeError('Maximum call stack size exceeded'))
+            const size = { width: 300, height: 80 }
+
+            await expectLogic(logic, () =>
+                logic.actions.setMeasuredSizes({ trigger_node: size })
+            ).toFinishAllListeners()
+            expect(logic.values.layoutError).toBe('Maximum call stack size exceeded')
+
+            await expectLogic(logic, () =>
+                logic.actions.setMeasuredSizes({ trigger_node: size, split: size })
+            ).toFinishAllListeners()
+            expect(logic.values.layoutError).toBeNull()
+            layout.mockRestore()
         })
     })
 
