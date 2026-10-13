@@ -2560,9 +2560,14 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
 
             resetFlowFromHogFlow: ({ hogFlow }) => {
                 try {
+                    const edgeCountBySource = new Map<string, number>()
+                    hogFlow.edges.forEach((edge) =>
+                        edgeCountBySource.set(edge.from, (edgeCountBySource.get(edge.from) ?? 0) + 1)
+                    )
+                    const actionsById = new Map(hogFlow.actions.map((action) => [action.id, action]))
                     const edges: HogFlowActionEdge[] = hogFlow.edges.map((edge) => {
-                        const isOnlyEdgeForNode = hogFlow.edges.filter((e) => e.from === edge.from).length === 1
-                        const edgeSourceAction = hogFlow.actions.find((action) => action.id === edge.from)
+                        const isOnlyEdgeForNode = edgeCountBySource.get(edge.from) === 1
+                        const edgeSourceAction = actionsById.get(edge.from)
 
                         return {
                             // Only these values are set by the user
@@ -2657,7 +2662,8 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
             },
 
             setNodes: async ({ nodes }, breakpoint) => {
-                const formattedNodes = await getFormattedNodes(nodes, values.edges)
+                // The tile canvas lays out its own tiles and reads only the steps and edges, so skip ELK under it.
+                const formattedNodes = values.isTileCanvas ? nodes : await getFormattedNodes(nodes, values.edges)
                 // Drop this layout run if a newer setNodes was dispatched while elk was working,
                 // so overlapping rebuilds can't finish out of order and let a stale layout win.
                 breakpoint()
@@ -2707,7 +2713,7 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
             },
 
             showDropzones: () => {
-                const { nodes, edges, isMovingNode, movingNodeId } = values
+                const { nodesById, edges, isMovingNode, movingNodeId } = values
 
                 const dropzoneNodes: DropzoneNode[] = []
 
@@ -2727,21 +2733,24 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                     if (skipEdgeIds.has(edge.id)) {
                         return
                     }
-                    const sourceNode = nodes.find((n) => n.id === edge.source)
-                    const targetNode = nodes.find((n) => n.id === edge.target)
+                    const sourceNode = nodesById[edge.source]
+                    const targetNode = nodesById[edge.target]
 
                     if (sourceNode && targetNode) {
                         const sourceHandle = sourceNode.handles?.find((h) => h.id === edge.sourceHandle)
                         const targetHandle = targetNode.handles?.find((h) => h.id === edge.targetHandle)
 
-                        const [, labelX, labelY] = getSmartStepPath({
-                            sourceX: sourceNode.position.x + (sourceHandle?.x || 0),
-                            sourceY: sourceNode.position.y + (sourceHandle?.y || 0),
-                            targetX: targetNode.position.x + (targetHandle?.x || 0),
-                            targetY: targetNode.position.y + (targetHandle?.y || 0),
-                            edges,
-                            currentEdgeId: edge.id,
-                        })
+                        // The tile canvas finds a dropzone by its edge and draws its own +, so it needs no position.
+                        const [, labelX, labelY] = values.isTileCanvas
+                            ? [undefined, 0, 0]
+                            : getSmartStepPath({
+                                  sourceX: sourceNode.position.x + (sourceHandle?.x || 0),
+                                  sourceY: sourceNode.position.y + (sourceHandle?.y || 0),
+                                  targetX: targetNode.position.x + (targetHandle?.x || 0),
+                                  targetY: targetNode.position.y + (targetHandle?.y || 0),
+                                  edges,
+                                  currentEdgeId: edge.id,
+                              })
 
                         dropzoneNodes.push({
                             id: `dropzone_edge_${edge.id}`,
@@ -3124,6 +3133,12 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
     }),
 
     subscriptions(({ actions, values }) => ({
+        isTileCanvas: (isTileCanvas: boolean, wasTileCanvas: boolean | undefined) => {
+            // Leaving the tile canvas needs the positions it skipped.
+            if (wasTileCanvas && !isTileCanvas) {
+                actions.resetFlowFromHogFlow(values.workflow)
+            }
+        },
         workflow: (hogFlow?: HogFlow, oldHogFlow?: HogFlow) => {
             // Auto-save round-trips can emit a deep-equal workflow; skipping the rebuild avoids
             // re-deriving every node and edge (including the async layout pass) for no change.
