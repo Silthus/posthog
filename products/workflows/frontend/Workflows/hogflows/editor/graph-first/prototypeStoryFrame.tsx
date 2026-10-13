@@ -16,8 +16,18 @@ function SceneChromeMock(): JSX.Element {
     return (
         <div className="shrink-0 border-b bg-surface-primary px-4 pt-3">
             <div className="flex items-center gap-2">
-                <h1 className="m-0 text-lg font-semibold">{originalWorkflow?.name}</h1>
-                <LemonTag type="muted">Draft</LemonTag>
+                <div className="flex min-w-0 flex-col">
+                    <div className="flex items-center gap-2">
+                        <h1 className="m-0 text-lg font-semibold">{originalWorkflow?.name}</h1>
+                        <LemonTag type="muted">Draft</LemonTag>
+                    </div>
+                    {originalWorkflow?.description && (
+                        <div className="flex items-center gap-1 text-[13px] text-secondary">
+                            <IconSparkles className="shrink-0 text-[#7c3aed]" />
+                            {originalWorkflow.description}
+                        </div>
+                    )}
+                </div>
                 <div className="flex-1" />
                 <LemonButton size="small" type="secondary">
                     Save draft

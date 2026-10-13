@@ -34,8 +34,8 @@ import { hogFlowEditorLogic, HogFlowEditorMode } from '../../hogFlowEditorLogic'
 import { HogFlowEditorPanel } from '../../panel/HogFlowEditorPanel'
 import { HogFlowEditorPanelBuild } from '../../panel/HogFlowEditorPanelBuild'
 import type { HogFlow } from '../../types'
-import { CanvasDrawer, DrawerTab, simulateRun, VariablesPopover } from './CanvasDrawer'
-import { NoteCard, SummaryCard } from './GraphFirstCards'
+import { LogsDrawer, simulateRun, TestRunPanel, VariablesPopover } from './CanvasDrawer'
+import { SummaryCard } from './GraphFirstCards'
 import { Compound, LABEL_HEIGHT, labelWidth, layoutGraph, LayoutResult, Point, PortSpec } from './graphFirstLayout'
 import {
     actionById,
@@ -107,7 +107,7 @@ function CardNode({ data }: NodeProps): JSX.Element {
         previews: view.previews,
     }
     return (
-        <div>
+        <div {...motionProps(data.motion as NodeMotion | undefined)}>
             <Handle type="target" position={Position.Top} className="!opacity-0" isConnectable={false} />
             {vnode.kind === 'action' ? (
                 <StepNode
@@ -183,7 +183,14 @@ function FrameNode({ data, width, height }: NodeProps): JSX.Element {
     const dimmed = view.trace && !group.memberIds.some((id) => view.trace!.nodeIds.includes(id))
     const style = view.groupStyle
     return (
-        <div className={clsx('relative transition-opacity', dimmed && 'opacity-40')} style={{ width, height }}>
+        <div
+            className={clsx(
+                'relative transition-opacity',
+                dimmed && 'opacity-40',
+                motionProps(data.motion as NodeMotion | undefined).className
+            )}
+            style={{ width, height }}
+        >
             {style === 'outline' && (
                 <div className="absolute inset-0 rounded-2xl border-[1.5px]" style={{ borderColor: `${color}80` }} />
             )}
@@ -212,7 +219,13 @@ function FrameLabelNode({ data }: NodeProps): JSX.Element {
     const group = data.group as BranchGroup
     const dimmed = view.trace && !group.memberIds.some((id) => view.trace!.nodeIds.includes(id))
     return (
-        <div className={clsx('-translate-y-1/2 transition-opacity', dimmed && 'opacity-40')}>
+        <div
+            className={clsx(
+                '-translate-y-1/2 transition-opacity',
+                dimmed && 'opacity-40',
+                motionProps(data.motion as NodeMotion | undefined).className
+            )}
+        >
             <FrameHeader group={group} color={pathColor(group.edge)} chip onCollapse={() => view.collapse(group.id)} />
         </div>
     )
@@ -230,10 +243,6 @@ function entryX(points: Point[] | undefined, top: number, fallback: number): num
         }
     }
     return fallback
-}
-
-function NoteNode(): JSX.Element {
-    return <NoteCard workflow={ViewContext.current!.workflow} />
 }
 
 function roundedPath(points: Point[]): string {
@@ -504,7 +513,83 @@ function attachToTiles(
     return { ...result, edgePoints }
 }
 
-const NODE_TYPES = { card: CardNode, frame: FrameNode, frameLabel: FrameLabelNode, note: NoteNode }
+type Motion = { kind: 'expand' | 'collapse' | 'settle'; groupId: string; origin: Point }
+type NodeMotion = { type: 'enter' | 'leave' | 'pop' | 'fade-in' | 'fade-out'; dx?: number; dy?: number }
+
+const LEAVE_MS = 260
+const MOTION_MS = 1100
+
+/** Steps fly out of the stack on open and back into it on close; the rest glide to their new places. */
+const MOTION_CSS = `
+@keyframes gf-enter { from { transform: translate(var(--gf-dx), var(--gf-dy)) scale(0.4); opacity: 0 } }
+@keyframes gf-leave { to { transform: translate(var(--gf-dx), var(--gf-dy)) scale(0.4); opacity: 0 } }
+@keyframes gf-pop { from { transform: scale(0.6); opacity: 0 } }
+@keyframes gf-fade-in { from { opacity: 0 } }
+@keyframes gf-fade-out { to { opacity: 0 } }
+@keyframes gf-edges { 0%, 55% { opacity: 0 } 100% { opacity: 1 } }
+.gf-enter { animation: gf-enter 460ms cubic-bezier(0.2, 0.8, 0.2, 1) both }
+.gf-leave { animation: gf-leave ${LEAVE_MS}ms cubic-bezier(0.4, 0, 1, 1) forwards }
+.gf-pop { animation: gf-pop 320ms cubic-bezier(0.2, 0.8, 0.2, 1) 200ms both }
+.gf-fade-in { animation: gf-fade-in 380ms ease 180ms both }
+.gf-fade-out { animation: gf-fade-out 160ms ease forwards }
+.gf-moving .react-flow__node { transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1) }
+.gf-moving .react-flow__viewport { transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1) }
+.gf-moving .react-flow__edges, .gf-moving .react-flow__edgelabel-renderer { animation: gf-edges 760ms ease both }
+@media (prefers-reduced-motion: reduce) { .gf-enter, .gf-leave, .gf-pop, .gf-fade-in, .gf-fade-out { animation: none } .gf-moving * { transition: none !important } }
+`
+
+function inGroup(groups: BranchGroup[], groupId: string, vnode: VisibleNode): boolean {
+    const group = groups.find((candidate) => candidate.id === groupId)
+    if (!group) {
+        return false
+    }
+    return vnode.kind === 'action'
+        ? group.memberIds.includes(vnode.id)
+        : group.memberIds.includes(vnode.group.branchNodeId)
+}
+
+function nodeMotion(
+    motion: Motion | null,
+    vnode: VisibleNode,
+    groups: BranchGroup[],
+    box: { x: number; y: number; width: number; height: number } | undefined
+): NodeMotion | undefined {
+    if (!motion || !box) {
+        return undefined
+    }
+    if (motion.kind === 'settle') {
+        return vnode.id === motion.groupId ? { type: 'pop' } : undefined
+    }
+    if (!inGroup(groups, motion.groupId, vnode)) {
+        return undefined
+    }
+    const dx = motion.origin.x - (box.x + box.width / 2)
+    const dy = motion.origin.y - (box.y + box.height / 2)
+    return { type: motion.kind === 'expand' ? 'enter' : 'leave', dx, dy }
+}
+
+function frameMotion(motion: Motion | null, group: BranchGroup, groups: BranchGroup[]): NodeMotion | undefined {
+    if (!motion || motion.kind === 'settle') {
+        return undefined
+    }
+    let current: BranchGroup | undefined = group
+    while (current && current.id !== motion.groupId) {
+        current = groups.find((candidate) => candidate.id === current!.parentId)
+    }
+    return current ? { type: motion.kind === 'expand' ? 'fade-in' : 'fade-out' } : undefined
+}
+
+function motionProps(motion: NodeMotion | undefined): { className?: string; style?: React.CSSProperties } {
+    if (!motion) {
+        return {}
+    }
+    return {
+        className: `gf-${motion.type}`,
+        style: { '--gf-dx': `${motion.dx ?? 0}px`, '--gf-dy': `${motion.dy ?? 0}px` } as React.CSSProperties,
+    }
+}
+
+const NODE_TYPES = { card: CardNode, frame: FrameNode, frameLabel: FrameLabelNode }
 const EDGE_TYPES = { routed: RoutedEdge }
 
 function MeasureLayer({
@@ -696,12 +781,14 @@ function GraphFirstCanvas({
     initialTileFlow,
     initialTileHover,
     initialGroupStyle,
+    initialCollapsed,
     showStyleSwitch,
 }: {
     initialNodeStyle: NodeStyle
     initialTileFlow: TileFlow
     initialTileHover: boolean
     initialGroupStyle: GroupStyle
+    initialCollapsed: 'all' | 'auto'
     showStyleSwitch: boolean
 }): JSX.Element {
     const { isDarkModeOn } = useValues(themeLogic)
@@ -714,12 +801,15 @@ function GraphFirstCanvas({
     const groups = useMemo(() => computeGroups(workflow), [workflow])
     const [collapsed, setCollapsed] = useState<Set<string>>(
         () =>
-            new Set(workflow.actions.length > COLLAPSE_ALL_ABOVE_STEPS ? computeGroups(workflow).map((g) => g.id) : [])
+            new Set(
+                initialCollapsed === 'all' || workflow.actions.length > COLLAPSE_ALL_ABOVE_STEPS
+                    ? computeGroups(workflow).map((g) => g.id)
+                    : []
+            )
     )
     const [traceOn, setTraceOn] = useState(false)
     const [choices, setChoices] = useState<Record<string, string>>({})
     const [showMetrics, setShowMetrics] = useState(false)
-    const [showNote, setShowNote] = useState(true)
     const [previews, setPreviews] = useState(
         () => workflow.actions.filter((action) => emailContent(action)).length <= 3
     )
@@ -728,7 +818,10 @@ function GraphFirstCanvas({
     const [tileHover, setTileHover] = useState(initialTileHover)
     const tile = useMemo(() => ({ flow: tileFlow, hover: tileHover }), [tileFlow, tileHover])
     const [groupStyle, setGroupStyle] = useState<GroupStyle>(initialGroupStyle)
-    const [drawerTab, setDrawerTab] = useState<DrawerTab | null>(null)
+    const [testOpen, setTestOpen] = useState(false)
+    const [logsOpen, setLogsOpen] = useState(false)
+    const [motion, setMotion] = useState<Motion | null>(null)
+    const motionTimer = useRef<number>()
     const [testTrace, setTestTrace] = useState<Trace | null>(null)
     const direction = nodeStyle === 'tiles' && tileFlow === 'right' ? 'RIGHT' : 'DOWN'
     const [panelOpen, setPanelOpen] = useState(false)
@@ -741,7 +834,13 @@ function GraphFirstCanvas({
         return waitsOnArrows ? foldWaits(base) : base
     }, [workflow, groups, collapsed, waitsOnArrows])
     const labels = useMemo(() => {
-        const framedEntries = new Set(shownGroups(groups, collapsed).map((group) => edgeKey(group.edge)))
+        const summaryEntries = graph.nodes.flatMap((node) =>
+            node.kind === 'summary' ? [edgeKey(node.group.edge)] : []
+        )
+        const framedEntries = new Set([
+            ...shownGroups(groups, collapsed).map((group) => edgeKey(group.edge)),
+            ...(nodeStyle === 'tiles' ? summaryEntries : []),
+        ])
         return Object.fromEntries(
             graph.edges.map((vedge) => {
                 const branch = framedEntries.has(vedge.originalKeys[0]) ? undefined : vedge.label
@@ -749,9 +848,9 @@ function GraphFirstCanvas({
                 return [vedge.id, [branch, timing].filter(Boolean).join(' · ') || undefined]
             })
         )
-    }, [graph.edges, groups, collapsed])
+    }, [graph.edges, graph.nodes, groups, collapsed, nodeStyle])
     const followTrace = useMemo(() => (traceOn ? computeTrace(workflow, choices) : null), [traceOn, workflow, choices])
-    const trace = (drawerTab === 'test' ? testTrace : null) ?? followTrace
+    const trace = (testOpen ? testTrace : null) ?? followTrace
     const metrics = useMemo(() => (showMetrics ? sampleMetrics(workflow) : null), [showMetrics, workflow])
     const sideOpen = panelOpen || !!followTrace
     const selectedAction =
@@ -803,8 +902,28 @@ function GraphFirstCanvas({
         groupStyle,
         selectedNodeId: panelOpen ? selectedNodeId : null,
         openStep: (nodeId) => openPanel('build', nodeId),
-        expand: (id) => setCollapsed((prev) => new Set([...prev].filter((g) => g !== id))),
-        collapse: (id) => setCollapsed((prev) => new Set([...prev, id])),
+        expand: (id) => {
+            const position = layout?.positions[id]
+            const size = sizes?.[id]
+            const anchor = size?.anchor
+            animate({
+                kind: 'expand',
+                groupId: id,
+                origin: position
+                    ? { x: position.x + (anchor?.x ?? (size?.width ?? 0) / 2), y: position.y + (anchor?.y ?? 0) }
+                    : { x: 0, y: 0 },
+            })
+            setCollapsed((prev) => new Set([...prev].filter((g) => g !== id)))
+        },
+        collapse: (id) => {
+            const box = layout?.frames[`frame:${id}`]
+            const origin = box ? { x: box.x + box.width / 2, y: box.y + 40 } : { x: 0, y: 0 }
+            animate({ kind: 'collapse', groupId: id, origin })
+            window.setTimeout(() => {
+                setCollapsed((prev) => new Set([...prev, id]))
+                animate({ kind: 'settle', groupId: id, origin })
+            }, LEAVE_MS)
+        },
         choose: (nodeId, key) => {
             setTraceOn(true)
             setChoices((prev) => ({ ...prev, [nodeId]: key }))
@@ -835,7 +954,7 @@ function GraphFirstCanvas({
                     position: { x: box.x, y: box.y },
                     width: box.width,
                     height: box.height,
-                    data: { group, tick },
+                    data: { group, tick, motion: frameMotion(motion, group, groups) },
                     selectable: false,
                     draggable: false,
                     zIndex: -10 + group.depth,
@@ -853,43 +972,27 @@ function GraphFirstCanvas({
                     id: `frameLabel:${group.id}`,
                     type: 'frameLabel',
                     position: { x: left, y: box.y },
-                    data: { group, tick },
+                    data: { group, tick, motion: frameMotion(motion, group, groups) },
                     selectable: false,
                     draggable: false,
                     zIndex: 5,
                 }
             })
-        const trigger = graph.nodes.find((n) => n.kind === 'action' && n.action.type === 'trigger')
-        const triggerBox = trigger ? boxes[trigger.id] : undefined
-        const note =
-            showNote && triggerBox
-                ? [
-                      {
-                          id: 'note',
-                          type: 'note',
-                          position: { x: triggerBox.x - 260 - 48, y: triggerBox.y },
-                          data: { tick },
-                          selectable: false,
-                          draggable: false,
-                      },
-                  ]
-                : []
         return [
             ...frames,
             ...frameLabels,
-            ...note,
             ...graph.nodes
                 .filter((n) => layout.positions[n.id])
                 .map((vnode) => ({
                     id: vnode.id,
                     type: 'card',
                     position: layout.positions[vnode.id],
-                    data: { vnode, tick },
+                    data: { vnode, tick, motion: nodeMotion(motion, vnode, groups, boxes[vnode.id]) },
                     selectable: vnode.kind === 'action',
                     draggable: false,
                 })),
         ]
-    }, [layout, sizes, graph.nodes, groups, collapsed, showNote, tick])
+    }, [layout, sizes, graph.nodes, groups, collapsed, tick, motion])
 
     const rfEdges = useMemo(
         () =>
@@ -969,7 +1072,7 @@ function GraphFirstCanvas({
             : undefined
         const timer = setTimeout(() => fitWidth(pathIds), 30)
         return () => clearTimeout(timer)
-    }, [sideOpen, drawerTab === null]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [sideOpen, testOpen, logsOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent): void => {
@@ -989,11 +1092,10 @@ function GraphFirstCanvas({
         setSelectedNodeId(null)
     }
 
-    const toggleDrawer = (tab: DrawerTab): void => {
-        setDrawerTab(drawerTab === tab ? null : tab)
-        if (drawerTab === tab) {
-            setTestTrace(null)
-        }
+    const animate = (next: Motion): void => {
+        window.clearTimeout(motionTimer.current)
+        setMotion(next)
+        motionTimer.current = window.setTimeout(() => setMotion(null), MOTION_MS)
     }
 
     const openPanel = (nextMode: HogFlowEditorMode, nodeId: string | null = null): void => {
@@ -1027,7 +1129,23 @@ function GraphFirstCanvas({
                 tile={tile}
                 onMeasured={setSizes}
             />
-            <div className="flex min-h-0 min-w-0 grow flex-col">
+            <style>{MOTION_CSS}</style>
+            {testOpen && (
+                <TestRunPanel
+                    workflow={workflow}
+                    trace={testTrace}
+                    onRun={(run) => {
+                        setTraceOn(false)
+                        setTestTrace(run)
+                    }}
+                    onSelectStep={(id) => openPanel('build', id)}
+                    onClose={() => {
+                        setTestOpen(false)
+                        setTestTrace(null)
+                    }}
+                />
+            )}
+            <div className={clsx('flex min-h-0 min-w-0 grow flex-col', motion && 'gf-moving')}>
                 <div ref={wrapperRef} className="flex min-h-0 min-w-0 grow">
                     <ReactFlow
                         className="grow"
@@ -1066,16 +1184,15 @@ function GraphFirstCanvas({
                                 <VariablesPopover workflow={workflow} />
                                 <LemonButton
                                     size="small"
-                                    onClick={() => toggleDrawer('test')}
-                                    active={drawerTab === 'test'}
+                                    onClick={() => {
+                                        setTestOpen(!testOpen)
+                                        setTestTrace(null)
+                                    }}
+                                    active={testOpen}
                                 >
                                     Test
                                 </LemonButton>
-                                <LemonButton
-                                    size="small"
-                                    onClick={() => toggleDrawer('logs')}
-                                    active={drawerTab === 'logs'}
-                                >
+                                <LemonButton size="small" onClick={() => setLogsOpen(!logsOpen)} active={logsOpen}>
                                     Logs
                                 </LemonButton>
                                 <div className="mx-1 h-5 w-px bg-border" />
@@ -1095,7 +1212,6 @@ function GraphFirstCanvas({
                                         ['Email previews', previews, setPreviews],
                                         ['Waits on arrows', waitsOnArrows, setWaitsOnArrows],
                                         ['Sample metrics', showMetrics, setShowMetrics],
-                                        ['Workflow note', showNote, setShowNote],
                                         ...(nodeStyle === 'tiles'
                                             ? [
                                                   ['Hover cards', tileHover, setTileHover] as [
@@ -1169,21 +1285,11 @@ function GraphFirstCanvas({
                         <Controls showInteractive={false} />
                     </ReactFlow>
                 </div>
-                {drawerTab && (
-                    <CanvasDrawer
+                {logsOpen && (
+                    <LogsDrawer
                         workflow={workflow}
-                        tab={drawerTab}
-                        setTab={setDrawerTab}
-                        trace={testTrace}
-                        onRun={(run) => {
-                            setTraceOn(false)
-                            setTestTrace(run)
-                        }}
                         onSelectStep={(id) => openPanel('build', id)}
-                        onClose={() => {
-                            setDrawerTab(null)
-                            setTestTrace(null)
-                        }}
+                        onClose={() => setLogsOpen(false)}
                     />
                 )}
             </div>
@@ -1210,7 +1316,7 @@ function GraphFirstCanvas({
                             metrics={metrics}
                             onClose={closePanel}
                             onTest={() => {
-                                setDrawerTab('test')
+                                setTestOpen(true)
                                 setTestTrace(simulateRun(workflow, 'ada@example.com'))
                             }}
                         />
@@ -1238,15 +1344,17 @@ function GraphFirstCanvas({
 /** Mount inside a bound `workflowLogic`. */
 export function PrototypeGraphFirstEditor({
     initialNodeStyle = 'line',
-    initialTileFlow = 'down',
+    initialTileFlow = 'rail',
     initialTileHover = true,
     initialGroupStyle = 'outline',
+    initialCollapsed = 'auto',
     showStyleSwitch = true,
 }: {
     initialNodeStyle?: NodeStyle
     initialTileFlow?: TileFlow
     initialTileHover?: boolean
     initialGroupStyle?: GroupStyle
+    initialCollapsed?: 'all' | 'auto'
     showStyleSwitch?: boolean
 }): JSX.Element {
     const { logicProps } = useValues(workflowLogic)
@@ -1260,6 +1368,7 @@ export function PrototypeGraphFirstEditor({
                             initialTileFlow={initialTileFlow}
                             initialTileHover={initialTileHover}
                             initialGroupStyle={initialGroupStyle}
+                            initialCollapsed={initialCollapsed}
                             showStyleSwitch={showStyleSwitch}
                         />
                     </ReactFlowProvider>

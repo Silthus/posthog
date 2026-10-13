@@ -5,15 +5,13 @@ import clsx from 'clsx'
 import { useMemo, useState } from 'react'
 
 import { IconCheck, IconPlay, IconX } from '@posthog/icons'
-import { LemonButton, LemonSegmentedButton, LemonTag } from '@posthog/lemon-ui'
+import { LemonButton, LemonTag } from '@posthog/lemon-ui'
 
 import { Popover } from 'lib/lemon-ui/Popover'
 
 import type { HogFlow, HogFlowAction } from '../../types'
 import { actionById, computeTrace, stepSentence, Trace } from './graphFirstModel'
 import { useTileKind } from './tileKinds'
-
-export type DrawerTab = 'test' | 'logs'
 
 type AnyConfig = Record<string, any>
 
@@ -71,22 +69,33 @@ function StepIcon({ action, workflow }: { action: HogFlowAction; workflow: HogFl
     )
 }
 
-function TestTab({
+/** Test run on the left of the canvas: pick a person, run, and read their path top to bottom. */
+export function TestRunPanel({
     workflow,
     trace,
     onRun,
     onSelectStep,
+    onClose,
 }: {
     workflow: HogFlow
     trace: Trace | null
     onRun: (trace: Trace | null) => void
     onSelectStep: (id: string) => void
+    onClose: () => void
 }): JSX.Element {
     const [person, setPerson] = useState(PEOPLE[0].email)
     const byId = actionById(workflow)
     return (
-        <div className="grid min-h-0 flex-1 grid-cols-[300px_1fr] overflow-hidden">
-            <div className="flex min-h-0 flex-col gap-1.5 overflow-y-auto border-r p-3">
+        <div className="flex h-full w-[340px] shrink-0 flex-col overflow-hidden border-r bg-surface-primary">
+            <div className="flex items-center gap-2 border-b px-3 py-2">
+                <IconPlay className="text-lg" />
+                <div className="flex-1">
+                    <div className="text-sm font-semibold">Test run</div>
+                    <div className="text-xs text-secondary">Runs the workflow for one person</div>
+                </div>
+                <LemonButton size="small" icon={<IconX />} tooltip="Close" onClick={onClose} />
+            </div>
+            <div className="flex flex-col gap-1.5 border-b p-3">
                 <div className="text-xs font-semibold text-secondary">Run as</div>
                 {PEOPLE.map((candidate) => (
                     <button
@@ -94,14 +103,14 @@ function TestTab({
                         type="button"
                         onClick={() => setPerson(candidate.email)}
                         className={clsx(
-                            'flex cursor-pointer items-baseline gap-2 rounded-md border px-2.5 py-1 text-left',
+                            'flex cursor-pointer flex-col rounded-md border px-2.5 py-1 text-left',
                             person === candidate.email
                                 ? 'border-[var(--color-accent)] bg-surface-secondary'
                                 : 'bg-surface-primary'
                         )}
                     >
-                        <span className="shrink-0 text-[13px] font-semibold">{candidate.name}</span>
-                        <span className="truncate text-[11px] text-secondary">{candidate.note}</span>
+                        <span className="text-[13px] font-semibold">{candidate.name}</span>
+                        <span className="text-[11px] text-secondary">{candidate.note}</span>
                     </button>
                 ))}
                 <LemonButton
@@ -117,28 +126,25 @@ function TestTab({
                     Test runs skip waits. Emails and messages go to your test inbox, not to the person.
                 </div>
             </div>
-            <div className="min-h-0 overflow-y-auto p-3">
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
                 {trace ? (
-                    <ol className="m-0 flex list-none flex-col gap-1 p-0">
+                    <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
                         {trace.nodeIds.map((id) => (
                             <li key={id}>
                                 <button
                                     type="button"
-                                    className="flex w-full cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-left text-[13px] hover:bg-surface-secondary"
+                                    className="flex w-full cursor-pointer items-start gap-2 rounded px-1.5 py-1 text-left text-[13px] leading-snug hover:bg-surface-secondary"
                                     onClick={() => onSelectStep(id)}
                                 >
-                                    <IconCheck className="shrink-0 text-success" />
+                                    <IconCheck className="mt-0.5 shrink-0 text-success" />
                                     <StepIcon action={byId[id]} workflow={workflow} />
-                                    <span className="min-w-0 flex-1 truncate">
-                                        {resultText(workflow, byId[id], trace)}
-                                    </span>
-                                    <span className="text-[11px] text-secondary">ok</span>
+                                    <span className="min-w-0 flex-1">{resultText(workflow, byId[id], trace)}</span>
                                 </button>
                             </li>
                         ))}
                     </ol>
                 ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-secondary">
+                    <div className="p-4 text-center text-sm text-secondary">
                         Pick a person and run the test. Their path lights up on the canvas.
                     </div>
                 )}
@@ -147,7 +153,7 @@ function TestTab({
     )
 }
 
-type LogRow = { time: string; person: string; stepId: string; message: string; level: 'info' | 'warn' }
+export type LogRow = { time: string; person: string; stepId: string; message: string; level: 'info' | 'warn' }
 
 function logRows(workflow: HogFlow): LogRow[] {
     const byId = actionById(workflow)
@@ -168,6 +174,10 @@ function logRows(workflow: HogFlow): LogRow[] {
         })
     })
     return rows.sort((a, b) => b.time.localeCompare(a.time))
+}
+
+export function stepLogRows(workflow: HogFlow, stepId: string): LogRow[] {
+    return logRows(workflow).filter((row) => row.stepId === stepId)
 }
 
 function LogsTab({ workflow, onSelectStep }: { workflow: HogFlow; onSelectStep: (id: string) => void }): JSX.Element {
@@ -199,48 +209,24 @@ function LogsTab({ workflow, onSelectStep }: { workflow: HogFlow; onSelectStep: 
     )
 }
 
-export function CanvasDrawer({
+export function LogsDrawer({
     workflow,
-    tab,
-    setTab,
-    trace,
-    onRun,
     onSelectStep,
     onClose,
 }: {
     workflow: HogFlow
-    tab: DrawerTab
-    setTab: (tab: DrawerTab) => void
-    trace: Trace | null
-    onRun: (trace: Trace | null) => void
     onSelectStep: (id: string) => void
     onClose: () => void
 }): JSX.Element {
     return (
-        <div className="flex h-[280px] shrink-0 flex-col overflow-hidden border-t bg-surface-primary">
-            <div className="flex items-center gap-2 border-b px-2 py-1">
-                <LemonSegmentedButton
-                    size="xsmall"
-                    value={tab}
-                    onChange={setTab}
-                    options={[
-                        { value: 'test', label: 'Test run' },
-                        { value: 'logs', label: 'Logs' },
-                    ]}
-                />
-                <span className="text-xs text-secondary">
-                    {tab === 'test'
-                        ? 'Runs the workflow for one person'
-                        : 'Last runs, newest first. Click a row to open the step'}
-                </span>
+        <div className="flex h-[260px] shrink-0 flex-col overflow-hidden border-t bg-surface-primary">
+            <div className="flex items-center gap-2 border-b px-3 py-1">
+                <span className="text-sm font-semibold">Logs</span>
+                <span className="text-xs text-secondary">Last runs, newest first. Click a row to open the step</span>
                 <div className="flex-1" />
                 <LemonButton size="xsmall" icon={<IconX />} tooltip="Close" onClick={onClose} />
             </div>
-            {tab === 'test' ? (
-                <TestTab workflow={workflow} trace={trace} onRun={onRun} onSelectStep={onSelectStep} />
-            ) : (
-                <LogsTab workflow={workflow} onSelectStep={onSelectStep} />
-            )}
+            <LogsTab workflow={workflow} onSelectStep={onSelectStep} />
         </div>
     )
 }

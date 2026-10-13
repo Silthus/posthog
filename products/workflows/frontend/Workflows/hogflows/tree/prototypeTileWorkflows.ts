@@ -578,6 +578,370 @@ function aiTriage(): HogFlow {
     )
 }
 
+function springDrip(): HogFlow {
+    const trigger = {
+        type: 'batch',
+        filters: { properties: [{ key: 'orders_count', type: 'person', value: '0', operator: 'exact' }] },
+    } as unknown as HogFlow['trigger']
+    return flow(
+        'prototype-tile-spring-drip',
+        'Spring trails drip campaign',
+        'A three-email drip for subscribers who have not bought yet. Readers who click get the gear list and an offer.',
+        trigger,
+        [
+            step('trigger_node', 'trigger', 'Audience: subscribers with no orders', trigger as AnyConfig),
+            email(
+                'trails',
+                'Trails',
+                FERNWOOD,
+                'Five trails to walk this spring',
+                'Short, steep, and very green',
+                ['Our team picked five spring trails, from a one-hour loop to a full day out.'],
+                'See the trails'
+            ),
+            waitFor('wait_click', 'Clicked email link', '3d'),
+            email(
+                'gear_list',
+                'Gear list',
+                FERNWOOD,
+                'The gear list for those trails',
+                'What we pack for a spring day out',
+                ['Here is what our guides pack for a spring walk, from layers to snacks.'],
+                'Shop the list'
+            ),
+            delay('wait_four_days', '4d'),
+            email(
+                'offer',
+                'Offer',
+                FERNWOOD,
+                '20% off trail packs this week',
+                'Ends Sunday at midnight',
+                ['Your spring pack is 20% off until Sunday.'],
+                'Get 20% off'
+            ),
+            email(
+                'nudge',
+                'Nudge',
+                FERNWOOD,
+                'Still planning your spring walks?',
+                'The five trails are still here',
+                ['Spring is short. Here are the five trails again, in case you missed them.'],
+                'See the trails'
+            ),
+            exit('exit_node', 'Drip finished'),
+        ],
+        [
+            next('trigger_node', 'trails'),
+            next('trails', 'wait_click'),
+            branch('wait_click', 'gear_list', 0),
+            next('gear_list', 'wait_four_days'),
+            next('wait_four_days', 'offer'),
+            next('offer', 'exit_node'),
+            next('wait_click', 'nudge'),
+            next('nudge', 'exit_node'),
+        ],
+        { conversion: { window: '21d', filters: [] } } as Partial<HogFlow>
+    )
+}
+
+function blackFriday(): HogFlow {
+    const trigger = {
+        type: 'batch',
+        filters: { properties: [{ key: 'last_order_days', type: 'person', value: '365', operator: 'lt' }] },
+    } as unknown as HogFlow['trigger']
+    return flow(
+        'prototype-tile-black-friday',
+        'Black Friday',
+        'VIPs get early access a day before everyone else. Buyers get a thank-you, everyone else a Cyber Monday reminder.',
+        trigger,
+        [
+            step('trigger_node', 'trigger', 'Audience: bought in the last year', trigger as AnyConfig),
+            split('by_tier', 'By tier', 'tier', 'person', [['VIP', 'vip']]),
+            email(
+                'vip_early',
+                'VIP early access',
+                FERNWOOD,
+                'Your Black Friday starts a day early',
+                'VIP early access, 30% off everything',
+                ['As a VIP you get Black Friday a day early. 30% off everything, starting now.'],
+                'Shop early'
+            ),
+            delay('wait_one_day', '1d'),
+            email(
+                'bf_email',
+                'Black Friday',
+                FERNWOOD,
+                'Black Friday: 30% off everything',
+                'Today only, while stock lasts',
+                ['Black Friday is here. Everything is 30% off, today only.'],
+                'Shop the sale'
+            ),
+            waitFor('wait_order', 'Order completed', '3d'),
+            fn('tag_buyer', 'Tag buyer', 'template-posthog-update-person-properties', {
+                properties: { bf_2026: 'buyer' },
+            }),
+            email(
+                'thanks',
+                'Thank you',
+                FERNWOOD,
+                'Thanks for your order',
+                'Your gear is on its way',
+                ['Thank you. Your order is packed and leaves the warehouse tomorrow.'],
+                'Track my order',
+                'transactional'
+            ),
+            email(
+                'cyber_monday',
+                'Cyber Monday',
+                FERNWOOD,
+                'Last chance: Cyber Monday deals end tonight',
+                'Free shipping on every order',
+                ['Cyber Monday ends tonight. Free shipping on everything, no minimum.'],
+                'Shop Cyber Monday'
+            ),
+            slack(
+                'marketing_slack',
+                'Tell marketing',
+                '#marketing',
+                'Black Friday flow finished for {person.properties.email}'
+            ),
+            exit('exit_node', 'Campaign finished'),
+        ],
+        [
+            next('trigger_node', 'by_tier'),
+            branch('by_tier', 'vip_early', 0),
+            next('vip_early', 'wait_one_day'),
+            next('by_tier', 'wait_one_day'),
+            next('wait_one_day', 'bf_email'),
+            next('bf_email', 'wait_order'),
+            branch('wait_order', 'tag_buyer', 0),
+            next('tag_buyer', 'thanks'),
+            next('thanks', 'marketing_slack'),
+            next('wait_order', 'cyber_monday'),
+            next('cyber_monday', 'marketing_slack'),
+            next('marketing_slack', 'exit_node'),
+        ]
+    )
+}
+
+function ciAutoFix(): HogFlow {
+    const trigger = {
+        type: 'webhook',
+        template_id: 'template-source-github',
+        inputs: {},
+    } as unknown as HogFlow['trigger']
+    return flow(
+        'prototype-tile-ci-autofix',
+        'Auto-fix CI failures',
+        'Listens for failed GitHub checks. Flaky tests get a re-run, real failures get an AI fix PR, and main going red pages the team.',
+        trigger,
+        [
+            step('trigger_node', 'trigger', 'GitHub: check run failed', trigger as AnyConfig),
+            split('by_branch', 'By branch', 'branch', 'event', [['Main', 'main']]),
+            slack(
+                'main_red',
+                'Main is red',
+                '#eng-alerts',
+                ':red_circle: Main is red: {event.properties.check_name} failed on {event.properties.sha}'
+            ),
+            fn('main_fix', 'Fix main', 'template-posthog-create-task', {
+                title: 'Fix the failing check on main',
+                instructions: 'Find the commit that broke the check and open a revert or a fix PR.',
+                outputs: ['pr_url'],
+            }),
+            aiPrompt(
+                'classify_failure',
+                'Classify failure',
+                'Read the failed check log. Say if the failure is flaky, a real bug, or an infrastructure problem.',
+                ['failure_kind'],
+                ['Read CI logs', 'Read the diff']
+            ),
+            split('by_kind', 'By failure kind', 'failure_kind', 'workflow_variable', [
+                ['Flaky', 'flaky'],
+                ['Real bug', 'bug'],
+                ['Infrastructure', 'infra'],
+            ]),
+            fn('rerun', 'Re-run the check', 'template-webhook', {
+                url: 'https://github.example.com/repos/acme/app/check-runs/rerun',
+                method: 'POST',
+                body: { check_run_id: '{event.properties.check_run_id}' },
+            }),
+            fn('fix_pr', 'Open a fix PR', 'template-posthog-create-task', {
+                title: 'Fix the failing check',
+                instructions: 'Reproduce the failure, fix it, and open a PR against the branch.',
+                outputs: ['pr_url'],
+            }),
+            waitFor('wait_merged', 'Fix PR merged', '1d'),
+            slack(
+                'author_slack',
+                'Tell the author',
+                '#eng-prs',
+                'An AI fix for your failing check is waiting: {variables.pr_url}'
+            ),
+            slack('infra_slack', 'Tell infra', '#infra', 'CI infrastructure problem on {event.properties.check_name}'),
+            exit('exit_node', 'Failure handled'),
+        ],
+        [
+            next('trigger_node', 'by_branch'),
+            branch('by_branch', 'main_red', 0),
+            next('main_red', 'main_fix'),
+            next('main_fix', 'exit_node'),
+            next('by_branch', 'classify_failure'),
+            next('classify_failure', 'by_kind'),
+            branch('by_kind', 'rerun', 0),
+            next('rerun', 'exit_node'),
+            branch('by_kind', 'fix_pr', 1),
+            next('fix_pr', 'wait_merged'),
+            branch('wait_merged', 'exit_node', 0),
+            next('wait_merged', 'author_slack'),
+            next('author_slack', 'exit_node'),
+            branch('by_kind', 'infra_slack', 2),
+            next('infra_slack', 'exit_node'),
+            next('by_kind', 'exit_node'),
+        ]
+    )
+}
+
+const flagStep = (id: string, rollout: number): HogFlowAction =>
+    fn(id, `Roll out to ${rollout}%`, 'prototype-update-flag', { flag: 'new-checkout', rollout })
+
+const errorCheck = (id: string): HogFlowAction =>
+    fn(id, 'Check error rate', 'prototype-run-insight', {
+        insights: ['Checkout error rate'],
+        range: 'Last 7 days',
+        output: 'error_rate',
+    })
+
+const errorSplit = (id: string): HogFlowAction =>
+    split(id, 'Error rate', 'error_rate', 'workflow_variable', [['Too many errors', '2', 'gte']])
+
+function flagRollout(): HogFlow {
+    const trigger = { type: 'manual' } as unknown as HogFlow['trigger']
+    return flow(
+        'prototype-tile-flag-rollout',
+        'Gradual rollout of new checkout',
+        'Rolls the new-checkout flag out from 10% to 100% over three weeks. Each week it checks the error rate, rolls back if it is too high, and keeps Slack informed.',
+        trigger,
+        [
+            step('trigger_node', 'trigger', 'Start rollout', trigger as AnyConfig),
+            flagStep('flag_10', 10),
+            slack('slack_10', 'Announce 10%', '#releases', 'new-checkout is live for 10% of people'),
+            delay('week_1', '7d'),
+            errorCheck('check_1'),
+            errorSplit('split_1'),
+            flagStep('rollback_1', 0),
+            slack(
+                'slack_rollback_1',
+                'Announce rollback',
+                '#releases',
+                ':rewind: new-checkout rolled back at 10%: error rate {variables.error_rate}%'
+            ),
+            flagStep('flag_50', 50),
+            slack('slack_50', 'Announce 50%', '#releases', 'new-checkout is live for 50% of people'),
+            delay('week_2', '7d'),
+            errorCheck('check_2'),
+            errorSplit('split_2'),
+            flagStep('rollback_2', 0),
+            slack(
+                'slack_rollback_2',
+                'Announce rollback',
+                '#releases',
+                ':rewind: new-checkout rolled back at 50%: error rate {variables.error_rate}%'
+            ),
+            flagStep('flag_100', 100),
+            slack('slack_100', 'Announce 100%', '#releases', ':rocket: new-checkout is live for everyone'),
+            exit('exit_rolled_back', 'Rolled back'),
+            exit('exit_node', 'Fully rolled out'),
+        ],
+        [
+            next('trigger_node', 'flag_10'),
+            next('flag_10', 'slack_10'),
+            next('slack_10', 'week_1'),
+            next('week_1', 'check_1'),
+            next('check_1', 'split_1'),
+            branch('split_1', 'rollback_1', 0),
+            next('rollback_1', 'slack_rollback_1'),
+            next('slack_rollback_1', 'exit_rolled_back'),
+            next('split_1', 'flag_50'),
+            next('flag_50', 'slack_50'),
+            next('slack_50', 'week_2'),
+            next('week_2', 'check_2'),
+            next('check_2', 'split_2'),
+            branch('split_2', 'rollback_2', 0),
+            next('rollback_2', 'slack_rollback_2'),
+            next('slack_rollback_2', 'exit_rolled_back'),
+            next('split_2', 'flag_100'),
+            next('flag_100', 'slack_100'),
+            next('slack_100', 'exit_node'),
+        ]
+    )
+}
+
+/**
+ * What an AI author would write about each path, so a collapsed workflow reads like a summary.
+ * Keyed by `<split step id>:<edge type>:<edge index>`.
+ */
+export const PATH_SUMMARIES: Record<string, Record<string, string>> = {
+    'prototype-tile-ai-triage': {
+        'by_category:branch:0':
+            'An AI agent drafts an answer from the docs. Sure answers go to the customer, unsure ones become a note for an agent.',
+        'by_confidence:branch:0': 'Sends the AI answer to the customer right away.',
+        'by_confidence:continue:': 'Saves the AI answer as a private note so an agent can check it first.',
+        'by_category:branch:1': 'Assigns the ticket to engineering and posts it in #bugs.',
+        'by_category:branch:2': 'Assigns the ticket to the billing team.',
+    },
+    'prototype-tile-trial-to-paid': {
+        'by_activation:branch:0': 'Active trials get an upgrade email.',
+        'by_activation:continue:': 'Stuck trials get help: big teams go to sales, small teams get a call offer.',
+        'by_seats:branch:0': 'Tells sales in Slack so someone reaches out.',
+        'by_seats:continue:': 'Offers a 15-minute call to get started.',
+        'wait_upgrade:continue:': 'Nobody upgraded in 4 days: a last-day reminder.',
+    },
+    'prototype-tile-ticket-to-slack': {
+        'by_priority:branch:0': 'Urgent tickets go to #support-urgent right away, with @here.',
+        'by_priority:continue:': 'Other tickets wait for business hours, then go to #support.',
+    },
+    'prototype-tile-abandoned-checkout': {
+        'wait_order:continue:': 'No order within an hour: a reminder, then a 10% discount a day later.',
+        'wait_order_again:continue:': 'Still no order a day later: a 10% discount.',
+    },
+    'prototype-tile-payment-failed': {
+        'still_past_due:branch:0': 'Still not paid after 3 days: a last reminder before the plan pauses.',
+    },
+    'prototype-tile-sre-investigator': {
+        'by_severity:branch:0': 'Sev 1 pages on-call and opens an incident in #incidents.',
+        'by_severity:branch:1': 'Sev 2 posts the root cause in #eng-alerts.',
+    },
+    'prototype-tile-welcome-sequence': {
+        'wait_first_doc:branch:0': 'Wrote a first doc within 2 days: three tips for the next one.',
+        'wait_first_doc:continue:': 'No doc after 2 days: a nudge to start from a template.',
+    },
+    'prototype-tile-spring-drip': {
+        'wait_click:branch:0': 'Clicked a link: the gear list, then a 20% offer 4 days later.',
+        'wait_click:continue:': 'No click in 3 days: one gentle nudge, then the drip ends.',
+    },
+    'prototype-tile-black-friday': {
+        'by_tier:branch:0': 'VIPs get early access a day before the sale.',
+        'wait_order:branch:0': 'Bought within 3 days: tagged as a buyer and thanked.',
+        'wait_order:continue:': 'No order: a Cyber Monday last-chance email.',
+    },
+    'prototype-tile-ci-autofix': {
+        'by_branch:branch:0': 'Main is red: alerts #eng-alerts and an AI agent opens a revert or fix PR.',
+        'by_branch:continue:': 'Pull request checks: an AI step decides if it is flaky, a bug, or infrastructure.',
+        'by_kind:branch:0': 'Flaky: re-runs the check.',
+        'by_kind:branch:1':
+            'Real bug: an AI agent opens a fix PR. If it is not merged in a day, the author hears about it.',
+        'by_kind:branch:2': 'Infrastructure: tells #infra.',
+        'wait_merged:continue:': 'Fix not merged in a day: pings the PR author.',
+    },
+    'prototype-tile-flag-rollout': {
+        'split_1:branch:0': 'Error rate at 2% or more after week 1: rolls back to 0% and tells #releases.',
+        'split_1:continue:': 'Healthy after week 1: goes to 50%, checks again a week later, then 100% or rolls back.',
+        'split_2:branch:0': 'Error rate too high at 50%: rolls back and tells #releases.',
+        'split_2:continue:': 'Healthy at 50%: goes to 100% and announces it.',
+    },
+}
+
 export const TILE_WORKFLOWS: HogFlow[] = [
     welcomeSequence(),
     supportTicketToSlack(),
@@ -588,4 +952,8 @@ export const TILE_WORKFLOWS: HogFlow[] = [
     sreInvestigator(),
     weeklyReport(),
     aiTriage(),
+    springDrip(),
+    blackFriday(),
+    ciAutoFix(),
+    flagRollout(),
 ]

@@ -11,6 +11,9 @@ import {
     IconRewind,
     IconSearch,
     IconSparkles,
+    IconGithub,
+    IconPlay,
+    IconFlag,
     IconWebhooks,
 } from '@posthog/icons'
 
@@ -19,8 +22,17 @@ import { IconSlack } from 'lib/lemon-ui/icons'
 
 import { workflowLogic } from '../../../workflowLogic'
 import { useHogFlowStep } from '../../steps/HogFlowSteps'
+import { PATH_SUMMARIES } from '../../tree/prototypeTileWorkflows'
 import type { HogFlow, HogFlowAction } from '../../types'
-import { conditionText, emailContent, humanDuration, nodeFacts, NodeFacts, outgoingEdges } from './graphFirstModel'
+import {
+    BranchGroup,
+    conditionText,
+    emailContent,
+    humanDuration,
+    nodeFacts,
+    NodeFacts,
+    outgoingEdges,
+} from './graphFirstModel'
 
 type AnyConfig = Record<string, any>
 
@@ -37,6 +49,7 @@ export type PreviewKind =
     | 'wait'
     | 'window'
     | 'fields'
+    | 'flag'
 
 export type TileKind = {
     label: string
@@ -204,6 +217,24 @@ function functionKind(action: HogFlowAction): Omit<TileKind, 'invalid' | 'isStar
                 },
                 preview: 'replay',
             }
+        case 'prototype-update-flag': {
+            const rollout = Number(inputs.rollout ?? 0)
+            return {
+                label: 'Feature flag',
+                icon: <IconFlag />,
+                color: '#0e9f6e',
+                badge: `${rollout}%`,
+                facts: {
+                    headline: rollout === 0 ? `Turn ${inputs.flag} off` : `Roll ${inputs.flag} out to ${rollout}%`,
+                    detail: rollout === 0 ? 'Rolls back for everyone' : `${rollout}% of people get it`,
+                    fields: [
+                        ['Flag', inputs.flag],
+                        ['Rollout', `${rollout}% of people`],
+                    ],
+                },
+                preview: 'flag',
+            }
+        }
         case 'prototype-run-insight': {
             const insights: string[] = inputs.insights ?? []
             return {
@@ -298,14 +329,26 @@ function triggerKind(workflow: HogFlow, action: HogFlowAction): Partial<TileKind
             },
         }
     }
+    if (trigger?.type === 'manual') {
+        return {
+            label: 'Manual start',
+            icon: <IconPlay />,
+            badge: 'Manual',
+            facts: {
+                headline: action.name,
+                detail: 'Someone starts it by hand',
+                fields: [['Starts', 'When someone presses Run']],
+            },
+        }
+    }
     if (trigger?.type === 'webhook') {
         const [source, event] = action.name.includes(':') ? action.name.split(/:\s*/) : ['Webhook', action.name]
         return {
             label: 'Webhook trigger',
-            icon: <IconWebhooks />,
+            icon: source === 'GitHub' ? <IconGithub /> : <IconWebhooks />,
             badge: source,
             facts: {
-                headline: event,
+                headline: event.charAt(0).toUpperCase() + event.slice(1),
                 detail: `Starts when ${source} calls the webhook`,
                 fields: [
                     ['Starts on', `${source} webhook`],
@@ -657,6 +700,25 @@ function WaitPreview({ action }: { action: HogFlowAction }): JSX.Element {
     )
 }
 
+function FlagPreview({ action }: { action: HogFlowAction }): JSX.Element {
+    const inputs = inputsOf(action)
+    const rollout = Number(inputs.rollout ?? 0)
+    return (
+        <div className="flex flex-col gap-1.5 text-left text-[12.5px]">
+            <div className="flex items-center gap-2">
+                <code className="rounded bg-surface-secondary px-1">{inputs.flag}</code>
+                <span className="ml-auto font-semibold">{rollout}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-surface-secondary">
+                <div className="h-full rounded-full bg-[#0e9f6e]" style={{ width: `${rollout}%` }} />
+            </div>
+            <div className="text-secondary">
+                {rollout === 0 ? 'Nobody gets the new version.' : `${rollout}% of people get the new version.`}
+            </div>
+        </div>
+    )
+}
+
 function WindowPreview({ action }: { action: HogFlowAction }): JSX.Element {
     const config = action.config as AnyConfig
     const start = parseInt(config.time?.[0] ?? '9', 10)
@@ -724,6 +786,8 @@ export function TilePreview({
             return <WaitPreview action={action} />
         case 'window':
             return <WindowPreview action={action} />
+        case 'flag':
+            return <FlagPreview action={action} />
         default:
             return <FieldList facts={kind.facts} />
     }
@@ -740,4 +804,18 @@ export function FieldList({ facts }: { facts: NodeFacts }): JSX.Element {
             ))}
         </dl>
     )
+}
+
+/** What a collapsed path does: the AI author's summary when there is one, otherwise its steps in order. */
+export function pathSummary(workflow: HogFlow, group: BranchGroup): { text: string; ai: boolean } {
+    const key = `${group.edge.from}:${group.edge.type}:${group.edge.index ?? ''}`
+    const written = PATH_SUMMARIES[workflow.id]?.[key]
+    if (written) {
+        return { text: written, ai: true }
+    }
+    const steps = workflow.actions
+        .filter((action) => group.memberIds.includes(action.id))
+        .slice(0, 3)
+        .map((action) => nodeFacts(workflow, action).headline)
+    return { text: steps.join(', then '), ai: false }
 }

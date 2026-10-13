@@ -24,11 +24,15 @@ export default meta
 
 const byId = Object.fromEntries(TILE_WORKFLOWS.map((flow) => [flow.id, flow]))
 
-function tiles(
-    id: string,
-    flow: TileFlow = 'down',
-    options: { aiPanel?: boolean; chat?: { ask: string; answer: string }; groups?: GroupStyle } = {}
-): StoryFn {
+type TileOptions = {
+    flow?: TileFlow
+    open?: boolean
+    aiPanel?: boolean
+    chat?: { ask: string; answer: string }
+    groups?: GroupStyle
+}
+
+function tiles(id: string, options: TileOptions = {}): StoryFn {
     const Story: StoryFn = () => (
         <Frame
             id={id}
@@ -36,8 +40,9 @@ function tiles(
             chat={options.chat}
             editor={{
                 initialNodeStyle: 'tiles',
-                initialTileFlow: flow,
+                initialTileFlow: options.flow ?? 'rail',
                 initialGroupStyle: options.groups,
+                initialCollapsed: options.open ? 'auto' : 'all',
                 showStyleSwitch: false,
             }}
         />
@@ -45,30 +50,40 @@ function tiles(
     return Story
 }
 
+const TRIAGE_CHAT = {
+    ask: 'Triage new support tickets with AI. Answer how-to questions, route bugs and billing.',
+    answer: 'I built a flow where an AI step sorts each ticket. How-to questions get an AI reply, and a person checks the unsure ones. Bugs go to engineering, billing tickets to billing.',
+}
+
+export const AiSupportTriageWithAiPanel = tiles('prototype-tile-ai-triage', { aiPanel: true, chat: TRIAGE_CHAT })
+export const AiSupportTriage = tiles('prototype-tile-ai-triage')
+export const AiSupportTriageOpen = tiles('prototype-tile-ai-triage', { open: true })
 export const WelcomeSequence = tiles('prototype-tile-welcome-sequence')
-export const WelcomeSequenceRight = tiles('prototype-tile-welcome-sequence', 'right')
-export const WelcomeSequenceRail = tiles('prototype-tile-welcome-sequence', 'rail')
+export const SpringDripCampaign = tiles('prototype-tile-spring-drip')
+export const BlackFriday = tiles('prototype-tile-black-friday')
+export const AutoFixCiFailures = tiles('prototype-tile-ci-autofix')
+export const AutoFixCiFailuresOpen = tiles('prototype-tile-ci-autofix', { open: true })
+export const FeatureFlagRollout = tiles('prototype-tile-flag-rollout')
+export const FeatureFlagRolloutWithAiPanel = tiles('prototype-tile-flag-rollout', {
+    aiPanel: true,
+    chat: {
+        ask: 'Roll out new-checkout over three weeks. Roll back if errors go up, and keep #releases posted.',
+        answer: 'I built a rollout that goes 10%, 50%, then 100%, one week apart. Before each step it checks the checkout error rate. At 2% or more it rolls back to 0% and tells #releases.',
+    },
+})
 export const TicketToSlack = tiles('prototype-tile-ticket-to-slack')
 export const NegativeSurveyAlert = tiles('prototype-tile-negative-survey')
 export const TrialToPaid = tiles('prototype-tile-trial-to-paid')
-export const TrialToPaidRight = tiles('prototype-tile-trial-to-paid', 'right')
+export const TrialToPaidDown = tiles('prototype-tile-trial-to-paid', { flow: 'down', open: true })
 export const AbandonedCheckout = tiles('prototype-tile-abandoned-checkout')
-export const PaymentFailed = tiles('prototype-tile-payment-failed', 'rail')
+export const PaymentFailed = tiles('prototype-tile-payment-failed')
 export const AiIncidentInvestigator = tiles('prototype-tile-sre-investigator')
-export const WeeklyReport = tiles('prototype-tile-weekly-report', 'right')
-export const AiSupportTriage = tiles('prototype-tile-ai-triage')
-export const AiSupportTriageWithAiPanel = tiles('prototype-tile-ai-triage', 'down', {
-    aiPanel: true,
-    chat: {
-        ask: 'Triage new support tickets with AI. Answer how-to questions, route bugs and billing.',
-        answer: 'I built a flow where an AI step sorts each ticket. How-to questions get an AI reply, and a person checks the unsure ones. Bugs go to engineering, billing tickets to billing.',
-    },
-})
+export const WeeklyReportRight = tiles('prototype-tile-weekly-report', { flow: 'right' })
 export const LaunchAbTestWithAiPanel: StoryFn = () => (
     <Frame
         id="prototype-larkspur-launch-ab-test"
         aiPanel
-        editor={{ initialNodeStyle: 'tiles', showStyleSwitch: false }}
+        editor={{ initialNodeStyle: 'tiles', initialTileFlow: 'rail', initialCollapsed: 'all', showStyleSwitch: false }}
     />
 )
 
@@ -168,7 +183,6 @@ export const HoverCards: StoryFn = () => (
 )
 HoverCards.parameters = { testOptions: { waitForSelector: '[data-tile-anchor]' } }
 
-export const AiSupportTriageGroupsDashed = tiles('prototype-tile-ai-triage', 'down', { groups: 'dashed' })
-export const AiSupportTriageGroupsTint = tiles('prototype-tile-ai-triage', 'down', { groups: 'tint' })
-export const AiSupportTriageGroupsBracket = tiles('prototype-tile-ai-triage', 'down', { groups: 'bracket' })
-export const TrialToPaidRail = tiles('prototype-tile-trial-to-paid', 'rail')
+export const AiSupportTriageGroupsDashed = tiles('prototype-tile-ai-triage', { open: true, groups: 'dashed' })
+export const AiSupportTriageGroupsTint = tiles('prototype-tile-ai-triage', { open: true, groups: 'tint' })
+export const AiSupportTriageGroupsBracket = tiles('prototype-tile-ai-triage', { open: true, groups: 'bracket' })

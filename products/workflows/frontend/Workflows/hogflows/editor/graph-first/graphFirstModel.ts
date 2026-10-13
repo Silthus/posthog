@@ -185,7 +185,9 @@ function reachable(workflow: HogFlow, start: string): Set<string> {
 export function computeGroups(workflow: HogFlow): BranchGroup[] {
     const groups: BranchGroup[] = []
     workflow.actions
-        .filter((action) => action.type === 'conditional_branch' || action.type === 'random_cohort_branch')
+        .filter((action) =>
+            ['conditional_branch', 'random_cohort_branch', 'wait_until_condition'].includes(action.type)
+        )
         .forEach((action) => {
             const outgoing = outgoingEdges(workflow, action.id)
             const reach = outgoing.map((edge) => reachable(workflow, edge.to))
@@ -213,11 +215,15 @@ export function computeGroups(workflow: HogFlow): BranchGroup[] {
                 }
                 const config = configOf(action)
                 const condition =
-                    action.type === 'conditional_branch' && edge.type === 'branch'
-                        ? conditionText(config.conditions?.[edge.index ?? 0]?.filters)
-                        : edge.type === 'continue'
-                          ? 'no other path matched'
-                          : `${config.cohorts?.[edge.index ?? 0]?.percentage}% at random`
+                    action.type === 'wait_until_condition'
+                        ? edge.type === 'branch'
+                            ? `${config.condition?.name ?? 'it'} happens within ${humanDuration(config.max_wait_duration)}`
+                            : `nothing happens in ${humanDuration(config.max_wait_duration)}`
+                        : action.type === 'conditional_branch' && edge.type === 'branch'
+                          ? conditionText(config.conditions?.[edge.index ?? 0]?.filters)
+                          : edge.type === 'continue'
+                            ? 'no other path matched'
+                            : `${config.cohorts?.[edge.index ?? 0]?.percentage}% at random`
                 groups.push({
                     id: `group:${edgeKey(edge)}`,
                     branchNodeId: action.id,

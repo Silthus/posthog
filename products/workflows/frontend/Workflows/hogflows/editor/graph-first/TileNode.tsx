@@ -5,7 +5,7 @@
 import clsx from 'clsx'
 import { useEffect, useRef, useState } from 'react'
 
-import { IconStack } from '@posthog/icons'
+import { IconSparkles } from '@posthog/icons'
 import { LemonTag, Tooltip } from '@posthog/lemon-ui'
 
 import { EmailPreviewThumbnail } from 'lib/components/EmailPreviewThumbnail/EmailPreviewThumbnail'
@@ -14,7 +14,7 @@ import { humanFriendlyLargeNumber } from 'lib/utils/numbers'
 import type { HogFlow, HogFlowAction } from '../../types'
 import { CardState } from './GraphFirstCards'
 import { BranchGroup, emailContent, groupEmails } from './graphFirstModel'
-import { FieldList, TileKind, TilePreview, useTileKind } from './tileKinds'
+import { FieldList, pathSummary, TileKind, TilePreview, useTileKind } from './tileKinds'
 
 export type TileFlow = 'down' | 'rail' | 'right'
 
@@ -27,6 +27,7 @@ export const TILE_FLOWS: { value: TileFlow; label: string; tooltip: string }[] =
 export const TILE = 64
 const PAD = 14
 const CARD_WIDTH = 400
+const SIDE_CARD_WIDTH = 440
 const CAPTION_WIDTH = 220
 const RAIL_CAPTION_WIDTH = 230
 const OPEN_DELAY_MS = 260
@@ -179,23 +180,42 @@ export function StepCardHead({
     kind,
     state,
     width,
+    side = false,
     trailing,
 }: {
     action: HogFlowAction
     kind: TileKind
     state: CardState
     width: number
+    side?: boolean
     trailing?: React.ReactNode
 }): JSX.Element {
+    const face = (
+        <TileFace kind={kind} state={state} entered={state.metrics?.enteredByNode[action.id]} action={action} />
+    )
+    const label = (
+        <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: kind.color }}>
+            {kind.label}
+        </div>
+    )
+    if (side) {
+        return (
+            <div className="relative flex items-start gap-3">
+                {face}
+                <Caption kind={kind} side />
+                <div className="absolute right-0 top-0 flex items-center gap-1">
+                    {label}
+                    {trailing}
+                </div>
+            </div>
+        )
+    }
     return (
         <div className="relative flex flex-col items-center gap-1.5">
-            <TileFace kind={kind} state={state} entered={state.metrics?.enteredByNode[action.id]} action={action} />
+            {face}
             <Caption kind={kind} side={false} />
-            <div
-                className="absolute left-0 top-0 text-[10px] font-semibold uppercase tracking-wider"
-                style={{ color: kind.color, maxWidth: (width - TILE) / 2 - PAD - 8 }}
-            >
-                {kind.label}
+            <div className="absolute left-0 top-0" style={{ maxWidth: (width - TILE) / 2 - PAD - 8 }}>
+                {label}
             </div>
             {trailing && <div className="absolute right-0 top-0 flex gap-1">{trailing}</div>}
         </div>
@@ -204,33 +224,37 @@ export function StepCardHead({
 
 function HoverCard({
     open,
+    side,
     action,
     workflow,
     kind,
     state,
 }: {
     open: boolean
+    side: boolean
     action: HogFlowAction
     workflow: HogFlow
     kind: TileKind
     state: CardState
 }): JSX.Element {
-    const inset = (CARD_WIDTH - TILE) / 2
-    const closedClip = `inset(${PAD}px ${inset}px calc(100% - ${PAD + TILE}px) ${inset}px round 12px)`
+    const width = side ? SIDE_CARD_WIDTH : CARD_WIDTH
+    const inset = (width - TILE) / 2
+    const [right, left] = side ? [width - PAD - TILE, PAD] : [inset, inset]
+    const closedClip = `inset(${PAD}px ${right}px calc(100% - ${PAD + TILE}px) ${left}px round 12px)`
     return (
         <div
             className="absolute z-10 rounded-2xl border bg-surface-primary text-primary shadow-xl"
             style={{
-                left: TILE / 2 - CARD_WIDTH / 2,
+                left: side ? -PAD : TILE / 2 - width / 2,
                 top: -PAD,
-                width: CARD_WIDTH,
+                width,
                 padding: PAD,
                 clipPath: open ? 'inset(0px 0px 0px 0px round 16px)' : closedClip,
                 transition: `clip-path ${open ? 240 : CLOSE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
                 borderColor: kind.color,
             }}
         >
-            <StepCardHead action={action} kind={kind} state={state} width={CARD_WIDTH} />
+            <StepCardHead action={action} kind={kind} state={state} width={width} side={side} />
             <div
                 className="mt-3 border-t pt-3 transition-opacity"
                 style={{
@@ -340,7 +364,14 @@ export function TileNode({
             >
                 <TileFace kind={kind} state={state} entered={entered} showEmail={showEmail} action={action} />
                 {expansion.mounted && !showEmail && (
-                    <HoverCard open={expansion.open} action={action} workflow={workflow} kind={kind} state={state} />
+                    <HoverCard
+                        open={expansion.open}
+                        side={side}
+                        action={action}
+                        workflow={workflow}
+                        kind={kind}
+                        state={state}
+                    />
                 )}
             </div>
             <div className={clsx('flex flex-col gap-1', !side && 'items-center')}>
@@ -360,6 +391,44 @@ export function TileNode({
     )
 }
 
+function MiniTile({
+    action,
+    workflow,
+    size,
+    style,
+}: {
+    action: HogFlowAction
+    workflow: HogFlow
+    size: number
+    style?: React.CSSProperties
+}): JSX.Element {
+    const kind = useTileKind(action, workflow)
+    return (
+        <div
+            className="flex items-center justify-center rounded-lg border-2 bg-surface-primary shadow-sm"
+            style={{
+                width: size,
+                height: size,
+                borderColor: kind.color,
+                color: kind.color,
+                fontSize: size * 0.45,
+                ...style,
+            }}
+            title={kind.facts.headline}
+        >
+            {kind.icon}
+        </div>
+    )
+}
+
+const PEEK_TILE = 44
+const PEEK_GAP = 8
+const PEEK_MAX = 6
+
+/**
+ * A collapsed path. At rest the cover shows the first steps' icons like a folder. On hover the cover
+ * fades and the stack fans out, so you can peek at every step inside before you open it.
+ */
 export function TileGroupNode({
     group,
     workflow,
@@ -376,16 +445,41 @@ export function TileGroupNode({
     onExpand?: () => void
 }): JSX.Element {
     const side = flow === 'rail'
+    const ref = useRef<HTMLDivElement>(null)
+    const [peek, setPeek] = useState(false)
+    const members = group.memberIds
+        .map((id) => workflow.actions.find((action) => action.id === id))
+        .filter((action): action is HogFlowAction => !!action)
+    const shown = members.slice(0, PEEK_MAX)
+    const hidden = members.length - shown.length
     const emails = groupEmails(workflow, group).reduce((sum, email) => sum + email.count, 0)
+    const summary = pathSummary(workflow, group)
     const border = state.onPath ? 'var(--color-accent)' : (color ?? 'var(--color-border-bold, #9ca3af)')
+    const fanWidth = shown.length * (PEEK_TILE + PEEK_GAP) + (hidden ? PEEK_TILE : 0)
+    const fanStart = side ? 0 : TILE / 2 - fanWidth / 2
+
+    useEffect(() => {
+        const node = ref.current?.closest<HTMLElement>('.react-flow__node')
+        if (node && peek) {
+            const previous = node.style.zIndex
+            node.style.zIndex = '1000'
+            return () => {
+                node.style.zIndex = previous
+            }
+        }
+    }, [peek])
+
     return (
         <div
+            ref={ref}
             className={clsx(
                 'flex cursor-pointer text-primary transition-opacity',
                 side ? 'items-start gap-3' : 'flex-col items-center gap-1.5 text-center',
                 state.dimmed && 'opacity-30'
             )}
             title="Open this path"
+            onMouseEnter={() => setPeek(true)}
+            onMouseLeave={() => setPeek(false)}
             onClick={(e) => {
                 e.stopPropagation()
                 onExpand?.()
@@ -395,35 +489,97 @@ export function TileGroupNode({
                 {[8, 4].map((offset) => (
                     <div
                         key={offset}
-                        className="absolute rounded-xl border-2 bg-surface-primary"
+                        className="absolute inset-0 rounded-xl border-2 bg-surface-primary transition-all duration-200"
                         style={{
-                            inset: 0,
                             transform: `translate(${offset}px, ${-offset}px)`,
                             borderColor: border,
-                            opacity: 0.5,
+                            opacity: peek ? 0 : 0.5,
                         }}
                     />
                 ))}
+                {shown.map((action, index) => (
+                    <MiniTile
+                        key={action.id}
+                        action={action}
+                        workflow={workflow}
+                        size={PEEK_TILE}
+                        style={{
+                            position: 'absolute',
+                            left: (TILE - PEEK_TILE) / 2,
+                            top: (TILE - PEEK_TILE) / 2,
+                            transform: peek
+                                ? `translate(${fanStart - (TILE - PEEK_TILE) / 2 + index * (PEEK_TILE + PEEK_GAP)}px, ${side ? 0 : -PEEK_TILE - 14}px)`
+                                : 'translate(0, 0) scale(0.6)',
+                            opacity: peek ? 1 : 0,
+                            transition: `transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1) ${index * 30}ms, opacity 160ms ease ${index * 30}ms`,
+                            zIndex: 2,
+                        }}
+                    />
+                ))}
+                {hidden > 0 && (
+                    <div
+                        className="absolute flex items-center justify-center rounded-lg border bg-surface-primary text-xs font-semibold text-secondary"
+                        style={{
+                            width: PEEK_TILE,
+                            height: PEEK_TILE,
+                            left: (TILE - PEEK_TILE) / 2,
+                            top: (TILE - PEEK_TILE) / 2,
+                            transform: peek
+                                ? `translate(${fanStart - (TILE - PEEK_TILE) / 2 + shown.length * (PEEK_TILE + PEEK_GAP)}px, ${side ? 0 : -PEEK_TILE - 14}px)`
+                                : 'scale(0.6)',
+                            opacity: peek ? 1 : 0,
+                            transition: 'transform 260ms ease, opacity 160ms ease',
+                            zIndex: 2,
+                        }}
+                    >
+                        +{hidden}
+                    </div>
+                )}
                 <div
-                    className="absolute inset-0 flex items-center justify-center rounded-xl border-2 border-dashed bg-surface-primary text-2xl"
-                    style={{ borderColor: border, color: color ?? 'var(--color-text-secondary)' }}
+                    className="absolute inset-0 grid grid-cols-2 place-items-center gap-0.5 rounded-xl border-2 border-dashed bg-surface-primary p-1.5 transition-opacity duration-200"
+                    style={{ borderColor: border, opacity: peek ? 0 : 1, zIndex: 3, pointerEvents: 'none' }}
                 >
-                    <IconStack />
+                    {members.slice(0, 4).map((action) => (
+                        <CoverIcon key={action.id} action={action} workflow={workflow} />
+                    ))}
                 </div>
-                <Badge className="-right-3 -top-3.5">{group.memberIds.length}</Badge>
+                <Badge className="-right-3 -top-3.5 z-[4]">{group.memberIds.length}</Badge>
             </div>
             <div
                 className={clsx('flex flex-col gap-0.5', side ? 'pt-1 text-left' : 'items-center')}
-                style={{ width: side ? RAIL_CAPTION_WIDTH : CAPTION_WIDTH }}
+                style={{
+                    width: side ? RAIL_CAPTION_WIDTH : CAPTION_WIDTH,
+                    visibility: peek && side ? 'hidden' : undefined,
+                }}
             >
                 <div className="break-words text-[13px] font-semibold leading-tight" style={{ color }}>
                     {group.label}
                 </div>
-                <div className="break-words text-xs leading-snug text-secondary">
-                    {group.memberIds.length} steps{emails ? `, ${emails} ${emails === 1 ? 'email' : 'emails'}` : ''}.
-                    Click to open
+                <div className="break-words text-xs leading-snug">
+                    {summary.ai && (
+                        <Tooltip title="Written by PostHog AI when it built this workflow">
+                            <IconSparkles className="mr-1 inline align-[-2px] text-[#7c3aed]" />
+                        </Tooltip>
+                    )}
+                    {summary.text}
+                </div>
+                <div className="text-[11px] text-secondary">
+                    {group.memberIds.length} {group.memberIds.length === 1 ? 'step' : 'steps'}
+                    {emails ? ` · ${emails} ${emails === 1 ? 'email' : 'emails'}` : ''} · click to open
                 </div>
             </div>
         </div>
+    )
+}
+
+function CoverIcon({ action, workflow }: { action: HogFlowAction; workflow: HogFlow }): JSX.Element {
+    const kind = useTileKind(action, workflow)
+    return (
+        <span
+            className="flex size-[22px] items-center justify-center rounded text-[14px]"
+            style={{ color: kind.color, backgroundColor: `${kind.color}1a` }}
+        >
+            {kind.icon}
+        </span>
     )
 }
