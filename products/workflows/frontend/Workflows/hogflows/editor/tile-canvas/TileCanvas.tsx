@@ -224,7 +224,7 @@ function TileCanvasContent(): JSX.Element {
                         openStepMenu(nodeId)
                     }
                 }}
-                className="@container/tile-canvas flex min-h-0 min-w-0 grow @max-[48rem]/workflow-editor:min-h-80 @max-[48rem]/workflow-editor:shrink-0"
+                className="TileCanvas__flow @container/tile-canvas flex min-h-0 min-w-0 grow @max-[48rem]/workflow-editor:min-h-80 @max-[48rem]/workflow-editor:shrink-0"
             >
                 <ReactFlow<TileCanvasNode, TileEdgeType>
                     className="grow"
