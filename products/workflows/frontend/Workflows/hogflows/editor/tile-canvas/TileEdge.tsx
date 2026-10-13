@@ -16,8 +16,8 @@ export function TileEdge({ data }: EdgeProps<TileEdgeType>): JSX.Element | null 
     const at = label && routed.label ? routed.label : insertPoint(routed.points)
     return (
         <>
-            <path d={roundedPath(routed.points)} fill="none" stroke="var(--border-bold)" strokeWidth={1.5} />
-            <path d={arrowHead(routed.points)} fill="none" stroke="var(--border-bold)" strokeWidth={1.5} />
+            <path d={roundedPath(routed.points)} fill="none" stroke="var(--tile-canvas-edge)" strokeWidth={1.5} />
+            <path d={arrowHead(routed.points)} fill="none" stroke="var(--tile-canvas-edge)" strokeWidth={1.5} />
             <EdgeLabelRenderer>
                 {label && routed.label && (
                     <div

@@ -145,7 +145,10 @@ function TileCanvasContent(): JSX.Element {
 
     return (
         <div
-            className={cn('relative flex min-h-0 min-w-0 flex-1 overflow-hidden', motion && 'TileCanvas--moving')}
+            className={cn(
+                'TileCanvas relative flex min-h-0 min-w-0 flex-1 overflow-hidden',
+                motion && 'TileCanvas--moving'
+            )}
             data-attr="workflow-editor"
         >
             <TileCanvasMeasureLayer />

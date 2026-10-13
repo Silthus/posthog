@@ -63,6 +63,14 @@ const TYPE_LABELS: Partial<Record<HogFlowAction['type'], string>> = {
     random_cohort_branch: 'Random split',
 }
 
+/** Some step colors are dark in both themes, so dark mode lifts them to stay readable on a dark tile. */
+function readableStepColor(color: string | undefined, isDarkModeOn: boolean): string {
+    if (!color) {
+        return 'var(--color-text-secondary)'
+    }
+    return isDarkModeOn ? `color-mix(in srgb, ${color} 65%, white)` : color
+}
+
 export function useTileStep(action: HogFlowAction, workflow: HogFlow): TileStep {
     const step = useHogFlowStep(action)
     const { hogFunctionTemplatesById, actionValidationErrorsById } = useValues(workflowLogic)
@@ -77,7 +85,7 @@ export function useTileStep(action: HogFlowAction, workflow: HogFlow): TileStep 
         return {
             label: look?.label ?? TYPE_LABELS[action.type] ?? templateName ?? 'Step',
             icon: look?.icon ?? step?.icon,
-            color: look?.color?.[isDarkModeOn ? 1 : 0] ?? step?.color ?? 'var(--color-text-secondary)',
+            color: look?.color?.[isDarkModeOn ? 1 : 0] ?? readableStepColor(step?.color, isDarkModeOn),
             badge: stepBadge(workflow, action),
             facts: stepFacts(workflow, action, templateName),
             preview: stepPreviewKind(action),
