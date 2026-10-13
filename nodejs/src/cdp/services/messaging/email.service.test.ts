@@ -1441,13 +1441,13 @@ describe('EmailService', () => {
 
                 it('rechecks a pause after a delayed cap claim and returns the grant', async () => {
                     await setTenantStatus('ENABLED')
+                    const now = Date.now()
+                    const clock = jest.spyOn(Date, 'now').mockReturnValue(now)
                     service = createSandboxService(true, {
                         tenantName: tenantName(),
                         dailyTeamCap: '1',
                         dailyRecipientCap: '1',
                     })
-                    const now = Date.now()
-                    const clock = jest.spyOn(Date, 'now').mockReturnValue(now)
                     const claim = dailyCapLimiter.claimAllOrNothing.bind(dailyCapLimiter)
                     const delayedClaim = jest
                         .spyOn(dailyCapLimiter, 'claimAllOrNothing')
