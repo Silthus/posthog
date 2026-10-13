@@ -6,7 +6,7 @@ type OrganizationMemberSnapshot = {
     expiresAt: number
 }
 
-type TeamOrganizationSnapshot = { organizationId: string; expiresAt: number }
+export type TeamOrganizationSnapshot = { readonly organizationId: string; readonly expiresAt: number }
 
 const MAX_SNAPSHOT_AGE_MS = 60_000
 const REFRESH_AGE_MS = MAX_SNAPSHOT_AGE_MS - 1_000
@@ -67,7 +67,7 @@ export class OrganizationMembersService {
         })
     }
 
-    public async getOrganizationId(teamId: number): Promise<string> {
+    public async getOrganizationSnapshot(teamId: number): Promise<TeamOrganizationSnapshot> {
         const key = String(teamId)
         let snapshot = await this.organizations.get(key)
         if (snapshot && this.now() >= snapshot.expiresAt) {
@@ -81,21 +81,29 @@ export class OrganizationMembersService {
             this.organizations.markForRefresh(key)
             throw new Error('The organization lookup expired')
         }
-        return snapshot.organizationId
+        return snapshot
     }
 
-    public async getBlockedRecipients(teamId: number, recipients: string[]): Promise<string[]> {
+    public async getBlockedRecipients(
+        teamId: number,
+        recipients: string[],
+        organizationSnapshot?: TeamOrganizationSnapshot
+    ): Promise<string[]> {
         const expiresAt = this.now() + MAX_SNAPSHOT_AGE_MS
-        const organizationId = await this.getOrganizationId(teamId)
+        const organization = organizationSnapshot ?? (await this.getOrganizationSnapshot(teamId))
+        if (this.now() >= organization.expiresAt) {
+            throw new Error('The organization lookup expired')
+        }
+        const { organizationId } = organization
         let snapshot = await this.snapshots.get(organizationId)
-        if (snapshot && this.now() >= snapshot.expiresAt && this.now() < expiresAt) {
+        if (snapshot && this.now() >= snapshot.expiresAt && this.now() < Math.min(expiresAt, organization.expiresAt)) {
             this.snapshots.markForRefresh(organizationId)
             snapshot = await this.snapshots.get(organizationId)
         }
         if (!snapshot) {
             throw new Error('Could not check organization members')
         }
-        if (this.now() >= Math.min(expiresAt, snapshot.expiresAt)) {
+        if (this.now() >= Math.min(expiresAt, snapshot.expiresAt, organization.expiresAt)) {
             this.snapshots.markForRefresh(organizationId)
             throw new Error('The organization member check expired')
         }

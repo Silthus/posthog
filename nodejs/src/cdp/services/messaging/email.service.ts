@@ -17,7 +17,7 @@ import { createInvocationResult } from '~/cdp/utils/invocation-utils'
 import { logger } from '~/common/utils/logger'
 
 import { IntegrationManagerService } from '../managers/integration-manager.service'
-import { OrganizationMembersService } from '../managers/organization-members.service'
+import { OrganizationMembersService, TeamOrganizationSnapshot } from '../managers/organization-members.service'
 import { RecipientManagerRecipient, RecipientsManagerService } from '../managers/recipients-manager.service'
 import { TeamWorkflowsConfigService } from '../managers/team-workflows-config.service'
 import { RateLimiterService } from '../rate-limiter/rate-limiter.service'
@@ -997,7 +997,8 @@ export class EmailService {
     private async checkSandboxRecipients(
         result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>,
         recipients: string[],
-        isTest: boolean
+        isTest: boolean,
+        organization?: TeamOrganizationSnapshot
     ): Promise<boolean> {
         const invocation = result.invocation
         let blockedRecipients: string[]
@@ -1006,7 +1007,11 @@ export class EmailService {
             if (!this.organizationMembers) {
                 throw new Error('Organization member checks are not configured')
             }
-            blockedRecipients = await this.organizationMembers.getBlockedRecipients(invocation.teamId, recipients)
+            blockedRecipients = await this.organizationMembers.getBlockedRecipients(
+                invocation.teamId,
+                recipients,
+                organization
+            )
         } catch (error) {
             blockedRecipients = recipients
             reason = 'check_failed'

@@ -3,6 +3,29 @@ import { PostgresRouter } from '~/common/utils/db/postgres'
 import { OrganizationMembersService } from './organization-members.service'
 
 describe('sandbox organization membership decisions', () => {
+    it('fails closed when a warmed organization mapping expires during a member refresh', async () => {
+        let now = -10_000
+        const organizationId = '00000000-0000-0000-0000-000000000001'
+        const query = jest.fn((_use, _sql, params, operation) => {
+            if (operation === 'fetch-sandbox-team-organization') {
+                return Promise.resolve({
+                    rows: params[0].map((id: number) => ({ id, organization_id: organizationId })),
+                })
+            }
+            if (now > 0) {
+                now = 63_000
+            }
+            return Promise.resolve({ rows: [{ organization_id: organizationId, email: 'member@example.com' }] })
+        })
+        const service = new OrganizationMembersService({ query } as unknown as PostgresRouter, () => now)
+        expect(await service.getBlockedRecipients(2, ['member@example.com'])).toEqual([])
+        now = 0
+        await service.getOrganizationSnapshot(1)
+        now = 58_000
+
+        await expect(service.getBlockedRecipients(1, ['member@example.com'])).rejects.toThrow('expired')
+    })
+
     it('rejects a member response that outlasts its one-minute decision', async () => {
         let now = 0
         const organizationId = '00000000-0000-0000-0000-000000000001'
