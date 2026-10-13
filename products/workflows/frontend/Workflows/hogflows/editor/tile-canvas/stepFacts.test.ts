@@ -1,0 +1,220 @@
+import type { HogFlow, HogFlowAction } from '../../types'
+import { pathSummary, stepBadge, stepFacts } from './stepFacts'
+import { computePathGroups } from './tileCanvasModel'
+
+type Config = Record<string, unknown>
+
+const step = (id: string, type: string, config: Config, name = id): HogFlowAction =>
+    ({ id, type, name, description: '', config }) as HogFlowAction
+
+const inputs = (values: Config): Record<string, { value: unknown }> =>
+    Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value }]))
+
+const fn = (id: string, templateId: string, values: Config, extra: Partial<HogFlowAction> = {}): HogFlowAction =>
+    ({ ...step(id, 'function', { template_id: templateId, inputs: inputs(values) }), ...extra }) as HogFlowAction
+
+const email = step('welcome', 'function_email', {
+    template_id: 'template-email',
+    inputs: inputs({
+        email: {
+            to: { email: '{{ person.properties.email }}' },
+            subject: 'Welcome to Example Co.',
+            preheader: 'Your first doc takes two minutes',
+            html: '<p>Hi</p>',
+        },
+    }),
+})
+
+const workflow = (actions: HogFlowAction[], extra: Partial<HogFlow> = {}): HogFlow =>
+    ({
+        id: 'flow',
+        team_id: 1,
+        version: 1,
+        name: 'Flow',
+        status: 'draft',
+        exit_condition: 'exit_only_at_end',
+        actions,
+        edges: [],
+        created_at: '',
+        updated_at: '',
+        ...extra,
+    }) as HogFlow
+
+const eventTrigger = step('trigger', 'trigger', {
+    type: 'event',
+    filters: { events: [{ id: 'Signed up', name: 'Signed up', type: 'events' }] },
+})
+
+const split = step('by_plan', 'conditional_branch', {
+    conditions: [
+        {
+            name: 'Paid',
+            filters: { properties: [{ key: 'plan', type: 'person', value: ['paid'], operator: 'exact' }] },
+        },
+        {
+            name: 'Trial',
+            filters: { properties: [{ key: 'plan', type: 'person', value: ['trial'], operator: 'exact' }] },
+        },
+    ],
+})
+
+const aiTask = fn(
+    'draft_reply',
+    'template-posthog-create-task',
+    {
+        title: 'Answer the question',
+        prompt: 'Answer with links to the docs. Say how sure you are.',
+        connectors: ['docs-mcp'],
+        skills: ['tone-of-voice', 'support-macros'],
+    },
+    { output_variable: [{ key: 'reply', result_path: 'reply' }] }
+)
+
+describe('stepFacts', () => {
+    it.each<[string, HogFlowAction, string, string | undefined]>([
+        ['an email', email, 'Welcome to Example Co.', 'Your first doc takes two minutes'],
+        [
+            'a Slack message',
+            fn('notify', 'template-slack', {
+                channel: 'C123|#support',
+                text: 'New ticket: {event.properties.subject}\nOpen it',
+            }),
+            'Post to #support',
+            'New ticket: subject',
+        ],
+        [
+            'a webhook',
+            fn('call', 'template-webhook', {
+                url: 'https://hooks.example.com/v1/page',
+                method: 'POST',
+                body: { severity: 'high' },
+            }),
+            'Call hooks.example.com',
+            'Sends severity',
+        ],
+        ['an AI task', aiTask, 'Answer the question', 'Answer with links to the docs.'],
+        [
+            'a scout',
+            fn('investigate', 'template-posthog-run-scout', { skill_name: 'incident-investigator' }),
+            'Run the incident investigator scout',
+            undefined,
+        ],
+        [
+            'a ticket reply',
+            fn('reply', 'template-posthog-send-ticket-message', { message: 'Thanks, we are on it', is_private: false }),
+            'Reply to the customer',
+            'Thanks, we are on it',
+        ],
+        [
+            'a ticket note that sends an earlier answer',
+            fn('note', 'template-posthog-send-ticket-message', { message: '{variables.ai_reply}', is_private: true }),
+            'Save a note for an agent',
+            'Sends the ai reply from earlier',
+        ],
+        [
+            'a ticket update',
+            fn('route', 'template-posthog-update-ticket', { status: 'pending', tags: ['bug', 'p1'] }),
+            'Set status to pending',
+            'Tag bug, p1',
+        ],
+        [
+            'a person update',
+            fn('mark', 'template-posthog-update-person-properties', { set_properties: { billing_status: 'past_due' } }),
+            'Set billing status to past_due',
+            'On the person',
+        ],
+        ['a delay', step('pause', 'delay', { delay_duration: '3d' }), 'Wait 3 days', 'Then continue'],
+        [
+            'a wait for an event',
+            step('wait', 'wait_until_condition', { condition: { name: 'Upgraded' }, max_wait_duration: '4d' }),
+            'Wait for Upgraded',
+            'Gives up after 4 days',
+        ],
+        [
+            'a time window',
+            step('hours', 'wait_until_time_window', {
+                timezone: 'Europe/Berlin',
+                day: 'weekday',
+                time: ['09:00', '17:00'],
+            }),
+            'Next weekday, 09:00 to 17:00',
+            'Holds people until then (Europe/Berlin)',
+        ],
+        ['a split', split, 'Split by plan', 'Paid, Trial, or no match'],
+        [
+            'a random split',
+            step('ab', 'random_cohort_branch', { cohorts: [{ percentage: 50 }, { percentage: 50 }] }),
+            'Random split',
+            '50% / 50%',
+        ],
+        ['an event trigger', eventTrigger, 'Signed up', 'Starts when someone does this'],
+        [
+            'an exit',
+            step('exit', 'exit', { reason: 'Trial ended' }),
+            'Trial ended',
+            'Nobody leaves early: everyone runs to the end',
+        ],
+    ])('leads %s with its own data', (_, action, headline, detail) => {
+        expect(stepFacts(workflow([action]), action)).toMatchObject({ headline, detail })
+    })
+
+    it('falls back to the template name for a template it does not know', () => {
+        const action = fn('hubspot', 'template-hubspot', { email: 'x' })
+
+        expect(stepFacts(workflow([action]), action, 'HubSpot').headline).toBe('HubSpot')
+    })
+
+    it.each<[string, HogFlowAction, string | undefined]>([
+        ['a delay shows its length', step('pause', 'delay', { delay_duration: '3d' }), '3d'],
+        [
+            'a wait shows its longest wait',
+            step('wait', 'wait_until_condition', { condition: {}, max_wait_duration: '4d' }),
+            '≤ 4d',
+        ],
+        [
+            'a time window shows its hours',
+            step('hours', 'wait_until_time_window', { timezone: null, day: 'any', time: ['09:00', '17:00'] }),
+            '09-17',
+        ],
+        ['a split shows its paths', split, '2 paths'],
+        ['an AI task shows its tools', aiTask, '3 tools'],
+        ['a trigger shows its source', eventTrigger, 'Event'],
+        ['an email shows nothing', email, undefined],
+    ])('badges the key setting: %s', (_, action, badge) => {
+        const edges =
+            action.type === 'conditional_branch'
+                ? [
+                      { from: action.id, to: 'a', type: 'branch' as const, index: 0 },
+                      { from: action.id, to: 'b', type: 'continue' as const },
+                  ]
+                : []
+
+        expect(stepBadge(workflow([action], { edges }), action)).toBe(badge)
+    })
+
+    it('sums up a collapsed path with its first three steps', () => {
+        const flow = workflow(
+            [
+                split,
+                email,
+                step('pause', 'delay', { delay_duration: '1d' }),
+                fn('notify', 'template-slack', { channel: '#sales', text: 'Hi' }),
+                step('exit', 'exit', {}),
+                step('other', 'delay', { delay_duration: '2h' }),
+            ],
+            {
+                edges: [
+                    { from: 'by_plan', to: 'welcome', type: 'branch', index: 0 },
+                    { from: 'welcome', to: 'pause', type: 'continue' },
+                    { from: 'pause', to: 'notify', type: 'continue' },
+                    { from: 'notify', to: 'exit', type: 'continue' },
+                    { from: 'by_plan', to: 'other', type: 'continue' },
+                    { from: 'other', to: 'exit', type: 'continue' },
+                ],
+            }
+        )
+        const [group] = computePathGroups(flow)
+
+        expect(pathSummary(flow, group)).toBe('Welcome to Example Co., then Wait 1 day, then Post to #sales')
+    })
+})
