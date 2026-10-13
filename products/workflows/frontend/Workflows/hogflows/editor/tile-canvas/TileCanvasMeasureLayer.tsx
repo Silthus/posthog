@@ -1,53 +1,57 @@
 import { useActions, useValues } from 'kea'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import type { HogFunctionTemplateType } from '~/types'
 
 import { workflowLogic } from '../../../workflowLogic'
 import type { HogFlow } from '../../types'
 import type { NodeSize } from './tileCanvasLayout'
-import { StepCountOf, tileCanvasLogic } from './tileCanvasLogic'
+import { TemplateNameOf, tileCanvasLogic } from './tileCanvasLogic'
 import { outgoingEdges, pathActions, VisibleNode } from './tileCanvasModel'
 import { TileStackNode } from './TileStackNode'
 import { TileStepNode } from './TileStepNode'
 
 const STACK_COVER_STEPS = 4
 
-function measure(container: HTMLElement): Record<string, NodeSize> {
+function sizeOf(node: HTMLElement): NodeSize {
+    const box = node.getBoundingClientRect()
+    const anchor = node.querySelector<HTMLElement>('[data-tile-anchor]')?.getBoundingClientRect()
+    return {
+        width: node.offsetWidth,
+        height: node.offsetHeight,
+        anchor: anchor && {
+            x: anchor.left - box.left + anchor.width / 2,
+            y: anchor.top - box.top + anchor.height / 2,
+            width: anchor.width,
+            height: anchor.height,
+        },
+    }
+}
+
+function measure(container: HTMLElement, ids: ReadonlySet<string>): Record<string, NodeSize> {
     const sizes: Record<string, NodeSize> = {}
     container.querySelectorAll<HTMLElement>('[data-measure-id]').forEach((wrapper) => {
         const node = wrapper.firstElementChild as HTMLElement | null
         const id = wrapper.dataset.measureId
-        if (!node || !id) {
-            return
-        }
-        const box = node.getBoundingClientRect()
-        const anchor = node.querySelector<HTMLElement>('[data-tile-anchor]')?.getBoundingClientRect()
-        sizes[id] = {
-            width: node.offsetWidth,
-            height: node.offsetHeight,
-            anchor: anchor && {
-                x: anchor.left - box.left + anchor.width / 2,
-                y: anchor.top - box.top + anchor.height / 2,
-                width: anchor.width,
-                height: anchor.height,
-            },
+        if (node && id && ids.has(id)) {
+            sizes[id] = sizeOf(node)
         }
     })
     return sizes
 }
 
-/** Everything that can change a node's size. A node whose inputs match its last measure keeps that size. */
+/**
+ * Everything that can change a node's size. A node whose inputs match its last measure keeps that size. Counts
+ * sit in a badge over the tile, so they never change it.
+ */
 function sizeInputs(
     node: VisibleNode,
     workflow: HogFlow,
-    countOf: StepCountOf,
     templates: Record<string, HogFunctionTemplateType>
 ): unknown[] {
     if (node.kind === 'step') {
         return [
             node.action,
-            countOf(node.id),
             templates,
             node.action.type === 'exit' ? workflow.exit_condition : undefined,
             outgoingEdges(workflow, node.id).length,
@@ -56,7 +60,6 @@ function sizeInputs(
     return [
         node.group.label,
         node.group.memberIds.length,
-        countOf(node.group.entryEdge.to),
         templates,
         ...pathActions(workflow, node.group).slice(0, STACK_COVER_STEPS),
     ]
@@ -78,6 +81,39 @@ function useFontsLoaded(): boolean {
     return loaded
 }
 
+const noCount = (): undefined => undefined
+
+/** Re-renders only when the node's size inputs change, so a measured tile stays mounted untouched. */
+const MeasureCopy = memo(
+    function MeasureCopy({
+        node,
+        workflow,
+        templateNameOf,
+    }: {
+        node: VisibleNode
+        workflow: HogFlow
+        templateNameOf: TemplateNameOf
+        inputs: unknown[]
+    }): JSX.Element {
+        return (
+            <div data-measure-id={node.id} className="w-max">
+                {node.kind === 'step' ? (
+                    <TileStepNode action={node.action} workflow={workflow} count={undefined} interactive={false} />
+                ) : (
+                    <TileStackNode
+                        group={node.group}
+                        workflow={workflow}
+                        countOf={noCount}
+                        templateNameOf={templateNameOf}
+                        interactive={false}
+                    />
+                )}
+            </div>
+        )
+    },
+    (previous, next) => sameInputs(previous.inputs, next.inputs)
+)
+
 interface MeasuredNode {
     inputs: unknown[]
     size: NodeSize
@@ -86,14 +122,14 @@ interface MeasuredNode {
 export function TileCanvasMeasureLayer(): JSX.Element {
     const ref = useRef<HTMLDivElement>(null)
     const measured = useRef(new Map<string, MeasuredNode>())
-    const { visibleGraph, workflow, countOf } = useValues(tileCanvasLogic)
+    const { visibleGraph, workflow, templateNameOf } = useValues(tileCanvasLogic)
     const { hogFunctionTemplatesById } = useValues(workflowLogic)
     const { setMeasuredSizes } = useActions(tileCanvasLogic)
     const fontsLoaded = useFontsLoaded()
 
     const nodes = visibleGraph.nodes.map((node) => ({
         node,
-        inputs: [...sizeInputs(node, workflow, countOf, hogFunctionTemplatesById), fontsLoaded],
+        inputs: [...sizeInputs(node, workflow, hogFunctionTemplatesById), fontsLoaded],
     }))
     const changed = nodes.filter(({ node, inputs }) => !sameInputs(measured.current.get(node.id)?.inputs, inputs))
 
@@ -102,7 +138,7 @@ export function TileCanvasMeasureLayer(): JSX.Element {
         if (!container) {
             return
         }
-        const sizes = measure(container)
+        const sizes = measure(container, new Set(changed.map(({ node }) => node.id)))
         changed.forEach(({ node, inputs }) => {
             if (sizes[node.id]) {
                 measured.current.set(node.id, { inputs, size: sizes[node.id] })
@@ -118,29 +154,18 @@ export function TileCanvasMeasureLayer(): JSX.Element {
         )
         // `changed` and `nodes` derive from these inputs on every render.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [visibleGraph, workflow, countOf, hogFunctionTemplatesById, fontsLoaded, setMeasuredSizes])
+    }, [visibleGraph, workflow, hogFunctionTemplatesById, fontsLoaded, setMeasuredSizes])
 
     return (
         <div ref={ref} aria-hidden className="pointer-events-none invisible absolute left-[-20000px] top-0">
-            {changed.map(({ node }) => (
-                <div key={node.id} data-measure-id={node.id} className="w-max">
-                    {node.kind === 'step' ? (
-                        <TileStepNode
-                            action={node.action}
-                            workflow={workflow}
-                            count={countOf(node.id)}
-                            interactive={false}
-                        />
-                    ) : (
-                        <TileStackNode
-                            group={node.group}
-                            workflow={workflow}
-                            countOf={countOf}
-                            templateNameOf={(templateId) => hogFunctionTemplatesById[templateId]?.name}
-                            interactive={false}
-                        />
-                    )}
-                </div>
+            {nodes.map(({ node, inputs }) => (
+                <MeasureCopy
+                    key={node.id}
+                    node={node}
+                    workflow={workflow}
+                    templateNameOf={templateNameOf}
+                    inputs={inputs}
+                />
             ))}
         </div>
     )

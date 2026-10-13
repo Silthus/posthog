@@ -89,21 +89,26 @@ describe('TileCanvasMeasureLayer', () => {
     })
 
     it('measures only the step that changed', async () => {
-        const container = renderLayer()
+        renderLayer()
         await expectLogic(canvasLogic).toDispatchActions([
             'setMeasuredSizes',
             flowLogic.actionTypes.loadHogFunctionTemplatesByIdSuccess,
             'setMeasuredSizes',
         ])
         const sync = flowLogic.values.workflow.actions.find((action) => action.id === 'sync')!
+        const measuredIds = new Set<string | undefined>()
+        const measure = jest
+            .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+            .mockImplementation(function (this: HTMLElement) {
+                measuredIds.add(this.closest<HTMLElement>('[data-measure-id]')?.dataset.measureId)
+                return new DOMRect()
+            })
 
         act(() => flowLogic.actions.setWorkflowAction('sync', { ...sync, name: 'Sync contacts' }))
 
         await expectLogic(canvasLogic).toDispatchActions(['setMeasuredSizes'])
-        const measuredIds = [...container.querySelectorAll<HTMLElement>('[data-measure-id]')].map(
-            (element) => element.dataset.measureId
-        )
-        expect(measuredIds).toEqual(['sync'])
+        measure.mockRestore()
+        expect([...measuredIds]).toEqual(['sync'])
         expect(Object.keys(canvasLogic.values.measuredSizes ?? {})).toEqual(['trigger_node', 'sync', 'exit_node'])
     })
 })
