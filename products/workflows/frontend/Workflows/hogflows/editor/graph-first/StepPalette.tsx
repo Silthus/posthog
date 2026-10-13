@@ -64,18 +64,34 @@ export function StepPalette({
     initialQuery = '',
     commands = [],
     placeholder = 'Search steps',
+    trigger,
     onSelect,
     onClose,
 }: {
     initialQuery?: string
     commands?: PaletteCommand[]
     placeholder?: string
+    /** The element that toggles this palette. Clicks on it are left to its own handler. */
+    trigger?: React.RefObject<HTMLElement>
     onSelect: (step: CreateActionType) => void
     onClose: () => void
 }): JSX.Element {
     const [query, setQuery] = useState(initialQuery)
     const [active, setActive] = useState(0)
     const listRef = useRef<HTMLDivElement>(null)
+    const rootRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        const onPointerDown = (e: PointerEvent): void => {
+            const target = e.target as HTMLElement
+            const onTrigger = trigger ? !!trigger.current?.contains(target) : !!target.closest('[data-palette-trigger]')
+            if (!rootRef.current?.contains(target) && !onTrigger) {
+                onClose()
+            }
+        }
+        document.addEventListener('pointerdown', onPointerDown, true)
+        return () => document.removeEventListener('pointerdown', onPointerDown, true)
+    }, [onClose, trigger])
 
     const items = useMemo((): Item[] => {
         const steps = STEP_SECTIONS.flatMap(({ title, steps }) =>
@@ -115,6 +131,7 @@ export function StepPalette({
 
     return (
         <div
+            ref={rootRef}
             className="flex w-[380px] flex-col overflow-hidden rounded-xl border bg-surface-primary shadow-xl"
             onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') {

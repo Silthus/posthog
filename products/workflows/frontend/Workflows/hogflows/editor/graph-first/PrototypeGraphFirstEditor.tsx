@@ -33,7 +33,7 @@ import { HogFlowBranchSelectionProvider } from '../../HogFlowBranchSelection'
 import { hogFlowEditorLogic, HogFlowEditorMode } from '../../hogFlowEditorLogic'
 import { HogFlowEditorPanel } from '../../panel/HogFlowEditorPanel'
 import type { HogFlow } from '../../types'
-import { CanvasCommands, CanvasCommandState, paletteCommands, TOOLBAR_VARIANTS, ToolbarVariant } from './CanvasCommands'
+import { CanvasCommands, CanvasCommandState, paletteCommands, ToolbarVariant } from './CanvasCommands'
 import { LogsDrawer, simulateRun, TestRunPanel } from './CanvasDrawer'
 import { SummaryCard } from './GraphFirstCards'
 import { Compound, LABEL_HEIGHT, labelWidth, layoutGraph, LayoutResult, Point, PortSpec } from './graphFirstLayout'
@@ -291,6 +291,7 @@ function insertPoint(points: Point[], label?: Point): Point {
 
 function InsertButton({ edge, at, offsetX }: { edge: FlowEdge; at: Point; offsetX: number }): JSX.Element {
     const [open, setOpen] = useState(false)
+    const buttonRef = useRef<HTMLButtonElement>(null)
     const { isMovingNode, isCopyingNode, nodeToBeAdded, dropzoneNodes } = useValues(hogFlowEditorLogic)
     const {
         setNodeToBeAdded,
@@ -330,10 +331,10 @@ function InsertButton({ edge, at, offsetX }: { edge: FlowEdge; at: Point; offset
         >
             <Popover
                 visible={open}
-                onClickOutside={() => setOpen(false)}
                 placement="right-start"
                 overlay={
                     <StepPalette
+                        trigger={buttonRef}
                         onSelect={(action) => {
                             setNodeToBeAdded(action)
                             onDrop(undefined, edge)
@@ -344,6 +345,7 @@ function InsertButton({ edge, at, offsetX }: { edge: FlowEdge; at: Point; offset
             >
                 <button
                     type="button"
+                    ref={buttonRef}
                     aria-label="Add a step here"
                     title={placing || nodeToBeAdded ? 'Place the step here' : 'Add a step here'}
                     onClick={() => (placing ? place() : nodeToBeAdded ? onDrop(undefined, edge) : setOpen(!open))}
@@ -795,7 +797,8 @@ function GraphFirstCanvas({
     const [choices, setChoices] = useState<Record<string, string>>({})
     const showMetrics = true
     const previews = true
-    const [toolbar, setToolbar] = useState<ToolbarVariant>(initialToolbar)
+    const toolbar = initialToolbar
+    const paletteAtBottom = toolbar === 'command' || toolbar === 'combined'
     const [palette, setPalette] = useState<{ query: string } | null>(null)
     const [nodeStyle, setNodeStyle] = useState<NodeStyle>(initialNodeStyle)
     const tileFlow = initialTileFlow
@@ -1097,7 +1100,9 @@ function GraphFirstCanvas({
         toggleCollapse: () =>
             setCollapsed(new Set(groups.every((g) => collapsed.has(g.id)) ? [] : groups.map((g) => g.id))),
         fit: () => fitWidth(),
+        paletteOpen: !!palette,
         openPalette: (query = '') => setPalette({ query }),
+        closePalette: () => setPalette(null),
     }
 
     const closePanel = (): void => {
@@ -1185,14 +1190,6 @@ function GraphFirstCanvas({
                         <CanvasCommands variant={toolbar} state={commandState} />
                         <Panel position="top-right" className="!m-3">
                             <div className="flex flex-col items-end gap-1.5">
-                                <SwitchRow label="Prototype · toolbar">
-                                    <LemonSegmentedButton
-                                        size="small"
-                                        value={toolbar}
-                                        onChange={setToolbar}
-                                        options={TOOLBAR_VARIANTS}
-                                    />
-                                </SwitchRow>
                                 {showStyleSwitch && (
                                     <SwitchRow label="Nodes">
                                         <LemonSegmentedButton
@@ -1207,14 +1204,14 @@ function GraphFirstCanvas({
                         </Panel>
                         {palette && (
                             <Panel
-                                position={toolbar === 'command' ? 'bottom-center' : 'top-center'}
-                                className={toolbar === 'command' ? '!mb-20' : '!mt-16'}
+                                position={paletteAtBottom ? 'bottom-center' : 'top-center'}
+                                className={paletteAtBottom ? '!mb-20' : '!mt-16'}
                             >
                                 <StepPalette
                                     key={palette.query}
                                     initialQuery={palette.query}
-                                    placeholder={toolbar === 'command' ? 'Add a step or run a command' : 'Search steps'}
-                                    commands={toolbar === 'command' ? paletteCommands(commandState) : []}
+                                    placeholder={paletteAtBottom ? 'Add a step or run a command' : 'Search steps'}
+                                    commands={paletteAtBottom ? paletteCommands(commandState) : []}
                                     onSelect={(step) => setNodeToBeAdded(step)}
                                     onClose={() => setPalette(null)}
                                 />
@@ -1309,7 +1306,7 @@ export function PrototypeGraphFirstEditor({
     initialGroupStyle = 'tint',
     initialCollapsed = 'auto',
     initialPeek = 'spotlight',
-    initialToolbar = 'floating',
+    initialToolbar = 'combined',
     showStyleSwitch = true,
 }: {
     initialNodeStyle?: NodeStyle

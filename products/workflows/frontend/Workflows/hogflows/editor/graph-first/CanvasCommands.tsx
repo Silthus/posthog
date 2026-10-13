@@ -23,9 +23,14 @@ import type { HogFlow } from '../../types'
 import { VariablesPopover } from './CanvasDrawer'
 import { PaletteCommand } from './StepPalette'
 
-export type ToolbarVariant = 'floating' | 'header' | 'rail' | 'command'
+export type ToolbarVariant = 'combined' | 'floating' | 'header' | 'rail' | 'command'
 
 export const TOOLBAR_VARIANTS: { value: ToolbarVariant; label: string; tooltip: string }[] = [
+    {
+        value: 'combined',
+        label: 'Header + command',
+        tooltip: 'Run commands in the page header, add steps from the command bar.',
+    },
     { value: 'floating', label: 'Floating', tooltip: 'A small toolbar on the canvas, Add step at the bottom right.' },
     { value: 'header', label: 'Header', tooltip: 'Commands sit in the page header next to Publish.' },
     { value: 'rail', label: 'Rail', tooltip: 'A slim icon rail down the left of the canvas.' },
@@ -63,7 +68,9 @@ export type CanvasCommandState = {
     toggleFollow: () => void
     toggleCollapse: () => void
     fit: () => void
+    paletteOpen: boolean
     openPalette: (query?: string) => void
+    closePalette: () => void
 }
 
 export function paletteCommands(state: CanvasCommandState): PaletteCommand[] {
@@ -150,7 +157,7 @@ function FloatingToolbar({ state }: { state: CanvasCommandState }): JSX.Element 
     )
 }
 
-function HeaderActions({ state }: { state: CanvasCommandState }): JSX.Element {
+function HeaderActions({ state, fab = true }: { state: CanvasCommandState; fab?: boolean }): JSX.Element | null {
     const actions = (
         <div className="flex items-center gap-1 border-r pr-2">
             <LemonButton size="small" icon={<IconPlay />} active={state.testOpen} onClick={state.toggleTest}>
@@ -167,7 +174,7 @@ function HeaderActions({ state }: { state: CanvasCommandState }): JSX.Element {
     )
     useLayoutEffect(() => publishSceneActions(actions))
     useLayoutEffect(() => () => publishSceneActions(null), [])
-    return <AddStepFab state={state} />
+    return fab ? <AddStepFab state={state} /> : null
 }
 
 function RailButton({
@@ -248,12 +255,13 @@ function RailToolbar({ state }: { state: CanvasCommandState }): JSX.Element {
     )
 }
 
-function CommandBar({ state }: { state: CanvasCommandState }): JSX.Element {
+function CommandBar({ state, variables = true }: { state: CanvasCommandState; variables?: boolean }): JSX.Element {
     return (
         <Panel position="bottom-center" className="!mb-5">
             <button
                 type="button"
-                onClick={() => state.openPalette()}
+                data-palette-trigger
+                onClick={() => (state.paletteOpen ? state.closePalette() : state.openPalette())}
                 className="flex w-[420px] cursor-pointer items-center gap-2 rounded-full border bg-surface-primary px-3 py-2 text-left text-sm shadow-lg hover:border-[var(--color-accent)]"
             >
                 <span className="flex size-6 items-center justify-center rounded-full bg-[var(--color-accent)] text-white">
@@ -262,9 +270,11 @@ function CommandBar({ state }: { state: CanvasCommandState }): JSX.Element {
                 <span className="flex-1 text-secondary">Add a step or run a command…</span>
                 <span className="rounded border px-1.5 text-[11px] text-secondary">type anywhere</span>
             </button>
-            <div className="absolute -right-2 top-1/2 translate-x-full -translate-y-1/2 rounded-full border bg-surface-primary p-0.5 shadow-sm">
-                <VariablesPopover workflow={state.workflow} />
-            </div>
+            {variables && (
+                <div className="absolute -right-2 top-1/2 translate-x-full -translate-y-1/2 rounded-full border bg-surface-primary p-0.5 shadow-sm">
+                    <VariablesPopover workflow={state.workflow} />
+                </div>
+            )}
         </Panel>
     )
 }
@@ -277,6 +287,13 @@ export function CanvasCommands({
     state: CanvasCommandState
 }): JSX.Element {
     switch (variant) {
+        case 'combined':
+            return (
+                <>
+                    <HeaderActions state={state} fab={false} />
+                    <CommandBar state={state} variables={false} />
+                </>
+            )
         case 'header':
             return <HeaderActions state={state} />
         case 'rail':
