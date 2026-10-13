@@ -16,8 +16,7 @@ function captureMenuUse(choice: 'copy' | 'move' | 'delete'): void {
 export function TileStepMenu({ action, children }: { action: HogFlowAction; children: JSX.Element }): JSX.Element {
     const { stepMenuActionId, selectedNode, selectedNodeCanBeDeleted, selectedNodeCanBeCopiedOrMoved } =
         useValues(tileCanvasLogic)
-    const { openStepMenu, closeStepMenu, startCopyingNode, startMovingNode, onNodesDelete } =
-        useActions(tileCanvasLogic)
+    const { closeStepMenu, startCopyingNode, startMovingNode, onNodesDelete } = useActions(tileCanvasLogic)
     const node = selectedNode?.id === action.id ? selectedNode : null
 
     if (!hasStepMenu(action)) {
@@ -69,14 +68,7 @@ export function TileStepMenu({ action, children }: { action: HogFlowAction; chil
                     : []
             }
         >
-            <div
-                onContextMenu={(event) => {
-                    event.preventDefault()
-                    openStepMenu(action.id)
-                }}
-            >
-                {children}
-            </div>
+            {children}
         </LemonMenu>
     )
 }
