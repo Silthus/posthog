@@ -60,6 +60,7 @@ export interface workflowsSavedViewsLogicValues {
     value: FacetSearchValue // workflowsListV2Logic
     activeView: WorkflowSavedView
     activeViewChanges: string[]
+    activeViewConflicted: boolean
     activeViewId: string
     addedFilters: FacetFilter[]
     available: boolean
@@ -219,7 +220,8 @@ export interface workflowsSavedViewsLogicMeta {
         ) => string[]
         isModified: (activeViewChanges: string[]) => boolean
         canUpdateActiveView: (activeView: WorkflowSavedView) => boolean
-        sharedSaveDisabledReason: (conflictedViewId: string | null, activeViewId: string) => string | undefined
+        activeViewConflicted: (conflictedViewId: string | null, activeViewId: string) => boolean
+        sharedSaveDisabledReason: (activeViewConflicted: boolean) => string | undefined
         myWorkflowsDeleted: (defaultView: WorkflowViewApi | null) => boolean
         saving: (pendingAction: SavedViewAction | null) => boolean
         viewCounts: (
@@ -455,12 +457,14 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
         ],
         isModified: [(s) => [s.activeViewChanges], (changes: string[]): boolean => changes.length > 0],
         canUpdateActiveView: [(s) => [s.activeView], (view: WorkflowSavedView): boolean => !view.builtIn],
-        sharedSaveDisabledReason: [
+        activeViewConflicted: [
             (s) => [s.conflictedViewId, s.activeViewId],
-            (conflictedViewId: string | null, activeViewId: string): string | undefined =>
-                conflictedViewId === activeViewId
-                    ? 'Reset to the latest version of this view before you update it'
-                    : undefined,
+            (conflictedViewId: string | null, activeViewId: string): boolean => conflictedViewId === activeViewId,
+        ],
+        sharedSaveDisabledReason: [
+            (s) => [s.activeViewConflicted],
+            (activeViewConflicted: boolean): string | undefined =>
+                activeViewConflicted ? 'Reset to the latest version of this view before you update it' : undefined,
         ],
         myWorkflowsDeleted: [(s) => [s.defaultView], (view: WorkflowViewApi | null): boolean => view?.deleted === true],
         saving: [(s) => [s.pendingAction], (pendingAction: SavedViewAction | null): boolean => pendingAction !== null],
@@ -659,7 +663,7 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
                 if (!values.available || values.saving) {
                     return
                 }
-                if (values.conflictedViewId === values.activeViewId) {
+                if (values.activeViewConflicted) {
                     const currentViewId = values.activeViewId
                     await runMutation(
                         'reset',

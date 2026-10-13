@@ -25,6 +25,7 @@ export function WorkflowSavedViewTabs(): JSX.Element | null {
         activeViewChanges,
         activeView,
         canUpdateActiveView,
+        activeViewConflicted,
         pendingAction,
         sharedSaveDisabledReason,
         writeDisabledReason,
@@ -48,7 +49,7 @@ export function WorkflowSavedViewTabs(): JSX.Element | null {
     if (!available) {
         return null
     }
-    const saveRoom = isModified ? 2 : addedFilters.length ? 1 : 0
+    const saveRoom = isModified ? 2 : addedFilters.length || activeViewConflicted ? 1 : 0
     const rowProps = { views, activeViewId, viewCounts, isModified, activeViewChanges, onApplyView: applyView }
     return (
         <div className="@container/saved-views">
@@ -68,6 +69,7 @@ export function WorkflowSavedViewTabs(): JSX.Element | null {
                     activeView={activeView}
                     isModified={isModified}
                     hasAddedFilters={addedFilters.length > 0}
+                    activeViewConflicted={activeViewConflicted}
                     canUpdateActiveView={canUpdateActiveView}
                     activeViewChanges={activeViewChanges}
                     pendingAction={pendingAction}

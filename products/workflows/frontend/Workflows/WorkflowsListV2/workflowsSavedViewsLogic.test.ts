@@ -554,6 +554,39 @@ describe('workflowsSavedViewsLogic', () => {
         expect(logic.values.isModified).toBe(false)
     })
 
+    it('retries a rename that conflicted on an unchanged view once reset loads the latest version', async () => {
+        const latest = { ...savedView, name: 'Renamed elsewhere', version: 2 }
+        useMocks({
+            get: { '/api/projects/:team_id/workflow_views/:id/': () => [200, latest] },
+            patch: {
+                '/api/projects/:team_id/workflow_views/:id/': async ({ request }) => {
+                    const body = (await request.json()) as { version: number; name: string }
+                    writes.push(body)
+                    return body.version === latest.version
+                        ? [200, { ...latest, name: body.name, version: 3 }]
+                        : [409, { detail: 'View changed' }]
+                },
+            },
+        })
+        router.actions.push(urls.workflows(), { view: VIEW_ID })
+        logic = workflowsSavedViewsLogic()
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadSavedViewsSuccess'])
+
+        await logic.asyncActions.renameView(VIEW_ID, 'Mine')
+        expect(logic.values.isModified).toBe(false)
+        expect(logic.values.activeViewConflicted).toBe(true)
+        await logic.asyncActions.resetView()
+        await logic.asyncActions.renameView(VIEW_ID, 'Mine')
+
+        expect(writes).toEqual([
+            { version: 1, name: 'Mine' },
+            { version: 2, name: 'Mine' },
+        ])
+        expect(logic.values.activeView.name).toEqual('Mine')
+        expect(logic.values.activeViewConflicted).toBe(false)
+    })
+
     it('resolves My workflows to each viewer and saves the symbolic viewer rather than their identity', async () => {
         useMocks({
             patch: {
