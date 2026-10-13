@@ -18,6 +18,14 @@ jest.mock('lib/components/AppMetrics/appMetricsLogic', () => ({
 
 const WORKFLOW_ID = 'flow-1'
 
+const step = (id: string, type = 'delay', config: Record<string, unknown> = { delay_duration: '1d' }): object => ({
+    id,
+    type,
+    name: id,
+    config,
+})
+
+// trigger -> split, whose two paths hold two steps each, both ending at exit
 const savedWorkflow = {
     id: WORKFLOW_ID,
     name: 'Onboarding',
@@ -25,20 +33,35 @@ const savedWorkflow = {
     status: 'active',
     trigger: { type: 'event', filters: {} },
     actions: [
-        {
-            id: 'trigger_node',
-            type: 'trigger',
-            name: 'Trigger',
-            config: { type: 'event', filters: {} },
-        },
-        { id: 'pause', type: 'delay', name: 'Delay', config: { delay_duration: '1d' } },
-        { id: 'exit_node', type: 'exit', name: 'Exit', config: { reason: 'Done' } },
+        step('trigger_node', 'trigger', { type: 'event', filters: {} }),
+        step('split', 'conditional_branch', { conditions: [{ filters: {} }] }),
+        step('pause'),
+        step('a2'),
+        step('b1'),
+        step('b2'),
+        step('exit_node', 'exit', { reason: 'Done' }),
     ],
     edges: [
-        { from: 'trigger_node', to: 'pause', type: 'continue' },
-        { from: 'pause', to: 'exit_node', type: 'continue' },
+        { from: 'trigger_node', to: 'split', type: 'continue' },
+        { from: 'split', to: 'pause', type: 'branch', index: 0 },
+        { from: 'pause', to: 'a2', type: 'continue' },
+        { from: 'a2', to: 'exit_node', type: 'continue' },
+        { from: 'split', to: 'b1', type: 'continue' },
+        { from: 'b1', to: 'b2', type: 'continue' },
+        { from: 'b2', to: 'exit_node', type: 'continue' },
     ],
     updated_at: '2026-10-01T00:00:00.000Z',
+}
+
+async function mountSavedCanvas(): Promise<ReturnType<typeof tileCanvasLogic.build>> {
+    initKeaTests()
+    const flowLogic = workflowLogic({ id: WORKFLOW_ID })
+    flowLogic.mount()
+    await expectLogic(flowLogic).toDispatchActions(['loadWorkflowSuccess'])
+    const canvasLogic = tileCanvasLogic({ id: WORKFLOW_ID })
+    canvasLogic.mount()
+    await expectLogic(canvasLogic).toDispatchActions(['loadStepCountsSuccess'])
+    return canvasLogic
 }
 
 const totals = (rows: [instanceId: string, metric: string, total: number][]): Record<string, unknown> =>
@@ -51,6 +74,15 @@ const totals = (rows: [instanceId: string, metric: string, total: number][]): Re
 
 describe('tileCanvasLogic', () => {
     let logic: ReturnType<typeof tileCanvasLogic.build>
+
+    beforeEach(() => {
+        useMocks({
+            get: {
+                '/api/environments/:team_id/hog_flows/:id/': savedWorkflow,
+                '/api/projects/:team_id/hog_function_templates/': { results: [], count: 0 },
+            },
+        })
+    })
 
     describe('panels', () => {
         beforeEach(() => {
@@ -115,6 +147,26 @@ describe('tileCanvasLogic', () => {
         )
     })
 
+    describe('paths', () => {
+        beforeEach(async () => {
+            jest.mocked(loadAppMetricsTotals).mockResolvedValue({})
+            logic = await mountSavedCanvas()
+            jest.useFakeTimers()
+        })
+
+        afterEach(() => jest.useRealTimers())
+
+        it('collapses every path someone collapses in quick succession', () => {
+            const pathIds = logic.values.pathGroups.map((group) => group.id)
+            logic.actions.setOpenPathIds(pathIds)
+
+            pathIds.forEach((pathId) => logic.actions.collapsePath(pathId))
+            jest.advanceTimersByTime(1000)
+
+            expect(logic.values.openPathIds).toEqual([])
+        })
+    })
+
     describe('step counts', () => {
         beforeEach(async () => {
             jest.mocked(loadAppMetricsTotals).mockResolvedValue(
@@ -123,19 +175,7 @@ describe('tileCanvasLogic', () => {
                     ['pause', 'filtered', 8],
                 ]) as any
             )
-            useMocks({
-                get: {
-                    '/api/environments/:team_id/hog_flows/:id/': savedWorkflow,
-                    '/api/projects/:team_id/hog_function_templates/': { results: [], count: 0 },
-                },
-            })
-            initKeaTests()
-            const flowLogic = workflowLogic({ id: WORKFLOW_ID })
-            flowLogic.mount()
-            await expectLogic(flowLogic).toDispatchActions(['loadWorkflowSuccess'])
-            logic = tileCanvasLogic({ id: WORKFLOW_ID })
-            logic.mount()
-            await expectLogic(logic).toDispatchActions(['loadStepCountsSuccess'])
+            logic = await mountSavedCanvas()
         })
 
         it('counts the people a step filtered out', () => {

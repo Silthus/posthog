@@ -533,7 +533,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                         animate({ kind: 'settle', groupId, origin })
                     }, PATH_LEAVE_MS)
                     return () => window.clearTimeout(timer)
-                }, 'collapse')
+                }, `collapse:${groupId}`)
             },
             toggleAllPaths: () => {
                 actions.fitNextLayout()
