@@ -1,3 +1,5 @@
+import { useMemo } from 'react'
+
 import type { HogFlow } from '../../types'
 import { MiniFlowEdges } from './MiniFlowEdges'
 import { MiniFlowPreview } from './MiniFlowPreview'
@@ -21,7 +23,7 @@ export function MiniFlow({
     open: boolean
 }): JSX.Element {
     const spotlight = useMiniFlowSpotlight(open)
-    const layout = layoutMiniFlow(workflow, memberIds, SPACING)
+    const layout = useMemo(() => layoutMiniFlow(workflow, memberIds, SPACING), [workflow, memberIds])
     const byId = actionsById(workflow)
     const spotlightNode = layout.nodes.find((node) => node.actionId === spotlight.spotlightId)
     const spotlightAction = spotlightNode && byId.get(spotlightNode.actionId)

@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { cn } from 'lib/utils/css-classes'
 
@@ -7,6 +7,17 @@ import { MiniFlow } from './MiniFlow'
 import { TILE_SIZE } from './tileCanvasLayout'
 import type { PathGroup } from './tileCanvasModel'
 import { useKeepInView } from './useKeepInView'
+
+/** A closed peek renders no mini flow, so a stack of hidden steps costs nothing until someone looks inside. */
+function useHasOpened(open: boolean): boolean {
+    const [hasOpened, setHasOpened] = useState(open)
+    useEffect(() => {
+        if (open) {
+            setHasOpened(true)
+        }
+    }, [open])
+    return hasOpened || open
+}
 
 export function StackPeek({
     group,
@@ -23,6 +34,7 @@ export function StackPeek({
 }): JSX.Element {
     const ref = useRef<HTMLDivElement>(null)
     const shift = useKeepInView(ref, open)
+    const hasOpened = useHasOpened(open)
     return (
         <div
             ref={ref}
@@ -45,7 +57,9 @@ export function StackPeek({
                 <span className="text-secondary">{group.memberIds.length} steps, click to open</span>
             </div>
             <div className="px-1 pt-1">
-                <MiniFlow workflow={workflow} memberIds={group.memberIds} countOf={countOf} open={open} />
+                {hasOpened && (
+                    <MiniFlow workflow={workflow} memberIds={group.memberIds} countOf={countOf} open={open} />
+                )}
             </div>
         </div>
     )
