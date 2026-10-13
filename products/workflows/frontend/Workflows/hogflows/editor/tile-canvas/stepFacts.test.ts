@@ -131,6 +131,12 @@ describe('stepFacts', () => {
             'Gives up after 4 days',
         ],
         [
+            'a wait for an event it has not named yet',
+            step('wait', 'wait_until_condition', { condition: { name: '' }, max_wait_duration: '4d' }),
+            'Wait for a condition',
+            'Gives up after 4 days',
+        ],
+        [
             'a time window',
             step('hours', 'wait_until_time_window', {
                 timezone: 'Europe/Berlin',
@@ -202,6 +208,11 @@ describe('stepFacts', () => {
             'a time window shows its hours',
             step('hours', 'wait_until_time_window', { timezone: null, day: 'any', time: ['09:00', '17:00'] }),
             '09-17',
+        ],
+        [
+            'a time window keeps minutes that are not on the hour',
+            step('hours', 'wait_until_time_window', { timezone: null, day: 'any', time: ['09:30', '17:45'] }),
+            '09:30-17:45',
         ],
         ['a split shows its paths', split, '2 paths'],
         ['an AI task shows its tools', aiTask, '3 tools'],

@@ -11,6 +11,7 @@ import {
     plainVariables,
     stepInput,
     timeWindowSpans,
+    waitConditionName,
 } from './stepFacts'
 import { StepFieldList } from './StepFieldList'
 import { outgoingEdges, pathColor, tint } from './tileCanvasModel'
@@ -212,8 +213,7 @@ function BranchPreview({ action, workflow }: { action: HogFlowAction; workflow: 
 }
 
 function WaitPreview({ action }: { action: HogFlowAction }): JSX.Element {
-    const waitsFor =
-        action.type === 'wait_until_condition' ? (action.config.condition.name ?? 'the condition') : undefined
+    const waitsFor = action.type === 'wait_until_condition' ? (waitConditionName(action) ?? 'the condition') : undefined
     const duration =
         action.type === 'wait_until_condition'
             ? humanDuration(action.config.max_wait_duration)

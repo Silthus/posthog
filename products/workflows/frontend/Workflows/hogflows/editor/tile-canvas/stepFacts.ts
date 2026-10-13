@@ -475,7 +475,7 @@ export function stepFacts(workflow: HogFlow, action: HogFlowAction, templateName
         case 'wait_until_condition': {
             const giveUp = humanDuration(action.config.max_wait_duration)
             return {
-                headline: `Wait for ${action.config.condition.name ?? 'a condition'}`,
+                headline: `Wait for ${waitConditionName(action) ?? 'a condition'}`,
                 detail: `Gives up after ${giveUp}`,
                 fields: [
                     ['Waits for', conditionText(action.config.condition.filters)],
@@ -503,6 +503,11 @@ export function stepFacts(workflow: HogFlow, action: HogFlowAction, templateName
     }
 }
 
+const shortTime = (time: string): string => (time.endsWith(':00') ? time.slice(0, -3) : time)
+
+export const waitConditionName = (action: ActionOf<'wait_until_condition'>): string | undefined =>
+    action.config.condition.name?.trim() || undefined
+
 const TRIGGER_SOURCES: Record<string, string> = {
     event: 'Event',
     'internal-event': 'Event',
@@ -526,7 +531,7 @@ export function stepBadge(workflow: FlowGraph, action: HogFlowAction): string | 
         case 'wait_until_time_window':
             return action.config.time === 'any'
                 ? undefined
-                : `${action.config.time[0].slice(0, 2)}-${action.config.time[1].slice(0, 2)}`
+                : `${shortTime(action.config.time[0])}-${shortTime(action.config.time[1])}`
         case 'conditional_branch':
         case 'random_cohort_branch':
             return `${outgoingEdges(workflow, action.id).length} paths`
