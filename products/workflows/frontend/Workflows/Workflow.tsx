@@ -16,23 +16,21 @@ export function Workflow(props: WorkflowLogicProps): JSX.Element {
         workflowLogic(props)
     )
     const { loadWorkflow, keepMyWorkflowVersion } = useActions(workflowLogic(props))
-    const { editorLayout } = useValues(hogFlowEditorLogic(logicProps))
+    const { editorLayout, isTreeView, isTileCanvas, showsHeaderInWorkflowBar } = useValues(
+        hogFlowEditorLogic(logicProps)
+    )
     const { setEditorLayout } = useActions(hogFlowEditorLogic(logicProps))
     const treeViewEnabled = useFeatureFlag('WORKFLOWS_LINEAR_VIEW')
-    const tileCanvasEnabled = !!useFeatureFlag('WORKFLOWS_TILE_CANVAS')
-    const isTreeView = !!treeViewEnabled && editorLayout === 'simple'
-    const isTileCanvas = tileCanvasEnabled && !isTreeView
-    const headerInBar = tileCanvasEnabled && !!props.id && props.id !== 'new'
 
     return (
         <div className="relative flex h-[calc(100vh-13rem)] max-h-full min-h-[25rem] grow flex-col overflow-hidden rounded-md border">
-            {headerInBar ? (
+            {showsHeaderInWorkflowBar ? (
                 <WorkflowHeaderBar
                     {...props}
                     editorLayout={editorLayout}
                     showEditorLayoutToggle={treeViewEnabled}
                     onEditorLayoutChange={setEditorLayout}
-                    commands={isTileCanvas ? <CanvasCommandGroup {...logicProps} /> : undefined}
+                    commands={<CanvasCommandGroup {...logicProps} />}
                 />
             ) : (
                 <WorkflowStatusBar

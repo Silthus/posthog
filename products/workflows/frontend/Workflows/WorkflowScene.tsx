@@ -41,6 +41,7 @@ import {
 } from './workflowAgentContext'
 import { WorkflowAssets } from './WorkflowAssets'
 import { WorkflowEmailPauseBanner } from './WorkflowEmailPauseBanner'
+import { WorkflowHeaderPlacement } from './WorkflowHeaderPlacement'
 import { WorkflowInvocations } from './WorkflowInvocations'
 import { WorkflowLogicProps, workflowLogic } from './workflowLogic'
 import { WorkflowMetrics } from './WorkflowMetrics'
@@ -227,33 +228,42 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
 
     // A deep link to a tab the flag hides would leave LemonTabs with no active tab and a blank page.
     const activeTab = tabs.some((tab) => tab?.key === currentTab) ? currentTab : 'workflow'
-    const headerInWorkflowBar = tileCanvasEnabled && isSavedWorkflow && activeTab === 'workflow'
+    const renderScene = (editorShowsHeaderInBar: boolean): JSX.Element => {
+        const headerInWorkflowBar = editorShowsHeaderInBar && activeTab === 'workflow'
+        return (
+            <SceneContent
+                className={clsx('h-full flex flex-col grow', headerInWorkflowBar && '@container/workflow-scene')}
+                data-attr="workflow-scene"
+            >
+                <BindLogic logic={workflowLogic} props={workflowProps}>
+                    <WorkflowSceneHeader {...props} headerInWorkflowBar={headerInWorkflowBar} />
+                    <WorkflowEmailPauseBanner />
+                    {selfOptimisingEnabled && isSavedWorkflow && <WorkflowSuggestionsNotice id={props.id!} />}
+                    {/* Only show Logs and Metrics tabs if the workflow has already been created */}
+                    {!props.id || props.id === 'new' ? (
+                        <Workflow {...workflowProps} />
+                    ) : (
+                        <LemonTabs
+                            activeKey={activeTab}
+                            onChange={(tab) => router.actions.push(urls.workflow(props.id ?? 'new', tab))}
+                            tabs={tabs}
+                            sceneInset
+                            rightSlot={headerInWorkflowBar ? <WorkflowSceneTabActions /> : undefined}
+                            className={clsx({
+                                'flex flex-col grow [&>div]:flex [&>div]:flex-col [&>div]:grow':
+                                    currentTab === 'workflow',
+                            })}
+                        />
+                    )}
+                </BindLogic>
+            </SceneContent>
+        )
+    }
 
-    return (
-        <SceneContent
-            className={clsx('h-full flex flex-col grow', headerInWorkflowBar && '@container/workflow-scene')}
-            data-attr="workflow-scene"
-        >
-            <BindLogic logic={workflowLogic} props={workflowProps}>
-                <WorkflowSceneHeader {...props} headerInWorkflowBar={headerInWorkflowBar} />
-                <WorkflowEmailPauseBanner />
-                {selfOptimisingEnabled && isSavedWorkflow && <WorkflowSuggestionsNotice id={props.id!} />}
-                {/* Only show Logs and Metrics tabs if the workflow has already been created */}
-                {!props.id || props.id === 'new' ? (
-                    <Workflow {...workflowProps} />
-                ) : (
-                    <LemonTabs
-                        activeKey={activeTab}
-                        onChange={(tab) => router.actions.push(urls.workflow(props.id ?? 'new', tab))}
-                        tabs={tabs}
-                        sceneInset
-                        rightSlot={headerInWorkflowBar ? <WorkflowSceneTabActions /> : undefined}
-                        className={clsx({
-                            'flex flex-col grow [&>div]:flex [&>div]:flex-col [&>div]:grow': currentTab === 'workflow',
-                        })}
-                    />
-                )}
-            </BindLogic>
-        </SceneContent>
+    // Only the tile canvas of a saved workflow can carry the header, so other scenes never mount the editor logic for it.
+    return tileCanvasEnabled && isSavedWorkflow ? (
+        <WorkflowHeaderPlacement logicProps={workflowProps}>{renderScene}</WorkflowHeaderPlacement>
+    ) : (
+        renderScene(false)
     )
 }
