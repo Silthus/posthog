@@ -94,6 +94,40 @@ describe('tileCanvasModel', () => {
         ])
     })
 
+    it('leaves paths that loop back into each other ungrouped', () => {
+        const loop = flow(
+            [
+                step('trigger', 'trigger'),
+                step('s', 'conditional_branch'),
+                step('a'),
+                step('t', 'conditional_branch'),
+                step('b'),
+                step('exit', 'exit'),
+            ],
+            [
+                next('trigger', 's'),
+                branch('s', 'a'),
+                next('a', 't'),
+                next('s', 'exit'),
+                branch('t', 'b'),
+                next('b', 's'),
+                next('t', 'exit'),
+            ]
+        )
+
+        const groups = computePathGroups(loop)
+
+        expect(groups).toEqual([])
+        expect(computeVisibleGraph(loop, groups, []).nodes.map((node) => node.id)).toEqual([
+            'trigger',
+            's',
+            'a',
+            't',
+            'b',
+            'exit',
+        ])
+    })
+
     it('draws a collapsed path as one stack that takes over its arrows', () => {
         const workflow = splitWithLongAndShortPath('conditional_branch')
         const [group] = computePathGroups(workflow)

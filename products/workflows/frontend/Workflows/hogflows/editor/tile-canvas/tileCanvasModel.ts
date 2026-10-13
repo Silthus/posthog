@@ -101,12 +101,27 @@ function pathsOf(workflow: FlowGraph, splitAction: HogFlowAction): PathGroup[] {
     })
 }
 
+function loopsBackToItsSplit(group: PathGroup): boolean {
+    return group.memberIds.includes(group.branchActionId)
+}
+
+function encloses(outer: PathGroup, inner: PathGroup): boolean {
+    return (
+        outer.memberIds.includes(inner.branchActionId) &&
+        outer.memberIds.length > inner.memberIds.length &&
+        inner.memberIds.every((id) => outer.memberIds.includes(id))
+    )
+}
+
 export function computePathGroups(workflow: FlowGraph): PathGroup[] {
-    const groups = workflow.actions.filter(isBranchingAction).flatMap((action) => pathsOf(workflow, action))
+    // A path that leads back to its own split has no end to fold into a stack, so its steps stay plain tiles.
+    const groups = workflow.actions
+        .filter(isBranchingAction)
+        .flatMap((action) => pathsOf(workflow, action))
+        .filter((group) => !loopsBackToItsSplit(group))
+    // A parent must hold strictly more steps than its child, so the parent chain can never loop.
     const parentOf = (group: PathGroup): PathGroup | undefined =>
-        groups
-            .filter((other) => other !== group && other.memberIds.includes(group.branchActionId))
-            .sort((a, b) => a.memberIds.length - b.memberIds.length)[0]
+        groups.filter((other) => encloses(other, group)).sort((a, b) => a.memberIds.length - b.memberIds.length)[0]
     const withParents = groups.map((group) => ({ ...group, parentId: parentOf(group)?.id ?? null }))
     const depthOf = (group: PathGroup): number => {
         const parent = withParents.find((other) => other.id === group.parentId)
