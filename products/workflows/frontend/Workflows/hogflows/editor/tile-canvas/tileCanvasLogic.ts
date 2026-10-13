@@ -4,6 +4,7 @@ import type { DragEvent } from 'react'
 
 import { FEATURE_FLAGS } from 'lib/constants'
 import { FeatureFlagsSet, featureFlagLogic } from 'lib/logic/featureFlagLogic'
+import { objectsEqual } from 'lib/utils/objects'
 import { teamLogic } from 'scenes/teamLogic'
 
 import { sceneLayoutLogic } from '~/layout/scenes/sceneLayoutLogic'
@@ -81,6 +82,7 @@ export interface tileCanvasLogicValues {
     commandPaletteQuery: string | null
     edgeLabels: Record<string, string | undefined>
     fitRequest: number
+    fitsNextLayout: boolean
     frameSpecs: PathFrameSpec[]
     isPanelOpen: boolean
     isPlacing: boolean
@@ -157,6 +159,9 @@ export interface tileCanvasLogicActions {
         value: true
     }
     closeQuickAdd: () => {
+        value: true
+    }
+    fitNextLayout: () => {
         value: true
     }
     collapsePath: (groupId: string) => {
@@ -297,6 +302,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         setMeasuredSizes: (sizes: Record<string, NodeSize>) => ({ sizes }),
         setLayout: (layout: CanvasLayout) => ({ layout }),
         requestFit: true,
+        fitNextLayout: true,
         loadStepCounts: true,
     }),
     reducers({
@@ -332,6 +338,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         measuredSizes: [null as Record<string, NodeSize> | null, { setMeasuredSizes: (_, { sizes }) => sizes }],
         layout: [null as CanvasLayout | null, { setLayout: (_, { layout }) => layout }],
         fitRequest: [0, { requestFit: (count) => count + 1 }],
+        fitsNextLayout: [true, { fitNextLayout: () => true, requestFit: () => false }],
     }),
     selectors({
         pathGroups: [(s) => [s.workflow], (workflow: HogFlow): PathGroup[] => computePathGroups(workflow)],
@@ -447,6 +454,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 }, 'collapse')
             },
             toggleAllPaths: () => {
+                actions.fitNextLayout()
                 actions.setOpenPathIds(values.allPathsCollapsed ? values.pathGroups.map((group) => group.id) : [])
             },
             setSelectedNodeId: ({ selectedNodeId }) => {
@@ -515,14 +523,20 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             },
             setMeasuredSizes: async ({ sizes }, breakpoint) => {
                 await breakpoint(10)
-                const layout = await layoutTileCanvas(
-                    sizes,
-                    values.visibleGraph.edges,
-                    values.edgeLabels,
-                    values.frameSpecs
-                )
+                const input = { sizes, edges: values.visibleGraph.edges, frames: values.frameSpecs }
+                // Measuring again after fonts load or a re-render often finds nothing new, and a fresh layout would restart the motion.
+                if (objectsEqual(input, cache.layoutInput)) {
+                    return
+                }
+                const layout = await layoutTileCanvas(sizes, input.edges, values.edgeLabels, input.frames)
                 breakpoint()
+                cache.layoutInput = input
                 actions.setLayout(layout)
+            },
+            setLayout: () => {
+                if (values.fitsNextLayout) {
+                    actions.requestFit()
+                }
             },
         }
     }),

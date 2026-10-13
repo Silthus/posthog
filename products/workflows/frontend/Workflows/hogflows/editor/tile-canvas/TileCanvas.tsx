@@ -139,9 +139,9 @@ function TileCanvasContent(): JSX.Element {
             y: FIT_MARGIN.top - bounds.y * zoom,
             zoom,
         })
-        // Only a new layout or an explicit fit moves the view; a pan or zoom by hand stays put otherwise.
+        // Edits keep the viewport the person panned or zoomed to; only an explicit fit request moves it.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [layout, fitRequest])
+    }, [fitRequest])
 
     return (
         <div
