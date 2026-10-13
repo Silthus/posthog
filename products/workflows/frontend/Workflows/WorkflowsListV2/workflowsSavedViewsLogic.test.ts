@@ -896,6 +896,11 @@ describe('workflowsSavedViewsLogic', () => {
         expect(logic.values.addedFilters).toEqual([status('active'), eventTrigger])
         applyViewById('drafts')
         expect(workflowsListV2Logic.values.value.filters).toEqual([status('active'), eventTrigger])
+
+        expect(logic.values.myWorkflowsDeleted).toBe(false)
+        await logic.asyncActions.renameView(myWorkflows.id, 'Mine')
+        expect(logic.values.views.some((view) => view.id === myWorkflows.id)).toBe(false)
+        expect(logic.values.myWorkflowsDeleted).toBe(true)
     })
 
     it('restores the deletable My workflows view from its original default state after reload', async () => {

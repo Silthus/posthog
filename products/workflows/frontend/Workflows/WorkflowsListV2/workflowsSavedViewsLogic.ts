@@ -559,6 +559,9 @@ export const workflowsSavedViewsLogic = kea<workflowsSavedViewsLogicType>([
             if (values.conflictedViewId === id) {
                 actions.setConflictedViewId(null)
             }
+            if (values.defaultView?.id === id) {
+                actions.setDefaultView({ ...values.defaultView, deleted: true })
+            }
             if (values.activeViewId === id) {
                 actions.setAddedFilters(values.value.filters)
                 actions.setActiveViewId(BUILT_IN_WORKFLOW_VIEWS[0].id)
