@@ -1,4 +1,5 @@
 import { actions, afterMount, connect, kea, key, listeners, MakeLogicType, path, props, reducers, selectors } from 'kea'
+import { subscriptions } from 'kea-subscriptions'
 import type { DragEvent } from 'react'
 
 import { FEATURE_FLAGS } from 'lib/constants'
@@ -33,6 +34,8 @@ import {
     PaletteSection,
     PathGroup,
     Point,
+    stepCountsRequest,
+    StepCountsRequest,
     VisibleGraph,
 } from './tileCanvasModel'
 
@@ -82,6 +85,13 @@ export interface tileCanvasLogicActions {
     } // hogFlowEditorLogic
     handlePaneClick: () => {
         value: true
+    } // hogFlowEditorLogic
+    loadActionMetricsById: (
+        params: StepCountsRequest,
+        timezone: string
+    ) => {
+        params: StepCountsRequest
+        timezone: string
     } // hogFlowEditorLogic
     moveNodeToHighlightedDropzone: () => {
         value: true
@@ -134,6 +144,9 @@ export interface tileCanvasLogicActions {
     }
     collapsePath: (groupId: string) => {
         groupId: string
+    }
+    loadStepCounts: () => {
+        value: true
     }
     openCommandPalette: (query?: string) => {
         query: string
@@ -233,6 +246,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 'moveNodeToHighlightedDropzone',
                 'copyNodeToHighlightedDropzone',
                 'handlePaneClick',
+                'loadActionMetricsById',
             ],
         ],
     })),
@@ -256,6 +270,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         setMeasuredSizes: (sizes: Record<string, NodeSize>) => ({ sizes }),
         setLayout: (layout: CanvasLayout) => ({ layout }),
         requestFit: true,
+        loadStepCounts: true,
     }),
     reducers({
         openPathIds: [[] as string[], { setOpenPathIds: (_, { openPathIds }) => openPathIds }],
@@ -372,6 +387,12 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             return box ? { x: box.x + box.width / 2, y: box.y + 40 } : { x: 0, y: 0 }
         }
         return {
+            loadStepCounts: () => {
+                const request = stepCountsRequest(values.workflow, new Date())
+                if (request) {
+                    actions.loadActionMetricsById(request, values.currentTeam?.timezone ?? 'UTC')
+                }
+            },
             openPath: ({ groupId }) => {
                 animate({ kind: 'expand', groupId, origin: stackOrigin(groupId) })
                 actions.setOpenPathIds([...values.openPathIds, groupId])
@@ -466,6 +487,13 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             },
         }
     }),
+    subscriptions(({ actions }) => ({
+        workflow: (workflow: HogFlow, previous: HogFlow | undefined): void => {
+            if (workflow.id !== previous?.id || workflow.trigger?.type !== previous?.trigger?.type) {
+                actions.loadStepCounts()
+            }
+        },
+    })),
     afterMount(({ actions, values, cache }) => {
         cache.disposables.add(() => {
             const onKeyDown = (event: KeyboardEvent): void => {

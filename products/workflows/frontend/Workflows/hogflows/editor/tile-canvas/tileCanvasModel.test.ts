@@ -8,6 +8,7 @@ import {
     PaletteCommand,
     PaletteSection,
     stepCount,
+    stepCountsRequest,
 } from './tileCanvasModel'
 
 const step = (id: string, type: HogFlowAction['type'] = 'function'): HogFlowAction =>
@@ -187,5 +188,25 @@ describe('tileCanvasModel', () => {
         expect(stepCount(metrics, 'email')).toBe(50)
         expect(stepCount(metrics, 'delay')).toBe(0)
         expect(stepCount(null, 'email')).toBeUndefined()
+    })
+})
+
+describe('stepCountsRequest', () => {
+    const now = new Date('2026-10-13T12:00:00Z')
+
+    it('asks for the last seven days of a saved workflow', () => {
+        expect(stepCountsRequest({ id: 'flow-1', trigger: { type: 'event' } } as HogFlow, now)).toEqual({
+            appSource: 'hog_flow',
+            appSourceId: 'flow-1',
+            dateFrom: '2026-10-06T12:00:00.000Z',
+            dateTo: '2026-10-13T12:00:00.000Z',
+        })
+    })
+
+    it.each([
+        { name: 'an unsaved workflow', workflow: { id: 'new', trigger: { type: 'event' } } },
+        { name: 'a batch workflow', workflow: { id: 'flow-1', trigger: { type: 'batch' } } },
+    ])('skips $name', ({ workflow }) => {
+        expect(stepCountsRequest(workflow as HogFlow, now)).toBeNull()
     })
 })

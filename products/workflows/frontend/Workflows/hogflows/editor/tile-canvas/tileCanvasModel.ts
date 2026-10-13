@@ -1,3 +1,5 @@
+import type { AppMetricsTotalsRequest } from 'lib/components/AppMetrics/appMetricsLogic'
+
 import type { CreateActionType, HogFlowEditorActionMetrics } from '../../hogFlowEditorLogic'
 import { getWorkflowBranchLabel, isBranchingAction } from '../../tree/workflowTree'
 import type { HogFlow, HogFlowAction, HogFlowEdge } from '../../types'
@@ -236,6 +238,23 @@ export function stepCount(
     }
     const entry = metrics[actionId]
     return entry ? entry.succeeded + entry.failed + entry.filtered : 0
+}
+
+const STEP_COUNT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+export type StepCountsRequest = Pick<AppMetricsTotalsRequest, 'appSource' | 'appSourceId' | 'dateFrom' | 'dateTo'>
+
+/** Batch workflows report metrics per run, not per step, so they get no step counts. */
+export function stepCountsRequest(workflow: Pick<HogFlow, 'id' | 'trigger'>, now: Date): StepCountsRequest | null {
+    if (!workflow.id || workflow.id === 'new' || workflow.trigger?.type === 'batch') {
+        return null
+    }
+    return {
+        appSource: 'hog_flow',
+        appSourceId: workflow.id,
+        dateFrom: new Date(now.getTime() - STEP_COUNT_WINDOW_MS).toISOString(),
+        dateTo: now.toISOString(),
+    }
 }
 
 export interface Point {
