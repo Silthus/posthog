@@ -3,7 +3,7 @@ import { MiniFlowEdges } from './MiniFlowEdges'
 import { MiniFlowPreview } from './MiniFlowPreview'
 import { MiniFlowStep } from './MiniFlowStep'
 import { MINI_TILE_SIZE } from './MiniTile'
-import { layoutMiniFlow } from './tileCanvasModel'
+import { actionsById, layoutMiniFlow } from './tileCanvasModel'
 import { useMiniFlowSpotlight } from './useMiniFlowSpotlight'
 
 const SPACING = { tile: MINI_TILE_SIZE, gapX: 30, gapY: 52 }
@@ -22,9 +22,9 @@ export function MiniFlow({
 }): JSX.Element {
     const spotlight = useMiniFlowSpotlight(open)
     const layout = layoutMiniFlow(workflow, memberIds, SPACING)
-    const actionsById = new Map(workflow.actions.map((action) => [action.id, action]))
+    const byId = actionsById(workflow)
     const spotlightNode = layout.nodes.find((node) => node.actionId === spotlight.spotlightId)
-    const spotlightAction = spotlightNode && actionsById.get(spotlightNode.actionId)
+    const spotlightAction = spotlightNode && byId.get(spotlightNode.actionId)
 
     return (
         <div
@@ -35,7 +35,7 @@ export function MiniFlow({
         >
             <MiniFlowEdges layout={layout} opacity={open ? (spotlightNode ? 0.35 : 1) : 0} />
             {layout.nodes.map((node) => {
-                const action = actionsById.get(node.actionId)
+                const action = byId.get(node.actionId)
                 return action ? (
                     <MiniFlowStep
                         key={node.actionId}

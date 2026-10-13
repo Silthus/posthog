@@ -11,69 +11,131 @@ export function edgeKey(edge: HogFlowEdge): string {
     return `${edge.from}->${edge.to} ${edge.type} ${edge.index ?? ''}`.trim()
 }
 
-interface FlowIndex {
+interface EdgeIndex {
     outgoing: Map<string, HogFlowEdge[]>
+    /** The step every path out of a step passes through next, where its paths join again. */
+    joinOf: Map<string, string>
 }
 
-const flowIndexes = new WeakMap<HogFlowEdge[], FlowIndex>()
+const edgeIndexes = new WeakMap<HogFlowEdge[], EdgeIndex>()
+const actionIndexes = new WeakMap<HogFlowAction[], Map<string, HogFlowAction>>()
 
 function byPathOrder(a: HogFlowEdge, b: HogFlowEdge): number {
     return a.type !== b.type ? (a.type === 'branch' ? -1 : 1) : (a.index ?? 0) - (b.index ?? 0)
 }
 
-function buildFlowIndex(edges: HogFlowEdge[]): FlowIndex {
+function outgoingIndex(edges: HogFlowEdge[]): Map<string, HogFlowEdge[]> {
     const outgoing = new Map<string, HogFlowEdge[]>()
-    edges.forEach((edge) => outgoing.set(edge.from, [...(outgoing.get(edge.from) ?? []), edge]))
+    edges.forEach((edge) => {
+        const list = outgoing.get(edge.from)
+        if (list) {
+            list.push(edge)
+        } else {
+            outgoing.set(edge.from, [edge])
+        }
+    })
     outgoing.forEach((list) => list.sort(byPathOrder))
-    return { outgoing }
+    return outgoing
 }
 
-function flowIndex(workflow: FlowGraph): FlowIndex {
-    let index = flowIndexes.get(workflow.edges)
+const END_OF_FLOW = '\u0000end'
+
+function postorderToEnd(edges: HogFlowEdge[], outgoing: Map<string, HogFlowEdge[]>): string[] {
+    const incoming = new Map<string, string[]>()
+    const steps = new Set<string>()
+    edges.forEach((edge) => {
+        steps.add(edge.from).add(edge.to)
+        incoming.set(edge.to, [...(incoming.get(edge.to) ?? []), edge.from])
+    })
+    const lastSteps = [...steps].filter((id) => !outgoing.has(id))
+    const seen = new Set<string>([END_OF_FLOW])
+    const postorder: string[] = []
+    const pending: [id: string, isDone: boolean][] = [
+        [END_OF_FLOW, true],
+        ...lastSteps.map((id): [string, boolean] => [id, false]),
+    ]
+    while (pending.length) {
+        const [id, isDone] = pending.pop() as [string, boolean]
+        if (isDone) {
+            postorder.push(id)
+        } else if (!seen.has(id)) {
+            seen.add(id)
+            pending.push([id, true], ...(incoming.get(id) ?? []).map((from): [string, boolean] => [from, false]))
+        }
+    }
+    return postorder
+}
+
+/**
+ * Post-dominators, by the iterative algorithm of Cooper, Harvey and Kennedy on the reversed graph, with one end
+ * after every last step. A split's paths join at its immediate post-dominator.
+ */
+function joinSteps(edges: HogFlowEdge[], outgoing: Map<string, HogFlowEdge[]>): Map<string, string> {
+    const postorder = postorderToEnd(edges, outgoing)
+    const rank = new Map(postorder.map((id, index) => [id, index]))
+    const idom = new Map<string, string>([[END_OF_FLOW, END_OF_FLOW]])
+    const nextSteps = (id: string): string[] => outgoing.get(id)?.map((edge) => edge.to) ?? [END_OF_FLOW]
+    const intersect = (first: string, second: string): string => {
+        let [a, b] = [first, second]
+        while (a !== b) {
+            while ((rank.get(a) ?? 0) < (rank.get(b) ?? 0)) {
+                a = idom.get(a) as string
+            }
+            while ((rank.get(b) ?? 0) < (rank.get(a) ?? 0)) {
+                b = idom.get(b) as string
+            }
+        }
+        return a
+    }
+    const reversePostorder = postorder.slice(0, -1).reverse()
+    let changed = true
+    while (changed) {
+        changed = false
+        reversePostorder.forEach((id) => {
+            const processed = nextSteps(id).filter((next) => idom.has(next))
+            const dominator = processed.slice(1).reduce(intersect, processed[0])
+            if (dominator !== undefined && idom.get(id) !== dominator) {
+                idom.set(id, dominator)
+                changed = true
+            }
+        })
+    }
+    idom.forEach((dominator, id) => dominator === END_OF_FLOW && idom.delete(id))
+    return idom
+}
+
+function edgeIndex(workflow: FlowGraph): EdgeIndex {
+    let index = edgeIndexes.get(workflow.edges)
     if (!index) {
-        index = buildFlowIndex(workflow.edges)
-        flowIndexes.set(workflow.edges, index)
+        const outgoing = outgoingIndex(workflow.edges)
+        index = { outgoing, joinOf: joinSteps(workflow.edges, outgoing) }
+        edgeIndexes.set(workflow.edges, index)
+    }
+    return index
+}
+
+export function actionsById(workflow: Pick<HogFlow, 'actions'>): Map<string, HogFlowAction> {
+    let index = actionIndexes.get(workflow.actions)
+    if (!index) {
+        index = new Map(workflow.actions.map((action) => [action.id, action]))
+        actionIndexes.set(workflow.actions, index)
     }
     return index
 }
 
 export function outgoingEdges(workflow: FlowGraph, actionId: string): HogFlowEdge[] {
-    return flowIndex(workflow).outgoing.get(actionId) ?? []
-}
-
-function reachableFrom(workflow: FlowGraph, start: string): Set<string> {
-    const seen = new Set<string>()
-    const pending = [start]
-    while (pending.length) {
-        const id = pending.pop() as string
-        if (!seen.has(id)) {
-            seen.add(id)
-            outgoingEdges(workflow, id).forEach((edge) => pending.push(edge.to))
-        }
-    }
-    return seen
-}
-
-function breadthFirstOrder(workflow: FlowGraph, start: string | undefined): string[] {
-    const order: string[] = []
-    const seen = new Set<string>()
-    const queue = start ? [start] : []
-    for (let next = 0; next < queue.length; next++) {
-        const id = queue[next]
-        if (!seen.has(id)) {
-            seen.add(id)
-            order.push(id)
-            outgoingEdges(workflow, id).forEach((edge) => queue.push(edge.to))
-        }
-    }
-    return order
+    return edgeIndex(workflow).outgoing.get(actionId) ?? []
 }
 
 /**
  * Every step reachable from the starts, each before the steps it leads to. The paths of a split follow each
  * other in path order, so one path's steps stay together and the step where they join comes after all of them.
  */
-export function executionOrder(workflow: FlowGraph, startIds: readonly string[]): string[] {
+export function executionOrder(
+    workflow: FlowGraph,
+    startIds: readonly string[],
+    canVisit: (id: string) => boolean = () => true
+): string[] {
     const seen = new Set<string>()
     return startIds.flatMap((startId) => {
         const finished: string[] = []
@@ -82,7 +144,7 @@ export function executionOrder(workflow: FlowGraph, startIds: readonly string[])
             const [id, isDone] = pending.pop() as [string, boolean]
             if (isDone) {
                 finished.push(id)
-            } else if (!seen.has(id)) {
+            } else if (!seen.has(id) && canVisit(id)) {
                 seen.add(id)
                 pending.push(
                     [id, true],
@@ -108,6 +170,7 @@ export interface PathGroup {
     entryEdge: HogFlowEdge
     label: string
     memberIds: string[]
+    members: ReadonlySet<string>
     parentId: string | null
     depth: number
 }
@@ -132,30 +195,40 @@ export function pathGroupId(edge: HogFlowEdge): string {
     return `path:${edge.from}:${edge.type}:${edge.index ?? ''}`
 }
 
-/** The steps only this path reaches before it joins the others, in the order people move through them. */
-function exclusivePathMembers(
-    workflow: FlowGraph,
-    entryId: string,
-    otherPaths: Set<string>[],
-    afterJoin: Set<string>
-): string[] {
-    return executionOrder(workflow, [entryId]).filter(
-        (id) => !afterJoin.has(id) && !otherPaths.some((reach) => reach.has(id))
-    )
-}
+const SHARED = -1
 
-function stepsAfterJoin(workflow: FlowGraph, outgoing: HogFlowEdge[], reaches: Set<string>[]): Set<string> {
-    const joinId = breadthFirstOrder(workflow, outgoing[0]?.to).find((id) => reaches.every((reach) => reach.has(id)))
-    return joinId ? reachableFrom(workflow, joinId) : new Set<string>()
+/**
+ * Which path of a split reaches each step before the paths join: its index, or SHARED when more than one does.
+ * Each step changes its label at most twice, so one pass over the edges between the split and the join does.
+ */
+function pathOfStep(workflow: FlowGraph, entries: string[], joinId: string | undefined): Map<string, number> {
+    const label = new Map<string, number>()
+    const pending: [id: string, path: number][] = entries.map((id, path) => [id, path])
+    while (pending.length) {
+        const [id, path] = pending.pop() as [string, number]
+        const current = label.get(id)
+        if (id === joinId || current === path || current === SHARED) {
+            continue
+        }
+        const next = current === undefined ? path : SHARED
+        label.set(id, next)
+        outgoingEdges(workflow, id).forEach((edge) => pending.push([edge.to, next]))
+    }
+    return label
 }
 
 function pathsOf(workflow: FlowGraph, splitAction: HogFlowAction): PathGroup[] {
     const outgoing = outgoingEdges(workflow, splitAction.id)
-    const reaches = outgoing.map((edge) => reachableFrom(workflow, edge.to))
-    const afterJoin = stepsAfterJoin(workflow, outgoing, reaches)
-    return outgoing.flatMap((edge, index) => {
-        const otherPaths = reaches.filter((_, other) => other !== index)
-        const memberIds = exclusivePathMembers(workflow, edge.to, otherPaths, afterJoin)
+    if (outgoing.length < 2) {
+        return []
+    }
+    const label = pathOfStep(
+        workflow,
+        outgoing.map((edge) => edge.to),
+        edgeIndex(workflow).joinOf.get(splitAction.id)
+    )
+    return outgoing.flatMap((edge, path) => {
+        const memberIds = executionOrder(workflow, [edge.to], (id) => label.get(id) === path)
         // A single step reads better on the canvas as itself than inside a group of one.
         if (memberIds.length < 2) {
             return []
@@ -167,6 +240,7 @@ function pathsOf(workflow: FlowGraph, splitAction: HogFlowAction): PathGroup[] {
                 entryEdge: edge,
                 label: getWorkflowBranchLabel(splitAction, edge),
                 memberIds,
+                members: new Set(memberIds),
                 parentId: null,
                 depth: 0,
             },
@@ -175,15 +249,27 @@ function pathsOf(workflow: FlowGraph, splitAction: HogFlowAction): PathGroup[] {
 }
 
 function loopsBackToItsSplit(group: PathGroup): boolean {
-    return group.memberIds.includes(group.branchActionId)
+    return group.members.has(group.branchActionId)
 }
 
 function encloses(outer: PathGroup, inner: PathGroup): boolean {
-    return (
-        outer.memberIds.includes(inner.branchActionId) &&
-        outer.memberIds.length > inner.memberIds.length &&
-        inner.memberIds.every((id) => outer.memberIds.includes(id))
-    )
+    return outer.memberIds.length > inner.memberIds.length && inner.memberIds.every((id) => outer.members.has(id))
+}
+
+/** A path's parent is the smallest other path that holds its split and all of its steps. */
+function parentsOf(groups: PathGroup[]): Map<string, string> {
+    const holding = new Map<string, PathGroup[]>()
+    groups.forEach((group) => group.memberIds.forEach((id) => holding.set(id, [...(holding.get(id) ?? []), group])))
+    const parents = new Map<string, string>()
+    groups.forEach((group) => {
+        const parent = (holding.get(group.branchActionId) ?? [])
+            .filter((other) => encloses(other, group))
+            .sort((a, b) => a.memberIds.length - b.memberIds.length)[0]
+        if (parent) {
+            parents.set(group.id, parent.id)
+        }
+    })
+    return parents
 }
 
 export function computePathGroups(workflow: FlowGraph): PathGroup[] {
@@ -192,39 +278,58 @@ export function computePathGroups(workflow: FlowGraph): PathGroup[] {
         .filter(isBranchingAction)
         .flatMap((action) => pathsOf(workflow, action))
         .filter((group) => !loopsBackToItsSplit(group))
-    // A parent must hold strictly more steps than its child, so the parent chain can never loop.
-    const parentOf = (group: PathGroup): PathGroup | undefined =>
-        groups.filter((other) => encloses(other, group)).sort((a, b) => a.memberIds.length - b.memberIds.length)[0]
-    const withParents = groups.map((group) => ({ ...group, parentId: parentOf(group)?.id ?? null }))
-    const depthOf = (group: PathGroup): number => {
-        const parent = withParents.find((other) => other.id === group.parentId)
-        return parent ? depthOf(parent) + 1 : 0
+    // A parent holds strictly more steps than its child, so the parent chain can never loop.
+    const parents = parentsOf(groups)
+    const depths = new Map<string, number>()
+    const depthOf = (id: string): number => {
+        const parentId = parents.get(id)
+        if (!parentId) {
+            return 0
+        }
+        if (!depths.has(id)) {
+            depths.set(id, depthOf(parentId) + 1)
+        }
+        return depths.get(id) as number
     }
-    return withParents.map((group) => ({ ...group, depth: depthOf(group) }))
+    return groups.map((group) => ({ ...group, parentId: parents.get(group.id) ?? null, depth: depthOf(group.id) }))
 }
 
 function ancestorsOf(groups: PathGroup[], group: PathGroup): PathGroup[] {
-    const parent = groups.find((other) => other.id === group.parentId)
-    return parent ? [parent, ...ancestorsOf(groups, parent)] : []
+    const byId = new Map(groups.map((other) => [other.id, other]))
+    const ancestors: PathGroup[] = []
+    for (let parent = byId.get(group.parentId ?? ''); parent; parent = byId.get(parent.parentId ?? '')) {
+        ancestors.push(parent)
+    }
+    return ancestors
+}
+
+function hasOpenAncestors(groups: PathGroup[], open: ReadonlySet<string>): (group: PathGroup) => boolean {
+    const byId = new Map(groups.map((group) => [group.id, group]))
+    return (group) => {
+        for (let parent = byId.get(group.parentId ?? ''); parent; parent = byId.get(parent.parentId ?? '')) {
+            if (!open.has(parent.id)) {
+                return false
+            }
+        }
+        return true
+    }
 }
 
 export function openPathFrames(groups: PathGroup[], openGroupIds: readonly string[]): PathGroup[] {
     const open = new Set(openGroupIds)
-    return groups.filter(
-        (group) => open.has(group.id) && ancestorsOf(groups, group).every((ancestor) => open.has(ancestor.id))
-    )
+    const isShown = hasOpenAncestors(groups, open)
+    return groups.filter((group) => open.has(group.id) && isShown(group))
 }
 
 export function collapsedPathStacks(groups: PathGroup[], openGroupIds: readonly string[]): PathGroup[] {
     const open = new Set(openGroupIds)
-    return groups.filter(
-        (group) => !open.has(group.id) && ancestorsOf(groups, group).every((ancestor) => open.has(ancestor.id))
-    )
+    const isShown = hasOpenAncestors(groups, open)
+    return groups.filter((group) => !open.has(group.id) && isShown(group))
 }
 
 export function pathActions(workflow: Pick<HogFlow, 'actions'>, group: PathGroup): HogFlowAction[] {
-    const actionsById = new Map(workflow.actions.map((action) => [action.id, action]))
-    return group.memberIds.flatMap((id) => actionsById.get(id) ?? [])
+    const byId = actionsById(workflow)
+    return group.memberIds.flatMap((id) => byId.get(id) ?? [])
 }
 
 /** The start and end of a workflow cannot be copied, moved or deleted, so they have no step menu. */
@@ -233,7 +338,7 @@ export function hasStepMenu(action: Pick<HogFlowAction, 'type'>): boolean {
 }
 
 export function isInPathGroup(group: PathGroup, node: VisibleNode): boolean {
-    return group.memberIds.includes(node.kind === 'step' ? node.id : node.group.branchActionId)
+    return group.members.has(node.kind === 'step' ? node.id : node.group.branchActionId)
 }
 
 export type VisibleNode =
@@ -340,7 +445,7 @@ export function computeVisibleGraph(
     const collapsed: Collapsed = {
         stackOf: new Map(stacks.flatMap((group) => group.memberIds.map((id): [string, string] => [id, group.id]))),
         namedElsewhere: new Set([...stacks, ...frames].map((group) => edgeKey(group.entryEdge))),
-        actionsById: new Map(workflow.actions.map((action) => [action.id, action])),
+        actionsById: actionsById(workflow),
     }
     return {
         nodes: visibleNodes(workflow, stacks, collapsed),
@@ -498,12 +603,13 @@ export function layoutMiniFlow(
     memberIds: string[],
     spacing: { tile: number; gapX: number; gapY: number }
 ): MiniFlowLayout {
-    const members = new Set(memberIds)
-    const inner = workflow.edges.filter((edge) => members.has(edge.from) && members.has(edge.to))
+    const rank = new Map(memberIds.map((id, index) => [id, index]))
+    const inner = memberIds.flatMap((id) => outgoingEdges(workflow, id).filter((edge) => rank.has(edge.to)))
+    // Members come in flow order, so one pass over the edges that point forward places every step after the ones before it.
     const layer = new Map(memberIds.map((id) => [id, 0]))
-    memberIds.forEach(() =>
-        inner.forEach((edge) => layer.set(edge.to, Math.max(layer.get(edge.to) ?? 0, (layer.get(edge.from) ?? 0) + 1)))
-    )
+    inner
+        .filter((edge) => (rank.get(edge.to) as number) > (rank.get(edge.from) as number))
+        .forEach((edge) => layer.set(edge.to, Math.max(layer.get(edge.to) ?? 0, (layer.get(edge.from) ?? 0) + 1)))
     const columns: string[][] = []
     memberIds.forEach((id) => (columns[layer.get(id) ?? 0] ??= []).push(id))
     const tallest = Math.max(...columns.map((column) => column?.length ?? 0))

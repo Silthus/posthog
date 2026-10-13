@@ -96,8 +96,7 @@ const FLAT_ONLY_OPTIONS: Record<string, string> = {
     'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
 }
 
-function leafNode(id: string, size: NodeSize, edges: VisibleEdge[]): ElkNode {
-    const portCount = edges.find((edge) => edge.source === id)?.portCount ?? 1
+function leafNode(id: string, size: NodeSize, portCount: number): ElkNode {
     const ports = tilePorts(size, portCount)
     return {
         id,
@@ -117,11 +116,6 @@ function leafNode(id: string, size: NodeSize, edges: VisibleEdge[]): ElkNode {
     }
 }
 
-function frameDepth(frames: PathFrameSpec[], frame: PathFrameSpec): number {
-    const parent = frames.find((other) => other.id === frame.parentId)
-    return parent ? frameDepth(frames, parent) + 1 : 0
-}
-
 const FRAME_PADDING_OPTION = `[left=${FRAME_PADDING.side}, top=${FRAME_PADDING.top}, right=${FRAME_PADDING.side}, bottom=${FRAME_PADDING.bottom}]`
 
 function elkRootOptions(nested: boolean): Record<string, string> {
@@ -138,7 +132,8 @@ function elkRootOptions(nested: boolean): Record<string, string> {
     }
 }
 
-function elkEdge(edge: VisibleEdge, label: string | undefined): ElkExtendedEdge {
+function elkEdge(edge: VisibleEdge): ElkExtendedEdge {
+    const label = edge.label
     return {
         id: edge.id,
         sources: [`${edge.source}:out:${edge.portIndex}`],
@@ -170,31 +165,27 @@ function assignFrameChildren(
     frames: PathFrameSpec[]
 ): void {
     const containers = new Map(frames.map((frame) => [frame.id, elkFrame(frame)]))
-    const deepestFirst = [...frames].sort((a, b) => frameDepth(frames, b) - frameDepth(frames, a))
-    const ownerOf = (id: string): ElkNode => {
-        const frame = deepestFirst.find((candidate) => candidate.memberIds.includes(id))
-        return (frame && containers.get(frame.id)) || root
-    }
-    Object.entries(sizes).forEach(([id, size]) => ownerOf(id).children?.push(leafNode(id, size, edges)))
+    const deepestFrameOf = new Map<string, string>()
+    ;[...frames]
+        .sort((a, b) => a.group.depth - b.group.depth)
+        .forEach((frame) => frame.memberIds.forEach((id) => deepestFrameOf.set(id, frame.id)))
+    const portCounts = new Map(edges.map((edge) => [edge.source, edge.portCount]))
+    Object.entries(sizes).forEach(([id, size]) => {
+        const owner = containers.get(deepestFrameOf.get(id) ?? '') ?? root
+        owner.children?.push(leafNode(id, size, portCounts.get(id) ?? 1))
+    })
     frames.forEach((frame) => {
         const parent = (frame.parentId && containers.get(frame.parentId)) || root
         parent.children?.push(containers.get(frame.id) as ElkNode)
     })
 }
 
-function buildElkGraph(
-    sizes: Record<string, NodeSize>,
-    edges: VisibleEdge[],
-    labels: Record<string, string | undefined>,
-    frames: PathFrameSpec[]
-): ElkNode {
+function buildElkGraph(sizes: Record<string, NodeSize>, edges: VisibleEdge[], frames: PathFrameSpec[]): ElkNode {
     const root: ElkNode = {
         id: 'root',
         layoutOptions: elkRootOptions(frames.length > 0),
         children: [],
-        edges: edges
-            .filter((edge) => sizes[edge.source] && sizes[edge.target])
-            .map((edge) => elkEdge(edge, labels[edge.id])),
+        edges: edges.filter((edge) => sizes[edge.source] && sizes[edge.target]).map(elkEdge),
     }
     assignFrameChildren(root, sizes, edges, frames)
     return root
@@ -263,11 +254,10 @@ function attachToTiles(layout: CanvasLayout, edges: VisibleEdge[], sizes: Record
 export async function layoutTileCanvas(
     sizes: Record<string, NodeSize>,
     edges: VisibleEdge[],
-    labels: Record<string, string | undefined>,
     frames: PathFrameSpec[]
 ): Promise<CanvasLayout> {
     const elk = await getElk()
-    const result = await elk.layout(buildElkGraph(sizes, edges, labels, frames))
+    const result = await elk.layout(buildElkGraph(sizes, edges, frames))
     return attachToTiles(readLayout(result, new Set(frames.map((frame) => frame.id))), edges, sizes)
 }
 

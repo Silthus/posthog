@@ -118,7 +118,6 @@ export interface tileCanvasLogicValues {
     originalWorkflow: HogFlow | null // workflowLogic
     allPathsCollapsed: boolean
     commandPaletteQuery: string | null
-    edgeLabels: Record<string, string | undefined>
     fitRequest: number
     fitsNextLayout: boolean
     frameFocus: { box: Box; request: number } | null
@@ -301,7 +300,6 @@ export interface tileCanvasLogicMeta {
         pathGroups: (workflow: HogFlow) => PathGroup[]
         visibleGraph: (workflow: HogFlow, pathGroups: PathGroup[], openPathIds: string[]) => VisibleGraph
         frameSpecs: (pathGroups: PathGroup[], openPathIds: string[], visibleGraph: VisibleGraph) => PathFrameSpec[]
-        edgeLabels: (visibleGraph: VisibleGraph) => Record<string, string | undefined>
         allPathsCollapsed: (pathGroups: PathGroup[], openPathIds: string[]) => boolean
         hasHistory: (workflow: HogFlow) => boolean
         panelMode: (
@@ -505,11 +503,6 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             (groups: PathGroup[], openPathIds: string[], graph: VisibleGraph): PathFrameSpec[] =>
                 pathFrameSpecs(groups, openPathIds, graph.nodes),
         ],
-        edgeLabels: [
-            (s) => [s.visibleGraph],
-            (graph: VisibleGraph): Record<string, string | undefined> =>
-                Object.fromEntries(graph.edges.map((edge) => [edge.id, edge.label])),
-        ],
         allPathsCollapsed: [
             (s) => [s.pathGroups, s.openPathIds],
             (groups: PathGroup[], openPathIds: string[]): boolean =>
@@ -568,12 +561,12 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         /** A step that was just added or picked elsewhere must not stay hidden inside a stack. */
         const revealContainingPaths = (actionId: string): void => {
             const isHidden = collapsedPathStacks(values.pathGroups, values.openPathIds).some((group) =>
-                group.memberIds.includes(actionId)
+                group.members.has(actionId)
             )
             if (!isHidden) {
                 return
             }
-            const containing = values.pathGroups.filter((group) => group.memberIds.includes(actionId))
+            const containing = values.pathGroups.filter((group) => group.members.has(actionId))
             const innermost = containing.reduce((deepest, group) => (group.depth > deepest.depth ? group : deepest))
             actions.setOpenPathIds([...new Set([...values.openPathIds, ...containing.map((group) => group.id)])])
             actions.focusPathAfterLayout(innermost.id)
@@ -696,7 +689,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 if (objectsEqual(input, cache.layoutInput)) {
                     return
                 }
-                const layout = await layoutTileCanvas(sizes, input.edges, values.edgeLabels, input.frames)
+                const layout = await layoutTileCanvas(sizes, input.edges, input.frames)
                 breakpoint()
                 cache.layoutInput = input
                 actions.setLayout(layout)

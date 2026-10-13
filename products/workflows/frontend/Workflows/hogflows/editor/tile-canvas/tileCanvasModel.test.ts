@@ -161,6 +161,39 @@ describe('tileCanvasModel', () => {
         ])
     })
 
+    it('folds the paths of a split inside a retry loop, while the retry path itself stays open', () => {
+        const retry = flow(
+            [
+                step('trigger', 'trigger'),
+                step('start'),
+                step('split', 'conditional_branch'),
+                step('a1'),
+                step('a2'),
+                step('b1'),
+                step('b2'),
+                step('check', 'conditional_branch'),
+                step('exit', 'exit'),
+            ],
+            [
+                next('trigger', 'start'),
+                next('start', 'split'),
+                branch('split', 'a1'),
+                next('a1', 'a2'),
+                next('a2', 'check'),
+                next('split', 'b1'),
+                next('b1', 'b2'),
+                next('b2', 'check'),
+                branch('check', 'start'),
+                next('check', 'exit'),
+            ]
+        )
+
+        expect(computePathGroups(retry).map((group) => group.memberIds)).toEqual([
+            ['a1', 'a2'],
+            ['b1', 'b2'],
+        ])
+    })
+
     it('leaves paths that loop back into each other ungrouped', () => {
         const loop = flow(
             [
