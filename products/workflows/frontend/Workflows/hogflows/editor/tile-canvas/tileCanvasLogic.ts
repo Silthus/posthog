@@ -138,6 +138,9 @@ export interface tileCanvasLogicActions {
     stopMovingNode: () => {
         value: true
     } // hogFlowEditorLogic
+    activateNode: (nodeId: string) => {
+        nodeId: string
+    }
     addStepAt: (
         step: CreateActionType,
         edge: HogFlowEdge
@@ -315,6 +318,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         ],
     })),
     actions({
+        activateNode: (nodeId: string) => ({ nodeId }),
         openPath: (groupId: string) => ({ groupId }),
         collapsePath: (groupId: string) => ({ groupId }),
         toggleAllPaths: true,
@@ -502,6 +506,14 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             }
         }
         return {
+            activateNode: ({ nodeId }) => {
+                const node = values.visibleGraph.nodes.find((candidate) => candidate.id === nodeId)
+                if (node?.kind === 'step') {
+                    actions.selectStep(nodeId)
+                } else if (node?.kind === 'stack') {
+                    actions.openPath(nodeId)
+                }
+            },
             openPath: ({ groupId }) => {
                 animate({ kind: 'expand', groupId, origin: stackOrigin(groupId) })
                 actions.setOpenPathIds([...values.openPathIds, groupId])

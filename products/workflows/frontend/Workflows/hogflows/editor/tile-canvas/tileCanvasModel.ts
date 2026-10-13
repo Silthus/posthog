@@ -213,6 +213,11 @@ export function pathActions(workflow: Pick<HogFlow, 'actions'>, group: PathGroup
     return group.memberIds.flatMap((id) => actionsById.get(id) ?? [])
 }
 
+/** The start and end of a workflow cannot be copied, moved or deleted, so they have no step menu. */
+export function hasStepMenu(action: Pick<HogFlowAction, 'type'>): boolean {
+    return action.type !== 'trigger' && action.type !== 'exit'
+}
+
 export function isInPathGroup(group: PathGroup, node: VisibleNode): boolean {
     return group.memberIds.includes(node.kind === 'step' ? node.id : node.group.branchActionId)
 }

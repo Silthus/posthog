@@ -11,7 +11,7 @@ import {
     useReactFlow,
 } from '@xyflow/react'
 import { BindLogic, useActions, useValues } from 'kea'
-import { useEffect, useMemo, useRef } from 'react'
+import { KeyboardEvent, useEffect, useMemo, useRef } from 'react'
 
 import { cn } from 'lib/utils/css-classes'
 
@@ -28,7 +28,7 @@ import { PlacementHint } from './PlacementHint'
 import { canvasBounds, entryX, frameChipWidth } from './tileCanvasLayout'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import { TileCanvasMeasureLayer } from './TileCanvasMeasureLayer'
-import { edgeKey, Point, Size, viewportAfterResize } from './tileCanvasModel'
+import { edgeKey, hasStepMenu, Point, Size, viewportAfterResize } from './tileCanvasModel'
 import type { TileCanvasNode, TileEdgeType } from './tileCanvasNodes'
 import { TileEdge } from './TileEdge'
 import { TileFlowNode } from './TileFlowNode'
@@ -40,6 +40,21 @@ const MAX_ZOOM = 1.5
 const MIN_READABLE_ZOOM = 0.66
 const FIT_MARGIN = { side: 24, top: 32, bottom: 96 }
 const CHIP_INSET = 8
+
+type TileKeyCommand = 'activate' | 'menu'
+
+function tileKeyCommand(event: KeyboardEvent<HTMLElement>): TileKeyCommand | null {
+    if (event.key === 'Enter' || event.key === ' ') {
+        return 'activate'
+    }
+    return event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10') ? 'menu' : null
+}
+
+/** The tile the keyboard is on: React Flow focuses its own node wrapper, which carries the node id. */
+function focusedTileId(event: KeyboardEvent<HTMLElement>): string | undefined {
+    const target = event.target as HTMLElement
+    return target.classList.contains('react-flow__node-tile') ? target.dataset.id : undefined
+}
 
 function TileCanvasContent(): JSX.Element {
     const wrapperRef = useRef<HTMLDivElement>(null)
@@ -58,8 +73,11 @@ function TileCanvasContent(): JSX.Element {
         isHistoryOpen,
     } = useValues(tileCanvasLogic)
     const { logicProps } = useValues(workflowLogic)
-    const { selectStep, openPath, closePanel } = useActions(tileCanvasLogic)
+    const { activateNode, openStepMenu, closePanel } = useActions(tileCanvasLogic)
     const { handlePaneClick } = useActions(hogFlowEditorLogic)
+
+    const stepWithMenu = (nodeId: string): boolean =>
+        visibleGraph.nodes.some((node) => node.id === nodeId && node.kind === 'step' && hasStepMenu(node.action))
 
     const selectedPosition = selectedNodeId ? layout?.positions[selectedNodeId] : undefined
     const selectedSize = selectedNodeId ? measuredSizes?.[selectedNodeId] : undefined
@@ -193,6 +211,19 @@ function TileCanvasContent(): JSX.Element {
             <TileCanvasMeasureLayer />
             <div
                 ref={wrapperRef}
+                onKeyDown={(event) => {
+                    const nodeId = focusedTileId(event)
+                    const key = nodeId ? tileKeyCommand(event) : null
+                    if (!nodeId || !key) {
+                        return
+                    }
+                    event.preventDefault()
+                    if (key === 'activate') {
+                        activateNode(nodeId)
+                    } else if (stepWithMenu(nodeId)) {
+                        openStepMenu(nodeId)
+                    }
+                }}
                 className="@container/tile-canvas flex min-h-0 min-w-0 grow @max-[48rem]/workflow-editor:min-h-80 @max-[48rem]/workflow-editor:shrink-0"
             >
                 <ReactFlow<TileCanvasNode, TileEdgeType>
@@ -209,16 +240,7 @@ function TileCanvasContent(): JSX.Element {
                     nodesDraggable={false}
                     nodesConnectable={false}
                     colorMode={isDarkModeOn ? 'dark' : 'light'}
-                    onNodeClick={(_, node) => {
-                        if (node.type !== 'tile') {
-                            return
-                        }
-                        if (node.data.node.kind === 'step') {
-                            selectStep(node.id)
-                        } else {
-                            openPath(node.id)
-                        }
-                    }}
+                    onNodeClick={(_, node) => activateNode(node.id)}
                     onPaneClick={handlePaneClick}
                     proOptions={{ hideAttribution: true }}
                 >

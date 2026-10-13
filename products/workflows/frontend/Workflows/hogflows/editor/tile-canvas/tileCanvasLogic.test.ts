@@ -136,6 +136,18 @@ describe('tileCanvasLogic', () => {
             })
         })
 
+        it('opens the step panel for a step and the path for a stack, from a click or the keyboard', async () => {
+            const [stack] = logic.values.visibleGraph.nodes.filter((node) => node.kind === 'stack')
+
+            await expectLogic(logic, () => logic.actions.activateNode('split')).toMatchValues({
+                selectedNodeId: 'split',
+                isPanelOpen: true,
+            })
+            await expectLogic(logic, () => logic.actions.activateNode(stack.id)).toMatchValues({
+                openPathIds: [stack.id],
+            })
+        })
+
         it('opens the panel for a step picked on the canvas', async () => {
             await expectLogic(logic, () => logic.actions.selectStep('b1')).toMatchValues({
                 selectedNodeId: 'b1',

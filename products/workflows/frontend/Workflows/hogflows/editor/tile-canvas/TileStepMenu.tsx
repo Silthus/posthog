@@ -7,6 +7,7 @@ import { LemonMenu } from 'lib/lemon-ui/LemonMenu'
 import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
 import type { HogFlowAction } from '../../types'
 import { tileCanvasLogic } from './tileCanvasLogic'
+import { hasStepMenu } from './tileCanvasModel'
 
 export function TileStepMenu({ action, children }: { action: HogFlowAction; children: JSX.Element }): JSX.Element {
     const { stepMenuActionId } = useValues(tileCanvasLogic)
@@ -15,7 +16,7 @@ export function TileStepMenu({ action, children }: { action: HogFlowAction; chil
     const { startCopyingNode, startMovingNode, onNodesDelete } = useActions(hogFlowEditorLogic)
     const node = selectedNode?.id === action.id ? selectedNode : null
 
-    if (['trigger', 'exit'].includes(action.type)) {
+    if (!hasStepMenu(action)) {
         return children
     }
 
