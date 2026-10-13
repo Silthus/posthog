@@ -32,6 +32,7 @@ import { HogFunctionTemplateManagerService } from './services/managers/hog-funct
 import { IntegrationManagerService } from './services/managers/integration-manager.service'
 import { OrganizationMembersService } from './services/managers/organization-members.service'
 import { RecipientsManagerService } from './services/managers/recipients-manager.service'
+import { SandboxSenderStateService } from './services/managers/sandbox-sender-state.service'
 import { TeamWorkflowsConfigService } from './services/managers/team-workflows-config.service'
 import { EmailSuppressionService } from './services/messaging/email-suppression.service'
 import { EmailValidationService } from './services/messaging/email-validation.service'
@@ -486,7 +487,8 @@ export function createCdpCoreServices(
             },
             deps.teamManager,
             sandboxEmailRateLimiter,
-            redis
+            redis,
+            new SandboxSenderStateService(deps.postgres, deps.pubSub)
         ),
         new OrganizationMembersService(deps.postgres)
     )
