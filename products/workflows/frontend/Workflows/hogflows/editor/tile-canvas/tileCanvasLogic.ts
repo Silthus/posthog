@@ -4,15 +4,14 @@ import { subscriptions } from 'kea-subscriptions'
 import type { DragEvent } from 'react'
 
 import { loadAppMetricsTotals } from 'lib/components/AppMetrics/appMetricsLogic'
-import { FEATURE_FLAGS } from 'lib/constants'
 import { FeatureFlagsSet, featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { objectsEqual } from 'lib/utils/objects'
 import { teamLogic } from 'scenes/teamLogic'
 
 import { sceneLayoutLogic } from '~/layout/scenes/sceneLayoutLogic'
-import { TeamPublicType, TeamType } from '~/types'
+import { HogFunctionTemplateType, TeamPublicType, TeamType } from '~/types'
 
-import { PERSON_DEPENDENT_ACTION_TYPES, WorkflowLogicProps, workflowLogic } from '../../../workflowLogic'
+import { WorkflowLogicProps, workflowLogic } from '../../../workflowLogic'
 import {
     actionMetricsFromTotals,
     CreateActionType,
@@ -20,15 +19,8 @@ import {
     HogFlowEditorMode,
     hogFlowEditorLogic,
 } from '../../hogFlowEditorLogic'
-import {
-    ACTION_NODES_TO_SHOW,
-    AI_TASK_ACTION_NODE,
-    DELAY_NODES_TO_SHOW,
-    LOGIC_NODES_TO_SHOW,
-    POSTHOG_NODES_TO_SHOW,
-    RUN_SCOUT_ACTION_NODE,
-} from '../../panel/HogFlowEditorPanelBuild'
 import type { DropzoneNode, HogFlow, HogFlowActionNode, HogFlowEdge } from '../../types'
+import { destinationSteps, workflowStepSections } from '../../workflowStepCatalog'
 import { CanvasLayout, frameId, layoutTileCanvas, NodeSize, PathFrameSpec, pathFrameSpecs } from './tileCanvasLayout'
 import {
     CanvasMotion,
@@ -81,6 +73,7 @@ export interface tileCanvasLogicValues {
     currentTeam: TeamPublicType | TeamType | null // teamLogic
     mode: 'build' | 'logs' | 'metrics' | 'test' | 'variables' // hogFlowEditorLogic
     isRowScopedTrigger: boolean // workflowLogic
+    hogFunctionTemplatesById: Record<string, HogFunctionTemplateType> // workflowLogic
     workflow: HogFlow // workflowLogic
     allPathsCollapsed: boolean
     commandPaletteQuery: string | null
@@ -271,7 +264,8 @@ export interface tileCanvasLogicMeta {
         paletteSections: (
             featureFlags: FeatureFlagsSet,
             currentTeam: TeamPublicType | TeamType | null,
-            isRowScopedTrigger: boolean
+            isRowScopedTrigger: boolean,
+            hogFunctionTemplatesById: Record<string, HogFunctionTemplateType>
         ) => PaletteSection[]
         stepMetrics: (
             workflow: HogFlow,
@@ -294,7 +288,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
     connect(() => ({
         values: [
             workflowLogic,
-            ['workflow', 'isRowScopedTrigger'],
+            ['workflow', 'isRowScopedTrigger', 'hogFunctionTemplatesById'],
             hogFlowEditorLogic,
             ['nodeToBeAdded', 'isMovingNode', 'isCopyingNode', 'dropzoneNodes', 'selectedNodeId', 'mode'],
             featureFlagLogic,
@@ -462,30 +456,18 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             ): boolean => !!nodeToBeAdded || isMovingNode || isCopyingNode,
         ],
         paletteSections: [
-            (s) => [s.featureFlags, s.currentTeam, s.isRowScopedTrigger],
+            (s) => [s.featureFlags, s.currentTeam, s.isRowScopedTrigger, s.hogFunctionTemplatesById],
             (
                 featureFlags: FeatureFlagsSet,
                 currentTeam: TeamPublicType | TeamType | null,
-                isRowScopedTrigger: boolean
+                isRowScopedTrigger: boolean,
+                hogFunctionTemplatesById: Record<string, HogFunctionTemplateType>
             ): PaletteSection[] => {
-                // Same gates as the build panel: scouts run only in the project's main environment.
-                const aiSteps = [
-                    ...(featureFlags[FEATURE_FLAGS.WORKFLOW_AI_TASK_ACTION] ? [AI_TASK_ACTION_NODE] : []),
-                    ...(featureFlags[FEATURE_FLAGS.WORKFLOW_RUN_SCOUT_ACTION] &&
-                    !!currentTeam &&
-                    currentTeam.id === currentTeam.project_id
-                        ? [RUN_SCOUT_ACTION_NODE]
-                        : []),
-                ]
-                const forTrigger = (steps: CreateActionType[]): CreateActionType[] =>
-                    isRowScopedTrigger ? steps.filter((step) => !PERSON_DEPENDENT_ACTION_TYPES.has(step.type)) : steps
+                const destinations = destinationSteps(Object.values(hogFunctionTemplatesById))
                 return [
-                    { title: 'Send', steps: ACTION_NODES_TO_SHOW },
-                    { title: 'Wait', steps: forTrigger(DELAY_NODES_TO_SHOW) },
-                    { title: 'Split', steps: forTrigger(LOGIC_NODES_TO_SHOW) },
-                    { title: 'AI', steps: aiSteps },
-                    { title: 'PostHog', steps: POSTHOG_NODES_TO_SHOW },
-                ].filter((section) => section.steps.length > 0)
+                    ...workflowStepSections({ featureFlags, currentTeam, isRowScopedTrigger }),
+                    ...(destinations.length ? [{ title: 'More destinations', steps: destinations }] : []),
+                ]
             },
         ],
     }),
