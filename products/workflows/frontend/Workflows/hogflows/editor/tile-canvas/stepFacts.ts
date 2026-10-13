@@ -1,6 +1,7 @@
 import { isFunctionAction } from '../../steps/types'
+import { isBranchingAction } from '../../tree/workflowTree'
 import type { HogFlow, HogFlowAction } from '../../types'
-import { FlowGraph, outgoingEdges, PathGroup } from './tileCanvasModel'
+import { FlowGraph, outgoingEdges, pathActions, PathGroup } from './tileCanvasModel'
 
 type ActionOf<T extends HogFlowAction['type']> = Extract<HogFlowAction, { type: T }>
 type FunctionAction = ActionOf<'function' | 'function_email' | 'function_sms' | 'function_push'>
@@ -542,14 +543,20 @@ export function stepPreviewKind(action: HogFlowAction): StepPreviewKind {
     }
 }
 
+const SUMMARY_LENGTH = 3
+
+/** The steps after a split inside the path run on only some of its people, so the summary stops at the split. */
+function summarizedSteps(actions: HogFlowAction[]): HogFlowAction[] {
+    const split = actions.findIndex(isBranchingAction)
+    return actions.slice(0, split === -1 ? SUMMARY_LENGTH : Math.min(split + 1, SUMMARY_LENGTH))
+}
+
 export function pathSummary(
     workflow: HogFlow,
     group: PathGroup,
     templateNameOf?: (id: string) => string | undefined
 ): string {
-    return workflow.actions
-        .filter((action) => group.memberIds.includes(action.id))
-        .slice(0, 3)
+    return summarizedSteps(pathActions(workflow, group))
         .map((action) => {
             const templateId = templateIdOf(action)
             return stepFacts(workflow, action, templateId ? templateNameOf?.(templateId) : undefined).headline

@@ -96,6 +96,70 @@ describe('tileCanvasModel', () => {
         ])
     })
 
+    it.each([
+        {
+            name: 'steps stored out of flow order',
+            workflow: flow(
+                [
+                    step('exit', 'exit'),
+                    step('a2'),
+                    step('b1'),
+                    step('a1'),
+                    step('split', 'conditional_branch'),
+                    step('trigger', 'trigger'),
+                ],
+                splitWithLongAndShortPath('conditional_branch').edges
+            ),
+            splitId: 'split',
+            members: ['a1', 'a2'],
+        },
+        {
+            name: 'a step inserted before the first step of the path',
+            workflow: flow(
+                [...splitWithLongAndShortPath('conditional_branch').actions, step('first')],
+                [
+                    next('trigger', 'split'),
+                    branch('split', 'first'),
+                    next('first', 'a1'),
+                    next('a1', 'a2'),
+                    next('a2', 'exit'),
+                    next('split', 'b1'),
+                    next('b1', 'exit'),
+                ]
+            ),
+            splitId: 'split',
+            members: ['first', 'a1', 'a2'],
+        },
+        {
+            name: 'a nested split, one inner path after the other',
+            workflow: flow([...nestedSplits.actions].reverse(), nestedSplits.edges),
+            splitId: 'outer',
+            members: ['inner', 'x1', 'x2', 'y1', 'y2'],
+        },
+    ])('orders a path the way people move through it: $name', ({ workflow, splitId, members }) => {
+        const group = computePathGroups(workflow).find((candidate) => candidate.branchActionId === splitId)
+
+        expect(group?.memberIds).toEqual(members)
+    })
+
+    it('lists the visible steps in flow order, whatever order they are stored in', () => {
+        const workflow = flow([...nestedSplits.actions].reverse(), nestedSplits.edges)
+
+        const graph = computeVisibleGraph(workflow, [], [])
+
+        expect(graph.nodes.map((node) => node.id)).toEqual([
+            'trigger',
+            'outer',
+            'inner',
+            'x1',
+            'x2',
+            'y1',
+            'y2',
+            'other',
+            'exit',
+        ])
+    })
+
     it('leaves paths that loop back into each other ungrouped', () => {
         const loop = flow(
             [

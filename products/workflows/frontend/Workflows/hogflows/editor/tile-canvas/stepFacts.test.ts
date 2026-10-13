@@ -218,6 +218,36 @@ describe('stepFacts', () => {
         expect(pathSummary(flow, group)).toBe('Welcome to Example Co., then Wait 1 day, then Post to #sales')
     })
 
+    it('sums up a path in flow order, and stops at a split inside it', () => {
+        const innerSplit = step('inner', 'random_cohort_branch', { cohorts: [{ percentage: 50 }, { percentage: 50 }] })
+        const flow = workflow(
+            [
+                step('x', 'delay', { delay_duration: '2h' }),
+                innerSplit,
+                fn('notify', 'template-slack', { channel: '#sales', text: 'Hi' }),
+                step('y', 'delay', { delay_duration: '3h' }),
+                step('exit', 'exit', {}),
+                step('other', 'delay', { delay_duration: '2h' }),
+                split,
+            ],
+            {
+                edges: [
+                    { from: 'by_plan', to: 'notify', type: 'branch', index: 0 },
+                    { from: 'notify', to: 'inner', type: 'continue' },
+                    { from: 'inner', to: 'x', type: 'branch', index: 0 },
+                    { from: 'inner', to: 'y', type: 'continue' },
+                    { from: 'x', to: 'exit', type: 'continue' },
+                    { from: 'y', to: 'exit', type: 'continue' },
+                    { from: 'by_plan', to: 'other', type: 'continue' },
+                    { from: 'other', to: 'exit', type: 'continue' },
+                ],
+            }
+        )
+        const group = computePathGroups(flow).find((candidate) => candidate.branchActionId === 'by_plan')!
+
+        expect(pathSummary(flow, group)).toBe('Post to #sales, then Random split')
+    })
+
     it.each([
         {
             name: 'keeps the minutes of a short window',

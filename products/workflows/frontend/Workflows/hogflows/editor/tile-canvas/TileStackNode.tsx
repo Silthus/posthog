@@ -7,7 +7,7 @@ import { StackPeek } from './StackPeek'
 import { pathSummary } from './stepFacts'
 import { TileBadge } from './TileBadge'
 import { TILE_SIZE } from './tileCanvasLayout'
-import { PathGroup, pathColor } from './tileCanvasModel'
+import { pathActions, PathGroup, pathColor } from './tileCanvasModel'
 import { useRaisedNode } from './useRaisedNode'
 import { useTileStep } from './useTileStep'
 
@@ -46,8 +46,8 @@ export function TileStackNode({
     useRaisedNode(ref, peek)
 
     const color = pathColor(group.entryEdge)
-    const members = workflow.actions.filter((action) => group.memberIds.includes(action.id))
-    const count = members[0] ? countOf(members[0].id) : undefined
+    const members = pathActions(workflow, group)
+    const count = countOf(group.entryEdge.to)
 
     return (
         <div
