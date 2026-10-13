@@ -1,0 +1,115 @@
+import { Background, BackgroundVariant, Controls, EdgeTypes, NodeTypes, Panel, ReactFlow } from '@xyflow/react'
+import { useActions, useValues } from 'kea'
+import { KeyboardEvent, useMemo, useRef } from 'react'
+
+import { cn } from 'lib/utils/css-classes'
+
+import { themeLogic } from '~/layout/navigation-3000/themeLogic'
+
+import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
+import { CommandBar } from './CommandBar'
+import { PathChip } from './PathChip'
+import { PathFrame } from './PathFrame'
+import { PlacementHint } from './PlacementHint'
+import { tileCanvasLogic } from './tileCanvasLogic'
+import { TileCanvasMeasureLayer } from './TileCanvasMeasureLayer'
+import { CANVAS_MIN_ZOOM, hasStepMenu } from './tileCanvasModel'
+import { buildCanvasEdges, buildCanvasNodes, TileCanvasNode, TileEdgeType } from './tileCanvasNodes'
+import { TileCanvasPanel } from './TileCanvasPanel'
+import { TileEdge } from './TileEdge'
+import { TileFlowNode } from './TileFlowNode'
+import { useCanvasViewport } from './useCanvasViewport'
+
+const NODE_TYPES = { tile: TileFlowNode, frame: PathFrame, chip: PathChip } as NodeTypes
+const EDGE_TYPES = { tile: TileEdge } as EdgeTypes
+const MAX_ZOOM = 1.5
+
+type TileKeyCommand = 'activate' | 'menu'
+
+function tileKeyCommand(event: KeyboardEvent<HTMLElement>): TileKeyCommand | null {
+    if (event.key === 'Enter' || event.key === ' ') {
+        return 'activate'
+    }
+    return event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10') ? 'menu' : null
+}
+
+/** React Flow focuses its own node wrapper, which carries the node id. */
+function focusedTileId(event: KeyboardEvent<HTMLElement>): string | undefined {
+    const target = event.target as HTMLElement
+    return target.classList.contains('react-flow__node-tile') ? target.dataset.id : undefined
+}
+
+export function TileCanvasContent(): JSX.Element {
+    const wrapperRef = useRef<HTMLDivElement>(null)
+    const { isDarkModeOn } = useValues(themeLogic)
+    const { visibleGraph, frameSpecs, layout, motion, isPanelOpen, commandPaletteQuery } = useValues(tileCanvasLogic)
+    const { activateNode, openStepMenu } = useActions(tileCanvasLogic)
+    const { handlePaneClick } = useActions(hogFlowEditorLogic)
+    useCanvasViewport(wrapperRef)
+
+    const nodes = useMemo(() => buildCanvasNodes(layout, frameSpecs, visibleGraph), [layout, frameSpecs, visibleGraph])
+    const edges = useMemo(() => buildCanvasEdges(visibleGraph, layout), [visibleGraph, layout])
+
+    const hasMenu = (nodeId: string): boolean =>
+        visibleGraph.nodes.some((node) => node.id === nodeId && node.kind === 'step' && hasStepMenu(node.action))
+
+    const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+        const nodeId = focusedTileId(event)
+        const command = nodeId ? tileKeyCommand(event) : null
+        if (!nodeId || !command) {
+            return
+        }
+        event.preventDefault()
+        if (command === 'activate') {
+            activateNode(nodeId)
+        } else if (hasMenu(nodeId)) {
+            openStepMenu(nodeId)
+        }
+    }
+
+    return (
+        <div
+            className={cn(
+                'TileCanvas relative flex min-h-0 min-w-0 flex-1 overflow-hidden @max-[48rem]/workflow-editor:flex-col @max-[48rem]/workflow-editor:overflow-y-auto',
+                motion && 'TileCanvas--moving'
+            )}
+            data-attr="workflow-editor"
+        >
+            <TileCanvasMeasureLayer />
+            <div
+                ref={wrapperRef}
+                onKeyDown={onKeyDown}
+                className="TileCanvas__flow @container/tile-canvas flex min-h-0 min-w-0 grow @max-[48rem]/workflow-editor:min-h-80 @max-[48rem]/workflow-editor:shrink-0"
+            >
+                <ReactFlow<TileCanvasNode, TileEdgeType>
+                    className="grow"
+                    nodes={nodes}
+                    edges={edges}
+                    nodeTypes={NODE_TYPES}
+                    edgeTypes={EDGE_TYPES}
+                    minZoom={CANVAS_MIN_ZOOM}
+                    maxZoom={MAX_ZOOM}
+                    panOnScroll
+                    zoomOnScroll={false}
+                    zoomActivationKeyCode={['Meta', 'Control']}
+                    nodesDraggable={false}
+                    nodesConnectable={false}
+                    colorMode={isDarkModeOn ? 'dark' : 'light'}
+                    onNodeClick={(_, node) => activateNode(node.id)}
+                    onPaneClick={handlePaneClick}
+                    proOptions={{ hideAttribution: true }}
+                >
+                    <Background gap={36} variant={BackgroundVariant.Dots} />
+                    <Panel position="bottom-center" className="!mb-5">
+                        <div className="flex flex-col items-center gap-2">
+                            {commandPaletteQuery === null && <PlacementHint />}
+                            <CommandBar />
+                        </div>
+                    </Panel>
+                    <Controls showInteractive={false} />
+                </ReactFlow>
+            </div>
+            {isPanelOpen && <TileCanvasPanel />}
+        </div>
+    )
+}

@@ -431,6 +431,23 @@ export function viewportToFit(frame: Point & Size, canvas: Size, zoom: number): 
     }
 }
 
+const MIN_READABLE_ZOOM = 0.66
+
+/** Fits the workflow's width, but never shrinks below a readable zoom just to fit a long workflow's height. */
+export function readableFitViewport(bounds: Point & Size, canvas: Size): Viewport {
+    const width = bounds.width + FIT_MARGIN.side * 2
+    const height = bounds.height + FIT_MARGIN.top + FIT_MARGIN.bottom
+    const zoom = Math.max(
+        CANVAS_MIN_ZOOM,
+        Math.min(1, canvas.width / width, Math.max(canvas.height / height, MIN_READABLE_ZOOM))
+    )
+    return {
+        x: Math.max(FIT_MARGIN.side, (canvas.width - bounds.width * zoom) / 2) - bounds.x * zoom,
+        y: FIT_MARGIN.top - bounds.y * zoom,
+        zoom,
+    }
+}
+
 export interface MiniFlowLayout {
     nodes: { actionId: string; x: number; y: number; layer: number }[]
     edges: { from: Point; to: Point }[]
