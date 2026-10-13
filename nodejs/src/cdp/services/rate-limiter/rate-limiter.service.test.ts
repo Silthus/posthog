@@ -2,10 +2,11 @@ import { randomUUID } from 'crypto'
 import { register } from 'prom-client'
 
 import { deleteKeysWithPrefix } from '~/common/redis/_tests/redis'
-import { RedisV2, createRedisV2PoolFromConfig } from '~/common/redis/redis-v2'
+import { RedisClient, RedisClientPipeline, RedisV2 } from '~/common/redis/redis-v2'
 import { closeHub, createHub } from '~/common/utils/db/hub'
+import { createRedisPoolFromConfig } from '~/common/utils/db/redis'
 import { TeamManager } from '~/common/utils/team-manager'
-import { Hub } from '~/types'
+import { Hub, RedisPool } from '~/types'
 
 import { SandboxEmailSender } from '../messaging/sandbox-email-sender'
 import { RateLimiterService } from './rate-limiter.service'
@@ -17,13 +18,14 @@ describe('RateLimiterService', () => {
 
     let hub: Hub
     let redis: RedisV2
+    let redisPool: RedisPool
     let limiter: RateLimiterService
 
     beforeEach(async () => {
         hub = await createHub()
         // Reuse the local CDP Redis for tests — same wire protocol, same atomicity.
         // In production this points at the dedicated SES rate-limiter Valkey.
-        redis = createRedisV2PoolFromConfig({
+        redisPool = createRedisPoolFromConfig({
             connection: hub.CDP_REDIS_HOST
                 ? {
                       url: hub.CDP_REDIS_HOST,
@@ -33,11 +35,29 @@ describe('RateLimiterService', () => {
             poolMinSize: hub.REDIS_POOL_MIN_SIZE,
             poolMaxSize: hub.REDIS_POOL_MAX_SIZE,
         })
+        redis = {
+            useClient: async (_options, callback) => {
+                const client = await redisPool.acquire()
+                try {
+                    return await callback(client as RedisClient)
+                } finally {
+                    await redisPool.release(client)
+                }
+            },
+            usePipeline: async (options, callback) =>
+                redis.useClient(options, async (client) => {
+                    const pipeline = client.pipeline() as RedisClientPipeline
+                    callback(pipeline)
+                    return pipeline.exec()
+                }),
+        }
         limiter = new RateLimiterService(redis, { name: 'ses-rate-limiter' })
         await deleteKeysWithPrefix(redis, KEY)
     })
 
     afterEach(async () => {
+        await redisPool.drain()
+        await redisPool.clear()
         await closeHub(hub)
     })
 
@@ -437,14 +457,24 @@ describe('RateLimiterService', () => {
         )
 
         try {
-            expect(await sender.claimDailyCaps(1, ['member@example.com'])).toMatchObject({ type: 'granted' })
-            expect(await sender.claimDailyCaps(2, ['member@example.com'])).toEqual({
+            const firstOrganization = { organizationId: organizations[1], expiresAt: Infinity }
+            const otherOrganization = { organizationId: organizations[3], expiresAt: Infinity }
+            expect(await sender.claimDailyCaps(1, ['member@example.com'], firstOrganization)).toMatchObject({
+                type: 'granted',
+            })
+            expect(await sender.claimDailyCaps(2, ['member@example.com'], firstOrganization)).toEqual({
                 type: 'recipient_cap_reached',
                 addresses: ['member@example.com'],
             })
-            expect(await sender.claimDailyCaps(2, ['other@example.com'])).toMatchObject({ type: 'granted' })
-            expect(await sender.claimDailyCaps(3, ['member@example.com'])).toMatchObject({ type: 'granted' })
-            expect(await sender.claimDailyCaps(2, ['third@example.com'])).toEqual({ type: 'project_cap_reached' })
+            expect(await sender.claimDailyCaps(2, ['other@example.com'], firstOrganization)).toMatchObject({
+                type: 'granted',
+            })
+            expect(await sender.claimDailyCaps(3, ['member@example.com'], otherOrganization)).toMatchObject({
+                type: 'granted',
+            })
+            expect(await sender.claimDailyCaps(2, ['third@example.com'], firstOrganization)).toEqual({
+                type: 'project_cap_reached',
+            })
         } finally {
             for (const organizationId of Object.values(organizations)) {
                 await deleteKeysWithPrefix(redis, `@posthog/workflows-sandbox-daily/{${organizationId}}`)

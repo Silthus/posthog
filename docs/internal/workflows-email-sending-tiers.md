@@ -72,7 +72,7 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
 - Sandbox sender sends bypass the team buckets without spending their tokens. Sandbox limits run independently.
   The worker holds every sandbox send, test sends included, to a daily cap per project (`WORKFLOWS_SANDBOX_DAILY_TEAM_CAP`, one token per recipient copy) and per recipient address within that organization (`WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP`). These are continuously refilling token buckets, not calendar-day counters; an idle bucket starts full and refills its capacity over 24 hours.
   A reached cap skips the send instead of delaying it. A limiter error or an empty or invalid cap value skips every sandbox send.
-  Membership is checked again after the cap claim so a stalled Valkey call cannot outlive the recipient decision. A blocked recheck returns the claim.
+  Cap keys and the final membership check share one organization snapshot, valid for at most one minute. A stalled claim or member lookup that outlives that snapshot skips the send and returns the claim.
   SES throttle responses return the sandbox claim before the existing delivery retry. Returns are deduplicated, and Valkey ignores a return command that arrives more than five minutes after it was issued.
   Test sends run inline in the CDP API, so the API reads the same `SES_RATE_LIMITER_VALKEY_*` settings as the email worker. Without them, every sandbox test send is skipped.
   CDP API opens the SES Valkey pool only when sandbox delivery is enabled; otherwise its MX validation uses the existing local cache and DNS.

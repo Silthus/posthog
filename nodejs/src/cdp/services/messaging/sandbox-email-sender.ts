@@ -7,6 +7,7 @@ import { logger } from '~/common/utils/logger'
 import { captureTeamEvent } from '~/common/utils/posthog'
 import { TeamManager } from '~/common/utils/team-manager'
 
+import { TeamOrganizationSnapshot } from '../managers/organization-members.service'
 import { ClaimRequest, RateLimiterService } from '../rate-limiter/rate-limiter.service'
 import { maybeAddPreheaderToEmail } from './helpers/preheader'
 
@@ -34,7 +35,12 @@ function emptyRouteSettings(config: SandboxEmailSenderConfig): string[] {
         .map((setting) => ROUTE_SETTING_NAMES[setting])
 }
 
-export type SandboxDailyCapGrant = { type: 'granted'; claimId: string; buckets: ClaimRequest[] }
+export type SandboxDailyCapGrant = {
+    type: 'granted'
+    claimId: string
+    buckets: ClaimRequest[]
+    organization: TeamOrganizationSnapshot
+}
 
 export type SandboxDailyCapClaim =
     | SandboxDailyCapGrant
@@ -185,18 +191,21 @@ export class SandboxEmailSender {
         this.canSend = config.enabled && !emptySettings.length
     }
 
-    public async claimDailyCaps(teamId: number, recipients: string[]): Promise<SandboxDailyCapClaim> {
+    public async claimDailyCaps(
+        teamId: number,
+        recipients: string[],
+        organization: TeamOrganizationSnapshot
+    ): Promise<SandboxDailyCapClaim> {
         const dailyTeamCap = parseDailyCap(this.config.dailyTeamCap)
         const dailyRecipientCap = parseDailyCap(this.config.dailyRecipientCap)
         if (!this.dailyCapLimiter || dailyTeamCap === null || dailyRecipientCap === null) {
             logger.error('Sandbox email daily caps are not configured correctly', { teamId })
             return { type: 'check_failed' }
         }
-        const team = await this.teamManager.getTeam(teamId).catch(() => null)
-        if (!team?.organization_id) {
+        if (Date.now() >= organization.expiresAt) {
             return { type: 'check_failed' }
         }
-        const prefix = dailyCapKeyPrefix(team.organization_id)
+        const prefix = dailyCapKeyPrefix(organization.organizationId)
         const addresses = distinctAddresses(recipients)
         const buckets = [
             dailyBucket(`${prefix}/project/${teamId}`, recipients.length, dailyTeamCap),
@@ -206,7 +215,7 @@ export class SandboxEmailSender {
         ]
         const claim = await this.dailyCapLimiter.claimAllOrNothing(buckets)
         if (claim.granted) {
-            return { type: 'granted', claimId: randomUUID(), buckets }
+            return { type: 'granted', claimId: randomUUID(), buckets, organization }
         }
         if (claim.deniedIndexes === null) {
             return { type: 'check_failed' }

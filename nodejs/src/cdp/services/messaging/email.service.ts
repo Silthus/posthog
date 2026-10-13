@@ -1071,7 +1071,10 @@ export class EmailService {
         isTest: boolean
     ): Promise<SandboxDailyCapGrant | null> {
         const teamId = result.invocation.teamId
-        const claim = await this.sandboxSender!.claimDailyCaps(teamId, recipients)
+        const organization = await this.organizationMembers?.getOrganizationSnapshot(teamId).catch(() => null)
+        const claim = organization
+            ? await this.sandboxSender!.claimDailyCaps(teamId, recipients, organization)
+            : { type: 'check_failed' as const }
         if (claim.type === 'granted') {
             return claim
         }
@@ -1468,7 +1471,7 @@ export class EmailService {
             if (!dailyCapGrant) {
                 return false
             }
-            if (!(await this.checkSandboxRecipients(result, sandboxRecipients, isTest))) {
+            if (!(await this.checkSandboxRecipients(result, sandboxRecipients, isTest, dailyCapGrant.organization))) {
                 await this.sandboxSender!.returnDailyCaps(dailyCapGrant)
                 return false
             }

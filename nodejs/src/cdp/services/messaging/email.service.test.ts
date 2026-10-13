@@ -1338,6 +1338,68 @@ describe('EmailService', () => {
             })
 
             describe('daily caps', () => {
+                it('skips and refunds when the organization snapshot expires during the cap claim', async () => {
+                    const now = Date.now()
+                    const clock = jest.spyOn(Date, 'now').mockReturnValue(now)
+                    const claim = dailyCapLimiter.claimAllOrNothing.bind(dailyCapLimiter)
+                    const delayedClaim = jest.spyOn(dailyCapLimiter, 'claimAllOrNothing')
+                    try {
+                        service = createSandboxService(true, { dailyTeamCap: '2', dailyRecipientCap: '2' })
+                        expectSent(await send(true, {}))
+                        delayedClaim.mockImplementationOnce(async (buckets) => {
+                            const grant = await claim(buckets)
+                            clock.mockReturnValue(now + 61_000)
+                            return grant
+                        })
+
+                        const expired = await send(true, {})
+                        expect(expired).toMatchObject({ finished: true, skipped: true })
+                        expect(expired.error).toBeUndefined()
+                        expect(sendEmailSpy).toHaveBeenCalledTimes(1)
+                        expect(expired.logs).toContainEqual(
+                            expect.objectContaining({
+                                message: expect.stringContaining('Skipping send: could not check organization members'),
+                            })
+                        )
+
+                        clock.mockReturnValue(now + 122_000)
+                        expectSent(await send(true, {}))
+                        expect(sendEmailSpy).toHaveBeenCalledTimes(2)
+                    } finally {
+                        delayedClaim.mockRestore()
+                        clock.mockRestore()
+                    }
+                })
+
+                it('uses the membership organization for caps when the team cache is older', async () => {
+                    const now = Date.now()
+                    const clock = jest.spyOn(Date, 'now').mockReturnValue(now)
+                    const nextOrganization = await createOtherOrganization()
+                    try {
+                        service = createSandboxService(true, { dailyRecipientCap: '1' })
+                        expectSent(await send(true, {}))
+                        await createOrganizationMembership(hub.postgres, nextOrganization, memberId)
+                        await hub.postgres.query(
+                            PostgresUse.COMMON_WRITE,
+                            'UPDATE posthog_team SET organization_id = $1 WHERE id = $2',
+                            [nextOrganization, team.id],
+                            'test:transfer-sandbox-project'
+                        )
+                        clock.mockReturnValue(now + 61_000)
+
+                        expectSent(await send(true, {}))
+                        expect(sendEmailSpy).toHaveBeenCalledTimes(2)
+                    } finally {
+                        clock.mockRestore()
+                        await hub.postgres.query(
+                            PostgresUse.COMMON_WRITE,
+                            'UPDATE posthog_team SET organization_id = $1 WHERE id = $2',
+                            [team.organization_id, team.id],
+                            'test:restore-sandbox-project-organization'
+                        )
+                    }
+                })
+
                 const TEAM_CAP_REACHED =
                     "Skipping send: this email would go over the sandbox sender's daily limit for this project. Verify your own domain to send more."
                 const recipientCapReached = (addresses: string): string =>
@@ -1491,9 +1553,9 @@ describe('EmailService', () => {
                 it.each([false, true])(
                     'rechecks membership after a delayed cap claim and returns a blocked grant (isTest=%s)',
                     async (isTest) => {
-                        service = createSandboxService(true, { dailyTeamCap: '1', dailyRecipientCap: '1' })
                         const now = Date.now()
                         const clock = jest.spyOn(Date, 'now').mockReturnValue(now)
+                        service = createSandboxService(true, { dailyTeamCap: '1', dailyRecipientCap: '1' })
                         const claim = dailyCapLimiter.claimAllOrNothing.bind(dailyCapLimiter)
                         const delayedClaim = jest
                             .spyOn(dailyCapLimiter, 'claimAllOrNothing')
