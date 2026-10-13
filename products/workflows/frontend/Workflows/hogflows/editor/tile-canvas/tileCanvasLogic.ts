@@ -183,6 +183,9 @@ export interface tileCanvasLogicActions {
     requestFit: () => {
         value: true
     }
+    revealStep: (actionId: string) => {
+        actionId: string
+    }
     selectStep: (actionId: string) => {
         actionId: string
     }
@@ -287,6 +290,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         addStepAt: (step: CreateActionType, edge: HogFlowEdge) => ({ step, edge }),
         placeAt: (edge: HogFlowEdge) => ({ edge }),
         selectStep: (actionId: string) => ({ actionId }),
+        revealStep: (actionId: string) => ({ actionId }),
         openPanel: (mode: HogFlowEditorMode) => ({ mode }),
         closePanel: true,
         cancel: true,
@@ -322,7 +326,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 openPanel: () => true,
                 closePanel: () => false,
                 cancel: () => false,
-                setSelectedNodeId: (state, { selectedNodeId }) => (selectedNodeId ? true : state),
+                revealStep: () => true,
             },
         ],
         measuredSizes: [null as Record<string, NodeSize> | null, { setMeasuredSizes: (_, { sizes }) => sizes }],
@@ -446,13 +450,18 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 actions.setOpenPathIds(values.allPathsCollapsed ? values.pathGroups.map((group) => group.id) : [])
             },
             setSelectedNodeId: ({ selectedNodeId }) => {
+                if (selectedNodeId) {
+                    actions.revealStep(selectedNodeId)
+                }
+            },
+            revealStep: ({ actionId }) => {
                 // A step that was just added or picked elsewhere must not stay hidden inside a stack.
-                const hiding = collapsedPathStacks(values.pathGroups, values.openPathIds).filter(
-                    (group) => !!selectedNodeId && group.memberIds.includes(selectedNodeId)
+                const isHidden = collapsedPathStacks(values.pathGroups, values.openPathIds).some((group) =>
+                    group.memberIds.includes(actionId)
                 )
-                if (selectedNodeId && hiding.length) {
+                if (isHidden) {
                     const reveal = values.pathGroups
-                        .filter((group) => group.memberIds.includes(selectedNodeId))
+                        .filter((group) => group.memberIds.includes(actionId))
                         .map((group) => group.id)
                     actions.setOpenPathIds([...new Set([...values.openPathIds, ...reveal])])
                 }
@@ -525,6 +534,10 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         },
     })),
     afterMount(({ actions, values, cache }) => {
+        // The step can be picked before the canvas mounts, from the tree view or a link to the step.
+        if (values.selectedNodeId) {
+            actions.revealStep(values.selectedNodeId)
+        }
         cache.disposables.add(() => {
             const onKeyDown = (event: KeyboardEvent): void => {
                 // A takeover such as the email editor covers the canvas, and Escape there must not close the panel it lives in.
