@@ -50,7 +50,7 @@ describe('saved workflow view dialog', () => {
         const remove = jest.fn().mockResolvedValue(undefined)
         act(() => openDeleteWorkflowSavedViewDialog('Active flows', remove))
         expect(await screen.findByText('Delete Active flows?')).toBeInTheDocument()
-        expect(screen.getByText(/Everyone in this project loses this view/)).toBeInTheDocument()
+        expect(screen.getByText('Everyone in this project loses this view.')).toBeInTheDocument()
         await userEvent.click(screen.getByText('Cancel'))
         await waitFor(() => expect(screen.queryByText('Delete Active flows?')).not.toBeInTheDocument())
         expect(remove).not.toHaveBeenCalled()

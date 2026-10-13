@@ -40,7 +40,7 @@ export function openWorkflowSavedViewDialog(onSubmit: (name: string) => Promise<
 export function openDeleteWorkflowSavedViewDialog(name: string, onDelete: () => Promise<void>): void {
     LemonDialog.open({
         title: `Delete ${name}?`,
-        description: 'Everyone in this project loses this view, and your unsaved changes to it are discarded.',
+        description: 'Everyone in this project loses this view.',
         shouldAwaitSubmit: true,
         primaryButton: { children: 'Delete view', status: 'danger', onClick: onDelete },
         secondaryButton: { children: 'Cancel' },
