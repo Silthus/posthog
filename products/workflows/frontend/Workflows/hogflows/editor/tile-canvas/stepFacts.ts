@@ -360,10 +360,22 @@ export function timeWindowSpans(config: ActionOf<'wait_until_time_window'>['conf
     })
 }
 
-function splitKey(conditions: ActionOf<'conditional_branch'>['config']['conditions']): string | undefined {
+type BranchCondition = ActionOf<'conditional_branch'>['config']['conditions'][number]
+type BranchCohort = ActionOf<'random_cohort_branch'>['config']['cohorts'][number]
+
+/** A draft split can be saved before its paths are set up, so its list can be missing. */
+export function branchConditions(action: ActionOf<'conditional_branch'>): BranchCondition[] {
+    return action.config.conditions ?? []
+}
+
+export function branchCohorts(action: ActionOf<'random_cohort_branch'>): BranchCohort[] {
+    return action.config.cohorts ?? []
+}
+
+function splitKey(conditions: BranchCondition[]): string | undefined {
     const keys = new Set(
         conditions.flatMap((condition) =>
-            (condition.filters.properties ?? []).flatMap((filter) => asText(asRecord(filter).key) ?? [])
+            (condition.filters?.properties ?? []).flatMap((filter) => asText(asRecord(filter).key) ?? [])
         )
     )
     return keys.size === 1 ? humanKey([...keys][0]) : undefined
@@ -391,13 +403,14 @@ export function stepFacts(workflow: HogFlow, action: HogFlowAction, templateName
         case 'trigger':
             return triggerFacts(action, templateName)
         case 'conditional_branch': {
-            const names = action.config.conditions.map((condition, index) => condition.name || `Condition ${index + 1}`)
-            const key = splitKey(action.config.conditions)
+            const conditions = branchConditions(action)
+            const names = conditions.map((condition, index) => condition.name || `Condition ${index + 1}`)
+            const key = splitKey(conditions)
             return {
                 headline: key ? `Split by ${key}` : 'Split by condition',
-                detail: `${names.join(', ')}, or no match`,
+                detail: names.length ? `${names.join(', ')}, or no match` : 'No conditions yet',
                 fields: [
-                    ...action.config.conditions.map((condition, index): [string, string] => [
+                    ...conditions.map((condition, index): [string, string] => [
                         names[index],
                         conditionText(condition.filters),
                     ]),
@@ -408,8 +421,11 @@ export function stepFacts(workflow: HogFlow, action: HogFlowAction, templateName
         case 'random_cohort_branch':
             return {
                 headline: 'Random split',
-                detail: action.config.cohorts.map((cohort) => `${cohort.percentage}%`).join(' / '),
-                fields: action.config.cohorts.map((cohort, index): [string, string] => [
+                detail:
+                    branchCohorts(action)
+                        .map((cohort) => `${cohort.percentage}%`)
+                        .join(' / ') || undefined,
+                fields: branchCohorts(action).map((cohort, index): [string, string] => [
                     cohort.name || `Group ${index + 1}`,
                     `${cohort.percentage}% of people`,
                 ]),

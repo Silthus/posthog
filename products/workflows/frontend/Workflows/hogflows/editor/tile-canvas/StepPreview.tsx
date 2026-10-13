@@ -2,6 +2,8 @@ import { EmailPreviewThumbnail } from 'lib/components/EmailPreviewThumbnail/Emai
 
 import type { HogFlow, HogFlowAction } from '../../types'
 import {
+    branchCohorts,
+    branchConditions,
     conditionText,
     emailContent,
     humanDuration,
@@ -176,14 +178,14 @@ function PersonPreview({ action }: { action: HogFlowAction }): JSX.Element | nul
 function BranchPreview({ action, workflow }: { action: HogFlowAction; workflow: HogFlow }): JSX.Element | null {
     const rows: [string, string, string][] =
         action.type === 'random_cohort_branch'
-            ? action.config.cohorts.map((cohort, index) => [
+            ? branchCohorts(action).map((cohort, index) => [
                   cohort.name || `Group ${index + 1}`,
                   `${cohort.percentage}% of people`,
                   pathColor({ type: 'branch', index }),
               ])
             : action.type === 'conditional_branch'
               ? [
-                    ...action.config.conditions.map((condition, index): [string, string, string] => [
+                    ...branchConditions(action).map((condition, index): [string, string, string] => [
                         condition.name || `Condition ${index + 1}`,
                         conditionText(condition.filters),
                         pathColor({ type: 'branch', index }),

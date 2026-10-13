@@ -158,6 +158,13 @@ describe('stepFacts', () => {
         expect(stepFacts(workflow([action]), action)).toMatchObject({ headline, detail })
     })
 
+    it.each([
+        ['a split', step('draft_split', 'conditional_branch', {}), 'Split by condition', 'No conditions yet'],
+        ['a random split', step('draft_random', 'random_cohort_branch', {}), 'Random split', undefined],
+    ])('reads a draft %s that has no paths set up yet', (_, action, headline, detail) => {
+        expect(stepFacts(workflow([action]), action)).toMatchObject({ headline, detail })
+    })
+
     it('falls back to the template name for a template it does not know', () => {
         const action = fn('hubspot', 'template-hubspot', { email: 'x' })
 
