@@ -66,7 +66,7 @@ const PUSH_NOTIFICATION_ACTION_NODE: CreateActionType = {
     config: { template_id: 'template-native-push', inputs: {} },
 }
 
-const AI_TASK_ACTION_NODE: CreateActionType = {
+export const AI_TASK_ACTION_NODE: CreateActionType = {
     type: 'function',
     name: 'Create AI task',
     description: 'Start an AI agent task with instructions from this workflow.',
@@ -80,7 +80,7 @@ const AI_TASK_ACTION_NODE: CreateActionType = {
     output_variable: { key: 'task', result_path: null, label: 'Task' },
 }
 
-const RUN_SCOUT_ACTION_NODE: CreateActionType = {
+export const RUN_SCOUT_ACTION_NODE: CreateActionType = {
     type: 'function',
     name: 'Run scout',
     description: 'Start a Signals scout run. The scout explores as it does on its schedule.',
