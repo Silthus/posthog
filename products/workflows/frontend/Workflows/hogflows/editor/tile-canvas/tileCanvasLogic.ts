@@ -93,6 +93,7 @@ export interface tileCanvasLogicValues {
     paletteSections: PaletteSection[]
     pathGroups: PathGroup[]
     quickAddEdgeKey: string | null
+    stepMenuActionId: string | null
     stepMetrics: Record<string, HogFlowEditorActionMetrics> | null
     visibleGraph: VisibleGraph
 }
@@ -161,6 +162,9 @@ export interface tileCanvasLogicActions {
     closeQuickAdd: () => {
         value: true
     }
+    closeStepMenu: () => {
+        value: true
+    }
     fitNextLayout: () => {
         value: true
     }
@@ -181,6 +185,9 @@ export interface tileCanvasLogicActions {
     }
     openQuickAdd: (edgeKey: string) => {
         edgeKey: string
+    }
+    openStepMenu: (actionId: string) => {
+        actionId: string
     }
     placeAt: (edge: HogFlowEdge) => {
         edge: HogFlowEdge
@@ -291,6 +298,8 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         closeCommandPalette: true,
         openQuickAdd: (edgeKey: string) => ({ edgeKey }),
         closeQuickAdd: true,
+        openStepMenu: (actionId: string) => ({ actionId }),
+        closeStepMenu: true,
         startPlacing: (step: CreateActionType) => ({ step }),
         addStepAt: (step: CreateActionType, edge: HogFlowEdge) => ({ step, edge }),
         placeAt: (edge: HogFlowEdge) => ({ edge }),
@@ -333,6 +342,15 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 closePanel: () => false,
                 cancel: () => false,
                 revealStep: () => true,
+            },
+        ],
+        stepMenuActionId: [
+            null as string | null,
+            {
+                openStepMenu: (_, { actionId }) => actionId,
+                closeStepMenu: () => null,
+                cancel: () => null,
+                setSelectedNodeId: (state, { selectedNodeId }) => (selectedNodeId === state ? state : null),
             },
         ],
         measuredSizes: [null as Record<string, NodeSize> | null, { setMeasuredSizes: (_, { sizes }) => sizes }],
@@ -496,6 +514,10 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 } else if (values.nodeToBeAdded) {
                     actions.onDrop(undefined, edge)
                 }
+            },
+            openStepMenu: ({ actionId }) => {
+                // The copy, move and delete rules read the selected step, so the step under the menu must be the selected one.
+                actions.selectStep(actionId)
             },
             selectStep: ({ actionId }) => {
                 actions.setMode('build')
