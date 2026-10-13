@@ -283,6 +283,22 @@ describe('tileCanvasModel', () => {
         expect(filterPaletteItems(query, sections, commands).map((item) => item.label)).toEqual(expected)
     })
 
+    it('keeps two destinations that share a name apart in the palette', () => {
+        const destination = (templateId: string): PaletteSection['steps'][number] => ({
+            type: 'function',
+            name: 'Hubspot',
+            description: '',
+            config: { template_id: templateId, inputs: {} },
+        })
+        const sections = [
+            { title: 'More destinations', steps: [destination('hubspot'), destination('hubspot-contacts')] },
+        ]
+
+        const keys = filterPaletteItems('', sections, []).map((item) => item.key)
+
+        expect(new Set(keys).size).toBe(2)
+    })
+
     it('counts every person a step handled once metrics load', () => {
         const metrics = { email: { actionId: 'email', succeeded: 40, failed: 2, filtered: 8 } }
 

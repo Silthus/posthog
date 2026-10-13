@@ -564,6 +564,12 @@ export type PaletteItem<Command extends PaletteCommand = PaletteCommand> =
     | { kind: 'step'; key: string; section: string; label: string; description?: string; step: CreateActionType }
     | { kind: 'command'; key: string; section: string; label: string; description?: string; command: Command }
 
+/** Two destinations can share a name, so the key also carries the template the step runs. */
+function paletteStepKey(section: string, step: CreateActionType): string {
+    const templateId = 'template_id' in step.config ? step.config.template_id : undefined
+    return `${section}:${step.type}:${templateId ?? ''}:${step.name}`
+}
+
 const matches = (query: string, texts: (string | undefined)[]): boolean =>
     !query || texts.some((text) => text?.toLowerCase().includes(query.toLowerCase()))
 
@@ -580,7 +586,7 @@ export function filterPaletteItems<Command extends PaletteCommand>(
             .map(
                 (step): PaletteItem<Command> => ({
                     kind: 'step',
-                    key: `${title}:${step.name}`,
+                    key: paletteStepKey(title, step),
                     section: title,
                     label: step.name,
                     description: step.description,
