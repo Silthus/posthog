@@ -61,10 +61,13 @@ function SlackPreview({ action, color }: { action: HogFlowAction; color: string 
     )
 }
 
-function AiPreview({ action, color }: { action: HogFlowAction; color: string }): JSX.Element {
+function AiPreview({ action, color }: { action: HogFlowAction; color: string }): JSX.Element | null {
     const prompt = stepInput(action, 'prompt').text
     const tools = [...stepInput(action, 'connectors').list, ...stepInput(action, 'skills').list]
     const writes = outputKeys(action)
+    if (!prompt && !tools.length && !writes.length) {
+        return null
+    }
     return (
         <div className="flex flex-col gap-2 text-left text-[12.5px] leading-snug">
             {prompt && (
@@ -153,8 +156,11 @@ function isPrivate(action: HogFlowAction): boolean {
     return action.type === 'function' && action.config.inputs?.is_private?.value === true
 }
 
-function PersonPreview({ action }: { action: HogFlowAction }): JSX.Element {
+function PersonPreview({ action }: { action: HogFlowAction }): JSX.Element | null {
     const properties = Object.entries(stepInput(action, 'set_properties').record)
+    if (!properties.length) {
+        return null
+    }
     return (
         <div className="flex flex-col gap-1 rounded-md border p-2.5 text-left font-mono text-[12px]">
             {properties.map(([key, value]) => (
@@ -167,7 +173,7 @@ function PersonPreview({ action }: { action: HogFlowAction }): JSX.Element {
     )
 }
 
-function BranchPreview({ action, workflow }: { action: HogFlowAction; workflow: HogFlow }): JSX.Element {
+function BranchPreview({ action, workflow }: { action: HogFlowAction; workflow: HogFlow }): JSX.Element | null {
     const rows: [string, string, string][] =
         action.type === 'random_cohort_branch'
             ? action.config.cohorts.map((cohort, index) => [
@@ -187,6 +193,9 @@ function BranchPreview({ action, workflow }: { action: HogFlowAction; workflow: 
                         : []),
                 ]
               : []
+    if (!rows.length) {
+        return null
+    }
     return (
         <div className="flex flex-col gap-1 text-left text-[12.5px]">
             {rows.map(([name, rule, color]) => (

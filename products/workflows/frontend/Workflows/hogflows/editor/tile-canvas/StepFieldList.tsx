@@ -1,6 +1,9 @@
 import type { StepFacts } from './stepFacts'
 
-export function StepFieldList({ facts }: { facts: StepFacts }): JSX.Element {
+export function StepFieldList({ facts }: { facts: StepFacts }): JSX.Element | null {
+    if (!facts.fields.length) {
+        return null
+    }
     return (
         <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-left text-[12.5px] leading-snug">
             {facts.fields.map(([label, value]) => (

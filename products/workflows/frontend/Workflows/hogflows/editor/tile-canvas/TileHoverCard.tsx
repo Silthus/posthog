@@ -12,6 +12,9 @@ const MIN_WIDTH = 440
 const KIND_LABEL_ROOM = 72
 const EMAIL_FACE = { width: 164, height: 116 }
 export const HOVER_CARD_CLOSE_MS = 200
+// The border snaps to whole device pixels but the card's edge can fall between them, so a clip on the
+// edge itself can shave the bottom border off. Clipping just outside the card keeps the whole border.
+const OPEN_CLIP = 'inset(-2px round 18px)'
 const PREVIEWS_THAT_SHOW_SETTINGS = new Set(['slack', 'ai', 'ticket', 'person', 'webhook', 'branch', 'wait', 'window'])
 
 /**
@@ -46,7 +49,7 @@ export function TileHoverCard({
                 width,
                 padding: PADDING,
                 borderColor: tile.color,
-                clipPath: open ? 'inset(0px 0px 0px 0px round 16px)' : closedClip,
+                clipPath: open ? OPEN_CLIP : closedClip,
                 transitionDuration: open ? '240ms' : `${HOVER_CARD_CLOSE_MS}ms`,
             }}
         >
@@ -61,18 +64,21 @@ export function TileHoverCard({
                 </div>
             </div>
             <div
-                className="mt-3 flex flex-col gap-2.5 border-t pt-3 transition-opacity motion-reduce:transition-none"
+                className="mt-3 flex flex-col transition-opacity motion-reduce:transition-none"
                 style={{
                     opacity: open ? 1 : 0,
                     transitionDuration: open ? '180ms' : '80ms',
                     transitionDelay: open ? '90ms' : '0ms',
                 }}
             >
-                {showPreview && <StepPreview action={action} workflow={workflow} tile={tile} />}
-                {(!showPreview || !PREVIEWS_THAT_SHOW_SETTINGS.has(tile.preview)) && (
-                    <StepFieldList facts={tile.facts} />
-                )}
-                <StepCountLine count={count} />
+                {/* Each part returns null when it has nothing to show, so empty:hidden drops the section and its divider. */}
+                <div className="flex flex-col gap-2.5 border-t py-3 empty:hidden">
+                    {showPreview && <StepPreview action={action} workflow={workflow} tile={tile} />}
+                    {(!showPreview || !PREVIEWS_THAT_SHOW_SETTINGS.has(tile.preview)) && (
+                        <StepFieldList facts={tile.facts} />
+                    )}
+                    <StepCountLine count={count} />
+                </div>
                 <div className="border-t pt-2 text-[11px] text-secondary">Click to open the step</div>
             </div>
         </div>
