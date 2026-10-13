@@ -1,7 +1,7 @@
 import { useActions, useValues } from 'kea'
 import { useLayoutEffect, useRef } from 'react'
 
-import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
+import { workflowLogic } from '../../../workflowLogic'
 import type { NodeSize } from './tileCanvasLayout'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import { stepCount } from './tileCanvasModel'
@@ -35,7 +35,7 @@ function measure(container: HTMLElement): Record<string, NodeSize> {
 export function TileCanvasMeasureLayer(): JSX.Element {
     const ref = useRef<HTMLDivElement>(null)
     const { visibleGraph, workflow, stepMetrics } = useValues(tileCanvasLogic)
-    const { hogFunctionTemplatesById } = useValues(hogFlowEditorLogic)
+    const { hogFunctionTemplatesById } = useValues(workflowLogic)
     const { setMeasuredSizes } = useActions(tileCanvasLogic)
 
     useLayoutEffect(() => {
@@ -50,7 +50,7 @@ export function TileCanvasMeasureLayer(): JSX.Element {
         return () => {
             cancelled = true
         }
-    }, [visibleGraph, workflow, stepMetrics, setMeasuredSizes])
+    }, [visibleGraph, workflow, stepMetrics, hogFunctionTemplatesById, setMeasuredSizes])
 
     return (
         <div ref={ref} aria-hidden className="pointer-events-none invisible absolute left-[-20000px] top-0">
