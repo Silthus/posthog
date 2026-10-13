@@ -2,6 +2,7 @@ import type { HogFlow, HogFlowAction, HogFlowEdge } from '../../types'
 import {
     computePathGroups,
     computeVisibleGraph,
+    countableStepMetrics,
     filterPaletteItems,
     isHeadingToRect,
     layoutMiniFlow,
@@ -243,5 +244,15 @@ describe('stepCountsRequest', () => {
         { name: 'a batch workflow', workflow: { id: 'flow-1', trigger: { type: 'batch' } } },
     ])('skips $name', ({ workflow }) => {
         expect(stepCountsRequest(workflow as HogFlow, now)).toBeNull()
+    })
+
+    it.each([
+        { name: 'keeps the counts of a saved workflow', trigger: 'event', expected: 50 },
+        { name: 'drops counts loaded before the trigger became a batch', trigger: 'batch', expected: undefined },
+    ])('$name', ({ trigger, expected }) => {
+        const metrics = { email: { actionId: 'email', succeeded: 40, failed: 2, filtered: 8 } }
+        const workflow = { id: 'flow-1', trigger: { type: trigger } } as HogFlow
+
+        expect(stepCount(countableStepMetrics(workflow, metrics), 'email')).toBe(expected)
     })
 })

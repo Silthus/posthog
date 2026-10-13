@@ -13,14 +13,14 @@ import { TileStepNode } from './TileStepNode'
 
 export function TileFlowNode({ data }: NodeProps<TileFlowNodeType>): JSX.Element {
     const { node } = data
-    const { workflow, isPanelOpen, motion, pathGroups, layout, measuredSizes } = useValues(tileCanvasLogic)
-    const { selectedNodeId, actionMetricsById, hogFunctionTemplatesById } = useValues(hogFlowEditorLogic)
+    const { workflow, isPanelOpen, motion, pathGroups, layout, measuredSizes, stepMetrics } = useValues(tileCanvasLogic)
+    const { selectedNodeId, hogFunctionTemplatesById } = useValues(hogFlowEditorLogic)
     const position = layout?.positions[node.id]
     const size = measuredSizes?.[node.id]
     const motionStyle = motionProps(
         nodeMotion(motion, node, pathGroups, position && size ? { ...position, ...size } : undefined)
     )
-    const countOf = (actionId: string): number | undefined => stepCount(actionMetricsById, actionId)
+    const countOf = (actionId: string): number | undefined => stepCount(stepMetrics, actionId)
 
     return (
         <div className={cn(motionStyle.className)} style={motionStyle.style}>

@@ -30,6 +30,7 @@ import {
     collapsedPathStacks,
     computePathGroups,
     computeVisibleGraph,
+    countableStepMetrics,
     edgeKey,
     PaletteSection,
     PathGroup,
@@ -75,6 +76,7 @@ export interface tileCanvasLogicValues {
     paletteSections: PaletteSection[]
     pathGroups: PathGroup[]
     quickAddEdgeKey: string | null
+    stepMetrics: Record<string, HogFlowEditorActionMetrics> | null
     visibleGraph: VisibleGraph
 }
 
@@ -208,6 +210,10 @@ export interface tileCanvasLogicMeta {
             currentTeam: TeamPublicType | TeamType | null,
             isRowScopedTrigger: boolean
         ) => PaletteSection[]
+        stepMetrics: (
+            workflow: HogFlow,
+            actionMetricsById: Record<string, HogFlowEditorActionMetrics> | null
+        ) => Record<string, HogFlowEditorActionMetrics> | null
     }
 }
 
@@ -308,6 +314,13 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
     }),
     selectors({
         pathGroups: [(s) => [s.workflow], (workflow: HogFlow): PathGroup[] => computePathGroups(workflow)],
+        stepMetrics: [
+            (s) => [s.workflow, s.actionMetricsById],
+            (
+                workflow: HogFlow,
+                actionMetricsById: Record<string, HogFlowEditorActionMetrics> | null
+            ): Record<string, HogFlowEditorActionMetrics> | null => countableStepMetrics(workflow, actionMetricsById),
+        ],
         visibleGraph: [
             (s) => [s.workflow, s.pathGroups, s.openPathIds],
             (workflow: HogFlow, groups: PathGroup[], openPathIds: string[]): VisibleGraph =>

@@ -34,8 +34,8 @@ function measure(container: HTMLElement): Record<string, NodeSize> {
 
 export function TileCanvasMeasureLayer(): JSX.Element {
     const ref = useRef<HTMLDivElement>(null)
-    const { visibleGraph, workflow } = useValues(tileCanvasLogic)
-    const { actionMetricsById, hogFunctionTemplatesById } = useValues(hogFlowEditorLogic)
+    const { visibleGraph, workflow, stepMetrics } = useValues(tileCanvasLogic)
+    const { hogFunctionTemplatesById } = useValues(hogFlowEditorLogic)
     const { setMeasuredSizes } = useActions(tileCanvasLogic)
 
     useLayoutEffect(() => {
@@ -50,7 +50,7 @@ export function TileCanvasMeasureLayer(): JSX.Element {
         return () => {
             cancelled = true
         }
-    }, [visibleGraph, workflow, actionMetricsById, setMeasuredSizes])
+    }, [visibleGraph, workflow, stepMetrics, setMeasuredSizes])
 
     return (
         <div ref={ref} aria-hidden className="pointer-events-none invisible absolute left-[-20000px] top-0">
@@ -60,14 +60,14 @@ export function TileCanvasMeasureLayer(): JSX.Element {
                         <TileStepNode
                             action={node.action}
                             workflow={workflow}
-                            count={stepCount(actionMetricsById, node.id)}
+                            count={stepCount(stepMetrics, node.id)}
                             interactive={false}
                         />
                     ) : (
                         <TileStackNode
                             group={node.group}
                             workflow={workflow}
-                            countOf={(actionId) => stepCount(actionMetricsById, actionId)}
+                            countOf={(actionId) => stepCount(stepMetrics, actionId)}
                             templateNameOf={(templateId) => hogFunctionTemplatesById[templateId]?.name}
                             interactive={false}
                         />
