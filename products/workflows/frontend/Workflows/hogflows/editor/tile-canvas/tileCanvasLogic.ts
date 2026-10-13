@@ -145,7 +145,7 @@ export interface tileCanvasLogicValues {
     frameFocus: { box: Box; request: number } | null
     focusGroupId: string | null
     frameSpecs: PathFrameSpec[]
-    hasHistory: boolean
+    isSavedWorkflow: boolean
     isHistoryOpen: boolean
     isPanelOpen: boolean
     isPlacing: boolean
@@ -346,7 +346,7 @@ export interface tileCanvasLogicMeta {
         visibleGraph: (workflow: HogFlow, pathGroups: PathGroup[], openPathIds: string[]) => VisibleGraph
         frameSpecs: (pathGroups: PathGroup[], openPathIds: string[], visibleGraph: VisibleGraph) => PathFrameSpec[]
         allPathsCollapsed: (pathGroups: PathGroup[], openPathIds: string[]) => boolean
-        hasHistory: (workflow: HogFlow) => boolean
+        isSavedWorkflow: (workflow: HogFlow) => boolean
         panelMode: (
             isPanelOpen: boolean,
             isHistoryOpen: boolean,
@@ -596,7 +596,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             (groups: PathGroup[], openPathIds: string[]): boolean =>
                 groups.length > 0 && groups.every((group) => !openPathIds.includes(group.id)),
         ],
-        hasHistory: [(s) => [s.workflow], (workflow: HogFlow): boolean => workflow.id !== 'new'],
+        isSavedWorkflow: [(s) => [s.workflow], (workflow: HogFlow): boolean => !!workflow.id && workflow.id !== 'new'],
         panelMode: [
             (s) => [s.isPanelOpen, s.isHistoryOpen, s.mode],
             (isPanelOpen: boolean, isHistoryOpen: boolean, mode: HogFlowEditorMode): TileCanvasPanelMode | null =>

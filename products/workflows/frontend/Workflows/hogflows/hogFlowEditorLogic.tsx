@@ -2210,7 +2210,7 @@ export interface hogFlowEditorLogicMeta {
     __keaTypeGenInternalSelectorTypes: {
         isTreeView: (featureFlags: FeatureFlagsSet, editorLayout: HogFlowEditorLayout) => boolean
         isTileCanvas: (featureFlags: FeatureFlagsSet, isTreeView: boolean) => boolean
-        showsHeaderInWorkflowBar: (isTileCanvas: boolean, id: string | undefined) => boolean
+        showsHeaderInWorkflowBar: (isTileCanvas: boolean) => boolean
         nodesById: (nodes: HogFlowActionNode[]) => Record<string, HogFlowActionNode>
         selectedNode: (
             nodes: HogFlowActionNode[],
@@ -2447,11 +2447,8 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
             (featureFlags: FeatureFlagsSet, isTreeView: boolean): boolean =>
                 !!featureFlags[FEATURE_FLAGS.WORKFLOWS_TILE_CANVAS] && !isTreeView,
         ],
-        /** The tile canvas of a saved workflow carries the workflow header in its own bar. */
-        showsHeaderInWorkflowBar: [
-            (s) => [s.isTileCanvas, (_, props: WorkflowLogicProps) => props.id],
-            (isTileCanvas: boolean, id: string | undefined): boolean => isTileCanvas && !!id && id !== 'new',
-        ],
+        /** The tile canvas carries the workflow header in its own bar, saved or not. */
+        showsHeaderInWorkflowBar: [(s) => [s.isTileCanvas], (isTileCanvas: boolean): boolean => isTileCanvas],
         nodesById: [
             (s) => [s.nodes],
             (nodes: HogFlowActionNode[]): Record<string, HogFlowActionNode> => {

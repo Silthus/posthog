@@ -191,7 +191,7 @@ describe('hogFlowEditorLogic', () => {
             expected: true,
         },
         { name: 'the graph editor', flags: [], layout: 'advanced', id: 'flow-1', expected: false },
-        { name: 'an unsaved workflow', flags: ['tile'], layout: 'advanced', id: 'new', expected: false },
+        { name: 'the tile canvas of a new workflow', flags: ['tile'], layout: 'advanced', id: 'new', expected: true },
     ] as const)(
         'moves the workflow header into the workflow bar only for $name: $expected',
         ({ flags, layout, id, expected }) => {

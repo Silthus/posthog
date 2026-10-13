@@ -229,7 +229,7 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
     // A deep link to a tab the flag hides would leave LemonTabs with no active tab and a blank page.
     const activeTab = tabs.some((tab) => tab?.key === currentTab) ? currentTab : 'workflow'
     const renderScene = (editorShowsHeaderInBar: boolean): JSX.Element => {
-        const headerInWorkflowBar = editorShowsHeaderInBar && activeTab === 'workflow'
+        const headerInWorkflowBar = editorShowsHeaderInBar && (activeTab === 'workflow' || !isSavedWorkflow)
         return (
             <SceneContent
                 className={clsx('h-full flex flex-col grow', headerInWorkflowBar && '@container/workflow-scene')}
@@ -260,8 +260,8 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
         )
     }
 
-    // Only the tile canvas of a saved workflow can carry the header, so other scenes never mount the editor logic for it.
-    return tileCanvasEnabled && isSavedWorkflow ? (
+    // Only the tile canvas can carry the header, so other scenes never mount the editor logic for it.
+    return tileCanvasEnabled ? (
         <WorkflowHeaderPlacement logicProps={workflowProps}>{renderScene}</WorkflowHeaderPlacement>
     ) : (
         renderScene(false)

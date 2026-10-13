@@ -61,6 +61,8 @@ export function WorkflowHeaderBar({
     }
 
     const showWorkflowStatus = !props.editTemplateId
+    // Auto-save writes to a saved workflow, so a new one shows its Create button alone.
+    const showAutoSave = showWorkflowStatus && !!props.id && props.id !== 'new'
     const isActive = originalWorkflow.status === 'active'
     const isEditingDraftOfLive = isActive && (hasStagedDraft || hasUnsavedChanges)
 
@@ -124,7 +126,7 @@ export function WorkflowHeaderBar({
             <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
                 {commands}
                 {commands && <LemonDivider vertical className="h-6" />}
-                {showWorkflowStatus && (
+                {showAutoSave && (
                     // A fixed width keeps the buttons beside it still while the timestamp text changes.
                     <div className="flex w-44 flex-col">
                         <span className="flex items-center gap-1">

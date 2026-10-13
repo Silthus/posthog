@@ -61,6 +61,9 @@ const HISTORY_PANEL: PanelDefinition = {
     icon: <IconClock />,
 }
 
+/** Test runs, logs, metrics and history all read the saved workflow. */
+const NEEDS_SAVED_WORKFLOW = new Set<TileCanvasPanelMode>(['test', 'logs'])
+
 function tracked<Command extends CanvasCommand>(command: Command): Command {
     return {
         ...command,
@@ -72,7 +75,7 @@ function tracked<Command extends CanvasCommand>(command: Command): Command {
 }
 
 export function useCanvasCommands(): CanvasCommands {
-    const { pathGroups, allPathsCollapsed, hasHistory } = useValues(tileCanvasLogic)
+    const { pathGroups, allPathsCollapsed, isSavedWorkflow } = useValues(tileCanvasLogic)
     const { openPanel, toggleAllPaths, requestFit } = useActions(tileCanvasLogic)
     const hasPaths = pathGroups.length > 0
 
@@ -93,9 +96,11 @@ export function useCanvasCommands(): CanvasCommands {
             run: requestFit,
         }
         return {
-            panel: PANELS.map(openable),
-            morePanels: [METRICS_PANEL, ...(hasHistory ? [HISTORY_PANEL] : [])].map(openable),
+            panel: (isSavedWorkflow ? PANELS : PANELS.filter((panel) => !NEEDS_SAVED_WORKFLOW.has(panel.mode))).map(
+                openable
+            ),
+            morePanels: (isSavedWorkflow ? [METRICS_PANEL, HISTORY_PANEL] : []).map(openable),
             view: [...(hasPaths ? [pathsCommand] : []), fitCommand].map(tracked),
         }
-    }, [openPanel, hasHistory, hasPaths, allPathsCollapsed, toggleAllPaths, requestFit])
+    }, [openPanel, isSavedWorkflow, hasPaths, allPathsCollapsed, toggleAllPaths, requestFit])
 }
