@@ -1,7 +1,8 @@
-import type { HogFlow, HogFlowAction } from '../../types'
+import type { HogFlowAction } from '../../types'
+import { StepPreview } from './step-preview/StepPreview'
 import { StepCountLine } from './StepCountLine'
 import { StepFieldList } from './StepFieldList'
-import { StepPreview } from './StepPreview'
+import type { StepPresentationKind } from './stepPresentation'
 import { TILE_SIZE } from './tileCanvasLayout'
 import { CAPTION_WIDTH, TileCaption } from './TileCaption'
 import { TileFace } from './TileFace'
@@ -15,7 +16,18 @@ export const HOVER_CARD_CLOSE_MS = 200
 // The border snaps to whole device pixels but the card's edge can fall between them, so a clip on the
 // edge itself can shave the bottom border off. Clipping just outside the card keeps the whole border.
 const OPEN_CLIP = 'inset(-2px round 18px)'
-const PREVIEWS_THAT_SHOW_SETTINGS = new Set(['slack', 'ai', 'ticket', 'person', 'webhook', 'branch', 'wait', 'window'])
+const PREVIEWS_THAT_SHOW_SETTINGS = new Set<StepPresentationKind>([
+    'slack',
+    'ai-task',
+    'scout',
+    'ticket-message',
+    'ticket-update',
+    'person',
+    'webhook',
+    'branch',
+    'wait',
+    'window',
+])
 
 /**
  * The tile grows right and down into this card. The card starts clipped to the tile's own box, so the
@@ -24,14 +36,12 @@ const PREVIEWS_THAT_SHOW_SETTINGS = new Set(['slack', 'ai', 'ticket', 'person', 
 export function TileHoverCard({
     open,
     action,
-    workflow,
     tile,
     count,
     showEmail,
 }: {
     open: boolean
     action: HogFlowAction
-    workflow: HogFlow
     tile: TileStep
     count: number | undefined
     showEmail: boolean
@@ -39,7 +49,8 @@ export function TileHoverCard({
     const face = showEmail ? EMAIL_FACE : { width: TILE_SIZE, height: TILE_SIZE }
     const width = Math.max(MIN_WIDTH, face.width + 12 + CAPTION_WIDTH + PADDING * 2 + KIND_LABEL_ROOM)
     const closedClip = `inset(${PADDING}px ${width - PADDING - face.width}px calc(100% - ${PADDING + face.height}px) ${PADDING}px round 12px)`
-    const showPreview = tile.preview !== 'fields' && !(showEmail && tile.preview === 'email')
+    const kind = tile.presentation.kind
+    const showPreview = kind !== 'fields' && !(showEmail && kind === 'email')
     return (
         <div
             className="absolute z-10 rounded-2xl border bg-surface-primary text-primary shadow-xl transition-[clip-path] ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
@@ -73,10 +84,8 @@ export function TileHoverCard({
             >
                 {/* Each part returns null when it has nothing to show, so empty:hidden drops the section and its divider. */}
                 <div className="flex flex-col gap-2.5 border-t py-3 empty:hidden">
-                    {showPreview && <StepPreview action={action} workflow={workflow} tile={tile} />}
-                    {(!showPreview || !PREVIEWS_THAT_SHOW_SETTINGS.has(tile.preview)) && (
-                        <StepFieldList facts={tile.facts} />
-                    )}
+                    {showPreview && <StepPreview action={action} tile={tile} />}
+                    {(!showPreview || !PREVIEWS_THAT_SHOW_SETTINGS.has(kind)) && <StepFieldList facts={tile.facts} />}
                     <StepCountLine count={count} />
                 </div>
                 <div className="border-t pt-2 text-[11px] text-secondary">Click to open the step</div>

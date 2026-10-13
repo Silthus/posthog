@@ -4,7 +4,7 @@ import { EmailPreviewThumbnail } from 'lib/components/EmailPreviewThumbnail/Emai
 import { humanFriendlyLargeNumber } from 'lib/utils/numbers'
 
 import type { HogFlowAction } from '../../types'
-import { emailContent } from './stepFacts'
+import { emailContent } from './stepValues'
 import { TileBadge } from './TileBadge'
 import { TILE_SIZE } from './tileCanvasLayout'
 import type { TileShape, TileStep } from './useTileStep'

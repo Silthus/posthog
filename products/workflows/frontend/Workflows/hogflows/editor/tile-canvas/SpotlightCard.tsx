@@ -1,6 +1,6 @@
 import type { HogFlow, HogFlowAction } from '../../types'
+import { StepPreview } from './step-preview/StepPreview'
 import { StepCountLine } from './StepCountLine'
-import { StepPreview } from './StepPreview'
 import { useTileStep } from './useTileStep'
 
 export function SpotlightCard({
@@ -33,7 +33,7 @@ export function SpotlightCard({
             >
                 <div className="min-h-0 overflow-hidden">
                     <div className="mt-2 flex flex-col gap-2 border-t pt-2 text-xs">
-                        <StepPreview action={action} workflow={workflow} tile={tile} />
+                        <StepPreview action={action} tile={tile} />
                         <StepCountLine count={count} />
                     </div>
                 </div>

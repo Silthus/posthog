@@ -3,7 +3,7 @@ import { useRef } from 'react'
 import { cn } from 'lib/utils/css-classes'
 
 import type { HogFlow, HogFlowAction } from '../../types'
-import { emailContent } from './stepFacts'
+import { emailContent } from './stepValues'
 import { TileCaption } from './TileCaption'
 import { TileFace } from './TileFace'
 import { HOVER_CARD_CLOSE_MS, TileHoverCard } from './TileHoverCard'
@@ -44,14 +44,7 @@ export function TileStepNode({
             <div className={cn('relative rounded-xl', selected && 'ring-2 ring-[var(--color-accent)] ring-offset-4')}>
                 <TileFace action={action} tile={tile} count={count} showEmail={showEmail} />
                 {hover.mounted && (
-                    <TileHoverCard
-                        open={hover.open}
-                        action={action}
-                        workflow={workflow}
-                        tile={tile}
-                        count={count}
-                        showEmail={showEmail}
-                    />
+                    <TileHoverCard open={hover.open} action={action} tile={tile} count={count} showEmail={showEmail} />
                 )}
             </div>
             <TileCaption facts={tile.facts} />

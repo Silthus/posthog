@@ -11,7 +11,8 @@ import { workflowLogic } from '../../../workflowLogic'
 import { useHogFlowStep } from '../../steps/HogFlowSteps'
 import { isFunctionAction } from '../../steps/types'
 import type { HogFlow, HogFlowAction } from '../../types'
-import { StepFacts, stepBadge, stepFacts, StepPreviewKind, stepPreviewKind } from './stepFacts'
+import { StepFacts, stepBadge, stepFacts } from './stepFacts'
+import { StepPresentation, stepPresentation } from './stepPresentation'
 
 export type TileShape = 'start' | 'end' | 'step'
 
@@ -21,7 +22,7 @@ export interface TileStep {
     color: string
     badge?: string
     facts: StepFacts
-    preview: StepPreviewKind
+    presentation: StepPresentation
     invalid: boolean
     shape: TileShape
 }
@@ -88,7 +89,7 @@ export function useTileStep(action: HogFlowAction, workflow: HogFlow): TileStep 
             color: look?.color?.[isDarkModeOn ? 1 : 0] ?? readableStepColor(step?.color, isDarkModeOn),
             badge: stepBadge(workflow, action),
             facts: stepFacts(workflow, action, templateName),
-            preview: stepPreviewKind(action),
+            presentation: stepPresentation(action),
             invalid: actionValidationErrorsById[action.id]?.valid === false,
             shape: action.type === 'trigger' ? 'start' : action.type === 'exit' ? 'end' : 'step',
         }

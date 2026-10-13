@@ -1,5 +1,6 @@
 import type { HogFlow, HogFlowAction } from '../../types'
-import { pathSummary, stepBadge, stepFacts, timeWindowSpans } from './stepFacts'
+import { pathSummary, stepBadge, stepFacts } from './stepFacts'
+import { timeWindowSpans } from './stepPresentation'
 import { computePathGroups } from './tileCanvasModel'
 
 type Config = Record<string, unknown>
@@ -125,6 +126,24 @@ describe('stepFacts', () => {
         ],
         ['a delay', step('pause', 'delay', { delay_duration: '3d' }), 'Wait 3 days', 'Then continue'],
         [
+            'a delay until a date on the person',
+            step('remind', 'delay', {
+                delay_until: {
+                    expression: 'person.properties.trial_expires_at',
+                    offset: '-1d',
+                    use_person_timezone: true,
+                },
+            }),
+            'Wait until 1 day before trial expires at',
+            "Then continue (the person's time zone)",
+        ],
+        [
+            'a delay until a date not chosen yet',
+            step('remind', 'delay', { delay_until: { expression: '' } }),
+            'Wait until a date',
+            'Then continue (UTC)',
+        ],
+        [
             'a wait for an event',
             step('wait', 'wait_until_condition', { condition: { name: 'Upgraded' }, max_wait_duration: '4d' }),
             'Wait for Upgraded',
@@ -191,6 +210,16 @@ describe('stepFacts', () => {
         expect(stepFacts(workflow([action]), action)).toMatchObject({ headline, detail })
     })
 
+    it.each([
+        ['a yes or no', 'beta', true, 'Set beta to true'],
+        ['a number', 'seats', 3, 'Set seats to 3'],
+        ['a text', 'billing_status', 'past_due', 'Set billing status to past_due'],
+    ])('writes %s person property value as someone would type it', (_, key, value, headline) => {
+        const action = fn('mark', 'template-posthog-update-person-properties', { set_properties: { [key]: value } })
+
+        expect(stepFacts(workflow([action]), action).headline).toBe(headline)
+    })
+
     it('falls back to the template name for a template it does not know', () => {
         const action = fn('hubspot', 'template-hubspot', { email: 'x' })
 
@@ -199,6 +228,11 @@ describe('stepFacts', () => {
 
     it.each<[string, HogFlowAction, string | undefined]>([
         ['a delay shows its length', step('pause', 'delay', { delay_duration: '3d' }), '3d'],
+        [
+            'a delay until a date shows that it waits for a date',
+            step('remind', 'delay', { delay_until: { expression: 'person.properties.renews_at' } }),
+            'Date',
+        ],
         [
             'a wait shows its longest wait',
             step('wait', 'wait_until_condition', { condition: {}, max_wait_duration: '4d' }),
