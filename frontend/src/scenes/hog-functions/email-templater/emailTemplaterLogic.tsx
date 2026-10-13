@@ -817,15 +817,29 @@ export const emailTemplaterLogic = kea<emailTemplaterLogicType>([
                 return
             }
             if (sandboxSenderId !== undefined && next.integrationId === sandboxSenderId) {
+                const selectedIds = selectedSenderIds(typeof from === 'object' ? from : undefined)
                 const selectSandbox = (): void => {
                     actions.setEmailTemplateValues({ from: next, replyTo: '' })
                     actions.hideAdvancedField('replyTo')
                 }
-                if (values.hasCustomSenderDetails) {
+                if (values.hasCustomSenderDetails || selectedIds.length > 1) {
+                    const selectedNames = selectedIds.map(
+                        (id) =>
+                            values.senderIntegrations.find((sender) => sender.id === id)?.display_name || `sender ${id}`
+                    )
                     LemonDialog.open({
                         title: 'Switch to the sandbox sender?',
-                        description:
-                            'This removes your custom sender address, sender name, and Reply-To. The sandbox sender uses its own identity.',
+                        description: [
+                            selectedIds.length > 1
+                                ? `This replaces ${selectedNames.join(' and ')} with the sandbox sender.`
+                                : '',
+                            values.hasCustomSenderDetails
+                                ? 'This removes your custom sender address, sender name, and Reply-To.'
+                                : '',
+                            'The sandbox sender uses its own identity.',
+                        ]
+                            .filter(Boolean)
+                            .join(' '),
                         primaryButton: { children: 'Switch sender', onClick: selectSandbox },
                         secondaryButton: { children: 'Cancel' },
                     })

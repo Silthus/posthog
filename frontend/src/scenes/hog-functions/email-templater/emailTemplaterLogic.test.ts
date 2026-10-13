@@ -213,11 +213,27 @@ describe('emailTemplaterLogic', () => {
             { field: 'sender name', from: { integrationId: 5, name: 'Custom' }, replyTo: '', confirm: true },
             { field: 'Reply-To', from: { integrationId: 5 }, replyTo: 'replies@example.com', confirm: true },
             { field: 'no custom values', from: { integrationId: 5 }, replyTo: '', confirm: false },
+            {
+                field: 'a rotation selection',
+                from: { integrationId: 5, integrationIds: [5, 6] },
+                replyTo: '',
+                confirm: true,
+            },
         ])('switches with $field after any required confirmation', async ({ from, replyTo, confirm }) => {
             featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER], {
                 [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,
             })
-            useMocks({ get: { '/api/projects/:team_id/integrations/': { results: [SANDBOX_SENDER, OWN_SENDER] } } })
+            useMocks({
+                get: {
+                    '/api/projects/:team_id/integrations/': {
+                        results: [
+                            SANDBOX_SENDER,
+                            OWN_SENDER,
+                            { ...OWN_SENDER, id: 6, display_name: 'Second <second@example.com>' },
+                        ],
+                    },
+                },
+            })
             const onChange = jest.fn()
             const dialog = jest.spyOn(LemonDialog, 'open').mockImplementation(jest.fn())
             logic = emailTemplaterLogic(
@@ -235,6 +251,10 @@ describe('emailTemplaterLogic', () => {
             expect(dialog).toHaveBeenCalledTimes(confirm ? 1 : 0)
             if (confirm) {
                 expect(onChange).not.toHaveBeenCalled()
+                if (from.integrationIds) {
+                    expect(dialog.mock.calls[0][0].description).toContain('Acme <hello@acme.example.com>')
+                    expect(dialog.mock.calls[0][0].description).toContain('Second <second@example.com>')
+                }
                 emailTemplaterLogic(
                     makeProps({
                         sandboxSenderAllowed: true,

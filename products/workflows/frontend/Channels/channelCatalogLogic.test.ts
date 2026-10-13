@@ -1,5 +1,8 @@
-import { waitFor } from '@testing-library/react'
+import '@testing-library/jest-dom'
+
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { expectLogic } from 'kea-test-utils'
+import { createElement } from 'react'
 
 import { FEATURE_FLAGS } from 'lib/constants'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
@@ -8,13 +11,17 @@ import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { useMocks } from '~/mocks/jest'
 import { initKeaTests } from '~/test/init'
 
+import { ChannelCatalog } from './ChannelCatalog'
 import { channelCatalogLogic } from './channelCatalogLogic'
 
 describe('sandbox setup in the channel catalog', () => {
     let logic: ReturnType<typeof channelCatalogLogic.build>
 
     beforeEach(() => initKeaTests())
-    afterEach(() => logic?.unmount())
+    afterEach(() => {
+        cleanup()
+        logic?.unmount()
+    })
 
     it.each([404, 500])('starts setup on mount and exposes a %s request for retry', async (failureStatus) => {
         let status = failureStatus
@@ -70,11 +77,26 @@ describe('sandbox setup in the channel catalog', () => {
         expect(logic.values.integrationsLoadFailed).toBe(true)
         expect(logic.values.sandboxSetupError).toBeNull()
 
+        render(createElement(ChannelCatalog))
+        expect(screen.getByText('Could not load your channels.')).toBeInTheDocument()
+        cleanup()
+
         loadStatus = 200
         await expectLogic(logic, () => logic.actions.retrySandboxSenderSetup()).toFinishAllListeners()
         await expectLogic(integrationsLogic).toFinishAllListeners()
         expect(logic.values.integrationsLoadFailed).toBe(false)
         expect(logic.values.channels).not.toBeNull()
         expect(logic.values.sandboxSetupError).toBeNull()
+        render(createElement(ChannelCatalog))
+        expect(screen.getByTestId('workflows-channel-catalog-email')).toBeInTheDocument()
+
+        loadStatus = 500
+        await act(async () => {
+            await expectLogic(integrationsLogic, () =>
+                integrationsLogic.actions.loadIntegrations()
+            ).toFinishAllListeners()
+        })
+        expect(screen.getByTestId('workflows-channel-catalog-email')).toBeInTheDocument()
+        expect(screen.getByText(/Couldn't refresh your channels/)).toBeInTheDocument()
     })
 })

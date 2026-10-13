@@ -70,11 +70,25 @@ export function NativeEmailIntegrationChoice({
         </LemonBanner>
     ) : null
 
+    const connectSender = (
+        <LemonButton
+            size="small"
+            type="tertiary"
+            to={urls.workflows('channels')}
+            targetBlank
+            className="m-1 self-start"
+            icon={<IconExternal />}
+        >
+            Connect email sender
+        </LemonButton>
+    )
+
     if (!senderIntegrationsLoading && senderIntegrations.length === 0 && errorBanner) {
         return (
             <div className="flex flex-col gap-2">
                 {label}
                 {errorBanner}
+                {connectSender}
             </div>
         )
     }
@@ -84,16 +98,7 @@ export function NativeEmailIntegrationChoice({
                 {label}
                 <div className="flex gap-2 items-center">
                     <span className="text-muted">No email senders configured yet</span>
-                    <LemonButton
-                        size="small"
-                        type="tertiary"
-                        to={urls.workflows('channels')}
-                        targetBlank
-                        className="m-1"
-                        icon={<IconExternal />}
-                    >
-                        Connect email sender
-                    </LemonButton>
+                    {connectSender}
                 </div>
             </div>
         )
@@ -132,7 +137,7 @@ export function NativeEmailIntegrationChoice({
                         <span className="px-2 pb-1 text-xs text-muted">
                             {isSandboxSenderSelected
                                 ? SANDBOX_EMAIL_SENDER_NOTE
-                                : `Choose up to ${MAX_WORKFLOW_EMAIL_SENDERS} senders. Each workflow run uses one sender.${sandboxSenderId !== undefined && hasCustomSenderDetails ? ' Choosing the sandbox sender replaces the selection and removes custom sender and Reply-To.' : ''}`}
+                                : `Choose up to ${MAX_WORKFLOW_EMAIL_SENDERS} senders. Each workflow run uses one sender.${sandboxSenderId !== undefined && (hasCustomSenderDetails || selectedSenderIds(value).length > 1) ? ` Choosing the sandbox sender replaces the selection.${hasCustomSenderDetails ? ' It also removes custom sender and Reply-To.' : ''}` : ''}`}
                         </span>
                     </div>
                 ) : (
