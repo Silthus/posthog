@@ -19,18 +19,24 @@ export type LayoutResult = {
 export const LABEL_HEIGHT = 22
 export const labelWidth = (text: string): number => Math.ceil(text.length * 6.6) + 20
 
+export type PortSpec = { in: Point; out: Point[] }
+export type LayoutDirection = 'DOWN' | 'RIGHT'
+
 export async function layoutGraph(
     sizes: Record<string, { width: number; height: number }>,
     edges: VisibleEdge[],
     labels: Record<string, string | undefined>,
-    portFractions: Record<string, number[]> = {}
+    portFractions: Record<string, number[]> = {},
+    direction: LayoutDirection = 'DOWN',
+    portsFor?: (id: string, portCount: number) => PortSpec | undefined
 ): Promise<LayoutResult> {
+    const [inSide, outSide] = direction === 'DOWN' ? ['NORTH', 'SOUTH'] : ['WEST', 'EAST']
     const ids = Object.keys(sizes)
     const graph: ElkNode = {
         id: 'root',
         layoutOptions: {
             'elk.algorithm': 'layered',
-            'elk.direction': 'DOWN',
+            'elk.direction': direction,
             'elk.edgeRouting': 'ORTHOGONAL',
             'elk.layered.spacing.nodeNodeBetweenLayers': '44',
             'elk.spacing.nodeNode': '56',
@@ -49,6 +55,12 @@ export async function layoutGraph(
             const { width, height } = sizes[id]
             const outgoing = edges.filter((edge) => edge.source === id)
             const portCount = outgoing[0]?.portCount ?? 1
+            const custom = portsFor?.(id, portCount)
+            const defaultOut = (index: number): Point => {
+                const fraction = portFractions[id]?.[index] ?? (portCount === 1 ? 0.5 : (index + 1) / (portCount + 1))
+                return direction === 'DOWN' ? { x: width * fraction, y: height } : { x: width, y: height * fraction }
+            }
+            const inPoint = custom?.in ?? (direction === 'DOWN' ? { x: width / 2, y: 0 } : { x: 0, y: height / 2 })
             return {
                 id,
                 width,
@@ -57,21 +69,17 @@ export async function layoutGraph(
                 ports: [
                     {
                         id: `${id}:in`,
-                        x: width / 2,
-                        y: 0,
+                        ...inPoint,
                         width: 1,
                         height: 1,
-                        layoutOptions: { 'elk.port.side': 'NORTH' },
+                        layoutOptions: { 'elk.port.side': inSide },
                     },
                     ...Array.from({ length: portCount }, (_, index) => ({
                         id: `${id}:out:${index}`,
-                        x:
-                            width *
-                            (portFractions[id]?.[index] ?? (portCount === 1 ? 0.5 : (index + 1) / (portCount + 1))),
-                        y: height,
+                        ...(custom?.out[index] ?? defaultOut(index)),
                         width: 1,
                         height: 1,
-                        layoutOptions: { 'elk.port.side': 'SOUTH' },
+                        layoutOptions: { 'elk.port.side': outSide },
                     })),
                 ],
             }

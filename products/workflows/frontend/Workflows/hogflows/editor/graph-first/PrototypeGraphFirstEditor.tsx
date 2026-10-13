@@ -35,7 +35,7 @@ import { HogFlowEditorPanel } from '../../panel/HogFlowEditorPanel'
 import { HogFlowEditorPanelBuild } from '../../panel/HogFlowEditorPanelBuild'
 import type { HogFlow } from '../../types'
 import { GroupFrameHeader, NoteCard, SummaryCard } from './GraphFirstCards'
-import { LABEL_HEIGHT, labelWidth, layoutGraph, LayoutResult, Point } from './graphFirstLayout'
+import { LABEL_HEIGHT, labelWidth, layoutGraph, LayoutResult, Point, PortSpec } from './graphFirstLayout'
 import {
     actionById,
     BranchGroup,
@@ -54,6 +54,7 @@ import {
     visibleGraph,
 } from './graphFirstModel'
 import { NODE_STYLES, NodeStyle, StepNode } from './GraphFirstNodeStyles'
+import { TILE, TILE_FLOWS, TILE_HOVERS, TileFlow, TileGroupNode, TileHover } from './TileNode'
 
 const PANEL_WIDTH = 460
 const FRAME_PAD = 14
@@ -68,6 +69,7 @@ type ViewState = {
     metrics: SampleMetrics | null
     previews: boolean
     nodeStyle: NodeStyle
+    tile: { flow: TileFlow; hover: TileHover }
     selectedNodeId: string | null
     openStep: (nodeId: string) => void
     expand: (groupId: string) => void
@@ -96,7 +98,21 @@ function CardNode({ data }: NodeProps): JSX.Element {
         <div>
             <Handle type="target" position={Position.Top} className="!opacity-0" isConnectable={false} />
             {vnode.kind === 'action' ? (
-                <StepNode action={vnode.action} workflow={view.workflow} state={state} style={view.nodeStyle} />
+                <StepNode
+                    action={vnode.action}
+                    workflow={view.workflow}
+                    state={state}
+                    style={view.nodeStyle}
+                    tile={view.tile}
+                />
+            ) : view.nodeStyle === 'tiles' ? (
+                <TileGroupNode
+                    group={vnode.group}
+                    workflow={view.workflow}
+                    state={state}
+                    flow={view.tile.flow}
+                    onExpand={() => view.expand(vnode.group.id)}
+                />
             ) : (
                 <SummaryCard
                     group={vnode.group}
@@ -159,9 +175,9 @@ function insertPoint(points: Point[], label?: Point): Point {
     for (let i = 1; i < points.length; i++) {
         const a = points[i - 1]
         const b = points[i]
-        const length = Math.abs(b.y - a.y)
-        if (a.x === b.x && length > best.length) {
-            best = { length, point: { x: a.x, y: (a.y + b.y) / 2 } }
+        const length = Math.abs(b.y - a.y) + Math.abs(b.x - a.x)
+        if ((a.x === b.x || a.y === b.y) && length > best.length) {
+            best = { length, point: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }
         }
     }
     return best.point
@@ -253,7 +269,6 @@ function RoutedEdge({ data }: EdgeProps): JSX.Element | null {
     const onPath = view.trace ? vedge.originalKeys.some((key) => view.trace!.edgeKeys.has(key)) : false
     const dimmed = !!view.trace && !onPath
     const people = view.metrics ? (view.metrics.peopleByEdge[vedge.originalKeys[0]] ?? null) : null
-    const end = routed.points[routed.points.length - 1]
     const insertAt = insertPoint(routed.points, label ? routed.label : undefined)
     const canTraceChoice = !!view.trace && !!vedge.original && !!vedge.label && !vedge.timing
     const timingSelected = !!vedge.timing && vedge.timing.stepIds.includes(view.selectedNodeId ?? '')
@@ -269,7 +284,7 @@ function RoutedEdge({ data }: EdgeProps): JSX.Element | null {
                 opacity={dimmed ? 0.25 : 1}
             />
             <path
-                d={`M ${end.x - 4} ${end.y - 7} L ${end.x} ${end.y} L ${end.x + 4} ${end.y - 7}`}
+                d={arrowHead(routed.points)}
                 fill="none"
                 stroke={stroke}
                 strokeWidth={1.5}
@@ -328,6 +343,77 @@ function RoutedEdge({ data }: EdgeProps): JSX.Element | null {
     )
 }
 
+type Size = { width: number; height: number; anchor?: { x: number; y: number; width: number; height: number } }
+
+function SwitchRow({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
+    return (
+        <div className="flex items-center gap-2 rounded-lg border bg-surface-primary py-1 pl-2.5 pr-1 shadow-sm">
+            <span className="text-xs font-semibold text-secondary">{label}</span>
+            {children}
+        </div>
+    )
+}
+
+function arrowHead(points: Point[]): string {
+    const end = points[points.length - 1]
+    const before = points[points.length - 2] ?? { x: end.x, y: end.y - 1 }
+    const length = Math.hypot(end.x - before.x, end.y - before.y) || 1
+    const [dx, dy] = [(end.x - before.x) / length, (end.y - before.y) / length]
+    const back = { x: end.x - dx * 7, y: end.y - dy * 7 }
+    return `M ${back.x - dy * 4} ${back.y + dx * 4} L ${end.x} ${end.y} L ${back.x + dy * 4} ${back.y - dx * 4}`
+}
+
+/** Rail and Right flows connect to the tile itself, not to the box around tile and caption. */
+function tilePortsFor(size: Size | undefined, flow: TileFlow, count: number): PortSpec | undefined {
+    const anchor = size?.anchor
+    if (!size || !anchor) {
+        return undefined
+    }
+    const spread = (index: number, step: number): number => (index - (count - 1) / 2) * step
+    if (flow === 'rail') {
+        return {
+            in: { x: anchor.x, y: 0 },
+            out: Array.from({ length: count }, (_, index) => ({ x: anchor.x + spread(index, 14), y: size.height })),
+        }
+    }
+    return {
+        in: { x: 0, y: anchor.y },
+        out: Array.from({ length: count }, (_, index) => ({ x: size.width, y: anchor.y + spread(index, 14) })),
+    }
+}
+
+/** ELK ends edges at the node box. Pull the ends in to the tile edge so no arrow floats in empty space. */
+function attachToTiles(
+    result: LayoutResult,
+    edges: VisibleEdge[],
+    sizes: Record<string, Size>,
+    flow: TileFlow
+): LayoutResult {
+    const ends = Object.fromEntries(edges.map((edge) => [edge.id, [edge.source, edge.target]]))
+    const edgePoints = Object.fromEntries(
+        Object.entries(result.edgePoints).map(([id, edge]) => {
+            const [source, target] = ends[id] ?? []
+            const points = edge.points.map((point) => ({ ...point }))
+            const from = sizes[source]?.anchor
+            const to = sizes[target]?.anchor
+            const fromPos = result.positions[source]
+            const toPos = result.positions[target]
+            if (flow === 'right') {
+                if (from && fromPos) {
+                    points[0].x = fromPos.x + from.x + from.width / 2
+                }
+                if (to && toPos) {
+                    points[points.length - 1].x = toPos.x + to.x - to.width / 2
+                }
+            } else if (from && fromPos) {
+                points[0].y = fromPos.y + from.y + from.height / 2 + (from.height === TILE ? 10 : 0)
+            }
+            return [id, { ...edge, points }]
+        })
+    )
+    return { ...result, edgePoints }
+}
+
 const NODE_TYPES = { card: CardNode, frame: FrameNode, note: NoteNode }
 const EDGE_TYPES = { routed: RoutedEdge }
 
@@ -337,6 +423,7 @@ function MeasureLayer({
     metrics,
     previews,
     nodeStyle,
+    tile,
     onMeasured,
 }: {
     nodes: VisibleNode[]
@@ -344,15 +431,30 @@ function MeasureLayer({
     metrics: SampleMetrics | null
     previews: boolean
     nodeStyle: NodeStyle
-    onMeasured: (sizes: Record<string, { width: number; height: number }>) => void
+    tile: { flow: TileFlow; hover: TileHover }
+    onMeasured: (sizes: Record<string, Size>) => void
 }): JSX.Element {
     const ref = useRef<HTMLDivElement>(null)
     useLayoutEffect(() => {
         const measure = (): void => {
-            const sizes: Record<string, { width: number; height: number }> = {}
+            const sizes: Record<string, Size> = {}
             ref.current?.querySelectorAll<HTMLElement>('[data-measure-id]').forEach((el) => {
                 const child = el.firstElementChild as HTMLElement
-                sizes[el.dataset.measureId!] = { width: child.offsetWidth, height: child.offsetHeight }
+                const anchor = child.querySelector<HTMLElement>('[data-tile-anchor]')
+                const box = child.getBoundingClientRect()
+                const anchorBox = anchor?.getBoundingClientRect()
+                sizes[el.dataset.measureId!] = {
+                    width: child.offsetWidth,
+                    height: child.offsetHeight,
+                    anchor: anchorBox
+                        ? {
+                              x: anchorBox.left - box.left + anchorBox.width / 2,
+                              y: anchorBox.top - box.top + anchorBox.height / 2,
+                              width: anchorBox.width,
+                              height: anchorBox.height,
+                          }
+                        : undefined,
+                }
             })
             onMeasured(sizes)
         }
@@ -362,7 +464,7 @@ function MeasureLayer({
         return () => {
             cancelled = true
         }
-    }, [nodes, metrics, previews, nodeStyle]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [nodes, metrics, previews, nodeStyle, tile.flow]) // eslint-disable-line react-hooks/exhaustive-deps
     return (
         <div ref={ref} aria-hidden className="pointer-events-none invisible absolute left-[-20000px] top-0">
             {nodes.map((vnode) => (
@@ -373,7 +475,10 @@ function MeasureLayer({
                             workflow={workflow}
                             state={{ metrics, previews }}
                             style={nodeStyle}
+                            tile={{ ...tile, hover: 'off' }}
                         />
+                    ) : nodeStyle === 'tiles' ? (
+                        <TileGroupNode group={vnode.group} workflow={workflow} flow={tile.flow} />
                     ) : (
                         <SummaryCard group={vnode.group} workflow={workflow} />
                     )}
@@ -506,7 +611,17 @@ function ViewMenu({ toggles }: { toggles: [string, boolean, (value: boolean) => 
     )
 }
 
-function GraphFirstCanvas({ initialNodeStyle }: { initialNodeStyle: NodeStyle }): JSX.Element {
+function GraphFirstCanvas({
+    initialNodeStyle,
+    initialTileFlow,
+    initialTileHover,
+    showStyleSwitch,
+}: {
+    initialNodeStyle: NodeStyle
+    initialTileFlow: TileFlow
+    initialTileHover: TileHover
+    showStyleSwitch: boolean
+}): JSX.Element {
     const { isDarkModeOn } = useValues(themeLogic)
     const { workflow, selectedNodeId, mode, panelWidth, isMovingNode, isCopyingNode } = useValues(hogFlowEditorLogic)
     const { setSelectedNodeId, setMode, setPanelWidth, handlePaneClick, stopMovingNode, stopCopyingNode } =
@@ -527,8 +642,12 @@ function GraphFirstCanvas({ initialNodeStyle }: { initialNodeStyle: NodeStyle })
         () => workflow.actions.filter((action) => emailContent(action)).length <= 3
     )
     const [nodeStyle, setNodeStyle] = useState<NodeStyle>(initialNodeStyle)
+    const [tileFlow, setTileFlow] = useState<TileFlow>(initialTileFlow)
+    const [tileHover, setTileHover] = useState<TileHover>(initialTileHover)
+    const tile = useMemo(() => ({ flow: tileFlow, hover: tileHover }), [tileFlow, tileHover])
+    const direction = nodeStyle === 'tiles' && tileFlow === 'right' ? 'RIGHT' : 'DOWN'
     const [panelOpen, setPanelOpen] = useState(false)
-    const [sizes, setSizes] = useState<Record<string, { width: number; height: number }> | null>(null)
+    const [sizes, setSizes] = useState<Record<string, Size> | null>(null)
     const [layout, setLayout] = useState<LayoutResult | null>(null)
 
     const [waitsOnArrows, setWaitsOnArrows] = useState(true)
@@ -566,11 +685,22 @@ function GraphFirstCanvas({ initialNodeStyle }: { initialNodeStyle: NodeStyle })
                 .filter((action) => action.type === 'wait_until_condition')
                 .map((action) => [action.id, [0.12, 0.5]])
         )
-        void layoutGraph(sizes, graph.edges, labels, portFractions).then((result) => !cancelled && setLayout(result))
+        const tilePorts = nodeStyle === 'tiles' && tileFlow !== 'down'
+        void layoutGraph(
+            sizes,
+            graph.edges,
+            labels,
+            direction === 'DOWN' && !tilePorts ? portFractions : {},
+            direction,
+            tilePorts ? (id, count) => tilePortsFor(sizes[id], tileFlow, count) : undefined
+        ).then(
+            (result) =>
+                !cancelled && setLayout(tilePorts ? attachToTiles(result, graph.edges, sizes, tileFlow) : result)
+        )
         return () => {
             cancelled = true
         }
-    }, [sizes, graph.edges, labels]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [sizes, graph.edges, labels, direction]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const view: ViewState = {
         workflow,
@@ -579,6 +709,7 @@ function GraphFirstCanvas({ initialNodeStyle }: { initialNodeStyle: NodeStyle })
         metrics,
         previews,
         nodeStyle,
+        tile,
         selectedNodeId: panelOpen ? selectedNodeId : null,
         openStep: (nodeId) => openPanel('build', nodeId),
         expand: (id) => setCollapsed((prev) => new Set([...prev].filter((g) => g !== id))),
@@ -589,7 +720,7 @@ function GraphFirstCanvas({ initialNodeStyle }: { initialNodeStyle: NodeStyle })
         },
     }
     ViewContext.current = view
-    const tick = useMemo(() => ({}), [trace, metrics, previews, nodeStyle, selectedNodeId, panelOpen, workflow]) // eslint-disable-line react-hooks/exhaustive-deps
+    const tick = useMemo(() => ({}), [trace, metrics, previews, nodeStyle, tile, selectedNodeId, panelOpen, workflow]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const rfNodes = useMemo(() => {
         if (!layout || !sizes) {
@@ -691,8 +822,14 @@ function GraphFirstCanvas({ initialNodeStyle }: { initialNodeStyle: NodeStyle })
         const maxY = Math.max(...ys)
         const widthZoom = (width - 32) / (maxX - minX)
         const heightZoom = (height - 88) / (maxY - minY)
-        const zoom = Math.min(1, widthZoom, Math.max(heightZoom, MIN_READABLE_ZOOM))
-        void reactFlow.setViewport({ x: (width - (maxX - minX) * zoom) / 2 - minX * zoom, y: 64 - minY * zoom, zoom })
+        const zoom =
+            direction === 'DOWN'
+                ? Math.min(1, widthZoom, Math.max(heightZoom, MIN_READABLE_ZOOM))
+                : Math.min(1, heightZoom, Math.max(widthZoom, MIN_READABLE_ZOOM))
+        const x = Math.max(16, (width - (maxX - minX) * zoom) / 2) - minX * zoom
+        const y =
+            direction === 'DOWN' ? 64 - minY * zoom : Math.max(64, (height - (maxY - minY) * zoom) / 2) - minY * zoom
+        void reactFlow.setViewport({ x, y, zoom })
     }
 
     useEffect(() => {
@@ -758,6 +895,7 @@ function GraphFirstCanvas({ initialNodeStyle }: { initialNodeStyle: NodeStyle })
                 metrics={metrics}
                 previews={previews}
                 nodeStyle={nodeStyle}
+                tile={tile}
                 onMeasured={setSizes}
             />
             <div ref={wrapperRef} className="flex min-h-0 min-w-0 grow">
@@ -857,14 +995,37 @@ function GraphFirstCanvas({ initialNodeStyle }: { initialNodeStyle: NodeStyle })
                         </div>
                     </Panel>
                     <Panel position="bottom-right" className="!m-3">
-                        <div className="flex items-center gap-2 rounded-lg border bg-surface-primary py-1 pl-2.5 pr-1 shadow-sm">
-                            <span className="text-xs font-semibold text-secondary">Nodes</span>
-                            <LemonSegmentedButton
-                                size="small"
-                                value={nodeStyle}
-                                onChange={setNodeStyle}
-                                options={NODE_STYLES}
-                            />
+                        <div className="flex flex-col items-end gap-1.5">
+                            {nodeStyle === 'tiles' && (
+                                <>
+                                    <SwitchRow label="Hover">
+                                        <LemonSegmentedButton
+                                            size="small"
+                                            value={tileHover}
+                                            onChange={setTileHover}
+                                            options={TILE_HOVERS}
+                                        />
+                                    </SwitchRow>
+                                    <SwitchRow label="Flow">
+                                        <LemonSegmentedButton
+                                            size="small"
+                                            value={tileFlow}
+                                            onChange={setTileFlow}
+                                            options={TILE_FLOWS}
+                                        />
+                                    </SwitchRow>
+                                </>
+                            )}
+                            {showStyleSwitch && (
+                                <SwitchRow label="Nodes">
+                                    <LemonSegmentedButton
+                                        size="small"
+                                        value={nodeStyle}
+                                        onChange={setNodeStyle}
+                                        options={NODE_STYLES}
+                                    />
+                                </SwitchRow>
+                            )}
                         </div>
                     </Panel>
                     {(isMovingNode || isCopyingNode) && (
@@ -915,8 +1076,14 @@ function GraphFirstCanvas({ initialNodeStyle }: { initialNodeStyle: NodeStyle })
 /** Mount inside a bound `workflowLogic`. */
 export function PrototypeGraphFirstEditor({
     initialNodeStyle = 'line',
+    initialTileFlow = 'down',
+    initialTileHover = 'mixed',
+    showStyleSwitch = true,
 }: {
     initialNodeStyle?: NodeStyle
+    initialTileFlow?: TileFlow
+    initialTileHover?: TileHover
+    showStyleSwitch?: boolean
 }): JSX.Element {
     const { logicProps } = useValues(workflowLogic)
     return (
@@ -924,7 +1091,12 @@ export function PrototypeGraphFirstEditor({
             <HogFlowBranchSelectionProvider>
                 <div className="@container/workflow-editor flex min-h-0 min-w-0 flex-1">
                     <ReactFlowProvider>
-                        <GraphFirstCanvas initialNodeStyle={initialNodeStyle} />
+                        <GraphFirstCanvas
+                            initialNodeStyle={initialNodeStyle}
+                            initialTileFlow={initialTileFlow}
+                            initialTileHover={initialTileHover}
+                            showStyleSwitch={showStyleSwitch}
+                        />
                     </ReactFlowProvider>
                 </div>
             </HogFlowBranchSelectionProvider>

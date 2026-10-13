@@ -14,6 +14,7 @@ import { useHogFlowStep } from '../../steps/HogFlowSteps'
 import type { HogFlow, HogFlowAction } from '../../types'
 import { ActionCard, CardState, MetricsStrip, StepActionsMenu } from './GraphFirstCards'
 import { emailContent, nodeFacts, NodeFacts } from './graphFirstModel'
+import { TileFlow, TileHover, TileNode as HoverTileNode } from './TileNode'
 
 export type NodeStyle = 'cards' | 'line' | 'tiles' | 'fields'
 
@@ -267,7 +268,16 @@ function FieldsNode({ action, workflow, state }: NodeProps): JSX.Element {
 
 type NodeProps = { action: HogFlowAction; workflow: HogFlow; state: CardState }
 
-export function StepNode({ action, workflow, state, style }: NodeProps & { style: NodeStyle }): JSX.Element {
+export function StepNode({
+    action,
+    workflow,
+    state,
+    style,
+    tile,
+}: NodeProps & { style: NodeStyle; tile?: { flow: TileFlow; hover: TileHover } }): JSX.Element {
+    if (style === 'tiles' && tile) {
+        return <HoverTileNode action={action} workflow={workflow} state={state} flow={tile.flow} hover={tile.hover} />
+    }
     switch (style) {
         case 'line':
             return <LineNode action={action} workflow={workflow} state={state} />
