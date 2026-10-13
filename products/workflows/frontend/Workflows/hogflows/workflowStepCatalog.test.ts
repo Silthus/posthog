@@ -3,7 +3,13 @@ import { FEATURE_FLAGS } from 'lib/constants'
 import type { HogFunctionTemplateType } from '~/types'
 
 import type { HogFlowAction } from './types'
-import { destinationSteps, StepCatalogContext, stepKindName, workflowStepSections } from './workflowStepCatalog'
+import {
+    customStepName,
+    destinationSteps,
+    StepCatalogContext,
+    stepKindName,
+    workflowStepSections,
+} from './workflowStepCatalog'
 
 const mainEnvironment = { id: 1, project_id: 1 }
 
@@ -90,5 +96,16 @@ describe('workflowStepCatalog', () => {
         ],
     ])('names %s the way the step picker does', (_, action, name) => {
         expect(stepKindName(action as HogFlowAction)).toBe(name)
+    })
+
+    it.each([
+        ['keeps a name someone gave the step', 'Nudge trial users', undefined, 'Nudge trial users'],
+        ['skips the name the step picker gave it', 'Delay', undefined, undefined],
+        ['skips the name of the destination it runs', 'HubSpot', 'HubSpot', undefined],
+        ['skips an empty name', '  ', undefined, undefined],
+    ])('%s', (_, name, templateName, expected) => {
+        const action = { type: 'delay', name, config: { delay_duration: '1h' } } as HogFlowAction
+
+        expect(customStepName(action, templateName)).toBe(expected)
     })
 })

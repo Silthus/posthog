@@ -276,3 +276,9 @@ export function stepKindName(action: HogFlowAction): string | undefined {
     const templateId = 'template_id' in action.config ? (action.config.template_id as string | undefined) : undefined
     return STEP_KIND_NAMES.get(kindKey(action.type, templateId)) ?? STEP_KIND_NAMES.get(kindKey(action.type, undefined))
 }
+
+/** The step's own name, unless it is still the name it got from the step picker or its destination. */
+export function customStepName(action: HogFlowAction, templateName: string | undefined): string | undefined {
+    const name = action.name?.trim()
+    return name && name !== stepKindName(action) && name !== templateName ? name : undefined
+}

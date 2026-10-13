@@ -11,7 +11,7 @@ import { workflowLogic } from '../../../workflowLogic'
 import { useHogFlowStep } from '../../steps/HogFlowSteps'
 import { isFunctionAction } from '../../steps/types'
 import type { HogFlow, HogFlowAction } from '../../types'
-import { stepKindName } from '../../workflowStepCatalog'
+import { customStepName, stepKindName } from '../../workflowStepCatalog'
 import { StepFacts, stepBadge, stepFacts } from './stepFacts'
 import { StepPresentation, stepPresentation } from './stepPresentation'
 
@@ -19,6 +19,7 @@ export type TileShape = 'start' | 'end' | 'step'
 
 export interface TileStep {
     label: string
+    customName?: string
     icon: React.ReactNode
     color: string
     badge?: string
@@ -72,6 +73,7 @@ export function useTileStep(action: HogFlowAction, workflow: HogFlow): TileStep 
         const look = templateId ? TEMPLATE_LOOKS[templateId] : undefined
         return {
             label: ENDPOINT_LABELS[action.type] ?? stepKindName(action) ?? templateName ?? 'Step',
+            customName: customStepName(action, templateName),
             icon: look?.icon ?? step?.icon,
             color: look?.color?.[isDarkModeOn ? 1 : 0] ?? readableStepColor(step?.color, isDarkModeOn),
             badge: stepBadge(workflow, action),

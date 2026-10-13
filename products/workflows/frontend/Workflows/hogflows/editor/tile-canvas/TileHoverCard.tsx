@@ -11,6 +11,7 @@ import type { TileStep } from './useTileStep'
 const PADDING = 14
 const MIN_WIDTH = 440
 const KIND_LABEL_ROOM = 72
+const NAME_ROW_HEIGHT = 26
 const EMAIL_FACE = { width: 164, height: 116 }
 export const HOVER_CARD_CLOSE_MS = 200
 // The border snaps to whole device pixels but the card's edge can fall between them, so a clip on the
@@ -48,7 +49,9 @@ export function TileHoverCard({
 }): JSX.Element {
     const face = showEmail ? EMAIL_FACE : { width: TILE_SIZE, height: TILE_SIZE }
     const width = Math.max(MIN_WIDTH, face.width + 12 + CAPTION_WIDTH + PADDING * 2 + KIND_LABEL_ROOM)
-    const closedClip = `inset(${PADDING}px ${width - PADDING - face.width}px calc(100% - ${PADDING + face.height}px) ${PADDING}px round 12px)`
+    const nameRow = tile.customName ? NAME_ROW_HEIGHT : 0
+    const faceTop = PADDING + nameRow
+    const closedClip = `inset(${faceTop}px ${width - PADDING - face.width}px calc(100% - ${faceTop + face.height}px) ${PADDING}px round 12px)`
     const kind = tile.presentation.kind
     const showPreview = kind !== 'fields' && !(showEmail && kind === 'email')
     return (
@@ -56,7 +59,7 @@ export function TileHoverCard({
             className="absolute z-10 rounded-2xl border bg-surface-primary text-primary shadow-xl transition-[clip-path] ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
             style={{
                 left: -PADDING,
-                top: -PADDING,
+                top: -faceTop,
                 width,
                 padding: PADDING,
                 borderColor: tile.color,
@@ -64,6 +67,11 @@ export function TileHoverCard({
                 transitionDuration: open ? '240ms' : `${HOVER_CARD_CLOSE_MS}ms`,
             }}
         >
+            {tile.customName && (
+                <div className="truncate text-[13px] font-semibold leading-tight" style={{ height: nameRow }}>
+                    {tile.customName}
+                </div>
+            )}
             <div className="relative flex items-start gap-3">
                 <TileFace action={action} tile={tile} count={count} showEmail={showEmail} />
                 <TileCaption facts={tile.facts} />
