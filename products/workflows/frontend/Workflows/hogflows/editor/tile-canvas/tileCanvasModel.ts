@@ -1,15 +1,11 @@
 import type { AppMetricsTotalsRequest } from 'lib/components/AppMetrics/appMetricsLogic'
 
+import { getEdgeId } from '../../edgeId'
 import type { CreateActionType, HogFlowEditorActionMetrics } from '../../hogFlowEditorLogic'
 import { getWorkflowBranchLabel, isBranchingAction } from '../../tree/workflowTree'
 import type { HogFlow, HogFlowAction, HogFlowEdge } from '../../types'
 
 export type FlowGraph = Pick<HogFlow, 'actions' | 'edges'>
-
-/** Matches the edge id `hogFlowEditorLogic` gives its dropzones, so a + on an arrow finds its dropzone. */
-export function edgeKey(edge: HogFlowEdge): string {
-    return `${edge.from}->${edge.to} ${edge.type} ${edge.index ?? ''}`.trim()
-}
 
 interface EdgeIndex {
     outgoing: Map<string, HogFlowEdge[]>
@@ -382,7 +378,7 @@ function visibleNodes(workflow: FlowGraph, stacks: PathGroup[], { stackOf }: Col
 
 function edgeLabel(workflow: FlowGraph, edge: HogFlowEdge, collapsed: Collapsed): string | undefined {
     const isPathChoice = outgoingEdges(workflow, edge.from).length > 1
-    return isPathChoice && !collapsed.namedElsewhere.has(edgeKey(edge))
+    return isPathChoice && !collapsed.namedElsewhere.has(getEdgeId(edge))
         ? getWorkflowBranchLabel(collapsed.actionsById.get(edge.from), edge)
         : undefined
 }
@@ -398,10 +394,10 @@ function mergeVisibleEdges(workflow: FlowGraph, collapsed: Collapsed): VisibleEd
             return
         }
         const fromStack = source !== edge.from
-        const id = fromStack ? `${source}->${target}` : `${edgeKey(edge)}${target !== edge.to ? `=>${target}` : ''}`
+        const id = fromStack ? `${source}->${target}` : `${getEdgeId(edge)}${target !== edge.to ? `=>${target}` : ''}`
         const existing = edgesById.get(id)
         if (existing) {
-            existing.originalEdgeKeys.push(edgeKey(edge))
+            existing.originalEdgeKeys.push(getEdgeId(edge))
             existing.insertEdge = undefined
             return
         }
@@ -413,7 +409,7 @@ function mergeVisibleEdges(workflow: FlowGraph, collapsed: Collapsed): VisibleEd
             portCount: 1,
             label: fromStack ? undefined : edgeLabel(workflow, edge, collapsed),
             insertEdge: fromStack || target !== edge.to ? undefined : edge,
-            originalEdgeKeys: [edgeKey(edge)],
+            originalEdgeKeys: [getEdgeId(edge)],
         })
     })
     return [...edgesById.values()]
@@ -424,7 +420,7 @@ function assignSourcePorts(workflow: FlowGraph, edges: VisibleEdge[]): VisibleEd
     const bySource = new Map<string, VisibleEdge[]>()
     edges.forEach((edge) => bySource.set(edge.source, [...(bySource.get(edge.source) ?? []), edge]))
     bySource.forEach((fromSource, sourceId) => {
-        const order = outgoingEdges(workflow, sourceId).map(edgeKey)
+        const order = outgoingEdges(workflow, sourceId).map(getEdgeId)
         fromSource
             .sort((a, b) => order.indexOf(a.originalEdgeKeys[0]) - order.indexOf(b.originalEdgeKeys[0]))
             .forEach((edge, index) => {
@@ -444,7 +440,7 @@ export function computeVisibleGraph(
     const frames = openPathFrames(groups, openGroupIds)
     const collapsed: Collapsed = {
         stackOf: new Map(stacks.flatMap((group) => group.memberIds.map((id): [string, string] => [id, group.id]))),
-        namedElsewhere: new Set([...stacks, ...frames].map((group) => edgeKey(group.entryEdge))),
+        namedElsewhere: new Set([...stacks, ...frames].map((group) => getEdgeId(group.entryEdge))),
         actionsById: actionsById(workflow),
     }
     return {

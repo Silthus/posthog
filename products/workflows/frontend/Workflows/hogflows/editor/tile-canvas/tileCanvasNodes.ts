@@ -1,11 +1,11 @@
 import type { Edge, Node } from '@xyflow/react'
 
+import { getEdgeId } from '../../edgeId'
 import type { HogFlow } from '../../types'
 import { Box, CanvasLayout, entryX, frameChipWidth, NodeSize, PathFrameSpec, RoutedEdge } from './tileCanvasLayout'
 import type { StepCountOf, TemplateNameOf } from './tileCanvasLogic'
 import {
     CanvasMotion,
-    edgeKey,
     frameMotion,
     nodeMotion,
     NodeMotion,
@@ -74,7 +74,7 @@ function chipNode(
     graph: VisibleGraph,
     motion: NodeMotion | undefined
 ): TileCanvasNode {
-    const entry = graph.edges.find((edge) => edge.originalEdgeKeys.includes(edgeKey(frame.group.entryEdge)))
+    const entry = graph.edges.find((edge) => edge.originalEdgeKeys.includes(getEdgeId(frame.group.entryEdge)))
     const x = entryX(entry ? layout.edges[entry.id]?.points : undefined, box.y, box.x + box.width / 2)
     const width = frameChipWidth(frame.group.label)
     const left = Math.min(Math.max(x - width / 2, box.x + CHIP_INSET), box.x + box.width - width - CHIP_INSET)

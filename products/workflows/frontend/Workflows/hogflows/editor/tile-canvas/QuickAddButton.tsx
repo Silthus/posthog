@@ -6,16 +6,17 @@ import { IconPlus } from '@posthog/icons'
 import { Popover } from 'lib/lemon-ui/Popover'
 import { cn } from 'lib/utils/css-classes'
 
+import { getEdgeId } from '../../edgeId'
 import type { HogFlowEdge } from '../../types'
 import { StepPalette } from './StepPalette'
 import { tileCanvasLogic } from './tileCanvasLogic'
-import { edgeKey, Point } from './tileCanvasModel'
+import { Point } from './tileCanvasModel'
 
 export function QuickAddButton({ edge, at }: { edge: HogFlowEdge; at: Point }): JSX.Element {
     const buttonRef = useRef<HTMLButtonElement>(null)
     const { quickAddEdgeKey, isPlacing, paletteSections } = useValues(tileCanvasLogic)
     const { openQuickAdd, closeQuickAdd, addStepAt, placeAt, onDrop } = useActions(tileCanvasLogic)
-    const key = edgeKey(edge)
+    const key = getEdgeId(edge)
     const isOpen = quickAddEdgeKey === key
 
     return (

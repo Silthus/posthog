@@ -27,6 +27,7 @@ import { sceneLayoutLogic } from '~/layout/scenes/sceneLayoutLogic'
 import { HogFunctionTemplateType, TeamPublicType, TeamType } from '~/types'
 
 import { WorkflowLogicProps, workflowLogic } from '../../../workflowLogic'
+import { getEdgeId } from '../../edgeId'
 import {
     actionMetricsFromTotals,
     CreateActionType,
@@ -53,7 +54,6 @@ import {
     computePathGroups,
     computeVisibleGraph,
     countableStepMetrics,
-    edgeKey,
     PaletteSection,
     PathGroup,
     Point,
@@ -660,7 +660,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             actions.focusPathAfterLayout(innermost.id)
         }
         const placeExistingStep = (edge: HogFlowEdge): void => {
-            const dropzone = values.dropzoneNodes.find((zone) => zone.data.edge.id === edgeKey(edge))
+            const dropzone = values.dropzoneNodes.find((zone) => zone.data.edge.id === getEdgeId(edge))
             if (!dropzone) {
                 return
             }
