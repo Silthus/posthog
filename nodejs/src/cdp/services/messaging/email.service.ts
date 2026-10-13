@@ -12,11 +12,12 @@ import {
     IntegrationType,
     MessageAssetRow,
 } from '~/cdp/types'
-import { createAddLogFunction, logEntry } from '~/cdp/utils'
+import { MAX_UNTRUNCATED_LOG_LENGTH, createAddLogFunction, logEntry, sanitizeLogMessage } from '~/cdp/utils'
 import { createInvocationResult } from '~/cdp/utils/invocation-utils'
 import { logger } from '~/common/utils/logger'
 
 import { IntegrationManagerService } from '../managers/integration-manager.service'
+import { OrganizationMembersService, TeamOrganizationSnapshot } from '../managers/organization-members.service'
 import { RecipientManagerRecipient, RecipientsManagerService } from '../managers/recipients-manager.service'
 import { TeamWorkflowsConfigService } from '../managers/team-workflows-config.service'
 import { RateLimiterService } from '../rate-limiter/rate-limiter.service'
@@ -336,6 +337,90 @@ export function parseAddressList(value?: string): string[] | undefined {
     return result.length > 0 ? result : undefined
 }
 
+type QuoteScan = { unquotedIndexes: number[]; balanced: boolean }
+
+function scanQuotes(text: string): QuoteScan {
+    const unquotedIndexes: number[] = []
+    let quoted = false
+    let escaped = false
+    for (let index = 0; index < text.length; index++) {
+        const character = text[index]
+        if (escaped) {
+            escaped = false
+        } else if (quoted && character === '\\') {
+            escaped = true
+        } else if (character === '"') {
+            quoted = !quoted
+        } else if (!quoted) {
+            unquotedIndexes.push(index)
+        }
+    }
+    return { unquotedIndexes, balanced: !quoted }
+}
+
+function splitOutsideQuotes(text: string): string[] {
+    const commas = scanQuotes(text).unquotedIndexes.filter((index) => text[index] === ',')
+    return [-1, ...commas].map((comma, position) => text.slice(comma + 1, commas[position] ?? text.length))
+}
+
+function angleAddress(entry: string): string | undefined {
+    const { unquotedIndexes, balanced } = scanQuotes(entry)
+    const opening = unquotedIndexes.find((index) => entry[index] === '<')
+    const closing = entry.length - 1
+    if (!balanced || opening === undefined || entry[closing] !== '>' || /[\r\n]/.test(entry)) {
+        return undefined
+    }
+    const unquotedBetween = (start: number, end: number): string =>
+        unquotedIndexes
+            .filter((index) => index >= start && index < end)
+            .map((index) => entry[index])
+            .join('')
+    const mailbox = entry.slice(opening + 1, closing).trim()
+    const isFramed = !/[>@;]/.test(unquotedBetween(0, opening)) && !/[<>]/.test(unquotedBetween(opening + 1, closing))
+    return isFramed && mailbox ? mailbox : undefined
+}
+
+function sandboxAddressList(value?: string): string[] {
+    return splitOutsideQuotes(value ?? '')
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .map((entry) => angleAddress(entry) ?? entry)
+}
+
+const BLOCKED_ADDRESSES_LABEL = 'Blocked addresses: '
+
+function splitByLength(text: string, maxLength: number): string[] {
+    const chunks = ['']
+    for (const character of text) {
+        if (chunks[chunks.length - 1].length + character.length > maxLength) {
+            chunks.push('')
+        }
+        chunks[chunks.length - 1] += character
+    }
+    return chunks
+}
+
+function packAddressRows(addresses: string[], maxLength: number): string[] {
+    const rows: string[] = []
+    let row = ''
+    for (const piece of addresses.flatMap((address) => splitByLength(address, maxLength))) {
+        const joined = row ? `${row}, ${piece}` : piece
+        if (row && joined.length > maxLength) {
+            rows.push(row)
+            row = piece
+        } else {
+            row = joined
+        }
+    }
+    return [...rows, row]
+}
+
+function blockedAddressLogRows(addresses: string[]): string[] {
+    return packAddressRows(addresses, MAX_UNTRUNCATED_LOG_LENGTH - BLOCKED_ADDRESSES_LABEL.length).map(
+        (addressList) => `${BLOCKED_ADDRESSES_LABEL}${addressList}`
+    )
+}
+
 export class EmailService {
     sesV2Client: SESv2Client | null
 
@@ -354,7 +439,8 @@ export class EmailService {
         private messageAssetsService?: MessageAssetsService,
         private workflowEmailRateLimiter: RateLimiterService | null = null,
         private teamEmailRateLimiter: RateLimiterService | null = null,
-        private sandboxSender: SandboxEmailSender | null = null
+        private sandboxSender: SandboxEmailSender | null = null,
+        private organizationMembers: OrganizationMembersService | null = null
     ) {
         this.sesV2Client = this.sesConfig.sesRegion
             ? new SESv2Client({
@@ -398,6 +484,7 @@ export class EmailService {
         let assetRow: MessageAssetRow | null = null
         let trackingEnabled = true
         let deliveryParams = params
+        let sandboxRecipients: string[] | undefined
 
         try {
             // Team-level kill switches: staff suspend all workflow email for a team whose sender
@@ -501,6 +588,23 @@ export class EmailService {
                 })
                 return result
             }
+            if (isSandbox) {
+                const cc = sandboxAddressList(params.cc)
+                const bcc = sandboxAddressList(params.bcc)
+                sandboxRecipients = [params.to.email, ...cc, ...bcc]
+                if (!(await this.checkSandboxRecipients(result, sandboxRecipients, isTest))) {
+                    return result
+                }
+                deliveryParams = {
+                    ...params,
+                    to: {
+                        email: params.to.email.trim(),
+                        name: params.to.name ? sanitizeFromName(params.to.name) : undefined,
+                    },
+                    cc: cc.join(', ') || undefined,
+                    bcc: bcc.join(', ') || undefined,
+                }
+            }
             const from = this.resolveFromSender(integration, params.from, addLog)
 
             if (isSandbox && (params.from.email || params.from.name || params.replyTo)) {
@@ -514,7 +618,11 @@ export class EmailService {
             // of whether the invocation came from a workflow action or an email destination hog
             // function. Checking here means callers can't bypass it by taking a different upstream
             // route. Covers `to`, `cc`, and `bcc`; a suppressed address anywhere blocks the send.
-            const skipReason = await this.buildSuppressionSkipReason(invocation.teamId, params)
+            const skipReason = await this.buildSuppressionSkipReason(
+                invocation.teamId,
+                deliveryParams,
+                sandboxRecipients
+            )
             if (skipReason) {
                 addLog('info', skipReason)
                 if (!isTest) {
@@ -583,7 +691,10 @@ export class EmailService {
             // Charged per recipient, not per send: SES counts every to/cc/bcc address against its
             // own quota, so a send with many copies must spend that many tokens.
             const capRecipients =
-                1 + extractEmailsFromAddressList(params.cc).length + extractEmailsFromAddressList(params.bcc).length
+                sandboxRecipients?.length ??
+                1 +
+                    extractEmailsFromAddressList(deliveryParams.cc).length +
+                    extractEmailsFromAddressList(deliveryParams.bcc).length
             const capDelay = isSandbox ? null : await this.claimTeamSendingBudget(invocation, isTest, capRecipients)
             if (capDelay) {
                 result.finished = false
@@ -605,11 +716,11 @@ export class EmailService {
             // Tagged before click tracking wraps the links, so the tags land on the destination URL.
             const metadata = invocation.hogFunction.metadata
             const sendParams =
-                metadata?.utm_tags_enabled === true && params.html
+                metadata?.utm_tags_enabled === true && deliveryParams.html
                     ? {
-                          ...params,
+                          ...deliveryParams,
                           html: addUtmTagsToEmail(
-                              params.html,
+                              deliveryParams.html,
                               resolveUtmTags(
                                   {
                                       utm_source: 'posthog',
@@ -627,7 +738,7 @@ export class EmailService {
                               this.siteUrl
                           ),
                       }
-                    : params
+                    : deliveryParams
 
             deliveryParams = sendParams
             switch (integration.config.provider ?? 'ses') {
@@ -643,7 +754,18 @@ export class EmailService {
                         from.name,
                         invocation.teamId
                     )
-                    await this.sendEmailWithSES(result, deliveryParams, from, trackingEnabled, integration, isTest)
+                    if (
+                        !(await this.sendEmailWithSES(
+                            result,
+                            deliveryParams,
+                            from,
+                            trackingEnabled,
+                            integration,
+                            isTest
+                        ))
+                    ) {
+                        return result
+                    }
                     await this.sandboxSender!.capture(invocation.teamId, isTest, {
                         type: 'sent',
                         recipientCount: capRecipients,
@@ -872,6 +994,73 @@ export class EmailService {
         return null
     }
 
+    private async checkSandboxRecipients(
+        result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>,
+        recipients: string[],
+        isTest: boolean,
+        organization?: TeamOrganizationSnapshot
+    ): Promise<boolean> {
+        const invocation = result.invocation
+        let blockedRecipients: string[]
+        let reason: 'recipient_not_member' | 'check_failed' = 'recipient_not_member'
+        try {
+            if (!this.organizationMembers) {
+                throw new Error('Organization member checks are not configured')
+            }
+            blockedRecipients = await this.organizationMembers.getBlockedRecipients(
+                invocation.teamId,
+                recipients,
+                organization
+            )
+        } catch (error) {
+            blockedRecipients = recipients
+            reason = 'check_failed'
+            logger.warn('Could not check sandbox email recipients', {
+                teamId: invocation.teamId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            })
+        }
+        if (!blockedRecipients.length) {
+            return true
+        }
+        this.logSandboxRecipientBlock(result, blockedRecipients, reason)
+        result.skipped = true
+        result.invocation.state.vmState?.stack.push({ success: false })
+        await this.sandboxSender!.capture(invocation.teamId, isTest, {
+            type: 'blocked',
+            reason,
+            blockedRecipientCount: blockedRecipients.length,
+        })
+        return false
+    }
+
+    private logSandboxRecipientBlock(
+        result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>,
+        blockedRecipients: string[],
+        reason: 'recipient_not_member' | 'check_failed'
+    ): void {
+        const addLog = createAddLogFunction(result.logs)
+        const addresses = blockedRecipients.map((address) => address.trim() || '(empty address)')
+        const explanation =
+            reason === 'check_failed'
+                ? 'Skipping send: could not check organization members'
+                : 'Skipping send: the sandbox sender only sends to active organization members with verified email addresses'
+        const guidance =
+            reason === 'check_failed'
+                ? 'Try again, or verify your own domain to send to anyone.'
+                : 'Verify your own domain to send to anyone.'
+        const label = reason === 'check_failed' ? ' for these addresses: ' : '. Blocked addresses: '
+        const message = `${explanation}${label}${addresses.join(', ')}. ${guidance}`
+        if (sanitizeLogMessage([message]) === message) {
+            addLog('info', message)
+            return
+        }
+        addLog('info', `${explanation}. ${guidance}`)
+        for (const row of blockedAddressLogRows(addresses)) {
+            addLog('info', row)
+        }
+    }
+
     // Returns a human-readable log string when any destination address is suppressed for the team,
     // or null when the send should proceed. Scans to + cc + bcc — SES delivers to every list, so a
     // suppressed address anywhere blocks the whole send. `cc` and `bcc` can be comma-separated
@@ -879,14 +1068,14 @@ export class EmailService {
     // matching against the normalized suppression identifier.
     private async buildSuppressionSkipReason(
         teamId: number,
-        params: CyclotronInvocationQueueParametersEmailType
+        params: CyclotronInvocationQueueParametersEmailType,
+        recipientEmails?: string[]
     ): Promise<string | null> {
-        const recipients: string[] = []
-        if (params.to?.email && params.to.email.trim()) {
-            recipients.push(params.to.email.trim())
-        }
-        recipients.push(...extractEmailsFromAddressList(params.cc))
-        recipients.push(...extractEmailsFromAddressList(params.bcc))
+        const recipients = recipientEmails ?? [
+            ...(params.to?.email?.trim() ? [params.to.email.trim()] : []),
+            ...extractEmailsFromAddressList(params.cc),
+            ...extractEmailsFromAddressList(params.bcc),
+        ]
         if (recipients.length === 0) {
             return null
         }
@@ -1119,7 +1308,7 @@ export class EmailService {
         trackingEnabled: boolean,
         integration: IntegrationType,
         isTest = false
-    ): Promise<void> {
+    ): Promise<boolean> {
         if (!this.sesV2Client) {
             throw new Error('SES is not configured - set SES_REGION and AWS credentials')
         }
@@ -1210,19 +1399,30 @@ export class EmailService {
         }
 
         const replyToAddresses = parseAddressList(params.replyTo)
-        const ccAddresses = parseAddressList(params.cc)
-        const bccAddresses = parseAddressList(params.bcc)
+        const parseRecipients = integration.config.provider === 'sandbox' ? sandboxAddressList : parseAddressList
+        const ccAddresses = parseRecipients(params.cc)
+        const bccAddresses = parseRecipients(params.bcc)
 
         if (replyToAddresses) {
             sendEmailParams.ReplyToAddresses = replyToAddresses
         }
-        if (ccAddresses) {
+        if (ccAddresses?.length) {
             sendEmailParams.Destination!.CcAddresses = ccAddresses
         }
-        if (bccAddresses) {
+        if (bccAddresses?.length) {
             sendEmailParams.Destination!.BccAddresses = bccAddresses
         }
 
+        if (
+            integration.config.provider === 'sandbox' &&
+            !(await this.checkSandboxRecipients(
+                result,
+                [params.to.email, ...(ccAddresses ?? []), ...(bccAddresses ?? [])],
+                isTest
+            ))
+        ) {
+            return false
+        }
         try {
             const response = await this.sesV2Client.send(new SendEmailCommand(sendEmailParams))
             if (!response.MessageId) {
@@ -1236,6 +1436,7 @@ export class EmailService {
             const message = error instanceof Error ? error.message : String(error)
             throw new Error(`Failed to send email via SES: ${message}`)
         }
+        return true
     }
 
     private generateUnsubscribeHeaders(
