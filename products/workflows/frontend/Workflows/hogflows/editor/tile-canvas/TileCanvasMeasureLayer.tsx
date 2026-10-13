@@ -28,15 +28,22 @@ function sizeOf(node: HTMLElement): NodeSize {
     }
 }
 
+const HIDDEN = { display: 'none' }
+
+/** Copies stay hidden, so they cost no layout, and only the ones measured now are shown for that moment. */
 function measure(container: HTMLElement, ids: ReadonlySet<string>): Record<string, NodeSize> {
+    const wrappers = [...container.querySelectorAll<HTMLElement>('[data-measure-id]')].filter((wrapper) =>
+        ids.has(wrapper.dataset.measureId ?? '')
+    )
+    wrappers.forEach((wrapper) => (wrapper.style.display = 'block'))
     const sizes: Record<string, NodeSize> = {}
-    container.querySelectorAll<HTMLElement>('[data-measure-id]').forEach((wrapper) => {
+    wrappers.forEach((wrapper) => {
         const node = wrapper.firstElementChild as HTMLElement | null
-        const id = wrapper.dataset.measureId
-        if (node && id && ids.has(id)) {
-            sizes[id] = sizeOf(node)
+        if (node) {
+            sizes[wrapper.dataset.measureId as string] = sizeOf(node)
         }
     })
+    wrappers.forEach((wrapper) => (wrapper.style.display = HIDDEN.display))
     return sizes
 }
 
@@ -96,7 +103,7 @@ const MeasureCopy = memo(
         inputs: unknown[]
     }): JSX.Element {
         return (
-            <div data-measure-id={node.id} className="w-max">
+            <div data-measure-id={node.id} className="w-max" style={HIDDEN}>
                 {node.kind === 'step' ? (
                     <TileStepNode action={node.action} workflow={workflow} count={undefined} interactive={false} />
                 ) : (
