@@ -14,7 +14,8 @@ import { TileStepNode } from './TileStepNode'
 
 export function TileFlowNode({ data }: NodeProps<TileFlowNodeType>): JSX.Element {
     const { node } = data
-    const { workflow, isPanelOpen, motion, pathGroups, layout, measuredSizes, stepMetrics } = useValues(tileCanvasLogic)
+    const { workflow, isPanelOpen, motion, pathGroups, layout, measuredSizes, stepMetrics, stepMenuActionId } =
+        useValues(tileCanvasLogic)
     const { selectedNodeId, hogFunctionTemplatesById } = useValues(hogFlowEditorLogic)
     const position = layout?.positions[node.id]
     const size = measuredSizes?.[node.id]
@@ -33,6 +34,7 @@ export function TileFlowNode({ data }: NodeProps<TileFlowNodeType>): JSX.Element
                         workflow={workflow}
                         count={countOf(node.id)}
                         selected={isPanelOpen && selectedNodeId === node.id}
+                        menuOpen={stepMenuActionId === node.id}
                     />
                 </TileStepMenu>
             ) : (

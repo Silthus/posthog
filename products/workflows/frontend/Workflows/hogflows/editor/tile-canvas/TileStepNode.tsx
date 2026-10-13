@@ -18,18 +18,20 @@ export function TileStepNode({
     workflow,
     count,
     selected = false,
+    menuOpen = false,
     interactive = true,
 }: {
     action: HogFlowAction
     workflow: HogFlow
     count: number | undefined
     selected?: boolean
+    menuOpen?: boolean
     interactive?: boolean
 }): JSX.Element {
     const ref = useRef<HTMLDivElement>(null)
     const tile = useTileStep(action, workflow)
     const showEmail = !!emailContent(action)?.html
-    const hover = useHoverIntent(interactive && !selected, HOVER_OPEN_DELAY_MS, HOVER_CARD_CLOSE_MS)
+    const hover = useHoverIntent(interactive && !selected && !menuOpen, HOVER_OPEN_DELAY_MS, HOVER_CARD_CLOSE_MS)
     useRaisedNode(ref, hover.mounted)
 
     return (
