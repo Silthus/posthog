@@ -28,9 +28,14 @@ import { HogFlowEditorPanelTest } from './testing/HogFlowEditorPanelTest'
 export interface HogFlowEditorPanelProps {
     layout?: 'floating' | 'panel' | 'docked'
     onClose?: () => void
+    view?: { title: string; content: JSX.Element }
 }
 
-export function HogFlowEditorPanel({ layout = 'floating', onClose }: HogFlowEditorPanelProps = {}): JSX.Element | null {
+export function HogFlowEditorPanel({
+    layout = 'floating',
+    onClose,
+    view,
+}: HogFlowEditorPanelProps = {}): JSX.Element | null {
     const { panelWidth, selectedNode, mode, workflow } = useValues(hogFlowEditorLogic)
     const { clearPanelWidth, setMode, setPanelWidth, setSelectedNodeId } = useActions(hogFlowEditorLogic)
     const panelRef = useRef<HTMLDivElement>(null)
@@ -113,12 +118,18 @@ export function HogFlowEditorPanel({ layout = 'floating', onClose }: HogFlowEdit
                     </div>
 
                     <div className="min-w-0 flex-1">
-                        <LemonTabs
-                            activeKey={mode}
-                            onChange={(key) => setMode(key)}
-                            tabs={tabs}
-                            barClassName="-mb-px "
-                        />
+                        {layout === 'docked' ? (
+                            <h3 className="m-0 truncate py-2 text-sm font-semibold">
+                                {view?.title ?? capitalizeFirstLetter(mode)}
+                            </h3>
+                        ) : (
+                            <LemonTabs
+                                activeKey={mode}
+                                onChange={(key) => setMode(key)}
+                                tabs={tabs}
+                                barClassName="-mb-px "
+                            />
+                        )}
                     </div>
                     {onClose && (
                         <div className="shrink-0 p-1">
@@ -133,21 +144,27 @@ export function HogFlowEditorPanel({ layout = 'floating', onClose }: HogFlowEdit
                     )}
                 </div>
 
-                {selectedNode && ['build', 'metrics', 'test', 'logs'].includes(mode) && (
-                    <HogFlowEditorPanelSelectedStep />
+                {view ? (
+                    view.content
+                ) : (
+                    <>
+                        {selectedNode && ['build', 'metrics', 'test', 'logs'].includes(mode) && (
+                            <HogFlowEditorPanelSelectedStep />
+                        )}
+                        {mode === 'build' && (
+                            <>{!selectedNode ? <HogFlowEditorPanelBuild /> : <HogFlowEditorPanelBuildDetail />}</>
+                        )}
+                        {mode === 'variables' && <HogFlowEditorPanelVariables />}
+                        {mode === 'test' &&
+                            (selectedNode?.data?.type === 'function_email' ? (
+                                <EmailActionTestContent />
+                            ) : (
+                                <HogFlowEditorPanelTest />
+                            ))}
+                        {mode === 'metrics' && <HogFlowEditorPanelMetrics />}
+                        {mode === 'logs' && <HogFlowEditorPanelLogs />}
+                    </>
                 )}
-                {mode === 'build' && (
-                    <>{!selectedNode ? <HogFlowEditorPanelBuild /> : <HogFlowEditorPanelBuildDetail />}</>
-                )}
-                {mode === 'variables' && <HogFlowEditorPanelVariables />}
-                {mode === 'test' &&
-                    (selectedNode?.data?.type === 'function_email' ? (
-                        <EmailActionTestContent />
-                    ) : (
-                        <HogFlowEditorPanelTest />
-                    ))}
-                {mode === 'metrics' && <HogFlowEditorPanelMetrics />}
-                {mode === 'logs' && <HogFlowEditorPanelLogs />}
             </div>
         </div>
     )

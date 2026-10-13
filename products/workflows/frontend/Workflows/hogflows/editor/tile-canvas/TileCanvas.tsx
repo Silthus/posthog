@@ -18,6 +18,7 @@ import { cn } from 'lib/utils/css-classes'
 import { themeLogic } from '~/layout/navigation-3000/themeLogic'
 
 import { workflowLogic } from '../../../workflowLogic'
+import { WorkflowRevisions } from '../../../WorkflowRevisions'
 import { hogFlowEditorLogic } from '../../hogFlowEditorLogic'
 import { HogFlowEditorPanel } from '../../panel/HogFlowEditorPanel'
 import { CommandBar } from './CommandBar'
@@ -54,7 +55,9 @@ function TileCanvasContent(): JSX.Element {
         fitRequest,
         commandPaletteQuery,
         selectedNodeId,
+        isHistoryOpen,
     } = useValues(tileCanvasLogic)
+    const { logicProps } = useValues(workflowLogic)
     const { selectStep, openPath, closePanel } = useActions(tileCanvasLogic)
     const { handlePaneClick } = useActions(hogFlowEditorLogic)
 
@@ -229,7 +232,24 @@ function TileCanvasContent(): JSX.Element {
                     <Controls showInteractive={false} />
                 </ReactFlow>
             </div>
-            {isPanelOpen && <HogFlowEditorPanel layout="docked" onClose={closePanel} />}
+            {isPanelOpen && (
+                <HogFlowEditorPanel
+                    layout="docked"
+                    onClose={closePanel}
+                    view={
+                        isHistoryOpen && logicProps.id
+                            ? {
+                                  title: 'History',
+                                  content: (
+                                      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                                          <WorkflowRevisions id={logicProps.id} />
+                                      </div>
+                                  ),
+                              }
+                            : undefined
+                    }
+                />
+            )}
         </div>
     )
 }

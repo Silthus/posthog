@@ -1,23 +1,32 @@
 import { useActions, useValues } from 'kea'
 import { useMemo } from 'react'
 
-import { IconBrackets, IconCollapse, IconExpand, IconList, IconPlay, IconScreen } from '@posthog/icons'
+import {
+    IconBrackets,
+    IconClock,
+    IconCollapse,
+    IconExpand,
+    IconGraph,
+    IconList,
+    IconPlay,
+    IconScreen,
+} from '@posthog/icons'
 
-import type { HogFlowEditorMode } from '../../hogFlowEditorLogic'
 import type { CanvasCommand } from './StepPalette'
-import { tileCanvasLogic } from './tileCanvasLogic'
+import { tileCanvasLogic, TileCanvasPanelMode } from './tileCanvasLogic'
 
 export interface PanelCommand extends CanvasCommand {
-    mode: HogFlowEditorMode
+    mode: TileCanvasPanelMode
 }
 
 export interface CanvasCommands {
     panel: PanelCommand[]
+    morePanels: PanelCommand[]
     view: CanvasCommand[]
 }
 
 export function useCanvasCommands(): CanvasCommands {
-    const { pathGroups, allPathsCollapsed } = useValues(tileCanvasLogic)
+    const { pathGroups, allPathsCollapsed, hasHistory } = useValues(tileCanvasLogic)
     const { openPanel, toggleAllPaths, requestFit } = useActions(tileCanvasLogic)
 
     return useMemo(
@@ -48,6 +57,28 @@ export function useCanvasCommands(): CanvasCommands {
                     run: () => openPanel('variables'),
                 },
             ],
+            morePanels: [
+                {
+                    id: 'metrics',
+                    mode: 'metrics',
+                    label: 'Metrics',
+                    hint: 'How many people each step reached',
+                    icon: <IconGraph />,
+                    run: () => openPanel('metrics'),
+                },
+                ...(hasHistory
+                    ? [
+                          {
+                              id: 'history',
+                              mode: 'history' as const,
+                              label: 'History',
+                              hint: 'See and restore previous versions',
+                              icon: <IconClock />,
+                              run: () => openPanel('history'),
+                          },
+                      ]
+                    : []),
+            ],
             view: [
                 ...(pathGroups.length
                     ? [
@@ -68,6 +99,6 @@ export function useCanvasCommands(): CanvasCommands {
                 },
             ],
         }),
-        [openPanel, pathGroups.length, allPathsCollapsed, toggleAllPaths, requestFit]
+        [openPanel, hasHistory, pathGroups.length, allPathsCollapsed, toggleAllPaths, requestFit]
     )
 }

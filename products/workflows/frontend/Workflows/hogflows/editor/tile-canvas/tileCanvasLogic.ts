@@ -42,6 +42,8 @@ import {
     VisibleGraph,
 } from './tileCanvasModel'
 
+export type TileCanvasPanelMode = HogFlowEditorMode | 'history'
+
 const PATH_LEAVE_MS = 260
 const PATH_MOTION_MS = 1100
 
@@ -85,12 +87,14 @@ export interface tileCanvasLogicValues {
     fitRequest: number
     fitsNextLayout: boolean
     frameSpecs: PathFrameSpec[]
+    hasHistory: boolean
+    isHistoryOpen: boolean
     isPanelOpen: boolean
     isPlacing: boolean
     layout: CanvasLayout | null
     measuredSizes: Record<string, NodeSize> | null
     motion: CanvasMotion | null
-    openPanelMode: 'build' | 'logs' | 'metrics' | 'test' | 'variables' | null
+    panelMode: 'build' | 'logs' | 'metrics' | 'test' | 'variables' | 'history' | null
     openPathIds: string[]
     paletteSections: PaletteSection[]
     pathGroups: PathGroup[]
@@ -179,8 +183,8 @@ export interface tileCanvasLogicActions {
     openCommandPalette: (query?: string) => {
         query: string
     }
-    openPanel: (mode: HogFlowEditorMode) => {
-        mode: 'build' | 'logs' | 'metrics' | 'test' | 'variables'
+    openPanel: (mode: TileCanvasPanelMode) => {
+        mode: 'build' | 'logs' | 'metrics' | 'test' | 'variables' | 'history'
     }
     openPath: (groupId: string) => {
         groupId: string
@@ -221,8 +225,8 @@ export interface tileCanvasLogicActions {
     toggleAllPaths: () => {
         value: true
     }
-    togglePanel: (mode: HogFlowEditorMode) => {
-        mode: 'build' | 'logs' | 'metrics' | 'test' | 'variables'
+    togglePanel: (mode: TileCanvasPanelMode) => {
+        mode: 'build' | 'logs' | 'metrics' | 'test' | 'variables' | 'history'
     }
 }
 
@@ -235,11 +239,12 @@ export interface tileCanvasLogicMeta {
         frameSpecs: (pathGroups: PathGroup[], openPathIds: string[], visibleGraph: VisibleGraph) => PathFrameSpec[]
         edgeLabels: (visibleGraph: VisibleGraph) => Record<string, string | undefined>
         allPathsCollapsed: (pathGroups: PathGroup[], openPathIds: string[]) => boolean
-        openPanelMode: (
+        hasHistory: (workflow: HogFlow) => boolean
+        panelMode: (
             isPanelOpen: boolean,
-            selectedNodeId: string | null,
+            isHistoryOpen: boolean,
             mode: 'build' | 'logs' | 'metrics' | 'test' | 'variables'
-        ) => 'build' | 'logs' | 'metrics' | 'test' | 'variables' | null
+        ) => 'build' | 'logs' | 'metrics' | 'test' | 'variables' | 'history' | null
         isPlacing: (
             nodeToBeAdded: CreateActionType | HogFlowActionNode | null,
             isMovingNode: boolean,
@@ -323,8 +328,8 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         placeAt: (edge: HogFlowEdge) => ({ edge }),
         selectStep: (actionId: string) => ({ actionId }),
         revealStep: (actionId: string) => ({ actionId }),
-        openPanel: (mode: HogFlowEditorMode) => ({ mode }),
-        togglePanel: (mode: HogFlowEditorMode) => ({ mode }),
+        openPanel: (mode: TileCanvasPanelMode) => ({ mode }),
+        togglePanel: (mode: TileCanvasPanelMode) => ({ mode }),
         closePanel: true,
         cancel: true,
         setMeasuredSizes: (sizes: Record<string, NodeSize>) => ({ sizes }),
@@ -361,6 +366,16 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 closePanel: () => false,
                 cancel: () => false,
                 revealStep: () => true,
+            },
+        ],
+        isHistoryOpen: [
+            false,
+            {
+                openPanel: (_, { mode }) => mode === 'history',
+                selectStep: () => false,
+                closePanel: () => false,
+                cancel: () => false,
+                setSelectedNodeId: (state, { selectedNodeId }) => (selectedNodeId ? false : state),
             },
         ],
         stepMenuActionId: [
@@ -406,10 +421,11 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             (groups: PathGroup[], openPathIds: string[]): boolean =>
                 groups.length > 0 && groups.every((group) => !openPathIds.includes(group.id)),
         ],
-        openPanelMode: [
-            (s) => [s.isPanelOpen, s.selectedNodeId, s.mode],
-            (isPanelOpen: boolean, selectedNodeId: string | null, mode: HogFlowEditorMode): HogFlowEditorMode | null =>
-                isPanelOpen && !selectedNodeId ? mode : null,
+        hasHistory: [(s) => [s.workflow], (workflow: HogFlow): boolean => workflow.id !== 'new'],
+        panelMode: [
+            (s) => [s.isPanelOpen, s.isHistoryOpen, s.mode],
+            (isPanelOpen: boolean, isHistoryOpen: boolean, mode: HogFlowEditorMode): TileCanvasPanelMode | null =>
+                isPanelOpen ? (isHistoryOpen ? 'history' : mode) : null,
         ],
         isPlacing: [
             (s) => [s.nodeToBeAdded, s.isMovingNode, s.isCopyingNode],
@@ -548,11 +564,14 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 actions.setSelectedNodeId(actionId)
             },
             openPanel: ({ mode }) => {
-                actions.setSelectedNodeId(null)
-                actions.setMode(mode)
+                if (mode === 'history') {
+                    actions.setSelectedNodeId(null)
+                } else {
+                    actions.setMode(mode)
+                }
             },
             togglePanel: ({ mode }) => {
-                if (values.openPanelMode === mode) {
+                if (values.panelMode === mode) {
                     actions.closePanel()
                 } else {
                     actions.openPanel(mode)
