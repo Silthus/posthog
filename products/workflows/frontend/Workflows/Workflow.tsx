@@ -17,6 +17,7 @@ export function Workflow(props: WorkflowLogicProps): JSX.Element {
     const { editorLayout } = useValues(hogFlowEditorLogic(logicProps))
     const { setEditorLayout } = useActions(hogFlowEditorLogic(logicProps))
     const treeViewEnabled = useFeatureFlag('WORKFLOWS_LINEAR_VIEW')
+    const tileCanvasEnabled = useFeatureFlag('WORKFLOWS_TILE_CANVAS')
 
     return (
         <div className="relative flex h-[calc(100vh-13rem)] max-h-full min-h-[25rem] grow flex-col overflow-hidden rounded-md border">
@@ -50,7 +51,10 @@ export function Workflow(props: WorkflowLogicProps): JSX.Element {
             {!originalWorkflow && workflowLoading ? (
                 <SpinnerOverlay />
             ) : (
-                <HogFlowEditor isTreeView={!!treeViewEnabled && editorLayout === 'simple'} />
+                <HogFlowEditor
+                    isTreeView={!!treeViewEnabled && editorLayout === 'simple'}
+                    isTileCanvas={!!tileCanvasEnabled}
+                />
             )}
         </div>
     )
