@@ -377,6 +377,21 @@ export function branchCohorts(action: ActionOf<'random_cohort_branch'>): BranchC
     return action.config.cohorts ?? []
 }
 
+export interface CohortShare {
+    name: string
+    percent: number
+}
+
+/** The runner picks a group by its weight against the sum of all weights, so the weights read as shares of 100. */
+export function cohortShares(action: ActionOf<'random_cohort_branch'>): CohortShare[] {
+    const cohorts = branchCohorts(action)
+    const total = cohorts.reduce((sum, cohort) => sum + (cohort.percentage || 0), 0)
+    return cohorts.map((cohort, index) => ({
+        name: cohort.name || `Group ${index + 1}`,
+        percent: total ? Math.round(((cohort.percentage || 0) / total) * 100) : 0,
+    }))
+}
+
 function splitKey(conditions: BranchCondition[]): string | undefined {
     const keys = new Set(
         conditions.flatMap((condition) =>
@@ -423,18 +438,14 @@ export function stepFacts(workflow: HogFlow, action: HogFlowAction, templateName
                 ],
             }
         }
-        case 'random_cohort_branch':
+        case 'random_cohort_branch': {
+            const shares = cohortShares(action)
             return {
                 headline: 'Random split',
-                detail:
-                    branchCohorts(action)
-                        .map((cohort) => `${cohort.percentage}%`)
-                        .join(' / ') || undefined,
-                fields: branchCohorts(action).map((cohort, index): [string, string] => [
-                    cohort.name || `Group ${index + 1}`,
-                    `${cohort.percentage}% of people`,
-                ]),
+                detail: shares.map(({ percent }) => `${percent}%`).join(' / ') || undefined,
+                fields: shares.map(({ name, percent }): [string, string] => [name, `${percent}% of people`]),
             }
+        }
         case 'delay': {
             if (action.config.delay_until) {
                 return {

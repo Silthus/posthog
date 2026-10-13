@@ -147,6 +147,14 @@ describe('stepFacts', () => {
             'Random split',
             '50% / 50%',
         ],
+        [
+            'a random split whose weights do not add up to 100',
+            step('ab', 'random_cohort_branch', {
+                cohorts: [{ percentage: 10 }, { percentage: 10 }, { percentage: 20 }],
+            }),
+            'Random split',
+            '25% / 25% / 50%',
+        ],
         ['an event trigger', eventTrigger, 'Signed up', 'Starts when someone does this'],
         [
             'a trigger on a PostHog action',
