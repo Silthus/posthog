@@ -277,8 +277,8 @@ export function stepKindName(action: HogFlowAction): string | undefined {
     return STEP_KIND_NAMES.get(kindKey(action.type, templateId)) ?? STEP_KIND_NAMES.get(kindKey(action.type, undefined))
 }
 
-/** The step's own name, unless it is still the name it got from the step picker or its destination. */
-export function customStepName(action: HogFlowAction, templateName: string | undefined): string | undefined {
+/** The step's own name, unless it is still the name the step picker gave it or reads the same as a text shown beside it. */
+export function customStepName(action: HogFlowAction, shownElsewhere: (string | undefined)[]): string | undefined {
     const name = action.name?.trim()
-    return name && name !== stepKindName(action) && name !== templateName ? name : undefined
+    return name && name !== stepKindName(action) && !shownElsewhere.includes(name) ? name : undefined
 }

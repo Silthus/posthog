@@ -99,13 +99,14 @@ describe('workflowStepCatalog', () => {
     })
 
     it.each([
-        ['keeps a name someone gave the step', 'Nudge trial users', undefined, 'Nudge trial users'],
-        ['skips the name the step picker gave it', 'Delay', undefined, undefined],
-        ['skips the name of the destination it runs', 'HubSpot', 'HubSpot', undefined],
-        ['skips an empty name', '  ', undefined, undefined],
-    ])('%s', (_, name, templateName, expected) => {
+        ['keeps a name someone gave the step', 'Nudge trial users', [], 'Nudge trial users'],
+        ['skips the name the step picker gave it', 'Delay', [], undefined],
+        ['skips the name of the destination it runs', 'HubSpot', ['HubSpot'], undefined],
+        ['skips a name the caption already shows', 'Wait 1 day', ['Wait 1 day'], undefined],
+        ['skips an empty name', '  ', [], undefined],
+    ])('%s', (_, name, shownElsewhere, expected) => {
         const action = { type: 'delay', name, config: { delay_duration: '1h' } } as HogFlowAction
 
-        expect(customStepName(action, templateName)).toBe(expected)
+        expect(customStepName(action, shownElsewhere)).toBe(expected)
     })
 })

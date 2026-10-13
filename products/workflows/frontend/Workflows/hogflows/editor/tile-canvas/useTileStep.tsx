@@ -74,7 +74,7 @@ export function useTileStep(action: HogFlowAction, workflow: HogFlow): TileStep 
         const view = stepView(workflow, action, templateName)
         return {
             label: ENDPOINT_LABELS[action.type] ?? stepKindName(action) ?? templateName ?? 'Step',
-            customName: customStepName(action, templateName),
+            customName: customStepName(action, [templateName, view.facts.headline]),
             icon: look?.icon ?? step?.icon,
             color: look?.color?.[isDarkModeOn ? 1 : 0] ?? readableStepColor(step?.color, isDarkModeOn),
             badge: view.badge,
