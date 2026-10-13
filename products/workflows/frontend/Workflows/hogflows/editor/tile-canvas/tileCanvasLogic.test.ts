@@ -150,6 +150,18 @@ describe('tileCanvasLogic', () => {
             })
         })
 
+        it.each([
+            { name: 'clears the step a closed menu picked', panelOpen: false, selected: null },
+            { name: 'keeps the step the open panel shows', panelOpen: true, selected: 'b1' },
+        ])('$name', async ({ panelOpen, selected }) => {
+            if (panelOpen) {
+                logic.actions.selectStep('b1')
+            }
+            logic.actions.openStepMenu('b1')
+
+            await expectLogic(logic, () => logic.actions.closeStepMenu()).toMatchValues({ selectedNodeId: selected })
+        })
+
         it('opens the panel for a step picked on the canvas', async () => {
             await expectLogic(logic, () => logic.actions.selectStep('b1')).toMatchValues({
                 selectedNodeId: 'b1',

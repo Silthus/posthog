@@ -740,6 +740,12 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 // The copy, move and delete rules read the selected step, so the step under the menu must be the selected one.
                 actions.setSelectedNodeId(actionId)
             },
+            closeStepMenu: () => {
+                // The menu picked the step only for its own rules, so the next panel must not open scoped to it.
+                if (!values.isPanelOpen) {
+                    actions.setSelectedNodeId(null)
+                }
+            },
             selectStep: ({ actionId }) => {
                 actions.setMode('build')
                 actions.setSelectedNodeId(actionId)
