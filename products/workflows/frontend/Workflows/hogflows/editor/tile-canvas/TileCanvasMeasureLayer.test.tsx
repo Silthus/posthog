@@ -67,8 +67,8 @@ describe('TileCanvasMeasureLayer', () => {
 
     afterEach(() => cleanup())
 
-    it('measures the tiles again once template names change their captions', async () => {
-        const { container } = render(
+    const renderLayer = (): HTMLElement =>
+        render(
             <Provider>
                 <BindLogic logic={workflowLogic} props={{ id: WORKFLOW_ID }}>
                     <BindLogic logic={tileCanvasLogic} props={{ id: WORKFLOW_ID }}>
@@ -76,12 +76,34 @@ describe('TileCanvasMeasureLayer', () => {
                     </BindLogic>
                 </BindLogic>
             </Provider>
-        )
+        ).container
+
+    it('measures the tiles again once template names change their captions', async () => {
+        const container = renderLayer()
         await expectLogic(canvasLogic).toDispatchActions([
             'setMeasuredSizes',
             flowLogic.actionTypes.loadHogFunctionTemplatesByIdSuccess,
             'setMeasuredSizes',
         ])
         expect(container).toHaveTextContent('HubSpot')
+    })
+
+    it('measures only the step that changed', async () => {
+        const container = renderLayer()
+        await expectLogic(canvasLogic).toDispatchActions([
+            'setMeasuredSizes',
+            flowLogic.actionTypes.loadHogFunctionTemplatesByIdSuccess,
+            'setMeasuredSizes',
+        ])
+        const sync = flowLogic.values.workflow.actions.find((action) => action.id === 'sync')!
+
+        act(() => flowLogic.actions.setWorkflowAction('sync', { ...sync, name: 'Sync contacts' }))
+
+        await expectLogic(canvasLogic).toDispatchActions(['setMeasuredSizes'])
+        const measuredIds = [...container.querySelectorAll<HTMLElement>('[data-measure-id]')].map(
+            (element) => element.dataset.measureId
+        )
+        expect(measuredIds).toEqual(['sync'])
+        expect(Object.keys(canvasLogic.values.measuredSizes ?? {})).toEqual(['trigger_node', 'sync', 'exit_node'])
     })
 })
