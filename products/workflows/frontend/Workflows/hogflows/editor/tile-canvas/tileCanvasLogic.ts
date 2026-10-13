@@ -215,8 +215,12 @@ export interface tileCanvasLogicActions {
     requestFit: () => {
         value: true
     }
-    revealStep: (actionId: string) => {
+    revealStep: (
+        actionId: string,
+        openPanel?: boolean
+    ) => {
         actionId: string
+        openPanel: boolean
     }
     selectStep: (actionId: string) => {
         actionId: string
@@ -332,7 +336,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         addStepAt: (step: CreateActionType, edge: HogFlowEdge) => ({ step, edge }),
         placeAt: (edge: HogFlowEdge) => ({ edge }),
         selectStep: (actionId: string) => ({ actionId }),
-        revealStep: (actionId: string) => ({ actionId }),
+        revealStep: (actionId: string, openPanel: boolean = true) => ({ actionId, openPanel }),
         openPanel: (mode: TileCanvasPanelMode) => ({ mode }),
         togglePanel: (mode: TileCanvasPanelMode) => ({ mode }),
         closePanel: true,
@@ -370,7 +374,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 openPanel: () => true,
                 closePanel: () => false,
                 cancel: () => false,
-                revealStep: () => true,
+                revealStep: (state, { openPanel }) => openPanel || state,
             },
         ],
         isHistoryOpen: [
@@ -541,7 +545,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             },
             setSelectedNodeId: ({ selectedNodeId }) => {
                 if (selectedNodeId) {
-                    actions.revealStep(selectedNodeId)
+                    actions.revealStep(selectedNodeId, values.stepMenuActionId !== selectedNodeId)
                 }
             },
             revealStep: ({ actionId }) => {
@@ -583,7 +587,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             },
             openStepMenu: ({ actionId }) => {
                 // The copy, move and delete rules read the selected step, so the step under the menu must be the selected one.
-                actions.selectStep(actionId)
+                actions.setSelectedNodeId(actionId)
             },
             selectStep: ({ actionId }) => {
                 actions.setMode('build')

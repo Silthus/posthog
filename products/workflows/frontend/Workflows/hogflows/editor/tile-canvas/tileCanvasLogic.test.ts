@@ -122,6 +122,28 @@ describe('tileCanvasLogic', () => {
         })
     })
 
+    describe('step menu', () => {
+        beforeEach(async () => {
+            jest.mocked(loadAppMetricsTotals).mockResolvedValue({})
+            logic = await mountSavedCanvas()
+        })
+
+        it('selects the step under the menu without opening the panel', async () => {
+            await expectLogic(logic, () => logic.actions.openStepMenu('b1')).toMatchValues({
+                selectedNodeId: 'b1',
+                stepMenuActionId: 'b1',
+                isPanelOpen: false,
+            })
+        })
+
+        it('opens the panel for a step picked on the canvas', async () => {
+            await expectLogic(logic, () => logic.actions.selectStep('b1')).toMatchValues({
+                selectedNodeId: 'b1',
+                isPanelOpen: true,
+            })
+        })
+    })
+
     describe('placing a step', () => {
         const delayStep = { type: 'delay', name: 'Delay', description: '', config: { delay_duration: '1h' } } as const
 
