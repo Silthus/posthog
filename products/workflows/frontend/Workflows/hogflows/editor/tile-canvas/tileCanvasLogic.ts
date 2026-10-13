@@ -6,6 +6,7 @@ import { FEATURE_FLAGS } from 'lib/constants'
 import { FeatureFlagsSet, featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { teamLogic } from 'scenes/teamLogic'
 
+import { sceneLayoutLogic } from '~/layout/scenes/sceneLayoutLogic'
 import { TeamPublicType, TeamType } from '~/types'
 
 import { PERSON_DEPENDENT_ACTION_TYPES, WorkflowLogicProps, workflowLogic } from '../../../workflowLogic'
@@ -43,8 +44,21 @@ import {
 const PATH_LEAVE_MS = 260
 const PATH_MOTION_MS = 1100
 
-function isTyping(target: EventTarget | null): boolean {
-    return target instanceof HTMLElement && !!target.closest('input, textarea, select, [contenteditable="true"]')
+const SURFACES_WITH_THEIR_OWN_KEYS = [
+    'input',
+    'textarea',
+    'select',
+    '[contenteditable="true"]',
+    '.LemonModal',
+    '[role="dialog"]',
+    '.Popover',
+].join(', ')
+
+function belongsToAnotherSurface(event: KeyboardEvent): boolean {
+    return (
+        event.defaultPrevented ||
+        (event.target instanceof HTMLElement && !!event.target.closest(SURFACES_WITH_THEIR_OWN_KEYS))
+    )
 }
 
 const isPrintableKey = (event: KeyboardEvent): boolean =>
@@ -59,6 +73,7 @@ export interface tileCanvasLogicValues {
     isMovingNode: boolean // hogFlowEditorLogic
     nodeToBeAdded: CreateActionType | HogFlowActionNode | null // hogFlowEditorLogic
     selectedNodeId: string | null // hogFlowEditorLogic
+    sceneTakeoverActive: boolean // sceneLayoutLogic
     currentTeam: TeamPublicType | TeamType | null // teamLogic
     isRowScopedTrigger: boolean // workflowLogic
     workflow: HogFlow // workflowLogic
@@ -236,6 +251,8 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             ['actionMetricsById', 'nodeToBeAdded', 'isMovingNode', 'isCopyingNode', 'dropzoneNodes', 'selectedNodeId'],
             featureFlagLogic,
             ['featureFlags'],
+            sceneLayoutLogic,
+            ['sceneTakeoverActive'],
             teamLogic,
             ['currentTeam'],
         ],
@@ -510,7 +527,8 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
     afterMount(({ actions, values, cache }) => {
         cache.disposables.add(() => {
             const onKeyDown = (event: KeyboardEvent): void => {
-                if (isTyping(event.target)) {
+                // A takeover such as the email editor covers the canvas, and Escape there must not close the panel it lives in.
+                if (values.sceneTakeoverActive || belongsToAnotherSurface(event)) {
                     return
                 }
                 if (event.key === 'Escape') {
