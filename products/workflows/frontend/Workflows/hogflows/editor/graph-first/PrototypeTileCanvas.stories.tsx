@@ -10,7 +10,7 @@ import { workflowEditorStoryDecorator } from '../workflowEditorStoryFixtures'
 import { sampleMetrics } from './graphFirstModel'
 import type { GroupStyle } from './PrototypeGraphFirstEditor'
 import { Frame } from './prototypeStoryFrame'
-import { TileFlow, TileNode } from './TileNode'
+import { PeekDetail, TileFlow, TileNode } from './TileNode'
 
 const meta: Meta = {
     title: 'Prototypes/Workflows/Tile canvas',
@@ -30,6 +30,7 @@ type TileOptions = {
     aiPanel?: boolean
     chat?: { ask: string; answer: string }
     groups?: GroupStyle
+    peek?: PeekDetail
 }
 
 function tiles(id: string, options: TileOptions = {}): StoryFn {
@@ -43,6 +44,7 @@ function tiles(id: string, options: TileOptions = {}): StoryFn {
                 initialTileFlow: options.flow ?? 'rail',
                 initialGroupStyle: options.groups,
                 initialCollapsed: options.open ? 'auto' : 'all',
+                initialPeek: options.peek,
                 showStyleSwitch: false,
             }}
         />
@@ -62,6 +64,8 @@ export const WelcomeSequence = tiles('prototype-tile-welcome-sequence')
 export const SpringDripCampaign = tiles('prototype-tile-spring-drip')
 export const BlackFriday = tiles('prototype-tile-black-friday')
 export const AutoFixCiFailures = tiles('prototype-tile-ci-autofix')
+export const AutoFixCiFailuresPeekUnfold = tiles('prototype-tile-ci-autofix', { peek: 'unfold' })
+export const FeatureFlagRolloutPeekUnfold = tiles('prototype-tile-flag-rollout', { peek: 'unfold' })
 export const AutoFixCiFailuresOpen = tiles('prototype-tile-ci-autofix', { open: true })
 export const FeatureFlagRollout = tiles('prototype-tile-flag-rollout')
 export const FeatureFlagRolloutWithAiPanel = tiles('prototype-tile-flag-rollout', {
@@ -182,7 +186,3 @@ export const HoverCards: StoryFn = () => (
     </Bound>
 )
 HoverCards.parameters = { testOptions: { waitForSelector: '[data-tile-anchor]' } }
-
-export const AiSupportTriageGroupsDashed = tiles('prototype-tile-ai-triage', { open: true, groups: 'dashed' })
-export const AiSupportTriageGroupsTint = tiles('prototype-tile-ai-triage', { open: true, groups: 'tint' })
-export const AiSupportTriageGroupsBracket = tiles('prototype-tile-ai-triage', { open: true, groups: 'bracket' })

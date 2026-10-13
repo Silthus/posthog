@@ -391,39 +391,338 @@ export function TileNode({
     )
 }
 
+export type PeekDetail = 'spotlight' | 'unfold'
+
+export const PEEK_DETAILS: { value: PeekDetail; label: string; tooltip: string }[] = [
+    {
+        value: 'spotlight',
+        label: 'Spotlight',
+        tooltip: 'Hover a step in the peek for its label. Keep hovering for a preview.',
+    },
+    { value: 'unfold', label: 'Unfold', tooltip: 'Keep hovering the peek and every step gets its label.' },
+]
+
+const MINI = 32
+const GAPS = { compact: { x: 30, y: 52 }, unfolded: { x: 112, y: 96 } }
+const UNFOLDED_LABEL = 132
+const DWELL_MS = 650
+const UNFOLD_MS = 450
+
 function MiniTile({
     action,
     workflow,
-    size,
-    style,
+    entered,
+    dimmed,
+    label,
+    highlighted,
 }: {
     action: HogFlowAction
     workflow: HogFlow
-    size: number
-    style?: React.CSSProperties
+    entered?: number
+    dimmed?: boolean
+    label?: 'brief' | 'full'
+    highlighted?: boolean
 }): JSX.Element {
     const kind = useTileKind(action, workflow)
     return (
-        <div
-            className="flex items-center justify-center rounded-lg border-2 bg-surface-primary shadow-sm"
-            style={{
-                width: size,
-                height: size,
-                borderColor: kind.color,
-                color: kind.color,
-                fontSize: size * 0.45,
-                ...style,
-            }}
-            title={kind.facts.headline}
-        >
-            {kind.icon}
+        <div className="relative transition-opacity duration-150" style={{ opacity: dimmed ? 0.35 : 1 }}>
+            <div
+                className={clsx(
+                    'flex items-center justify-center rounded-lg border-2 bg-surface-primary transition-transform duration-150',
+                    highlighted && 'scale-110 shadow-md'
+                )}
+                style={{ width: MINI, height: MINI, borderColor: kind.color, color: kind.color, fontSize: 15 }}
+            >
+                {kind.icon}
+            </div>
+            {kind.badge && (
+                <span
+                    className="absolute left-1/2 top-full mt-0.5 -translate-x-1/2 whitespace-nowrap rounded-full border bg-surface-primary px-1 text-[9.5px] font-semibold leading-[14px]"
+                    style={{ color: kind.color }}
+                >
+                    {kind.badge}
+                </span>
+            )}
+            {entered !== undefined && (
+                <span className="absolute -right-2.5 -top-2 rounded-full border bg-surface-primary px-1 text-[9.5px] font-semibold leading-[14px] shadow-sm">
+                    {humanFriendlyLargeNumber(entered)}
+                </span>
+            )}
+            <div
+                className="absolute left-1/2 -translate-x-1/2 text-center leading-tight transition-opacity duration-200"
+                style={{ top: MINI + (kind.badge ? 18 : 6), width: UNFOLDED_LABEL, opacity: label ? 1 : 0 }}
+            >
+                {label && (
+                    <>
+                        <div className="break-words text-[10.5px] font-semibold">{kind.facts.headline}</div>
+                        {label === 'full' && kind.facts.detail && (
+                            <div className="break-words text-[10px] text-secondary">{kind.facts.detail}</div>
+                        )}
+                    </>
+                )}
+            </div>
         </div>
     )
 }
 
-const PEEK_TILE = 44
-const PEEK_GAP = 8
-const PEEK_MAX = 6
+/** The step a person dwells on inside the peek: label first, then a compact preview of what it does. */
+function SpotlightCard({
+    action,
+    workflow,
+    state,
+    deep,
+}: {
+    action: HogFlowAction
+    workflow: HogFlow
+    state: CardState
+    deep: boolean
+}): JSX.Element {
+    const kind = useTileKind(action, workflow)
+    const email = emailContent(action)
+    return (
+        <div
+            className="w-[260px] rounded-xl border bg-surface-primary p-2.5 text-left shadow-lg"
+            style={{ borderColor: kind.color }}
+        >
+            <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: kind.color }}>
+                {kind.label}
+            </div>
+            <div className="break-words text-[12.5px] font-semibold leading-snug">{kind.facts.headline}</div>
+            {kind.facts.detail && (
+                <div className="break-words text-[11.5px] leading-snug text-secondary">{kind.facts.detail}</div>
+            )}
+            <div
+                className="grid transition-[grid-template-rows,opacity] duration-200"
+                style={{ gridTemplateRows: deep ? '1fr' : '0fr', opacity: deep ? 1 : 0 }}
+            >
+                <div className="min-h-0 overflow-hidden">
+                    <div className="mt-2 flex flex-col gap-2 border-t pt-2 text-[12px]">
+                        {email?.html ? (
+                            <div className="flex justify-center overflow-hidden rounded border bg-white">
+                                <EmailPreviewThumbnail html={email.html} title={`${action.name} preview`} size="card" />
+                            </div>
+                        ) : kind.preview !== 'fields' ? (
+                            <TilePreview action={action} workflow={workflow} kind={kind} />
+                        ) : (
+                            <FieldList facts={kind.facts} />
+                        )}
+                        <MetricsLine action={action} state={state} />
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+type MiniLayout = {
+    nodes: { action: HogFlowAction; x: number; y: number; layer: number }[]
+    edges: { from: { x: number; y: number }; to: { x: number; y: number } }[]
+    width: number
+    height: number
+}
+
+/** A small left-to-right layout of a path's own steps: layers by depth, forks stacked and centered. */
+function miniLayout(
+    workflow: HogFlow,
+    members: HogFlowAction[],
+    gap: { x: number; y: number },
+    extra: number
+): MiniLayout {
+    const ids = new Set(members.map((action) => action.id))
+    const inner = workflow.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to))
+    const layer: Record<string, number> = Object.fromEntries(members.map((action) => [action.id, 0]))
+    for (let pass = 0; pass < members.length; pass++) {
+        inner.forEach((edge) => (layer[edge.to] = Math.max(layer[edge.to], layer[edge.from] + 1)))
+    }
+    const byLayer: HogFlowAction[][] = []
+    members.forEach((action) => (byLayer[layer[action.id]] ??= []).push(action))
+    const tallest = Math.max(...byLayer.map((column) => column?.length ?? 0))
+    const nodes = byLayer.flatMap((column, index) =>
+        (column ?? []).map((action, row) => ({
+            action,
+            layer: index,
+            x: index * (MINI + gap.x) + extra / 2,
+            y: (row - (column.length - 1) / 2 + (tallest - 1) / 2) * gap.y,
+        }))
+    )
+    const at = Object.fromEntries(nodes.map((node) => [node.action.id, node]))
+    return {
+        nodes,
+        edges: inner.map((edge) => ({
+            from: { x: at[edge.from].x + MINI, y: at[edge.from].y + MINI / 2 },
+            to: { x: at[edge.to].x, y: at[edge.to].y + MINI / 2 },
+        })),
+        width: byLayer.length * (MINI + gap.x) - gap.x + extra,
+        height: (tallest - 1) * gap.y + MINI + (extra ? 72 : 16),
+    }
+}
+
+function MiniFlow({
+    workflow,
+    members,
+    state,
+    open,
+    detail,
+}: {
+    workflow: HogFlow
+    members: HogFlowAction[]
+    state: CardState
+    open: boolean
+    detail: PeekDetail
+}): JSX.Element {
+    const [hovered, setHovered] = useState<string | null>(null)
+    const [deep, setDeep] = useState(false)
+    const [unfolded, setUnfolded] = useState(false)
+    const dwell = useRef<number>()
+    const unfoldTimer = useRef<number>()
+
+    useEffect(() => {
+        window.clearTimeout(dwell.current)
+        setDeep(false)
+        if (hovered && detail === 'spotlight') {
+            dwell.current = window.setTimeout(() => setDeep(true), DWELL_MS)
+        }
+        return () => window.clearTimeout(dwell.current)
+    }, [hovered, detail])
+
+    useEffect(() => {
+        if (!open) {
+            window.clearTimeout(unfoldTimer.current)
+            setUnfolded(false)
+            setHovered(null)
+        }
+    }, [open])
+
+    const spread = detail === 'unfold' && unfolded
+    const layout = miniLayout(
+        workflow,
+        members,
+        spread ? GAPS.unfolded : GAPS.compact,
+        spread ? UNFOLDED_LABEL - MINI : 0
+    )
+    const spotlight =
+        detail === 'spotlight' && hovered ? layout.nodes.find((node) => node.action.id === hovered) : undefined
+
+    return (
+        <div
+            className="relative transition-[width,height] duration-300 ease-out"
+            style={{ width: layout.width, height: layout.height }}
+            onMouseEnter={() => {
+                if (detail === 'unfold') {
+                    unfoldTimer.current = window.setTimeout(() => setUnfolded(true), UNFOLD_MS)
+                }
+            }}
+            onMouseLeave={() => {
+                window.clearTimeout(unfoldTimer.current)
+                setHovered(null)
+            }}
+        >
+            <svg className="absolute inset-0 overflow-visible" width={layout.width} height={layout.height}>
+                {layout.edges.map((edge, index) => {
+                    const midX = (edge.from.x + edge.to.x) / 2
+                    return (
+                        <g
+                            key={index}
+                            style={{
+                                opacity: open ? (spotlight ? 0.35 : 1) : 0,
+                                transition: `opacity 200ms ease ${open ? 120 + index * 25 : 0}ms`,
+                            }}
+                        >
+                            <path
+                                d={`M ${edge.from.x} ${edge.from.y} H ${midX} V ${edge.to.y} H ${edge.to.x - 1}`}
+                                fill="none"
+                                stroke="var(--color-border-bold, #9ca3af)"
+                                strokeWidth={1.25}
+                                style={{ transition: 'd 300ms ease-out' }}
+                            />
+                            <path
+                                d={`M ${edge.to.x - 5} ${edge.to.y - 3} L ${edge.to.x - 1} ${edge.to.y} L ${edge.to.x - 5} ${edge.to.y + 3}`}
+                                fill="none"
+                                stroke="var(--color-border-bold, #9ca3af)"
+                                strokeWidth={1.25}
+                                style={{ transition: 'd 300ms ease-out' }}
+                            />
+                        </g>
+                    )
+                })}
+            </svg>
+            {layout.nodes.map((node) => (
+                <div
+                    key={node.action.id}
+                    className="absolute"
+                    data-mini-step={node.action.id}
+                    onMouseEnter={() => setHovered(node.action.id)}
+                    style={{
+                        left: node.x,
+                        top: node.y,
+                        opacity: open ? 1 : 0,
+                        transform: open ? 'none' : 'translateX(-10px) scale(0.85)',
+                        transition: `left 300ms ease-out, top 300ms ease-out, transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1) ${node.layer * 40}ms, opacity 180ms ease ${node.layer * 40}ms`,
+                    }}
+                >
+                    <MiniTile
+                        action={node.action}
+                        workflow={workflow}
+                        entered={state.metrics?.enteredByNode[node.action.id]}
+                        dimmed={!!spotlight && spotlight.action.id !== node.action.id}
+                        highlighted={hovered === node.action.id}
+                        label={spread ? (hovered === node.action.id ? 'full' : 'brief') : undefined}
+                    />
+                </div>
+            ))}
+            {spotlight && (
+                <div
+                    className="absolute z-20 animate-[gf-fade-in_160ms_ease_both]"
+                    style={{
+                        left: spotlight.x + MINI / 2,
+                        top: spotlight.y + MINI + 22,
+                        transform: 'translateX(-50%)',
+                    }}
+                >
+                    <SpotlightCard action={spotlight.action} workflow={workflow} state={state} deep={deep} />
+                </div>
+            )}
+        </div>
+    )
+}
+
+const VIEW_MARGIN = 12
+
+/** Moves a growing card back inside the canvas when it would run past an edge. */
+function useKeepInView(ref: React.RefObject<HTMLElement>, active: boolean): { x: number; y: number } {
+    const [shift, setShift] = useState({ x: 0, y: 0 })
+    useEffect(() => {
+        const card = ref.current
+        if (!card || !active) {
+            setShift({ x: 0, y: 0 })
+            return
+        }
+        const measure = (): void => {
+            const canvas = card.closest('.react-flow')?.getBoundingClientRect()
+            const box = card.getBoundingClientRect()
+            if (!canvas || !card.offsetWidth) {
+                return
+            }
+            const scale = box.width / card.offsetWidth
+            setShift((current) => {
+                const left = box.left - current.x * scale
+                const top = box.top - current.y * scale
+                const overRight = left + box.width - (canvas.right - VIEW_MARGIN)
+                const overBottom = top + box.height - (canvas.bottom - VIEW_MARGIN)
+                const x = overRight > 0 ? -Math.min(overRight, left - canvas.left - VIEW_MARGIN) : 0
+                const y = overBottom > 0 ? -Math.min(overBottom, top - canvas.top - VIEW_MARGIN) : 0
+                return Math.abs(x / scale - current.x) < 1 && Math.abs(y / scale - current.y) < 1
+                    ? current
+                    : { x: x / scale, y: y / scale }
+            })
+        }
+        const observer = new ResizeObserver(measure)
+        observer.observe(card)
+        measure()
+        return () => observer.disconnect()
+    }, [ref, active])
+    return shift
+}
 
 /**
  * A collapsed path. At rest the cover shows the first steps' icons like a folder. On hover the cover
@@ -435,6 +734,7 @@ export function TileGroupNode({
     state = {},
     flow = 'down',
     color,
+    peekDetail = 'spotlight',
     onExpand,
 }: {
     group: BranchGroup
@@ -442,21 +742,19 @@ export function TileGroupNode({
     state?: CardState
     flow?: TileFlow
     color?: string
+    peekDetail?: PeekDetail
     onExpand?: () => void
 }): JSX.Element {
     const side = flow === 'rail'
     const ref = useRef<HTMLDivElement>(null)
     const [peek, setPeek] = useState(false)
-    const members = group.memberIds
-        .map((id) => workflow.actions.find((action) => action.id === id))
-        .filter((action): action is HogFlowAction => !!action)
-    const shown = members.slice(0, PEEK_MAX)
-    const hidden = members.length - shown.length
+    const members = workflow.actions.filter((action) => group.memberIds.includes(action.id))
     const emails = groupEmails(workflow, group).reduce((sum, email) => sum + email.count, 0)
     const summary = pathSummary(workflow, group)
     const border = state.onPath ? 'var(--color-accent)' : (color ?? 'var(--color-border-bold, #9ca3af)')
-    const fanWidth = shown.length * (PEEK_TILE + PEEK_GAP) + (hidden ? PEEK_TILE : 0)
-    const fanStart = side ? 0 : TILE / 2 - fanWidth / 2
+    const entered = state.metrics?.enteredByNode[members[0]?.id]
+    const cardRef = useRef<HTMLDivElement>(null)
+    const shift = useKeepInView(cardRef, peek)
 
     useEffect(() => {
         const node = ref.current?.closest<HTMLElement>('.react-flow__node')
@@ -477,7 +775,7 @@ export function TileGroupNode({
                 side ? 'items-start gap-3' : 'flex-col items-center gap-1.5 text-center',
                 state.dimmed && 'opacity-30'
             )}
-            title="Open this path"
+            title={peek ? undefined : 'Open this path'}
             onMouseEnter={() => setPeek(true)}
             onMouseLeave={() => setPeek(false)}
             onClick={(e) => {
@@ -489,68 +787,49 @@ export function TileGroupNode({
                 {[8, 4].map((offset) => (
                     <div
                         key={offset}
-                        className="absolute inset-0 rounded-xl border-2 bg-surface-primary transition-all duration-200"
-                        style={{
-                            transform: `translate(${offset}px, ${-offset}px)`,
-                            borderColor: border,
-                            opacity: peek ? 0 : 0.5,
-                        }}
+                        className="absolute inset-0 rounded-xl border-2 bg-surface-primary"
+                        style={{ transform: `translate(${offset}px, ${-offset}px)`, borderColor: border, opacity: 0.5 }}
                     />
                 ))}
-                {shown.map((action, index) => (
-                    <MiniTile
-                        key={action.id}
-                        action={action}
-                        workflow={workflow}
-                        size={PEEK_TILE}
-                        style={{
-                            position: 'absolute',
-                            left: (TILE - PEEK_TILE) / 2,
-                            top: (TILE - PEEK_TILE) / 2,
-                            transform: peek
-                                ? `translate(${fanStart - (TILE - PEEK_TILE) / 2 + index * (PEEK_TILE + PEEK_GAP)}px, ${side ? 0 : -PEEK_TILE - 14}px)`
-                                : 'translate(0, 0) scale(0.6)',
-                            opacity: peek ? 1 : 0,
-                            transition: `transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1) ${index * 30}ms, opacity 160ms ease ${index * 30}ms`,
-                            zIndex: 2,
-                        }}
-                    />
-                ))}
-                {hidden > 0 && (
-                    <div
-                        className="absolute flex items-center justify-center rounded-lg border bg-surface-primary text-xs font-semibold text-secondary"
-                        style={{
-                            width: PEEK_TILE,
-                            height: PEEK_TILE,
-                            left: (TILE - PEEK_TILE) / 2,
-                            top: (TILE - PEEK_TILE) / 2,
-                            transform: peek
-                                ? `translate(${fanStart - (TILE - PEEK_TILE) / 2 + shown.length * (PEEK_TILE + PEEK_GAP)}px, ${side ? 0 : -PEEK_TILE - 14}px)`
-                                : 'scale(0.6)',
-                            opacity: peek ? 1 : 0,
-                            transition: 'transform 260ms ease, opacity 160ms ease',
-                            zIndex: 2,
-                        }}
-                    >
-                        +{hidden}
-                    </div>
-                )}
                 <div
-                    className="absolute inset-0 grid grid-cols-2 place-items-center gap-0.5 rounded-xl border-2 border-dashed bg-surface-primary p-1.5 transition-opacity duration-200"
-                    style={{ borderColor: border, opacity: peek ? 0 : 1, zIndex: 3, pointerEvents: 'none' }}
+                    className="absolute inset-0 grid grid-cols-2 place-items-center gap-0.5 rounded-xl border-2 border-dashed bg-surface-primary p-1.5"
+                    style={{ borderColor: border }}
                 >
                     {members.slice(0, 4).map((action) => (
                         <CoverIcon key={action.id} action={action} workflow={workflow} />
                     ))}
                 </div>
-                <Badge className="-right-3 -top-3.5 z-[4]">{group.memberIds.length}</Badge>
+                {entered !== undefined && (
+                    <Badge className="-right-3 -top-3.5 z-[4]">{humanFriendlyLargeNumber(entered)}</Badge>
+                )}
+                <div
+                    ref={cardRef}
+                    className="absolute z-10 rounded-2xl border bg-surface-primary p-3 shadow-xl"
+                    style={{
+                        left: side ? TILE + 12 : TILE / 2,
+                        top: -14,
+                        transform: `${side ? '' : 'translateX(-50%) '}translate(${shift.x}px, ${shift.y}px)`,
+                        borderColor: color,
+                        opacity: peek ? 1 : 0,
+                        visibility: peek ? 'visible' : 'hidden',
+                        transition: 'opacity 160ms ease',
+                    }}
+                >
+                    <div className="mb-3 flex items-center gap-1.5 whitespace-nowrap text-[11px]">
+                        <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
+                        <span className="font-semibold" style={{ color }}>
+                            {group.label}
+                        </span>
+                        <span className="text-secondary">· {members.length} steps · click to open</span>
+                    </div>
+                    <div className="px-1 pt-1">
+                        <MiniFlow workflow={workflow} members={members} state={state} open={peek} detail={peekDetail} />
+                    </div>
+                </div>
             </div>
             <div
                 className={clsx('flex flex-col gap-0.5', side ? 'pt-1 text-left' : 'items-center')}
-                style={{
-                    width: side ? RAIL_CAPTION_WIDTH : CAPTION_WIDTH,
-                    visibility: peek && side ? 'hidden' : undefined,
-                }}
+                style={{ width: side ? RAIL_CAPTION_WIDTH : CAPTION_WIDTH }}
             >
                 <div className="break-words text-[13px] font-semibold leading-tight" style={{ color }}>
                     {group.label}
@@ -564,8 +843,8 @@ export function TileGroupNode({
                     {summary.text}
                 </div>
                 <div className="text-[11px] text-secondary">
-                    {group.memberIds.length} {group.memberIds.length === 1 ? 'step' : 'steps'}
-                    {emails ? ` · ${emails} ${emails === 1 ? 'email' : 'emails'}` : ''} · click to open
+                    {members.length} steps{emails ? ` · ${emails} ${emails === 1 ? 'email' : 'emails'}` : ''} · hover to
+                    peek, click to open
                 </div>
             </div>
         </div>

@@ -210,7 +210,8 @@ export function computeGroups(workflow: HogFlow): BranchGroup[] {
                     return
                 }
                 const memberIds = [...reach[index]].filter((id) => !joinReach.has(id))
-                if (!memberIds.length) {
+                // A single step is clearer on the canvas than inside a group of one.
+                if (memberIds.length < 2) {
                     return
                 }
                 const config = configOf(action)

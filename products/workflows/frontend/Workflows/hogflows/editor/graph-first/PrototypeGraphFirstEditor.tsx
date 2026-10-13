@@ -45,7 +45,6 @@ import {
     edgeKey,
     emailContent,
     FlowEdge,
-    foldWaits,
     sampleMetrics,
     SampleMetrics,
     stepSentence,
@@ -57,7 +56,7 @@ import {
 import { NODE_STYLES, NodeStyle, StepNode } from './GraphFirstNodeStyles'
 import { StepPanel } from './StepPanel'
 import { pathColor } from './tileKinds'
-import { TILE, TILE_FLOWS, TileFlow, TileGroupNode } from './TileNode'
+import { PEEK_DETAILS, PeekDetail, TILE, TILE_FLOWS, TileFlow, TileGroupNode } from './TileNode'
 
 const PANEL_WIDTH = 460
 const FRAME_PADDING = { top: 30, side: 16, bottom: 16 }
@@ -80,7 +79,7 @@ type ViewState = {
     metrics: SampleMetrics | null
     previews: boolean
     nodeStyle: NodeStyle
-    tile: { flow: TileFlow; hover: boolean }
+    tile: { flow: TileFlow; hover: boolean; peek: PeekDetail }
     groupStyle: GroupStyle
     selectedNodeId: string | null
     openStep: (nodeId: string) => void
@@ -124,6 +123,7 @@ function CardNode({ data }: NodeProps): JSX.Element {
                     state={state}
                     flow={view.tile.flow}
                     color={pathColor(vnode.group.edge)}
+                    peekDetail={view.tile.peek}
                     onExpand={() => view.expand(vnode.group.id)}
                 />
             ) : (
@@ -201,7 +201,13 @@ function FrameNode({ data, width, height }: NodeProps): JSX.Element {
                 />
             )}
             {style === 'tint' && (
-                <div className="absolute inset-0 rounded-2xl" style={{ backgroundColor: `${color}0f` }} />
+                <>
+                    <div className="absolute inset-0 rounded-2xl" style={{ backgroundColor: `${color}0f` }} />
+                    <div
+                        className="absolute bottom-3 left-0 top-3 w-[3px] rounded-full"
+                        style={{ backgroundColor: color }}
+                    />
+                </>
             )}
             {style === 'bracket' && (
                 <div
@@ -782,6 +788,7 @@ function GraphFirstCanvas({
     initialTileHover,
     initialGroupStyle,
     initialCollapsed,
+    initialPeek,
     showStyleSwitch,
 }: {
     initialNodeStyle: NodeStyle
@@ -789,6 +796,7 @@ function GraphFirstCanvas({
     initialTileHover: boolean
     initialGroupStyle: GroupStyle
     initialCollapsed: 'all' | 'auto'
+    initialPeek: PeekDetail
     showStyleSwitch: boolean
 }): JSX.Element {
     const { isDarkModeOn } = useValues(themeLogic)
@@ -809,15 +817,19 @@ function GraphFirstCanvas({
     )
     const [traceOn, setTraceOn] = useState(false)
     const [choices, setChoices] = useState<Record<string, string>>({})
-    const [showMetrics, setShowMetrics] = useState(false)
+    const [showMetrics, setShowMetrics] = useState(true)
     const [previews, setPreviews] = useState(
         () => workflow.actions.filter((action) => emailContent(action)).length <= 3
     )
     const [nodeStyle, setNodeStyle] = useState<NodeStyle>(initialNodeStyle)
     const [tileFlow, setTileFlow] = useState<TileFlow>(initialTileFlow)
     const [tileHover, setTileHover] = useState(initialTileHover)
-    const tile = useMemo(() => ({ flow: tileFlow, hover: tileHover }), [tileFlow, tileHover])
-    const [groupStyle, setGroupStyle] = useState<GroupStyle>(initialGroupStyle)
+    const [peekDetail, setPeekDetail] = useState<PeekDetail>(initialPeek)
+    const tile = useMemo(
+        () => ({ flow: tileFlow, hover: tileHover, peek: peekDetail }),
+        [tileFlow, tileHover, peekDetail]
+    )
+    const [groupStyle] = useState<GroupStyle>(initialGroupStyle)
     const [testOpen, setTestOpen] = useState(false)
     const [logsOpen, setLogsOpen] = useState(false)
     const [motion, setMotion] = useState<Motion | null>(null)
@@ -828,11 +840,7 @@ function GraphFirstCanvas({
     const [sizes, setSizes] = useState<Record<string, Size> | null>(null)
     const [layout, setLayout] = useState<LayoutResult | null>(null)
 
-    const [waitsOnArrows, setWaitsOnArrows] = useState(true)
-    const graph = useMemo(() => {
-        const base = visibleGraph(workflow, groups, collapsed)
-        return waitsOnArrows ? foldWaits(base) : base
-    }, [workflow, groups, collapsed, waitsOnArrows])
+    const graph = useMemo(() => visibleGraph(workflow, groups, collapsed), [workflow, groups, collapsed])
     const labels = useMemo(() => {
         const summaryEntries = graph.nodes.flatMap((node) =>
             node.kind === 'summary' ? [edgeKey(node.group.edge)] : []
@@ -1210,7 +1218,6 @@ function GraphFirstCanvas({
                                 <ViewMenu
                                     toggles={[
                                         ['Email previews', previews, setPreviews],
-                                        ['Waits on arrows', waitsOnArrows, setWaitsOnArrows],
                                         ['Sample metrics', showMetrics, setShowMetrics],
                                         ...(nodeStyle === 'tiles'
                                             ? [
@@ -1243,12 +1250,12 @@ function GraphFirstCanvas({
                                 {nodeStyle === 'tiles' && (
                                     <>
                                         {groups.length > 0 && (
-                                            <SwitchRow label="Groups">
+                                            <SwitchRow label="Peek">
                                                 <LemonSegmentedButton
                                                     size="small"
-                                                    value={groupStyle}
-                                                    onChange={setGroupStyle}
-                                                    options={GROUP_STYLES}
+                                                    value={peekDetail}
+                                                    onChange={setPeekDetail}
+                                                    options={PEEK_DETAILS}
                                                 />
                                             </SwitchRow>
                                         )}
@@ -1346,8 +1353,9 @@ export function PrototypeGraphFirstEditor({
     initialNodeStyle = 'line',
     initialTileFlow = 'rail',
     initialTileHover = true,
-    initialGroupStyle = 'outline',
+    initialGroupStyle = 'tint',
     initialCollapsed = 'auto',
+    initialPeek = 'spotlight',
     showStyleSwitch = true,
 }: {
     initialNodeStyle?: NodeStyle
@@ -1355,6 +1363,7 @@ export function PrototypeGraphFirstEditor({
     initialTileHover?: boolean
     initialGroupStyle?: GroupStyle
     initialCollapsed?: 'all' | 'auto'
+    initialPeek?: PeekDetail
     showStyleSwitch?: boolean
 }): JSX.Element {
     const { logicProps } = useValues(workflowLogic)
@@ -1369,6 +1378,7 @@ export function PrototypeGraphFirstEditor({
                             initialTileHover={initialTileHover}
                             initialGroupStyle={initialGroupStyle}
                             initialCollapsed={initialCollapsed}
+                            initialPeek={initialPeek}
                             showStyleSwitch={showStyleSwitch}
                         />
                     </ReactFlowProvider>
