@@ -47,6 +47,7 @@ import { WorkflowMetrics } from './WorkflowMetrics'
 import { WorkflowRevisions } from './WorkflowRevisions'
 import { WorkflowSceneHeader } from './WorkflowSceneHeader'
 import { WorkflowSceneLogicProps, WorkflowTab, workflowSceneLogic } from './workflowSceneLogic'
+import { WorkflowSceneTabActions } from './WorkflowSceneTabActions'
 import { TRIGGER_PREFILL_PARAM } from './workflowTriggerPrefill'
 
 export const scene: SceneExport<WorkflowSceneLogicProps> = {
@@ -226,14 +227,12 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
 
     // A deep link to a tab the flag hides would leave LemonTabs with no active tab and a blank page.
     const activeTab = tabs.some((tab) => tab?.key === currentTab) ? currentTab : 'workflow'
+    const headerInWorkflowBar = tileCanvasEnabled && isSavedWorkflow && activeTab === 'workflow'
 
     return (
         <SceneContent className="h-full flex flex-col grow" data-attr="workflow-scene">
             <BindLogic logic={workflowLogic} props={workflowProps}>
-                <WorkflowSceneHeader
-                    {...props}
-                    titleInWorkflowBar={tileCanvasEnabled && (!isSavedWorkflow || activeTab === 'workflow')}
-                />
+                <WorkflowSceneHeader {...props} headerInWorkflowBar={headerInWorkflowBar} />
                 <WorkflowEmailPauseBanner />
                 {selfOptimisingEnabled && isSavedWorkflow && <WorkflowSuggestionsNotice id={props.id!} />}
                 {/* Only show Logs and Metrics tabs if the workflow has already been created */}
@@ -245,6 +244,7 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
                         onChange={(tab) => router.actions.push(urls.workflow(props.id ?? 'new', tab))}
                         tabs={tabs}
                         sceneInset
+                        rightSlot={headerInWorkflowBar ? <WorkflowSceneTabActions /> : undefined}
                         className={clsx({
                             'flex flex-col grow [&>div]:flex [&>div]:flex-col [&>div]:grow': currentTab === 'workflow',
                         })}
