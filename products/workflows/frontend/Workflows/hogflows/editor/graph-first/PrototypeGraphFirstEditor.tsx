@@ -22,7 +22,7 @@ import { BindLogic, useActions, useValues } from 'kea'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { IconChevronDown, IconPerson, IconPlus, IconX } from '@posthog/icons'
-import { LemonBadge, LemonButton, LemonSegmentedButton, LemonSwitch } from '@posthog/lemon-ui'
+import { LemonButton, LemonSegmentedButton, LemonSwitch } from '@posthog/lemon-ui'
 
 import { Popover } from 'lib/lemon-ui/Popover'
 
@@ -34,8 +34,9 @@ import { hogFlowEditorLogic, HogFlowEditorMode } from '../../hogFlowEditorLogic'
 import { HogFlowEditorPanel } from '../../panel/HogFlowEditorPanel'
 import { HogFlowEditorPanelBuild } from '../../panel/HogFlowEditorPanelBuild'
 import type { HogFlow } from '../../types'
-import { GroupFrameHeader, NoteCard, SummaryCard } from './GraphFirstCards'
-import { LABEL_HEIGHT, labelWidth, layoutGraph, LayoutResult, Point, PortSpec } from './graphFirstLayout'
+import { CanvasDrawer, DrawerTab, simulateRun, VariablesPopover } from './CanvasDrawer'
+import { NoteCard, SummaryCard } from './GraphFirstCards'
+import { Compound, LABEL_HEIGHT, labelWidth, layoutGraph, LayoutResult, Point, PortSpec } from './graphFirstLayout'
 import {
     actionById,
     BranchGroup,
@@ -54,11 +55,21 @@ import {
     visibleGraph,
 } from './graphFirstModel'
 import { NODE_STYLES, NodeStyle, StepNode } from './GraphFirstNodeStyles'
-import { TILE, TILE_FLOWS, TILE_HOVERS, TileFlow, TileGroupNode, TileHover } from './TileNode'
+import { StepPanel } from './StepPanel'
+import { pathColor } from './tileKinds'
+import { TILE, TILE_FLOWS, TileFlow, TileGroupNode } from './TileNode'
 
 const PANEL_WIDTH = 460
-const FRAME_PAD = 14
-const FRAME_HEADER = 30
+const FRAME_PADDING = { top: 30, side: 16, bottom: 16 }
+
+export type GroupStyle = 'outline' | 'dashed' | 'tint' | 'bracket'
+
+export const GROUP_STYLES: { value: GroupStyle; label: string; tooltip: string }[] = [
+    { value: 'outline', label: 'Outline', tooltip: 'A thin outline in the path color, the name sits on the line.' },
+    { value: 'dashed', label: 'Dashed', tooltip: 'A neutral dashed outline, the name inside in the path color.' },
+    { value: 'tint', label: 'Tint', tooltip: 'No line, a faint wash of the path color.' },
+    { value: 'bracket', label: 'Bracket', tooltip: 'No box, a colored bar down the left side of the path.' },
+]
 const COLLAPSE_ALL_ABOVE_STEPS = 30
 const MIN_READABLE_ZOOM = 0.66
 
@@ -69,7 +80,8 @@ type ViewState = {
     metrics: SampleMetrics | null
     previews: boolean
     nodeStyle: NodeStyle
-    tile: { flow: TileFlow; hover: TileHover }
+    tile: { flow: TileFlow; hover: boolean }
+    groupStyle: GroupStyle
     selectedNodeId: string | null
     openStep: (nodeId: string) => void
     expand: (groupId: string) => void
@@ -111,6 +123,7 @@ function CardNode({ data }: NodeProps): JSX.Element {
                     workflow={view.workflow}
                     state={state}
                     flow={view.tile.flow}
+                    color={pathColor(vnode.group.edge)}
                     onExpand={() => view.expand(vnode.group.id)}
                 />
             ) : (
@@ -126,20 +139,97 @@ function CardNode({ data }: NodeProps): JSX.Element {
     )
 }
 
+function FrameHeader({
+    group,
+    color,
+    chip,
+    onCollapse,
+}: {
+    group: BranchGroup
+    color: string
+    chip: boolean
+    onCollapse: () => void
+}): JSX.Element {
+    return (
+        <div
+            className={clsx(
+                'nodrag flex w-max items-center gap-1.5 whitespace-nowrap pr-2.5',
+                chip && 'rounded-full border bg-surface-primary shadow-sm'
+            )}
+            style={chip ? { borderColor: color } : undefined}
+        >
+            <LemonButton
+                size="xsmall"
+                icon={<IconChevronDown />}
+                tooltip="Collapse this path"
+                onClick={(e) => {
+                    e.stopPropagation()
+                    onCollapse()
+                }}
+            />
+            <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+            <span className="text-[13px] font-semibold" style={{ color }}>
+                {group.label}
+            </span>
+            <span className="text-xs text-secondary">when {group.condition}</span>
+        </div>
+    )
+}
+
 function FrameNode({ data, width, height }: NodeProps): JSX.Element {
+    const view = ViewContext.current!
+    const group = data.group as BranchGroup
+    const color = pathColor(group.edge)
+    const dimmed = view.trace && !group.memberIds.some((id) => view.trace!.nodeIds.includes(id))
+    const style = view.groupStyle
+    return (
+        <div className={clsx('relative transition-opacity', dimmed && 'opacity-40')} style={{ width, height }}>
+            {style === 'outline' && (
+                <div className="absolute inset-0 rounded-2xl border-[1.5px]" style={{ borderColor: `${color}80` }} />
+            )}
+            {style === 'dashed' && (
+                <div
+                    className="absolute inset-0 rounded-2xl border-[1.5px] border-dashed"
+                    style={{ borderColor: 'var(--color-border-bold, #9ca3af)' }}
+                />
+            )}
+            {style === 'tint' && (
+                <div className="absolute inset-0 rounded-2xl" style={{ backgroundColor: `${color}0f` }} />
+            )}
+            {style === 'bracket' && (
+                <div
+                    className="absolute bottom-2 left-0 top-2 w-[3px] rounded-full"
+                    style={{ backgroundColor: color }}
+                />
+            )}
+        </div>
+    )
+}
+
+/** The path name sits on the arrow that enters the path, so the arrow runs into the label, not through text. */
+function FrameLabelNode({ data }: NodeProps): JSX.Element {
     const view = ViewContext.current!
     const group = data.group as BranchGroup
     const dimmed = view.trace && !group.memberIds.some((id) => view.trace!.nodeIds.includes(id))
     return (
-        <div
-            className={clsx('rounded-xl border bg-surface-secondary/60 transition-opacity', dimmed && 'opacity-40')}
-            style={{ width, height, borderColor: 'var(--color-border-primary)' }}
-        >
-            <div className="px-2 pt-1">
-                <GroupFrameHeader group={group} onCollapse={() => view.collapse(group.id)} />
-            </div>
+        <div className={clsx('-translate-y-1/2 transition-opacity', dimmed && 'opacity-40')}>
+            <FrameHeader group={group} color={pathColor(group.edge)} chip onCollapse={() => view.collapse(group.id)} />
         </div>
     )
+}
+
+const frameLabelWidth = (group: BranchGroup): number =>
+    Math.ceil(group.label.length * 7.6 + group.condition.length * 6.6 + 70)
+
+/** Where the path's entry arrow crosses the top of its frame. */
+function entryX(points: Point[] | undefined, top: number, fallback: number): number {
+    for (let i = 1; i < (points?.length ?? 0); i++) {
+        const [a, b] = [points![i - 1], points![i]]
+        if (a.x === b.x && Math.min(a.y, b.y) <= top && Math.max(a.y, b.y) >= top) {
+            return a.x
+        }
+    }
+    return fallback
 }
 
 function NoteNode(): JSX.Element {
@@ -414,7 +504,7 @@ function attachToTiles(
     return { ...result, edgePoints }
 }
 
-const NODE_TYPES = { card: CardNode, frame: FrameNode, note: NoteNode }
+const NODE_TYPES = { card: CardNode, frame: FrameNode, frameLabel: FrameLabelNode, note: NoteNode }
 const EDGE_TYPES = { routed: RoutedEdge }
 
 function MeasureLayer({
@@ -431,7 +521,7 @@ function MeasureLayer({
     metrics: SampleMetrics | null
     previews: boolean
     nodeStyle: NodeStyle
-    tile: { flow: TileFlow; hover: TileHover }
+    tile: { flow: TileFlow; hover: boolean }
     onMeasured: (sizes: Record<string, Size>) => void
 }): JSX.Element {
     const ref = useRef<HTMLDivElement>(null)
@@ -475,7 +565,7 @@ function MeasureLayer({
                             workflow={workflow}
                             state={{ metrics, previews }}
                             style={nodeStyle}
-                            tile={{ ...tile, hover: 'off' }}
+                            tile={{ ...tile, hover: false }}
                         />
                     ) : nodeStyle === 'tiles' ? (
                         <TileGroupNode group={vnode.group} workflow={workflow} flow={tile.flow} />
@@ -502,32 +592,22 @@ function shownGroups(groups: BranchGroup[], collapsed: Set<string>): BranchGroup
     return groups.filter((group) => !collapsed.has(group.id) && !isHidden(group))
 }
 
-function frameBoxes(
-    groups: BranchGroup[],
-    collapsed: Set<string>,
-    boxes: Record<string, { x: number; y: number; width: number; height: number }>
-): { group: BranchGroup; box: { x: number; y: number; width: number; height: number } }[] {
+/** Every open path becomes an ELK container holding the steps it owns, nested like the paths are. */
+function compoundsFor(groups: BranchGroup[], collapsed: Set<string>, nodes: VisibleNode[]): Compound[] {
     const shown = shownGroups(groups, collapsed)
-    const result: Record<string, { x: number; y: number; width: number; height: number }> = {}
-    const order = [...shown].sort((a, b) => b.depth - a.depth)
-    order.forEach((group) => {
-        const parts = [
-            ...group.memberIds.map((id) => boxes[id]).filter(Boolean),
-            ...shown.filter((child) => child.parentId === group.id).map((child) => result[child.id]),
-            ...groups
-                .filter((child) => child.parentId === group.id && collapsed.has(child.id))
-                .map((child) => boxes[child.id]),
-        ].filter(Boolean)
-        if (!parts.length) {
-            return
-        }
-        const minX = Math.min(...parts.map((b) => b.x)) - FRAME_PAD
-        const minY = Math.min(...parts.map((b) => b.y)) - FRAME_PAD - FRAME_HEADER
-        const maxX = Math.max(...parts.map((b) => b.x + b.width)) + FRAME_PAD
-        const maxY = Math.max(...parts.map((b) => b.y + b.height)) + FRAME_PAD
-        result[group.id] = { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
-    })
-    return shown.filter((group) => result[group.id]).map((group) => ({ group, box: result[group.id] }))
+    return shown.map((group) => ({
+        id: `frame:${group.id}`,
+        parentId: group.parentId ? `frame:${group.parentId}` : null,
+        memberIds: nodes
+            .filter((node) =>
+                node.kind === 'action'
+                    ? group.memberIds.includes(node.id)
+                    : group.memberIds.includes(node.group.branchNodeId)
+            )
+            .map((node) => node.id),
+        padding: FRAME_PADDING,
+        minWidth: frameLabelWidth(group) + 32,
+    }))
 }
 
 function PersonTracePanel({
@@ -615,15 +695,17 @@ function GraphFirstCanvas({
     initialNodeStyle,
     initialTileFlow,
     initialTileHover,
+    initialGroupStyle,
     showStyleSwitch,
 }: {
     initialNodeStyle: NodeStyle
     initialTileFlow: TileFlow
-    initialTileHover: TileHover
+    initialTileHover: boolean
+    initialGroupStyle: GroupStyle
     showStyleSwitch: boolean
 }): JSX.Element {
     const { isDarkModeOn } = useValues(themeLogic)
-    const { workflow, selectedNodeId, mode, panelWidth, isMovingNode, isCopyingNode } = useValues(hogFlowEditorLogic)
+    const { workflow, selectedNodeId, panelWidth, isMovingNode, isCopyingNode } = useValues(hogFlowEditorLogic)
     const { setSelectedNodeId, setMode, setPanelWidth, handlePaneClick, stopMovingNode, stopCopyingNode } =
         useActions(hogFlowEditorLogic)
     const reactFlow = useReactFlow()
@@ -643,8 +725,11 @@ function GraphFirstCanvas({
     )
     const [nodeStyle, setNodeStyle] = useState<NodeStyle>(initialNodeStyle)
     const [tileFlow, setTileFlow] = useState<TileFlow>(initialTileFlow)
-    const [tileHover, setTileHover] = useState<TileHover>(initialTileHover)
+    const [tileHover, setTileHover] = useState(initialTileHover)
     const tile = useMemo(() => ({ flow: tileFlow, hover: tileHover }), [tileFlow, tileHover])
+    const [groupStyle, setGroupStyle] = useState<GroupStyle>(initialGroupStyle)
+    const [drawerTab, setDrawerTab] = useState<DrawerTab | null>(null)
+    const [testTrace, setTestTrace] = useState<Trace | null>(null)
     const direction = nodeStyle === 'tiles' && tileFlow === 'right' ? 'RIGHT' : 'DOWN'
     const [panelOpen, setPanelOpen] = useState(false)
     const [sizes, setSizes] = useState<Record<string, Size> | null>(null)
@@ -665,9 +750,13 @@ function GraphFirstCanvas({
             })
         )
     }, [graph.edges, groups, collapsed])
-    const trace = useMemo(() => (traceOn ? computeTrace(workflow, choices) : null), [traceOn, workflow, choices])
+    const followTrace = useMemo(() => (traceOn ? computeTrace(workflow, choices) : null), [traceOn, workflow, choices])
+    const trace = (drawerTab === 'test' ? testTrace : null) ?? followTrace
     const metrics = useMemo(() => (showMetrics ? sampleMetrics(workflow) : null), [showMetrics, workflow])
-    const sideOpen = panelOpen || !!trace
+    const sideOpen = panelOpen || !!followTrace
+    const selectedAction =
+        panelOpen && selectedNodeId ? workflow.actions.find((a) => a.id === selectedNodeId) : undefined
+    const compounds = useMemo(() => compoundsFor(groups, collapsed, graph.nodes), [groups, collapsed, graph.nodes])
 
     useEffect(() => {
         if (panelWidth === null) {
@@ -692,7 +781,8 @@ function GraphFirstCanvas({
             labels,
             direction === 'DOWN' && !tilePorts ? portFractions : {},
             direction,
-            tilePorts ? (id, count) => tilePortsFor(sizes[id], tileFlow, count) : undefined
+            tilePorts ? (id, count) => tilePortsFor(sizes[id], tileFlow, count) : undefined,
+            compounds
         ).then(
             (result) =>
                 !cancelled && setLayout(tilePorts ? attachToTiles(result, graph.edges, sizes, tileFlow) : result)
@@ -700,7 +790,7 @@ function GraphFirstCanvas({
         return () => {
             cancelled = true
         }
-    }, [sizes, graph.edges, labels, direction]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [sizes, graph.edges, labels, direction, compounds]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const view: ViewState = {
         workflow,
@@ -710,6 +800,7 @@ function GraphFirstCanvas({
         previews,
         nodeStyle,
         tile,
+        groupStyle,
         selectedNodeId: panelOpen ? selectedNodeId : null,
         openStep: (nodeId) => openPanel('build', nodeId),
         expand: (id) => setCollapsed((prev) => new Set([...prev].filter((g) => g !== id))),
@@ -720,7 +811,10 @@ function GraphFirstCanvas({
         },
     }
     ViewContext.current = view
-    const tick = useMemo(() => ({}), [trace, metrics, previews, nodeStyle, tile, selectedNodeId, panelOpen, workflow]) // eslint-disable-line react-hooks/exhaustive-deps
+    const tick = useMemo(
+        () => ({}),
+        [trace, metrics, previews, nodeStyle, tile, groupStyle, selectedNodeId, panelOpen, workflow]
+    ) // eslint-disable-line react-hooks/exhaustive-deps
 
     const rfNodes = useMemo(() => {
         if (!layout || !sizes) {
@@ -731,17 +825,40 @@ function GraphFirstCanvas({
                 .filter((n) => layout.positions[n.id] && sizes[n.id])
                 .map((n) => [n.id, { ...layout.positions[n.id], ...sizes[n.id] }])
         )
-        const frames = frameBoxes(groups, collapsed, boxes).map(({ group, box }) => ({
-            id: `frame:${group.id}`,
-            type: 'frame',
-            position: { x: box.x, y: box.y },
-            width: box.width,
-            height: box.height,
-            data: { group, tick },
-            selectable: false,
-            draggable: false,
-            zIndex: -10 + group.depth,
-        }))
+        const frames = shownGroups(groups, collapsed)
+            .filter((group) => layout.frames[`frame:${group.id}`])
+            .map((group) => {
+                const box = layout.frames[`frame:${group.id}`]
+                return {
+                    id: `frame:${group.id}`,
+                    type: 'frame',
+                    position: { x: box.x, y: box.y },
+                    width: box.width,
+                    height: box.height,
+                    data: { group, tick },
+                    selectable: false,
+                    draggable: false,
+                    zIndex: -10 + group.depth,
+                }
+            })
+        const frameLabels = shownGroups(groups, collapsed)
+            .filter((group) => layout.frames[`frame:${group.id}`])
+            .map((group) => {
+                const box = layout.frames[`frame:${group.id}`]
+                const entry = graph.edges.find((edge) => edge.originalKeys.includes(edgeKey(group.edge)))
+                const x = entryX(entry ? layout.edgePoints[entry.id]?.points : undefined, box.y, box.x + box.width / 2)
+                const width = frameLabelWidth(group)
+                const left = Math.min(Math.max(x - width / 2, box.x + 8), box.x + box.width - width - 8)
+                return {
+                    id: `frameLabel:${group.id}`,
+                    type: 'frameLabel',
+                    position: { x: left, y: box.y },
+                    data: { group, tick },
+                    selectable: false,
+                    draggable: false,
+                    zIndex: 5,
+                }
+            })
         const trigger = graph.nodes.find((n) => n.kind === 'action' && n.action.type === 'trigger')
         const triggerBox = trigger ? boxes[trigger.id] : undefined
         const note =
@@ -759,6 +876,7 @@ function GraphFirstCanvas({
                 : []
         return [
             ...frames,
+            ...frameLabels,
             ...note,
             ...graph.nodes
                 .filter((n) => layout.positions[n.id])
@@ -851,7 +969,7 @@ function GraphFirstCanvas({
             : undefined
         const timer = setTimeout(() => fitWidth(pathIds), 30)
         return () => clearTimeout(timer)
-    }, [sideOpen]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [sideOpen, drawerTab === null]) // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent): void => {
@@ -865,6 +983,18 @@ function GraphFirstCanvas({
         window.addEventListener('keydown', onKey)
         return () => window.removeEventListener('keydown', onKey)
     }, [isMovingNode, isCopyingNode, setSelectedNodeId, stopMovingNode, stopCopyingNode])
+
+    const closePanel = (): void => {
+        setPanelOpen(false)
+        setSelectedNodeId(null)
+    }
+
+    const toggleDrawer = (tab: DrawerTab): void => {
+        setDrawerTab(drawerTab === tab ? null : tab)
+        if (drawerTab === tab) {
+            setTestTrace(null)
+        }
+    }
 
     const openPanel = (nextMode: HogFlowEditorMode, nodeId: string | null = null): void => {
         setSelectedNodeId(nodeId)
@@ -884,7 +1014,6 @@ function GraphFirstCanvas({
         }
     }
 
-    const variablesCount = workflow.variables?.length ?? 0
     const allCollapsed = groups.length > 0 && groups.every((g) => collapsed.has(g.id))
 
     return (
@@ -898,151 +1027,171 @@ function GraphFirstCanvas({
                 tile={tile}
                 onMeasured={setSizes}
             />
-            <div ref={wrapperRef} className="flex min-h-0 min-w-0 grow">
-                <ReactFlow
-                    className="grow"
-                    nodes={rfNodes}
-                    edges={rfEdges}
-                    nodeTypes={NODE_TYPES}
-                    edgeTypes={EDGE_TYPES}
-                    minZoom={0.15}
-                    maxZoom={1.5}
-                    panOnScroll
-                    zoomOnScroll={false}
-                    zoomActivationKeyCode={['Meta', 'Control']}
-                    nodesDraggable={false}
-                    nodesConnectable={false}
-                    colorMode={isDarkModeOn ? 'dark' : 'light'}
-                    onNodeClick={(_, node) => node.type === 'card' && node.selectable && openPanel('build', node.id)}
-                    onPaneClick={() => {
-                        handlePaneClick()
-                        setPanelOpen(false)
-                    }}
-                    proOptions={{ hideAttribution: true }}
-                >
-                    <Background gap={36} variant={BackgroundVariant.Dots} />
-                    <Panel position="top-left" className="!m-3">
-                        <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-surface-primary p-1 shadow-sm">
-                            <LemonButton
-                                size="small"
-                                type="primary"
-                                icon={<IconPlus />}
-                                onClick={() => openPanel('build')}
-                            >
-                                Add step
-                            </LemonButton>
-                            {!sideOpen && (
-                                <>
-                                    <LemonButton
-                                        size="small"
-                                        onClick={() => openPanel('variables')}
-                                        active={panelOpen && mode === 'variables'}
-                                        sideIcon={
-                                            variablesCount ? (
-                                                <LemonBadge.Number count={variablesCount} size="small" status="muted" />
-                                            ) : undefined
-                                        }
-                                    >
-                                        Variables
-                                    </LemonButton>
-                                    <LemonButton
-                                        size="small"
-                                        onClick={() => openPanel('test')}
-                                        active={panelOpen && mode === 'test'}
-                                    >
-                                        Test
-                                    </LemonButton>
-                                    <LemonButton
-                                        size="small"
-                                        onClick={() => openPanel('logs')}
-                                        active={panelOpen && mode === 'logs'}
-                                    >
-                                        Logs
-                                    </LemonButton>
-                                </>
-                            )}
-                            <div className="mx-1 h-5 w-px bg-border" />
-                            <LemonButton
-                                size="small"
-                                icon={<IconPerson />}
-                                active={traceOn}
-                                onClick={() => {
-                                    setTraceOn(!traceOn)
-                                    setPanelOpen(false)
-                                }}
-                            >
-                                Follow a person
-                            </LemonButton>
-                            <ViewMenu
-                                toggles={[
-                                    ['Email previews', previews, setPreviews],
-                                    ['Waits on arrows', waitsOnArrows, setWaitsOnArrows],
-                                    ['Sample metrics', showMetrics, setShowMetrics],
-                                    ['Workflow note', showNote, setShowNote],
-                                ]}
-                            />
-                            {groups.length > 0 && !sideOpen && (
+            <div className="flex min-h-0 min-w-0 grow flex-col">
+                <div ref={wrapperRef} className="flex min-h-0 min-w-0 grow">
+                    <ReactFlow
+                        className="grow"
+                        nodes={rfNodes}
+                        edges={rfEdges}
+                        nodeTypes={NODE_TYPES}
+                        edgeTypes={EDGE_TYPES}
+                        minZoom={0.15}
+                        maxZoom={1.5}
+                        panOnScroll
+                        zoomOnScroll={false}
+                        zoomActivationKeyCode={['Meta', 'Control']}
+                        nodesDraggable={false}
+                        nodesConnectable={false}
+                        colorMode={isDarkModeOn ? 'dark' : 'light'}
+                        onNodeClick={(_, node) =>
+                            node.type === 'card' && node.selectable && openPanel('build', node.id)
+                        }
+                        onPaneClick={() => {
+                            handlePaneClick()
+                            setPanelOpen(false)
+                        }}
+                        proOptions={{ hideAttribution: true }}
+                    >
+                        <Background gap={36} variant={BackgroundVariant.Dots} />
+                        <Panel position="top-left" className="!m-3">
+                            <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-surface-primary p-1 shadow-sm">
                                 <LemonButton
                                     size="small"
-                                    onClick={() => setCollapsed(new Set(allCollapsed ? [] : groups.map((g) => g.id)))}
+                                    type="primary"
+                                    icon={<IconPlus />}
+                                    onClick={() => openPanel('build')}
                                 >
-                                    {allCollapsed ? 'Open all paths' : 'Collapse paths'}
+                                    Add step
                                 </LemonButton>
-                            )}
-                            <LemonButton size="small" onClick={() => fitWidth()}>
-                                Fit
-                            </LemonButton>
-                        </div>
-                    </Panel>
-                    <Panel position="bottom-right" className="!m-3">
-                        <div className="flex flex-col items-end gap-1.5">
-                            {nodeStyle === 'tiles' && (
-                                <>
-                                    <SwitchRow label="Hover">
-                                        <LemonSegmentedButton
-                                            size="small"
-                                            value={tileHover}
-                                            onChange={setTileHover}
-                                            options={TILE_HOVERS}
-                                        />
-                                    </SwitchRow>
-                                    <SwitchRow label="Flow">
-                                        <LemonSegmentedButton
-                                            size="small"
-                                            value={tileFlow}
-                                            onChange={setTileFlow}
-                                            options={TILE_FLOWS}
-                                        />
-                                    </SwitchRow>
-                                </>
-                            )}
-                            {showStyleSwitch && (
-                                <SwitchRow label="Nodes">
-                                    <LemonSegmentedButton
+                                <VariablesPopover workflow={workflow} />
+                                <LemonButton
+                                    size="small"
+                                    onClick={() => toggleDrawer('test')}
+                                    active={drawerTab === 'test'}
+                                >
+                                    Test
+                                </LemonButton>
+                                <LemonButton
+                                    size="small"
+                                    onClick={() => toggleDrawer('logs')}
+                                    active={drawerTab === 'logs'}
+                                >
+                                    Logs
+                                </LemonButton>
+                                <div className="mx-1 h-5 w-px bg-border" />
+                                <LemonButton
+                                    size="small"
+                                    icon={<IconPerson />}
+                                    active={traceOn}
+                                    onClick={() => {
+                                        setTraceOn(!traceOn)
+                                        setPanelOpen(false)
+                                    }}
+                                >
+                                    Follow a person
+                                </LemonButton>
+                                <ViewMenu
+                                    toggles={[
+                                        ['Email previews', previews, setPreviews],
+                                        ['Waits on arrows', waitsOnArrows, setWaitsOnArrows],
+                                        ['Sample metrics', showMetrics, setShowMetrics],
+                                        ['Workflow note', showNote, setShowNote],
+                                        ...(nodeStyle === 'tiles'
+                                            ? [
+                                                  ['Hover cards', tileHover, setTileHover] as [
+                                                      string,
+                                                      boolean,
+                                                      (value: boolean) => void,
+                                                  ],
+                                              ]
+                                            : []),
+                                    ]}
+                                />
+                                {groups.length > 0 && !sideOpen && (
+                                    <LemonButton
                                         size="small"
-                                        value={nodeStyle}
-                                        onChange={setNodeStyle}
-                                        options={NODE_STYLES}
-                                    />
-                                </SwitchRow>
-                            )}
-                        </div>
-                    </Panel>
-                    {(isMovingNode || isCopyingNode) && (
-                        <Panel position="top-center" className="!mt-16">
-                            <div className="rounded-full border bg-surface-primary px-3 py-1 text-sm shadow">
-                                Click a highlighted + to {isMovingNode ? 'move' : 'copy'} the step there · Esc to cancel
+                                        onClick={() =>
+                                            setCollapsed(new Set(allCollapsed ? [] : groups.map((g) => g.id)))
+                                        }
+                                    >
+                                        {allCollapsed ? 'Open all paths' : 'Collapse paths'}
+                                    </LemonButton>
+                                )}
+                                <LemonButton size="small" onClick={() => fitWidth()}>
+                                    Fit
+                                </LemonButton>
                             </div>
                         </Panel>
-                    )}
-                    <Controls showInteractive={false} />
-                </ReactFlow>
+                        <Panel position="bottom-right" className="!m-3">
+                            <div className="flex flex-col items-end gap-1.5">
+                                {nodeStyle === 'tiles' && (
+                                    <>
+                                        {groups.length > 0 && (
+                                            <SwitchRow label="Groups">
+                                                <LemonSegmentedButton
+                                                    size="small"
+                                                    value={groupStyle}
+                                                    onChange={setGroupStyle}
+                                                    options={GROUP_STYLES}
+                                                />
+                                            </SwitchRow>
+                                        )}
+                                        <SwitchRow label="Flow">
+                                            <LemonSegmentedButton
+                                                size="small"
+                                                value={tileFlow}
+                                                onChange={setTileFlow}
+                                                options={TILE_FLOWS}
+                                            />
+                                        </SwitchRow>
+                                    </>
+                                )}
+                                {showStyleSwitch && (
+                                    <SwitchRow label="Nodes">
+                                        <LemonSegmentedButton
+                                            size="small"
+                                            value={nodeStyle}
+                                            onChange={setNodeStyle}
+                                            options={NODE_STYLES}
+                                        />
+                                    </SwitchRow>
+                                )}
+                            </div>
+                        </Panel>
+                        {(isMovingNode || isCopyingNode) && (
+                            <Panel position="top-center" className="!mt-16">
+                                <div className="rounded-full border bg-surface-primary px-3 py-1 text-sm shadow">
+                                    Click a highlighted + to {isMovingNode ? 'move' : 'copy'} the step there · Esc to
+                                    cancel
+                                </div>
+                            </Panel>
+                        )}
+                        <Controls showInteractive={false} />
+                    </ReactFlow>
+                </div>
+                {drawerTab && (
+                    <CanvasDrawer
+                        workflow={workflow}
+                        tab={drawerTab}
+                        setTab={setDrawerTab}
+                        trace={testTrace}
+                        onRun={(run) => {
+                            setTraceOn(false)
+                            setTestTrace(run)
+                        }}
+                        onSelectStep={(id) => openPanel('build', id)}
+                        onClose={() => {
+                            setDrawerTab(null)
+                            setTestTrace(null)
+                        }}
+                    />
+                )}
             </div>
-            {trace && !panelOpen && (
+            {followTrace && !panelOpen && (
                 <div className="flex h-full w-[360px] shrink-0 flex-col border-l bg-surface-primary p-2">
                     <PersonTracePanel
                         workflow={workflow}
-                        trace={trace}
+                        trace={followTrace}
                         choose={view.choose}
                         onClose={() => setTraceOn(false)}
                     />
@@ -1053,20 +1202,33 @@ function GraphFirstCanvas({
                     className="relative h-full shrink-0 border-l bg-surface-primary"
                     style={{ width: panelWidth ?? PANEL_WIDTH }}
                 >
-                    <HogFlowEditorPanel />
-                    <div className="absolute bottom-3 right-3 z-20">
-                        <LemonButton
-                            size="small"
-                            type="secondary"
-                            icon={<IconX />}
-                            tooltip="Close panel (Esc)"
-                            className="bg-surface-primary"
-                            onClick={() => {
-                                setPanelOpen(false)
-                                setSelectedNodeId(null)
+                    {selectedAction ? (
+                        <StepPanel
+                            key={selectedAction.id}
+                            action={selectedAction}
+                            workflow={workflow}
+                            metrics={metrics}
+                            onClose={closePanel}
+                            onTest={() => {
+                                setDrawerTab('test')
+                                setTestTrace(simulateRun(workflow, 'ada@example.com'))
                             }}
                         />
-                    </div>
+                    ) : (
+                        <>
+                            <HogFlowEditorPanel />
+                            <div className="absolute bottom-3 right-3 z-20">
+                                <LemonButton
+                                    size="small"
+                                    type="secondary"
+                                    icon={<IconX />}
+                                    tooltip="Close panel (Esc)"
+                                    className="bg-surface-primary"
+                                    onClick={closePanel}
+                                />
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
         </div>
@@ -1077,12 +1239,14 @@ function GraphFirstCanvas({
 export function PrototypeGraphFirstEditor({
     initialNodeStyle = 'line',
     initialTileFlow = 'down',
-    initialTileHover = 'mixed',
+    initialTileHover = true,
+    initialGroupStyle = 'outline',
     showStyleSwitch = true,
 }: {
     initialNodeStyle?: NodeStyle
     initialTileFlow?: TileFlow
-    initialTileHover?: TileHover
+    initialTileHover?: boolean
+    initialGroupStyle?: GroupStyle
     showStyleSwitch?: boolean
 }): JSX.Element {
     const { logicProps } = useValues(workflowLogic)
@@ -1095,6 +1259,7 @@ export function PrototypeGraphFirstEditor({
                             initialNodeStyle={initialNodeStyle}
                             initialTileFlow={initialTileFlow}
                             initialTileHover={initialTileHover}
+                            initialGroupStyle={initialGroupStyle}
                             showStyleSwitch={showStyleSwitch}
                         />
                     </ReactFlowProvider>

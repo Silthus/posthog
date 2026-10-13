@@ -1,6 +1,7 @@
 // PROTOTYPE (graph-first lane, Silthus/personal#35). Throwaway code, never merged.
-// n8n-style tiles. On hover a tile grows into a card around its own icon: the icon and caption stay
-// exactly where they were, and the card opens out around them, so the eye does not have to move.
+// n8n-style tiles. On hover a tile grows into a card centered on its own icon: the icon stays exactly
+// where it was and the card opens out around it, so the eye does not have to move. The side panel
+// shows the same card, so hovering and selecting a step read as one object.
 import clsx from 'clsx'
 import { useEffect, useRef, useState } from 'react'
 
@@ -11,37 +12,25 @@ import { EmailPreviewThumbnail } from 'lib/components/EmailPreviewThumbnail/Emai
 import { humanFriendlyLargeNumber } from 'lib/utils/numbers'
 
 import type { HogFlow, HogFlowAction } from '../../types'
-import { CardState, StepActionsMenu } from './GraphFirstCards'
+import { CardState } from './GraphFirstCards'
 import { BranchGroup, emailContent, groupEmails } from './graphFirstModel'
 import { FieldList, TileKind, TilePreview, useTileKind } from './tileKinds'
 
 export type TileFlow = 'down' | 'rail' | 'right'
-export type TileHover = 'off' | 'fields' | 'preview' | 'mixed'
 
 export const TILE_FLOWS: { value: TileFlow; label: string; tooltip: string }[] = [
-    { value: 'down', label: 'Down', tooltip: 'Top to bottom. Arrows leave below the text.' },
-    { value: 'rail', label: 'Rail', tooltip: 'Top to bottom, text beside the tile. Arrows never touch text.' },
-    {
-        value: 'right',
-        label: 'Right',
-        tooltip: 'Left to right like n8n. Arrows run beside the tiles, text sits below.',
-    },
-]
-
-export const TILE_HOVERS: { value: TileHover; label: string; tooltip: string }[] = [
-    { value: 'mixed', label: 'Mixed', tooltip: 'Preview, settings, and numbers.' },
-    { value: 'preview', label: 'Preview', tooltip: 'What the step sends or does.' },
-    { value: 'fields', label: 'Fields', tooltip: 'Every setting of the step.' },
-    { value: 'off', label: 'Off', tooltip: 'No hover cards.' },
+    { value: 'down', label: 'Down', tooltip: 'Top to bottom, text under the tile. Arrows leave below the text.' },
+    { value: 'rail', label: 'Rail', tooltip: 'Top to bottom, text beside the tile. Arrows run tile to tile.' },
+    { value: 'right', label: 'Right', tooltip: 'Left to right like n8n. Arrows meet the tile sides.' },
 ]
 
 export const TILE = 64
 const PAD = 14
+const CARD_WIDTH = 400
 const CAPTION_WIDTH = 220
 const RAIL_CAPTION_WIDTH = 230
 const OPEN_DELAY_MS = 260
 const CLOSE_MS = 200
-const WIDTHS: Record<Exclude<TileHover, 'off'>, number> = { fields: 340, preview: 380, mixed: 400 }
 
 function tileRadius(kind: Pick<TileKind, 'isStart' | 'isEnd'>): string {
     if (kind.isStart) {
@@ -68,17 +57,17 @@ function Badge({ children, className }: { children: React.ReactNode; className: 
     )
 }
 
-function TileFace({
+export function TileFace({
     kind,
     state,
     entered,
-    showEmail,
+    showEmail = false,
     action,
 }: {
     kind: TileKind
     state: CardState
     entered?: number
-    showEmail: boolean
+    showEmail?: boolean
     action: HogFlowAction
 }): JSX.Element {
     const border = state.onPath ? 'var(--color-accent)' : kind.color
@@ -109,7 +98,7 @@ function TileFace({
             )}
             {entered !== undefined && <Badge className="-right-3 -top-2.5">{humanFriendlyLargeNumber(entered)}</Badge>}
             {kind.badge && (
-                <Badge className="-bottom-2 left-1/2 -translate-x-1/2 text-secondary">
+                <Badge className="-bottom-2 left-1/2 -translate-x-1/2">
                     <span style={{ color: kind.color }}>{kind.badge}</span>
                 </Badge>
             )}
@@ -136,7 +125,7 @@ function Caption({ kind, side }: { kind: TileKind; side: boolean }): JSX.Element
     )
 }
 
-function MetricsLine({ action, state }: { action: HogFlowAction; state: CardState }): JSX.Element | null {
+export function MetricsLine({ action, state }: { action: HogFlowAction; state: CardState }): JSX.Element | null {
     const entered = state.metrics?.enteredByNode[action.id]
     const rates = state.metrics?.emailRates[action.id]
     if (entered === undefined) {
@@ -160,99 +149,88 @@ function MetricsLine({ action, state }: { action: HogFlowAction; state: CardStat
     )
 }
 
-function ExpandedContent({
-    variant,
+const PREVIEW_COVERS_FIELDS = ['slack', 'ai', 'ticket', 'person', 'webhook', 'report', 'branch', 'wait', 'window']
+
+/** The body of the Mixed card: what the step does, the settings the preview does not show, and numbers. */
+export function StepCardBody({
     action,
     workflow,
     kind,
     state,
 }: {
-    variant: Exclude<TileHover, 'off'>
     action: HogFlowAction
     workflow: HogFlow
     kind: TileKind
     state: CardState
 }): JSX.Element {
-    const preview = kind.preview !== 'fields'
-    const previewCoversFields = [
-        'slack',
-        'ai',
-        'ticket',
-        'person',
-        'webhook',
-        'report',
-        'branch',
-        'wait',
-        'window',
-    ].includes(kind.preview)
+    const hasPreview = kind.preview !== 'fields'
     return (
         <div className="flex flex-col gap-2.5">
-            {variant !== 'fields' && preview && <TilePreview action={action} workflow={workflow} kind={kind} />}
-            {(variant === 'fields' || (variant === 'mixed' && !previewCoversFields) || !preview) && (
-                <FieldList facts={kind.facts} />
-            )}
-            {variant !== 'preview' && <MetricsLine action={action} state={state} />}
-            {variant === 'mixed' && (
-                <div className="flex items-center gap-2 border-t pt-2 text-[11px] text-secondary">
-                    <span>Click the step to edit it</span>
-                </div>
-            )}
+            {hasPreview && <TilePreview action={action} workflow={workflow} kind={kind} />}
+            {(!hasPreview || !PREVIEW_COVERS_FIELDS.includes(kind.preview)) && <FieldList facts={kind.facts} />}
+            <MetricsLine action={action} state={state} />
         </div>
     )
 }
 
-function Expansion({
-    variant,
-    side,
+/** The icon, centered, with the kind label in the corner and the caption under it. */
+export function StepCardHead({
+    action,
+    kind,
+    state,
+    width,
+    trailing,
+}: {
+    action: HogFlowAction
+    kind: TileKind
+    state: CardState
+    width: number
+    trailing?: React.ReactNode
+}): JSX.Element {
+    return (
+        <div className="relative flex flex-col items-center gap-1.5">
+            <TileFace kind={kind} state={state} entered={state.metrics?.enteredByNode[action.id]} action={action} />
+            <Caption kind={kind} side={false} />
+            <div
+                className="absolute left-0 top-0 text-[10px] font-semibold uppercase tracking-wider"
+                style={{ color: kind.color, maxWidth: (width - TILE) / 2 - PAD - 8 }}
+            >
+                {kind.label}
+            </div>
+            {trailing && <div className="absolute right-0 top-0 flex gap-1">{trailing}</div>}
+        </div>
+    )
+}
+
+function HoverCard({
     open,
     action,
     workflow,
     kind,
     state,
 }: {
-    variant: Exclude<TileHover, 'off'>
-    side: boolean
     open: boolean
     action: HogFlowAction
     workflow: HogFlow
     kind: TileKind
     state: CardState
 }): JSX.Element {
-    const width = side ? Math.max(WIDTHS[variant], TILE + 12 + RAIL_CAPTION_WIDTH + PAD * 2) : WIDTHS[variant]
-    const left = side ? -PAD : TILE / 2 - width / 2
-    const [horizontalRight, horizontalLeft] = side
-        ? [width - PAD - TILE, PAD]
-        : [(width - TILE) / 2, (width - TILE) / 2]
-    const closedClip = `inset(${PAD}px ${horizontalRight}px calc(100% - ${PAD + TILE}px) ${horizontalLeft}px round 12px)`
-    const entered = state.metrics?.enteredByNode[action.id]
+    const inset = (CARD_WIDTH - TILE) / 2
+    const closedClip = `inset(${PAD}px ${inset}px calc(100% - ${PAD + TILE}px) ${inset}px round 12px)`
     return (
         <div
             className="absolute z-10 rounded-2xl border bg-surface-primary text-primary shadow-xl"
             style={{
-                left,
+                left: TILE / 2 - CARD_WIDTH / 2,
                 top: -PAD,
-                width,
+                width: CARD_WIDTH,
                 padding: PAD,
                 clipPath: open ? 'inset(0px 0px 0px 0px round 16px)' : closedClip,
                 transition: `clip-path ${open ? 240 : CLOSE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
                 borderColor: kind.color,
             }}
         >
-            <div
-                className={clsx('relative flex', side ? 'items-start gap-3' : 'flex-col items-center gap-1.5')}
-                style={side ? undefined : { marginLeft: 'auto', marginRight: 'auto' }}
-            >
-                <TileFace kind={kind} state={state} entered={entered} showEmail={false} action={action} />
-                <Caption kind={kind} side={side} />
-                {!side && (
-                    <div
-                        className="absolute left-0 top-0 text-[10px] font-semibold uppercase tracking-wider"
-                        style={{ color: kind.color, maxWidth: (width - TILE) / 2 - PAD - 8 }}
-                    >
-                        {kind.label}
-                    </div>
-                )}
-            </div>
+            <StepCardHead action={action} kind={kind} state={state} width={CARD_WIDTH} />
             <div
                 className="mt-3 border-t pt-3 transition-opacity"
                 style={{
@@ -261,15 +239,8 @@ function Expansion({
                     transitionDelay: open ? '90ms' : '0ms',
                 }}
             >
-                {side && (
-                    <div
-                        className="mb-2 text-[10px] font-semibold uppercase tracking-wider"
-                        style={{ color: kind.color }}
-                    >
-                        {kind.label}
-                    </div>
-                )}
-                <ExpandedContent variant={variant} action={action} workflow={workflow} kind={kind} state={state} />
+                <StepCardBody action={action} workflow={workflow} kind={kind} state={state} />
+                <div className="mt-2.5 border-t pt-2 text-[11px] text-secondary">Click to open the step</div>
             </div>
         </div>
     )
@@ -333,14 +304,14 @@ export function TileNode({
     workflow,
     state,
     flow = 'down',
-    hover = 'off',
+    hover = false,
     forceOpen = false,
 }: {
     action: HogFlowAction
     workflow: HogFlow
     state: CardState
     flow?: TileFlow
-    hover?: TileHover
+    hover?: boolean
     forceOpen?: boolean
 }): JSX.Element {
     const kind = useTileKind(action, workflow)
@@ -348,7 +319,7 @@ export function TileNode({
     const showEmail = !!state.previews && !!emailContent(action)?.html
     const entered = state.metrics?.enteredByNode[action.id]
     const rates = state.metrics?.emailRates[action.id]
-    const expansion = useHoverExpansion(hover !== 'off' && !state.dimmed, forceOpen && hover !== 'off')
+    const expansion = useHoverExpansion(hover && !state.dimmed && !state.selected, forceOpen)
     return (
         <div
             ref={expansion.ref}
@@ -364,25 +335,12 @@ export function TileNode({
             <div
                 className={clsx(
                     'relative rounded-xl',
-                    state.selected && 'ring-2 ring-[var(--color-accent)] ring-offset-2'
+                    state.selected && 'ring-2 ring-[var(--color-accent)] ring-offset-4'
                 )}
             >
                 <TileFace kind={kind} state={state} entered={entered} showEmail={showEmail} action={action} />
-                {state.selected && (
-                    <span className="absolute -right-9 top-0">
-                        <StepActionsMenu action={action} />
-                    </span>
-                )}
-                {expansion.mounted && hover !== 'off' && !showEmail && (
-                    <Expansion
-                        variant={hover}
-                        side={side}
-                        open={expansion.open}
-                        action={action}
-                        workflow={workflow}
-                        kind={kind}
-                        state={state}
-                    />
+                {expansion.mounted && !showEmail && (
+                    <HoverCard open={expansion.open} action={action} workflow={workflow} kind={kind} state={state} />
                 )}
             </div>
             <div className={clsx('flex flex-col gap-1', !side && 'items-center')}>
@@ -407,17 +365,19 @@ export function TileGroupNode({
     workflow,
     state = {},
     flow = 'down',
+    color,
     onExpand,
 }: {
     group: BranchGroup
     workflow: HogFlow
     state?: CardState
     flow?: TileFlow
+    color?: string
     onExpand?: () => void
 }): JSX.Element {
     const side = flow === 'rail'
     const emails = groupEmails(workflow, group).reduce((sum, email) => sum + email.count, 0)
-    const border = state.onPath ? 'var(--color-accent)' : 'var(--color-border-bold, #9ca3af)'
+    const border = state.onPath ? 'var(--color-accent)' : (color ?? 'var(--color-border-bold, #9ca3af)')
     return (
         <div
             className={clsx(
@@ -445,8 +405,8 @@ export function TileGroupNode({
                     />
                 ))}
                 <div
-                    className="absolute inset-0 flex items-center justify-center rounded-xl border-2 border-dashed bg-surface-primary text-2xl text-secondary"
-                    style={{ borderColor: border }}
+                    className="absolute inset-0 flex items-center justify-center rounded-xl border-2 border-dashed bg-surface-primary text-2xl"
+                    style={{ borderColor: border, color: color ?? 'var(--color-text-secondary)' }}
                 >
                     <IconStack />
                 </div>
@@ -456,7 +416,9 @@ export function TileGroupNode({
                 className={clsx('flex flex-col gap-0.5', side ? 'pt-1 text-left' : 'items-center')}
                 style={{ width: side ? RAIL_CAPTION_WIDTH : CAPTION_WIDTH }}
             >
-                <div className="break-words text-[13px] font-semibold leading-tight">{group.label}</div>
+                <div className="break-words text-[13px] font-semibold leading-tight" style={{ color }}>
+                    {group.label}
+                </div>
                 <div className="break-words text-xs leading-snug text-secondary">
                     {group.memberIds.length} steps{emails ? `, ${emails} ${emails === 1 ? 'email' : 'emails'}` : ''}.
                     Click to open

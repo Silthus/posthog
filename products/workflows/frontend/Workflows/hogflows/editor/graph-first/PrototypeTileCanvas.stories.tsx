@@ -8,8 +8,9 @@ import { TILE_WORKFLOWS } from '../../tree/prototypeTileWorkflows'
 import type { HogFlow, HogFlowAction } from '../../types'
 import { workflowEditorStoryDecorator } from '../workflowEditorStoryFixtures'
 import { sampleMetrics } from './graphFirstModel'
+import type { GroupStyle } from './PrototypeGraphFirstEditor'
 import { Frame } from './prototypeStoryFrame'
-import { TILE_HOVERS, TileFlow, TileHover, TileNode } from './TileNode'
+import { TileFlow, TileNode } from './TileNode'
 
 const meta: Meta = {
     title: 'Prototypes/Workflows/Tile canvas',
@@ -26,7 +27,7 @@ const byId = Object.fromEntries(TILE_WORKFLOWS.map((flow) => [flow.id, flow]))
 function tiles(
     id: string,
     flow: TileFlow = 'down',
-    options: { aiPanel?: boolean; chat?: { ask: string; answer: string } } = {}
+    options: { aiPanel?: boolean; chat?: { ask: string; answer: string }; groups?: GroupStyle } = {}
 ): StoryFn {
     const Story: StoryFn = () => (
         <Frame
@@ -36,7 +37,7 @@ function tiles(
             editor={{
                 initialNodeStyle: 'tiles',
                 initialTileFlow: flow,
-                initialTileHover: 'mixed',
+                initialGroupStyle: options.groups,
                 showStyleSwitch: false,
             }}
         />
@@ -67,7 +68,7 @@ export const LaunchAbTestWithAiPanel: StoryFn = () => (
     <Frame
         id="prototype-larkspur-launch-ab-test"
         aiPanel
-        editor={{ initialNodeStyle: 'tiles', initialTileHover: 'mixed', showStyleSwitch: false }}
+        editor={{ initialNodeStyle: 'tiles', showStyleSwitch: false }}
     />
 )
 
@@ -127,7 +128,7 @@ export const StepKinds: StoryFn = () => {
                             key={index}
                             action={action}
                             workflow={workflow}
-                            hover="mixed"
+                            hover
                             state={{ metrics: index % 3 === 0 ? sampleMetrics(workflow) : null }}
                         />
                     ))}
@@ -148,38 +149,26 @@ const HOVER_EXAMPLES: [string, string][] = [
     ['prototype-tile-abandoned-checkout', 'wait_order'],
 ]
 
-function HoverRow({ variant }: { variant: TileHover }): JSX.Element {
-    const items = lookup(HOVER_EXAMPLES)
-    const meta = TILE_HOVERS.find((hover) => hover.value === variant)!
-    return (
-        <section className="flex flex-col gap-4">
-            <h2 className="m-0 text-base font-semibold">
-                {meta.label} <span className="text-sm font-normal text-secondary">· {meta.tooltip}</span>
-            </h2>
-            <div className="flex flex-wrap gap-6 pb-4 pt-4">
-                {items.map(({ workflow, action }, index) => (
-                    <div key={index} className="flex min-h-[560px] w-[410px] shrink-0 justify-center pt-4">
-                        <TileNode
-                            action={action}
-                            workflow={workflow}
-                            hover={variant}
-                            forceOpen
-                            state={{ metrics: sampleMetrics(workflow) }}
-                        />
-                    </div>
-                ))}
-            </div>
-        </section>
-    )
-}
-
 export const HoverCards: StoryFn = () => (
     <Bound>
-        <div className="flex flex-col gap-4 p-8">
-            {(['mixed', 'preview', 'fields'] as TileHover[]).map((variant) => (
-                <HoverRow key={variant} variant={variant} />
+        <div className="flex flex-wrap gap-6 p-8">
+            {lookup(HOVER_EXAMPLES).map(({ workflow, action }, index) => (
+                <div key={index} className="flex min-h-[560px] w-[410px] shrink-0 justify-center pt-4">
+                    <TileNode
+                        action={action}
+                        workflow={workflow}
+                        hover
+                        forceOpen
+                        state={{ metrics: sampleMetrics(workflow) }}
+                    />
+                </div>
             ))}
         </div>
     </Bound>
 )
-HoverCards.parameters = { testOptions: { waitForSelector: 'section' } }
+HoverCards.parameters = { testOptions: { waitForSelector: '[data-tile-anchor]' } }
+
+export const AiSupportTriageGroupsDashed = tiles('prototype-tile-ai-triage', 'down', { groups: 'dashed' })
+export const AiSupportTriageGroupsTint = tiles('prototype-tile-ai-triage', 'down', { groups: 'tint' })
+export const AiSupportTriageGroupsBracket = tiles('prototype-tile-ai-triage', 'down', { groups: 'bracket' })
+export const TrialToPaidRail = tiles('prototype-tile-trial-to-paid', 'rail')

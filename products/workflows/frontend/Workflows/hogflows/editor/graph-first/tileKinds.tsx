@@ -52,6 +52,14 @@ export type TileKind = {
 
 const AI_COLOR = '#7c3aed'
 
+export const PATH_COLORS = ['#2f80fa', '#e08a00', '#16a34a', '#db2777', '#0e7490']
+export const NO_MATCH_COLOR = '#78716c'
+
+/** The color of a branch path, so a split's legend, its frames, and its collapsed tiles match. */
+export function pathColor(edge: { type: string; index?: number }): string {
+    return edge.type === 'branch' ? PATH_COLORS[(edge.index ?? 0) % PATH_COLORS.length] : NO_MATCH_COLOR
+}
+
 const BASE_LABELS: Partial<Record<HogFlowAction['type'], string>> = {
     trigger: 'Trigger',
     exit: 'End',
@@ -601,12 +609,19 @@ function BranchPreview({ action, workflow }: { action: HogFlowAction; workflow: 
                       ? [['No match', 'Everyone else'] as [string, string]]
                       : []),
               ]
-    const colors = ['#2f80fa', '#f59e0b', '#16a34a', '#db2777', '#64748b']
     return (
         <div className="flex flex-col gap-1 text-left text-[12.5px]">
             {rows.map(([name, rule], index) => (
                 <div key={name} className="flex items-baseline gap-2 rounded-md border px-2.5 py-1">
-                    <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: colors[index % 5] }} />
+                    <span
+                        className="size-2 shrink-0 rounded-full"
+                        style={{
+                            backgroundColor:
+                                action.type === 'conditional_branch' && index >= (config.conditions?.length ?? 0)
+                                    ? NO_MATCH_COLOR
+                                    : PATH_COLORS[index % PATH_COLORS.length],
+                        }}
+                    />
                     <span className="font-semibold">{name}</span>
                     <span className="min-w-0 break-words text-secondary">{rule}</span>
                 </div>

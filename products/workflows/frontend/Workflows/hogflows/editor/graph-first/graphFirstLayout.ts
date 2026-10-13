@@ -12,8 +12,18 @@ export type LayoutResult = {
         string,
         { points: Point[]; label?: Point; labelBox?: { x: number; y: number; width: number; height: number } }
     >
+    frames: Record<string, { x: number; y: number; width: number; height: number }>
     width: number
     height: number
+}
+
+/** A group frame that ELK lays out as a real container, so frames never overlap each other or steps. */
+export type Compound = {
+    id: string
+    parentId: string | null
+    memberIds: string[]
+    padding: { top: number; side: number; bottom: number }
+    minWidth: number
 }
 
 export const LABEL_HEIGHT = 22
@@ -28,7 +38,8 @@ export async function layoutGraph(
     labels: Record<string, string | undefined>,
     portFractions: Record<string, number[]> = {},
     direction: LayoutDirection = 'DOWN',
-    portsFor?: (id: string, portCount: number) => PortSpec | undefined
+    portsFor?: (id: string, portCount: number) => PortSpec | undefined,
+    compounds: Compound[] = []
 ): Promise<LayoutResult> {
     const [inSide, outSide] = direction === 'DOWN' ? ['NORTH', 'SOUTH'] : ['WEST', 'EAST']
     const ids = Object.keys(sizes)
@@ -51,66 +62,129 @@ export async function layoutGraph(
             'elk.edgeLabels.placement': 'CENTER',
             'elk.padding': '[left=0, top=0, right=0, bottom=0]',
         },
-        children: ids.map((id) => {
-            const { width, height } = sizes[id]
-            const outgoing = edges.filter((edge) => edge.source === id)
-            const portCount = outgoing[0]?.portCount ?? 1
-            const custom = portsFor?.(id, portCount)
-            const defaultOut = (index: number): Point => {
-                const fraction = portFractions[id]?.[index] ?? (portCount === 1 ? 0.5 : (index + 1) / (portCount + 1))
-                return direction === 'DOWN' ? { x: width * fraction, y: height } : { x: width, y: height * fraction }
-            }
-            const inPoint = custom?.in ?? (direction === 'DOWN' ? { x: width / 2, y: 0 } : { x: 0, y: height / 2 })
-            return {
-                id,
-                width,
-                height,
-                layoutOptions: { 'elk.portConstraints': 'FIXED_POS' },
-                ports: [
-                    {
-                        id: `${id}:in`,
-                        ...inPoint,
-                        width: 1,
-                        height: 1,
-                        layoutOptions: { 'elk.port.side': inSide },
-                    },
-                    ...Array.from({ length: portCount }, (_, index) => ({
-                        id: `${id}:out:${index}`,
-                        ...(custom?.out[index] ?? defaultOut(index)),
-                        width: 1,
-                        height: 1,
-                        layoutOptions: { 'elk.port.side': outSide },
-                    })),
-                ],
-            }
-        }),
-        edges: edges
-            .filter((edge) => sizes[edge.source] && sizes[edge.target])
-            .map(
-                (edge): ElkExtendedEdge => ({
-                    id: edge.id,
-                    sources: [`${edge.source}:out:${edge.portIndex}`],
-                    targets: [`${edge.target}:in`],
-                    labels: labels[edge.id]
-                        ? [
-                              {
-                                  id: `${edge.id}:label`,
-                                  text: labels[edge.id],
-                                  width: labelWidth(labels[edge.id]!),
-                                  height: LABEL_HEIGHT,
-                              },
-                          ]
-                        : [],
-                })
-            ),
+        children: [] as ElkNode[],
+        edges: [] as ElkExtendedEdge[],
+    }
+    const leaves: ElkNode[] = ids.map((id) => {
+        const { width, height } = sizes[id]
+        const outgoing = edges.filter((edge) => edge.source === id)
+        const portCount = outgoing[0]?.portCount ?? 1
+        const custom = portsFor?.(id, portCount)
+        const defaultOut = (index: number): Point => {
+            const fraction = portFractions[id]?.[index] ?? (portCount === 1 ? 0.5 : (index + 1) / (portCount + 1))
+            return direction === 'DOWN' ? { x: width * fraction, y: height } : { x: width, y: height * fraction }
+        }
+        const inPoint = custom?.in ?? (direction === 'DOWN' ? { x: width / 2, y: 0 } : { x: 0, y: height / 2 })
+        return {
+            id,
+            width,
+            height,
+            layoutOptions: { 'elk.portConstraints': 'FIXED_POS' },
+            ports: [
+                {
+                    id: `${id}:in`,
+                    ...inPoint,
+                    width: 1,
+                    height: 1,
+                    layoutOptions: { 'elk.port.side': inSide },
+                },
+                ...Array.from({ length: portCount }, (_, index) => ({
+                    id: `${id}:out:${index}`,
+                    ...(custom?.out[index] ?? defaultOut(index)),
+                    width: 1,
+                    height: 1,
+                    layoutOptions: { 'elk.port.side': outSide },
+                })),
+            ],
+        }
+    })
+    graph.edges = edges
+        .filter((edge) => sizes[edge.source] && sizes[edge.target])
+        .map(
+            (edge): ElkExtendedEdge => ({
+                id: edge.id,
+                sources: [`${edge.source}:out:${edge.portIndex}`],
+                targets: [`${edge.target}:in`],
+                labels: labels[edge.id]
+                    ? [
+                          {
+                              id: `${edge.id}:label`,
+                              text: labels[edge.id],
+                              width: labelWidth(labels[edge.id]!),
+                              height: LABEL_HEIGHT,
+                          },
+                      ]
+                    : [],
+            })
+        )
+
+    const { 'elk.padding': _padding, ...sharedOptions } = graph.layoutOptions!
+    const containers: Record<string, ElkNode> = Object.fromEntries(
+        compounds.map((compound) => [
+            compound.id,
+            {
+                id: compound.id,
+                children: [],
+                layoutOptions: {
+                    ...sharedOptions,
+                    'elk.padding': `[left=${compound.padding.side}, top=${compound.padding.top}, right=${compound.padding.side}, bottom=${compound.padding.bottom}]`,
+                    'elk.nodeSize.constraints': 'MINIMUM_SIZE',
+                    'elk.nodeSize.minimum': `(${compound.minWidth}, 40)`,
+                },
+            } as ElkNode,
+        ])
+    )
+    const depth = (compound: Compound): number => {
+        const parent = compounds.find((other) => other.id === compound.parentId)
+        return parent ? depth(parent) + 1 : 0
+    }
+    const deepestFirst = [...compounds].sort((a, b) => depth(b) - depth(a))
+    const ownerOf = (id: string): ElkNode =>
+        containers[deepestFirst.find((compound) => compound.memberIds.includes(id))?.id ?? ''] ?? graph
+    leaves.forEach((leaf) => ownerOf(leaf.id).children!.push(leaf))
+    compounds.forEach((compound) =>
+        (compound.parentId && containers[compound.parentId] ? containers[compound.parentId] : graph).children!.push(
+            containers[compound.id]
+        )
+    )
+    if (compounds.length) {
+        // ELK's model-order strategy crashes on nested graphs; forced node order still keeps paths in order.
+        const withoutModelOrder = (options: Record<string, string>): void => {
+            delete options['elk.layered.considerModelOrder.strategy']
+        }
+        withoutModelOrder(graph.layoutOptions!)
+        Object.values(containers).forEach((container) => withoutModelOrder(container.layoutOptions!))
+        Object.assign(graph.layoutOptions!, {
+            'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
+            'elk.json.shapeCoords': 'ROOT',
+            'elk.json.edgeCoords': 'ROOT',
+        })
     }
 
     const elk = await getElk()
     const result = await elk.layout(graph)
     const positions: LayoutResult['positions'] = {}
-    result.children?.forEach((child) => (positions[child.id] = { x: child.x ?? 0, y: child.y ?? 0 }))
+    const frames: LayoutResult['frames'] = {}
+    const allEdges: ElkExtendedEdge[] = []
+    const walk = (node: ElkNode): void => {
+        allEdges.push(...(node.edges ?? []))
+        node.children?.forEach((child) => {
+            if (containers[child.id]) {
+                frames[child.id] = {
+                    x: child.x ?? 0,
+                    y: child.y ?? 0,
+                    width: child.width ?? 0,
+                    height: child.height ?? 0,
+                }
+            } else {
+                positions[child.id] = { x: child.x ?? 0, y: child.y ?? 0 }
+            }
+            walk(child)
+        })
+    }
+    walk(result)
     const edgePoints: LayoutResult['edgePoints'] = {}
-    result.edges?.forEach((edge) => {
+    allEdges.forEach((edge) => {
         const section = edge.sections?.[0]
         if (!section) {
             return
@@ -128,5 +202,5 @@ export async function layoutGraph(
                     : undefined,
         }
     })
-    return { positions, edgePoints, width: result.width ?? 0, height: result.height ?? 0 }
+    return { positions, edgePoints, frames, width: result.width ?? 0, height: result.height ?? 0 }
 }
