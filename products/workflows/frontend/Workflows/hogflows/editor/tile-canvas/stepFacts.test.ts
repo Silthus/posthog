@@ -149,6 +149,18 @@ describe('stepFacts', () => {
         ],
         ['an event trigger', eventTrigger, 'Signed up', 'Starts when someone does this'],
         [
+            'a trigger on a PostHog action',
+            step('trigger', 'trigger', {
+                type: 'event',
+                filters: {
+                    events: [{ id: 'Signed up', name: 'Signed up', type: 'events' }],
+                    actions: [{ id: 12, name: 'Checked out', type: 'actions' }],
+                },
+            }),
+            'Signed up or Checked out',
+            'Starts when someone does this',
+        ],
+        [
             'an exit',
             step('exit', 'exit', { reason: 'Trial ended' }),
             'Trial ended',

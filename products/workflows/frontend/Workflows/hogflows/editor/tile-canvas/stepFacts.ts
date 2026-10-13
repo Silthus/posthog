@@ -91,6 +91,11 @@ function eventNames(events: unknown): string[] {
     })
 }
 
+/** PostHog actions the trigger starts on, listed beside its events. */
+function triggerActions(filters: unknown): unknown {
+    return asRecord(filters).actions
+}
+
 export function conditionText(filters: unknown): string {
     const { events, properties } = asRecord(filters)
     const parts = [
@@ -257,7 +262,7 @@ function triggerFacts(action: ActionOf<'trigger'>, templateName: string | undefi
     switch (trigger.type) {
         case 'event':
         case 'internal-event': {
-            const events = eventNames(trigger.filters.events)
+            const events = [...eventNames(trigger.filters.events), ...eventNames(triggerActions(trigger.filters))]
             const properties = trigger.filters.properties ?? []
             const who = properties.length ? conditionText({ properties }) : 'Anyone'
             return {
