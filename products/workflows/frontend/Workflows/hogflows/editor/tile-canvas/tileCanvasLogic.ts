@@ -21,7 +21,15 @@ import {
 } from '../../hogFlowEditorLogic'
 import type { DropzoneNode, HogFlow, HogFlowActionNode, HogFlowEdge } from '../../types'
 import { destinationSteps, workflowStepSections } from '../../workflowStepCatalog'
-import { CanvasLayout, frameId, layoutTileCanvas, NodeSize, PathFrameSpec, pathFrameSpecs } from './tileCanvasLayout'
+import {
+    Box,
+    CanvasLayout,
+    frameId,
+    layoutTileCanvas,
+    NodeSize,
+    PathFrameSpec,
+    pathFrameSpecs,
+} from './tileCanvasLayout'
 import {
     CanvasMotion,
     collapsedPathStacks,
@@ -86,6 +94,8 @@ export interface tileCanvasLogicValues {
     edgeLabels: Record<string, string | undefined>
     fitRequest: number
     fitsNextLayout: boolean
+    frameFocus: { box: Box; request: number } | null
+    focusGroupId: string | null
     frameSpecs: PathFrameSpec[]
     hasHistory: boolean
     isHistoryOpen: boolean
@@ -203,6 +213,12 @@ export interface tileCanvasLogicActions {
         mode: 'build' | 'logs' | 'metrics' | 'test' | 'variables' | 'history'
     }
     openPath: (groupId: string) => {
+        groupId: string
+    }
+    focusFrame: (box: Box) => {
+        box: Box
+    }
+    focusPathAfterLayout: (groupId: string) => {
         groupId: string
     }
     openQuickAdd: (edgeKey: string) => {
@@ -326,6 +342,8 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
     actions({
         activateNode: (nodeId: string) => ({ nodeId }),
         openPath: (groupId: string) => ({ groupId }),
+        focusFrame: (box: Box) => ({ box }),
+        focusPathAfterLayout: (groupId: string) => ({ groupId }),
         collapsePath: (groupId: string) => ({ groupId }),
         toggleAllPaths: true,
         setOpenPathIds: (openPathIds: string[]) => ({ openPathIds }),
@@ -353,6 +371,20 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
     }),
     reducers({
         openPathIds: [[] as string[], { setOpenPathIds: (_, { openPathIds }) => openPathIds }],
+        focusGroupId: [
+            null as string | null,
+            {
+                openPath: (_, { groupId }) => groupId,
+                focusPathAfterLayout: (_, { groupId }) => groupId,
+                focusFrame: () => null,
+                collapsePath: () => null,
+                toggleAllPaths: () => null,
+            },
+        ],
+        frameFocus: [
+            null as { box: Box; request: number } | null,
+            { focusFrame: (state, { box }) => ({ box, request: (state?.request ?? 0) + 1 }) },
+        ],
         motion: [null as CanvasMotion | null, { setMotion: (_, { motion }) => motion }],
         commandPaletteQuery: [
             null as string | null,
@@ -403,7 +435,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         measuredSizes: [null as Record<string, NodeSize> | null, { setMeasuredSizes: (_, { sizes }) => sizes }],
         layout: [null as CanvasLayout | null, { setLayout: (_, { layout }) => layout }],
         fitRequest: [0, { requestFit: (count) => count + 1 }],
-        fitsNextLayout: [true, { fitNextLayout: () => true, requestFit: () => false }],
+        fitsNextLayout: [true, { fitNextLayout: () => true, requestFit: () => false, focusFrame: () => false }],
     }),
     loaders(({ values }) => ({
         stepCounts: [
@@ -554,10 +586,14 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                     group.memberIds.includes(actionId)
                 )
                 if (isHidden) {
-                    const reveal = values.pathGroups
-                        .filter((group) => group.memberIds.includes(actionId))
-                        .map((group) => group.id)
-                    actions.setOpenPathIds([...new Set([...values.openPathIds, ...reveal])])
+                    const containing = values.pathGroups.filter((group) => group.memberIds.includes(actionId))
+                    const innermost = containing.reduce((deepest, group) =>
+                        group.depth > deepest.depth ? group : deepest
+                    )
+                    actions.setOpenPathIds([
+                        ...new Set([...values.openPathIds, ...containing.map((group) => group.id)]),
+                    ])
+                    actions.focusPathAfterLayout(innermost.id)
                 }
             },
             startPlacing: ({ step }) => {
@@ -630,8 +666,12 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 cache.layoutInput = input
                 actions.setLayout(layout)
             },
-            setLayout: () => {
-                if (values.fitsNextLayout) {
+            setLayout: ({ layout }) => {
+                const focusGroup = values.pathGroups.find((group) => group.id === values.focusGroupId)
+                const box = focusGroup && layout.frames[frameId(focusGroup)]
+                if (box) {
+                    actions.focusFrame(box)
+                } else if (values.fitsNextLayout) {
                     actions.requestFit()
                 }
             },

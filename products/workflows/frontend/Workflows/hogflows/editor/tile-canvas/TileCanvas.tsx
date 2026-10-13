@@ -28,17 +28,25 @@ import { PlacementHint } from './PlacementHint'
 import { canvasBounds, entryX, frameChipWidth } from './tileCanvasLayout'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import { TileCanvasMeasureLayer } from './TileCanvasMeasureLayer'
-import { edgeKey, hasStepMenu, Point, Size, viewportAfterResize } from './tileCanvasModel'
+import {
+    CANVAS_MIN_ZOOM,
+    edgeKey,
+    FIT_MARGIN,
+    hasStepMenu,
+    Point,
+    Size,
+    viewportAfterResize,
+    viewportToFit,
+} from './tileCanvasModel'
 import type { TileCanvasNode, TileEdgeType } from './tileCanvasNodes'
 import { TileEdge } from './TileEdge'
 import { TileFlowNode } from './TileFlowNode'
 
 const NODE_TYPES = { tile: TileFlowNode, frame: PathFrame, chip: PathChip } as NodeTypes
 const EDGE_TYPES = { tile: TileEdge } as EdgeTypes
-const MIN_ZOOM = 0.15
 const MAX_ZOOM = 1.5
 const MIN_READABLE_ZOOM = 0.66
-const FIT_MARGIN = { side: 24, top: 32, bottom: 96 }
+const FOCUS_MS = 400
 const CHIP_INSET = 8
 
 type TileKeyCommand = 'activate' | 'menu'
@@ -68,6 +76,7 @@ function TileCanvasContent(): JSX.Element {
         motion,
         isPanelOpen,
         fitRequest,
+        frameFocus,
         commandPaletteQuery,
         selectedNodeId,
         isHistoryOpen,
@@ -188,7 +197,7 @@ function TileCanvasContent(): JSX.Element {
         const height = bounds.height + FIT_MARGIN.top + FIT_MARGIN.bottom
         // Fit the width, but never shrink below a readable zoom just to fit a long workflow's height.
         const zoom = Math.max(
-            MIN_ZOOM,
+            CANVAS_MIN_ZOOM,
             Math.min(1, wrapper.clientWidth / width, Math.max(wrapper.clientHeight / height, MIN_READABLE_ZOOM))
         )
         void reactFlow.setViewport({
@@ -199,6 +208,19 @@ function TileCanvasContent(): JSX.Element {
         // Edits keep the viewport the person panned or zoomed to; only an explicit fit request moves it.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fitRequest])
+
+    useEffect(() => {
+        const wrapper = wrapperRef.current
+        if (!wrapper || !frameFocus) {
+            return
+        }
+        const canvas = { width: wrapper.clientWidth, height: wrapper.clientHeight }
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        void reactFlow.setViewport(viewportToFit(frameFocus.box, canvas, reactFlow.getViewport().zoom), {
+            duration: reduceMotion ? 0 : FOCUS_MS,
+        })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [frameFocus?.request])
 
     return (
         <div
@@ -232,7 +254,7 @@ function TileCanvasContent(): JSX.Element {
                     edges={edges}
                     nodeTypes={NODE_TYPES}
                     edgeTypes={EDGE_TYPES}
-                    minZoom={MIN_ZOOM}
+                    minZoom={CANVAS_MIN_ZOOM}
                     maxZoom={MAX_ZOOM}
                     panOnScroll
                     zoomOnScroll={false}

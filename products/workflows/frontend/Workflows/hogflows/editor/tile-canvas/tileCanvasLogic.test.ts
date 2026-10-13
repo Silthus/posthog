@@ -230,6 +230,38 @@ describe('tileCanvasLogic', () => {
 
         afterEach(() => jest.useRealTimers())
 
+        it('asks the canvas to bring an opened path into view once its frame is laid out', () => {
+            const [group] = logic.values.pathGroups
+            const frame = { x: 40, y: 300, width: 520, height: 260 }
+
+            logic.actions.openPath(group.id)
+            logic.actions.setLayout({
+                positions: {},
+                edges: {},
+                frames: { [`frame:${group.id}`]: frame },
+                width: 600,
+                height: 600,
+            })
+
+            expect(logic.values.frameFocus).toEqual({ box: frame, request: 1 })
+        })
+
+        it('brings the path of a step picked elsewhere into view', () => {
+            const group = logic.values.pathGroups.find((candidate) => candidate.memberIds.includes('a2'))!
+            const frame = { x: 0, y: 120, width: 300, height: 200 }
+
+            logic.actions.setSelectedNodeId('a2')
+            logic.actions.setLayout({
+                positions: {},
+                edges: {},
+                frames: { [`frame:${group.id}`]: frame },
+                width: 0,
+                height: 0,
+            })
+
+            expect(logic.values.frameFocus?.box).toEqual(frame)
+        })
+
         it('collapses every path someone collapses in quick succession', () => {
             const pathIds = logic.values.pathGroups.map((group) => group.id)
             logic.actions.setOpenPathIds(pathIds)

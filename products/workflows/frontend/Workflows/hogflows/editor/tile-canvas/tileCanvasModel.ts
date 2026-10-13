@@ -406,6 +406,31 @@ export function viewportAfterResize(viewport: Viewport, previous: Size, next: Si
     }
 }
 
+export const CANVAS_MIN_ZOOM = 0.15
+export const FIT_MARGIN = { side: 24, top: 32, bottom: 96 }
+
+/** The command bar floats over the bottom of the canvas, so the room to show things in ends above it. */
+function roomInView(canvas: Size): Size {
+    return {
+        width: canvas.width - FIT_MARGIN.side * 2,
+        height: canvas.height - FIT_MARGIN.top - FIT_MARGIN.bottom,
+    }
+}
+
+/** Centres a frame in view. Zooms out only when the frame does not fit at the zoom the person chose. */
+export function viewportToFit(frame: Point & Size, canvas: Size, zoom: number): Viewport {
+    const room = roomInView(canvas)
+    const fits = frame.width * zoom <= room.width && frame.height * zoom <= room.height
+    const nextZoom = fits
+        ? zoom
+        : Math.max(CANVAS_MIN_ZOOM, Math.min(room.width / frame.width, room.height / frame.height))
+    return {
+        x: FIT_MARGIN.side + (room.width - frame.width * nextZoom) / 2 - frame.x * nextZoom,
+        y: FIT_MARGIN.top + (room.height - frame.height * nextZoom) / 2 - frame.y * nextZoom,
+        zoom: nextZoom,
+    }
+}
+
 export interface MiniFlowLayout {
     nodes: { actionId: string; x: number; y: number; layer: number }[]
     edges: { from: Point; to: Point }[]

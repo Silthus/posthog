@@ -11,6 +11,7 @@ import {
     stepCount,
     stepCountsRequest,
     viewportAfterResize,
+    viewportToFit,
 } from './tileCanvasModel'
 
 const step = (id: string, type: HogFlowAction['type'] = 'function'): HogFlowAction =>
@@ -343,6 +344,37 @@ describe('tileCanvasModel', () => {
                 focus
             )
         ).toEqual(expected)
+    })
+})
+
+describe('viewportToFit', () => {
+    const canvas = { width: 1000, height: 700 }
+
+    it.each([
+        {
+            name: 'centres a frame that already fits, at the zoom the person chose',
+            frame: { x: 100, y: 200, width: 400, height: 300 },
+            zoom: 0.8,
+            expected: { x: 260, y: 32 + (572 - 240) / 2 - 200 * 0.8, zoom: 0.8 },
+        },
+        {
+            name: 'zooms out until a wide frame fits, then centres it',
+            frame: { x: 0, y: 0, width: 1904, height: 300 },
+            zoom: 1,
+            expected: { x: 24, y: 32 + (572 - 150) / 2, zoom: 0.5 },
+        },
+        {
+            name: 'never zooms out further than the canvas allows',
+            frame: { x: 0, y: 0, width: 20000, height: 300 },
+            zoom: 1,
+            expected: { x: 500 - 10000 * 0.15, y: 32 + (572 - 45) / 2, zoom: 0.15 },
+        },
+    ])('$name', ({ frame, zoom, expected }) => {
+        const viewport = viewportToFit(frame, canvas, zoom)
+
+        expect(viewport.zoom).toBeCloseTo(expected.zoom)
+        expect(viewport.x).toBeCloseTo(expected.x)
+        expect(viewport.y).toBeCloseTo(expected.y)
     })
 })
 
