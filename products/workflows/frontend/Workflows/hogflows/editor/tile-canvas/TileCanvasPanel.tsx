@@ -4,9 +4,10 @@ import { workflowLogic } from '../../../workflowLogic'
 import { WorkflowRevisions } from '../../../WorkflowRevisions'
 import { HogFlowEditorPanel } from '../../panel/HogFlowEditorPanel'
 import { tileCanvasLogic } from './tileCanvasLogic'
+import { TileStepPanelHead } from './TileStepPanelHead'
 
 export function TileCanvasPanel(): JSX.Element {
-    const { isHistoryOpen } = useValues(tileCanvasLogic)
+    const { isHistoryOpen, selectedNode } = useValues(tileCanvasLogic)
     const { closePanel } = useActions(tileCanvasLogic)
     const { logicProps } = useValues(workflowLogic)
     const historyView =
@@ -20,5 +21,12 @@ export function TileCanvasPanel(): JSX.Element {
                   ),
               }
             : undefined
-    return <HogFlowEditorPanel layout="docked" onClose={closePanel} view={historyView} />
+    return (
+        <HogFlowEditorPanel
+            layout="docked"
+            onClose={closePanel}
+            view={historyView}
+            stepHead={selectedNode ? <TileStepPanelHead action={selectedNode.data} /> : undefined}
+        />
+    )
 }

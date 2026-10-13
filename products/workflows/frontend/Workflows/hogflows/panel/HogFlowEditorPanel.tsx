@@ -29,12 +29,15 @@ export interface HogFlowEditorPanelProps {
     layout?: 'floating' | 'panel' | 'docked'
     onClose?: () => void
     view?: { title: string; content: JSX.Element }
+    /** Replaces the selected step's head, for a canvas that draws steps its own way. */
+    stepHead?: JSX.Element
 }
 
 export function HogFlowEditorPanel({
     layout = 'floating',
     onClose,
     view,
+    stepHead,
 }: HogFlowEditorPanelProps = {}): JSX.Element | null {
     const { panelWidth, selectedNode, mode, workflow } = useValues(hogFlowEditorLogic)
     const { clearPanelWidth, setMode, setPanelWidth, setSelectedNodeId } = useActions(hogFlowEditorLogic)
@@ -148,9 +151,9 @@ export function HogFlowEditorPanel({
                     view.content
                 ) : (
                     <>
-                        {selectedNode && ['build', 'metrics', 'test', 'logs'].includes(mode) && (
-                            <HogFlowEditorPanelSelectedStep />
-                        )}
+                        {selectedNode &&
+                            ['build', 'metrics', 'test', 'logs'].includes(mode) &&
+                            (stepHead ?? <HogFlowEditorPanelSelectedStep />)}
                         {mode === 'build' && (
                             <>{!selectedNode ? <HogFlowEditorPanelBuild /> : <HogFlowEditorPanelBuildDetail />}</>
                         )}
