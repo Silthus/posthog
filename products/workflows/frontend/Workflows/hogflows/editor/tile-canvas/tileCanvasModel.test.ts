@@ -11,6 +11,7 @@ import {
     stepCount,
     stepCountsRequest,
     viewportAfterResize,
+    readableFitViewport,
     viewportToFit,
 } from './tileCanvasModel'
 
@@ -424,6 +425,23 @@ describe('viewportToFit', () => {
         expect(viewport.zoom).toBeCloseTo(expected.zoom)
         expect(viewport.x).toBeCloseTo(expected.x)
         expect(viewport.y).toBeCloseTo(expected.y)
+    })
+})
+
+describe('readableFitViewport', () => {
+    it.each([
+        { name: 'fits a small workflow at full size', bounds: { x: 0, y: 0, width: 400, height: 300 }, zoom: 1 },
+        {
+            name: 'keeps a wide workflow readable, for people to pan',
+            bounds: { x: 0, y: 0, width: 4000, height: 300 },
+            zoom: 0.66,
+        },
+        { name: 'keeps a long workflow readable too', bounds: { x: 0, y: 0, width: 400, height: 6000 }, zoom: 0.66 },
+    ])('$name', ({ bounds, zoom }) => {
+        const viewport = readableFitViewport(bounds, { width: 1000, height: 700 })
+
+        expect(viewport.zoom).toBeCloseTo(zoom)
+        expect(viewport.x).toBeGreaterThanOrEqual(0)
     })
 })
 

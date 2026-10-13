@@ -572,14 +572,11 @@ export function viewportToFit(frame: Point & Size, canvas: Size, zoom: number): 
 
 const MIN_READABLE_ZOOM = 0.66
 
-/** Fits the workflow's width, but never shrinks below a readable zoom just to fit a long workflow's height. */
+/** Fits the workflow, but never shrinks it below a readable zoom: people pan to see the rest of a big one. */
 export function readableFitViewport(bounds: Point & Size, canvas: Size): Viewport {
     const width = bounds.width + FIT_MARGIN.side * 2
     const height = bounds.height + FIT_MARGIN.top + FIT_MARGIN.bottom
-    const zoom = Math.max(
-        CANVAS_MIN_ZOOM,
-        Math.min(1, canvas.width / width, Math.max(canvas.height / height, MIN_READABLE_ZOOM))
-    )
+    const zoom = Math.min(1, Math.max(MIN_READABLE_ZOOM, Math.min(canvas.width / width, canvas.height / height)))
     return {
         x: Math.max(FIT_MARGIN.side, (canvas.width - bounds.width * zoom) / 2) - bounds.x * zoom,
         y: FIT_MARGIN.top - bounds.y * zoom,
