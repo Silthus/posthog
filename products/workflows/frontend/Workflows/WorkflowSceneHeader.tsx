@@ -32,7 +32,14 @@ import { workflowLogic } from './workflowLogic'
 import { WorkflowSceneLogicProps } from './workflowSceneLogic'
 import { parseWorkflowTriggerPrefill, TRIGGER_PREFILL_PARAM } from './workflowTriggerPrefill'
 
-export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.Element => {
+type WorkflowSceneHeaderProps = WorkflowSceneLogicProps & {
+    titleInWorkflowBar?: boolean
+}
+
+export const WorkflowSceneHeader = ({
+    titleInWorkflowBar = false,
+    ...props
+}: WorkflowSceneHeaderProps = {}): JSX.Element => {
     const {
         workflow,
         hasUnsavedChanges,
@@ -199,8 +206,8 @@ export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.El
                 </SceneMenuBar>
             )}
             <SceneTitleSection
-                name={workflow?.name}
-                description={workflow?.description}
+                name={titleInWorkflowBar ? null : workflow?.name}
+                description={titleInWorkflowBar ? null : workflow?.description}
                 resourceType={{ type: 'workflows' }}
                 canEdit
                 onNameChange={(name) => setWorkflowValue('name', name)}

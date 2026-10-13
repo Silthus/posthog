@@ -107,6 +107,7 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
     )
     const { featureFlags } = useValues(featureFlagLogic)
     const selfOptimisingEnabled = !!featureFlags[FEATURE_FLAGS.SELF_OPTIMISING_WORKFLOWS]
+    const tileCanvasEnabled = !!featureFlags[FEATURE_FLAGS.WORKFLOWS_TILE_CANVAS]
     const isSavedWorkflow = !!props.id && props.id !== 'new'
     const { sceneIntegrationEnabled } = useValues(sceneAgentPanelLogic)
     const { aiComposerAvailable } = useValues(newWorkflowLogic)
@@ -229,7 +230,10 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
     return (
         <SceneContent className="h-full flex flex-col grow" data-attr="workflow-scene">
             <BindLogic logic={workflowLogic} props={workflowProps}>
-                <WorkflowSceneHeader {...props} />
+                <WorkflowSceneHeader
+                    {...props}
+                    titleInWorkflowBar={tileCanvasEnabled && (!isSavedWorkflow || activeTab === 'workflow')}
+                />
                 <WorkflowEmailPauseBanner />
                 {selfOptimisingEnabled && isSavedWorkflow && <WorkflowSuggestionsNotice id={props.id!} />}
                 {/* Only show Logs and Metrics tabs if the workflow has already been created */}

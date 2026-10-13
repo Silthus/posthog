@@ -1,60 +1,18 @@
 import { useActions, useValues } from 'kea'
 import { useMemo, useRef } from 'react'
 
-import { IconBrackets, IconCollapse, IconExpand, IconList, IconPlay, IconPlus, IconScreen } from '@posthog/icons'
+import { IconPlus } from '@posthog/icons'
 
 import { CanvasCommand, StepPalette } from './StepPalette'
 import { tileCanvasLogic } from './tileCanvasLogic'
+import { useCanvasCommands } from './useCanvasCommands'
 
 export function CommandBar(): JSX.Element {
     const triggerRef = useRef<HTMLButtonElement>(null)
-    const { commandPaletteQuery, paletteSections, pathGroups, allPathsCollapsed } = useValues(tileCanvasLogic)
-    const { openCommandPalette, closeCommandPalette, startPlacing, openPanel, toggleAllPaths, requestFit } =
-        useActions(tileCanvasLogic)
-
-    const commands = useMemo(
-        (): CanvasCommand[] => [
-            {
-                id: 'test',
-                label: 'Test',
-                hint: 'Run the workflow for one person',
-                icon: <IconPlay />,
-                run: () => openPanel('test'),
-            },
-            {
-                id: 'logs',
-                label: 'Logs',
-                hint: 'Recent runs, newest first',
-                icon: <IconList />,
-                run: () => openPanel('logs'),
-            },
-            {
-                id: 'variables',
-                label: 'Variables',
-                hint: 'Values the steps can read and write',
-                icon: <IconBrackets />,
-                run: () => openPanel('variables'),
-            },
-            ...(pathGroups.length
-                ? [
-                      {
-                          id: 'paths',
-                          label: allPathsCollapsed ? 'Open all paths' : 'Collapse all paths',
-                          icon: allPathsCollapsed ? <IconExpand /> : <IconCollapse />,
-                          run: toggleAllPaths,
-                      },
-                  ]
-                : []),
-            {
-                id: 'fit',
-                label: 'Fit to screen',
-                hint: 'Show the whole workflow',
-                icon: <IconScreen />,
-                run: requestFit,
-            },
-        ],
-        [openPanel, pathGroups.length, allPathsCollapsed, toggleAllPaths, requestFit]
-    )
+    const { commandPaletteQuery, paletteSections } = useValues(tileCanvasLogic)
+    const { openCommandPalette, closeCommandPalette, startPlacing } = useActions(tileCanvasLogic)
+    const { panel, view } = useCanvasCommands()
+    const commands = useMemo((): CanvasCommand[] => [...panel, ...view], [panel, view])
 
     return (
         <div className="relative">

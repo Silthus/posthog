@@ -4,6 +4,7 @@ import { LemonBanner, LemonButton, SpinnerOverlay } from '@posthog/lemon-ui'
 
 import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
 
+import { CanvasCommandGroup } from './hogflows/editor/tile-canvas/CanvasCommandGroup'
 import { HogFlowEditor } from './hogflows/HogFlowEditor'
 import { hogFlowEditorLogic } from './hogflows/hogFlowEditorLogic'
 import { WorkflowLogicProps, workflowLogic } from './workflowLogic'
@@ -17,7 +18,9 @@ export function Workflow(props: WorkflowLogicProps): JSX.Element {
     const { editorLayout } = useValues(hogFlowEditorLogic(logicProps))
     const { setEditorLayout } = useActions(hogFlowEditorLogic(logicProps))
     const treeViewEnabled = useFeatureFlag('WORKFLOWS_LINEAR_VIEW')
-    const tileCanvasEnabled = useFeatureFlag('WORKFLOWS_TILE_CANVAS')
+    const tileCanvasEnabled = !!useFeatureFlag('WORKFLOWS_TILE_CANVAS')
+    const isTreeView = !!treeViewEnabled && editorLayout === 'simple'
+    const isTileCanvas = tileCanvasEnabled && !isTreeView
 
     return (
         <div className="relative flex h-[calc(100vh-13rem)] max-h-full min-h-[25rem] grow flex-col overflow-hidden rounded-md border">
@@ -26,6 +29,8 @@ export function Workflow(props: WorkflowLogicProps): JSX.Element {
                 editorLayout={editorLayout}
                 showEditorLayoutToggle={treeViewEnabled}
                 onEditorLayoutChange={setEditorLayout}
+                showTitle={tileCanvasEnabled}
+                commands={isTileCanvas ? <CanvasCommandGroup {...logicProps} /> : undefined}
             />
             {/* Brief working/disabled overlay while we reconcile to an edit made elsewhere (clean state). */}
             {isSyncingExternalEdit && <SpinnerOverlay />}
@@ -51,10 +56,7 @@ export function Workflow(props: WorkflowLogicProps): JSX.Element {
             {!originalWorkflow && workflowLoading ? (
                 <SpinnerOverlay />
             ) : (
-                <HogFlowEditor
-                    isTreeView={!!treeViewEnabled && editorLayout === 'simple'}
-                    isTileCanvas={!!tileCanvasEnabled}
-                />
+                <HogFlowEditor isTreeView={isTreeView} isTileCanvas={isTileCanvas} />
             )}
         </div>
     )
