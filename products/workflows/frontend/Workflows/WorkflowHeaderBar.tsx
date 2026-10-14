@@ -13,6 +13,7 @@ import { SceneName } from '~/layout/scenes/components/SceneTitleSection'
 import type { HogFlowEditorLayout } from './hogflows/hogFlowEditorLogic'
 import { WorkflowActions } from './WorkflowActions'
 import { WorkflowLogicProps, workflowLogic } from './workflowLogic'
+import { WorkflowSceneTabActions } from './WorkflowSceneTabActions'
 
 type WorkflowHeaderBarProps = WorkflowLogicProps & {
     editorLayout: HogFlowEditorLayout
@@ -61,8 +62,9 @@ export function WorkflowHeaderBar({
     }
 
     const showWorkflowStatus = !props.editTemplateId
+    const isSaved = !!props.id && props.id !== 'new'
     // Auto-save writes to a saved workflow, so a new one shows its Create button alone.
-    const showAutoSave = showWorkflowStatus && !!props.id && props.id !== 'new'
+    const showAutoSave = showWorkflowStatus && isSaved
     const isActive = originalWorkflow.status === 'active'
     const isEditingDraftOfLive = isActive && (hasStagedDraft || hasUnsavedChanges)
 
@@ -161,6 +163,8 @@ export function WorkflowHeaderBar({
                 <div className="flex flex-wrap items-center gap-1.5">
                     <WorkflowActions {...props} />
                 </div>
+                {/* A saved workflow shows these beside its tabs, and a new one has no tabs yet. */}
+                {!isSaved && <WorkflowSceneTabActions />}
             </div>
         </div>
     )
