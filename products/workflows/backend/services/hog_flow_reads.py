@@ -26,7 +26,7 @@ from products.workflows.backend.facade.contracts import (
     WorkflowPage,
     WorkflowRef,
 )
-from products.workflows.backend.facade.enums import HogFlowScheduleStatus, WorkflowProposalStatus
+from products.workflows.backend.facade.enums import HogFlowScheduleStatus, HogFlowType, WorkflowProposalStatus
 from products.workflows.backend.models.hog_flow.hog_flow import MESSAGING_ACTION_TYPES, HogFlow
 from products.workflows.backend.models.hog_flow_schedule import HogFlowSchedule
 from products.workflows.backend.models.workflow_proposal import WorkflowProposal
@@ -222,7 +222,10 @@ def list_workflows(
     template_cache: TemplateCache = {}
     return WorkflowPage(
         count=count,
-        results=[_to_workflow(flow, user_access_control, template_cache, with_schedules=False) for flow in flows],
+        results=[
+            _to_workflow(flow, user_access_control, template_cache, with_schedules=False, summaries=query.summaries)
+            for flow in flows
+        ],
     )
 
 
@@ -250,7 +253,9 @@ def _list_queryset(
     # workflow with one suggestion would push a fresh one off their first page.
     # `id` breaks ties so LIMIT/OFFSET paging stays stable: rows sharing an updated_at can
     # otherwise repeat on one page and never appear on another.
-    if query.suggestions_first:
+    if query.summaries:
+        queryset = annotate_workflow_type(queryset).order_by("-created_at", "-id")
+    elif query.suggestions_first:
         queryset = queryset.order_by("-pending_suggestions", "-updated_at", "-id")
     else:
         queryset = queryset.order_by("-updated_at", "-id")
@@ -314,10 +319,12 @@ def _list_queryset(
     regex_pattern = re.escape(query.search).replace(r"\ ", r"[\s\-_]*")
 
     # Name and description are small columns, while the step search has to read every workflow's `actions`
-    # JSON (tens of KB per email step). Only fall through to the step content when nothing matched by
-    # name, so the common search stays cheap and a subject line or body text, which rarely appears in a
-    # workflow name, is still found.
+    # JSON (tens of KB per email step). The list falls through to the step content only when nothing
+    # matched by name, so its common search stays cheap. Summary pages return both kinds of match
+    # together, because the redesigned list shows every workflow that mentions the term, and pay the scan.
     by_name = Q(name__iregex=regex_pattern) | Q(description__iregex=regex_pattern)
+    if query.summaries:
+        return queryset.filter(by_name | Q(_action_content_matches(regex_pattern)))
     if queryset.filter(by_name).exists():
         return queryset.filter(by_name)
     return queryset.filter(Q(_action_content_matches(regex_pattern)))
@@ -329,8 +336,11 @@ def _to_workflow(
     template_cache: TemplateCache,
     *,
     with_schedules: bool,
+    summaries: bool = False,
 ) -> Workflow:
-    masked: dict[str, object] = {"actions": flow.actions, "trigger": flow.trigger, "draft": flow.draft}
+    masked: dict[str, object] = {"trigger": flow.trigger}
+    if not summaries:
+        masked.update(actions=flow.actions, draft=flow.draft)
     mask_workflow_fields(
         masked,
         live_actions=flow.actions,
@@ -359,14 +369,14 @@ def _to_workflow(
         exit_condition=flow.exit_condition,
         email_sending_rate_limit=flow.email_sending_rate_limit,
         edges=flow.edges,
-        actions=cast("list[dict] | dict", masked["actions"]),
+        actions=cast("list[dict] | dict", masked.get("actions", [])),
         abort_action=flow.abort_action,
         variables=flow.variables,
         billable_action_types=flow.billable_action_types,
         schedules=tuple(list_schedules_oldest_first(team_id=flow.team_id, hog_flow_id=flow.id))
         if with_schedules
         else (),
-        draft=cast("dict | None", masked["draft"]),
+        draft=cast("dict | None", masked.get("draft")),
         draft_updated_at=flow.draft_updated_at,
         action_redirects=flow.action_redirects,
         email_sending_paused_at=flow.email_sending_paused_at,
@@ -374,6 +384,7 @@ def _to_workflow(
         email_sending_paused_by=flow.email_sending_paused_by,
         email_sending_resumed_at=flow.email_sending_resumed_at,
         user_access_level=access_level,
+        workflow_type=getattr(flow, "workflow_type", None),
         pending_suggestions=getattr(flow, "pending_suggestions", None),
         suggestions_enabled=getattr(flow, "suggestions_enabled", None),
     )
@@ -384,11 +395,33 @@ def _to_workflow(
 # by surface in the UI (see WorkflowTypeTag), so returning it under `messaging` would contradict the
 # tag on the row. Accepting several lets a list say which surfaces it covers, which is how the
 # workflows page asks for everything except the ones that moved out.
-WORKFLOW_TYPES: Final[tuple[str, ...]] = ("messaging", "automation", "loop", "broadcast")
+WORKFLOW_TYPES: Final[tuple[str, ...]] = tuple(HogFlowType.values)
 OWNED_WORKFLOW_TYPES: Final[dict[str, str]] = {
     "loop": HogFlow.OriginProduct.LOOPS,
     "broadcast": HogFlow.OriginProduct.BROADCASTS,
 }
+
+
+def _has_messaging_action_q() -> Q:
+    messaging = Q()
+    for action_type in MESSAGING_ACTION_TYPES:
+        messaging |= Q(actions__contains=[{"type": action_type}])
+    return messaging
+
+
+def annotate_workflow_type(queryset: QuerySet) -> QuerySet:
+    """Adds `workflow_type`, decided by the same rules as the `type` filter in workflow_type_q."""
+    return queryset.annotate(
+        workflow_type=models.Case(
+            *(
+                models.When(origin_product=origin_product, then=models.Value(workflow_type))
+                for workflow_type, origin_product in OWNED_WORKFLOW_TYPES.items()
+            ),
+            models.When(_has_messaging_action_q(), then=models.Value(HogFlowType.MESSAGING)),
+            default=models.Value(HogFlowType.AUTOMATION),
+            output_field=models.CharField(),
+        )
+    )
 
 
 def workflow_type_q(requested: set[str]) -> Q:
@@ -397,9 +430,7 @@ def workflow_type_q(requested: set[str]) -> Q:
     if not behavioural:
         return owned
 
-    messaging = Q()
-    for action_type in MESSAGING_ACTION_TYPES:
-        messaging |= Q(actions__contains=[{"type": action_type}])
+    messaging = _has_messaging_action_q()
     unowned = ~Q(origin_product__in=list(OWNED_WORKFLOW_TYPES.values()))
     if behavioural == {"messaging", "automation"}:
         return owned | unowned

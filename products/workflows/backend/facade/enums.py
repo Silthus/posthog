@@ -104,3 +104,10 @@ class EmailDraftFallbackReason(LabeledStrEnum):
     TIMEOUT = "timeout", "The model took too long"
     MODEL_ERROR = "model_error", "The model call failed"
     INVALID_OUTPUT = "invalid_output", "The model returned an unusable draft"
+
+
+class HogFlowType(LabeledStrEnum):
+    MESSAGING = "messaging"
+    AUTOMATION = "automation"
+    LOOP = "loop"
+    BROADCAST = "broadcast"
