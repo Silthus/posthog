@@ -1,0 +1,7 @@
+2026-10-14 14:37:05.554000	Starting workflow execution at trigger on [Event:01a13ad8-7044-0000-8a91-40d7616322be|$workflows_api_send|2026-10-14T14:37:05.477+00:00]
+2026-10-14 14:37:05.555000	Executing action [Action:api_send_email]
+2026-10-14 14:37:05.748000	[Action:api_send_email] Email sent to your local maildev server: http://127.0.0.1:1080
+2026-10-14 14:37:05.749000	[Action:api_send_email] Email sent to jane@example.com from Tom & Jerry <hello@example.com> [Email:01a13ad8-6d88-0000-e3ba-eb67ad7f0190:api_send_email]
+2026-10-14 14:37:05.750000	Workflow moved to action [Action:exit_node]
+2026-10-14 14:37:05.751000	Executing action [Action:exit_node]
+2026-10-14 14:37:05.752000	Workflow completed

@@ -1,0 +1,32 @@
+    @patch(CDP_POST_PATH, return_value=_cdp_response())
+    def test_sends_one_email_through_the_api_sends_workflow(self, cdp_post: MagicMock, _flag: MagicMock) -> None:
+        response = self._send(
+            {
+                "from": "Tom & Jerry <hello@example.com>",
+                "to": "jane@example.com",
+                "subject": "Welcome <Jane> & friends",
+                "html": "<p>Hi Jane</p>",
+                "text": "Hi Jane",
+                "replyTo": "support@example.com",
+                "cc": ["ops@example.com", "Team <team@example.com>"],
+                "bcc": "audit@example.com",
+                "distinctId": "user_42",
+            }
+        )
+    
+>       assert response.status_code == status.HTTP_200_OK, response.json()
+E       AssertionError: {'type': 'invalid_request', 'code': 'not_found', 'detail': 'Endpoint not found.', 'attr': None}
+E       assert 404 == 200
+E        +  where 404 = <Response status_code=404, "application/json">.status_code
+E        +  and   200 = status.HTTP_200_OK
+
+products/workflows/backend/tests/api/test_email_sends.py:87: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  posthog.middleware:middleware.py:884 {'rss_mb_start': 2132.7, 'rss_mb_end': 2336.6, 'rss_mb_delta': 203.9, 'request_path': '/api/projects/@current/emails/', 'method': 'POST', 'worker_pid': 3242342, 'event': 'request_memory_growth', 'timestamp': '2026-10-14T14:03:26.140742Z', 'logger': 'posthog.middleware', 'level': 'warning', 'pid': 3242342, 'tid': 261252290654240}
+WARNING  django.request:log.py:253 Not Found: /api/projects/@current/emails/
+=========================== short test summary info ============================
+FAILED products/workflows/backend/tests/api/test_email_sends.py::TestEmailSendsAPI::test_sends_one_email_through_the_api_sends_workflow
+======================== 1 failed in 872.36s (0:14:32) =========================
+💥 Command failed: pytest -s products/workflows/backend/tests/api/test_email_sends.py
+
+[exited with code 0]

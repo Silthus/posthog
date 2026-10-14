@@ -1,0 +1,2 @@
+{"type":"server_error","code":"send_service_unavailable","detail":"PostHog couldn't queue the email right now. Retry with the same Idempotency-Key. PostHog sends the email at most once.","attr":null,"docs_url":"https://posthog.com/docs/workflows/email-api#send_service_unavailable"}
+HTTP 503

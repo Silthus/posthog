@@ -1,0 +1,6 @@
+$ curl -X POST .../api/projects/@current/emails/ -d '{"from":"Acme <news@unverified.example.com>","to":"jane@example.com","subject":"Unverified sender","text":"Hi"}'
+{"type":"validation_error","code":"sender_not_verified","detail":"The sender can't send yet because its domain is not verified. PostHog needs the domain's DNS records in place before it sends from that domain. Finish domain verification for the sender in Workflows > Channels, then send again.","attr":"from","docs_url":"https://posthog.com/docs/workflows/email-api#sender_not_verified"}
+HTTP 422
+$ curl -X POST .../api/projects/@current/emails/ -d '{"from":"hello@acme-unknown.example.org","to":"jane@example.com","subject":"Unknown domain","text":"Hi"}'
+{"type":"validation_error","code":"sender_not_found","detail":"No email sender in this project matches the domain of from. PostHog only sends from domains that the project has added as senders. Add and verify a sender for that domain in Workflows > Channels, or leave out from to use the project's default sender.","attr":"from","docs_url":"https://posthog.com/docs/workflows/email-api#sender_not_found"}
+HTTP 422

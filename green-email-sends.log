@@ -1,0 +1,95 @@
+Detected: Python test (pytest)
+🚀 pytest -s products/workflows/backend/tests/api/test_email_sends.py
+{'event': "\n                You indicated your instance is behind a proxy (IS_BEHIND_PROXY env var),\n                but you haven't configured any trusted proxies. See\n                https://posthog.com/docs/configuring-posthog/running-behind-proxy for details.\n            ", 'timestamp': '2026-10-14T14:05:20.373235Z', 'logger': 'posthog.settings.access', 'level': 'warning', 'pid': 3324805, 'tid': 273586304786464}
+/home/coder/.t3/worktrees/posthog/t3-9fda773c/.flox/cache/venv/lib/python3.14/site-packages/structlog/stdlib.py:1166: UserWarning: Remove `format_exc_info` from your processor chain if you want pretty exceptions.
+  ed = p(logger, meth_name, ed)  # type: ignore[arg-type]
+[2m2026-10-14T14:05:21.707658Z[0m [[31m[1merror    [0m] [1mPath must be a valid database or directory containing databases.[0m [[0m[1m[34mposthog.exceptions_capture[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+Traceback (most recent call last):
+  File "/home/coder/dev/posthog/.claude/worktrees/agent-a6e04d0d98f6becc8/posthog/geoip.py", line 15, in <module>
+    geoip: Optional[GeoIP2] = GeoIP2(cache=8)
+                              ~~~~~~^^^^^^^^^
+  File "/home/coder/.t3/worktrees/posthog/t3-9fda773c/.flox/cache/venv/lib/python3.14/site-packages/django/contrib/gis/geoip2.py", line 116, in __init__
+    raise GeoIP2Exception(
+        "Path must be a valid database or directory containing databases."
+    )
+django.contrib.gis.geoip2.GeoIP2Exception: Path must be a valid database or directory containing databases.
+/home/coder/.t3/worktrees/posthog/t3-9fda773c/.flox/cache/venv/lib/python3.14/site-packages/infi/clickhouse_orm/__init__.py:1: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  __import__("pkg_resources").declare_namespace(__name__)
+Running in test mode. Setting DEBUG and TEST environment variables.
+============================= test session starts ==============================
+platform linux -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0
+django: version: 5.2.18, settings: posthog.settings (from ini)
+rootdir: /home/coder/dev/posthog/.claude/worktrees/agent-a6e04d0d98f6becc8
+configfile: pytest.ini
+plugins: xdist-3.8.0, env-1.7.1, icdiff-0.9, split-0.11.0, rerunfailures-16.7, django-4.14.0, hypothesis-6.151.9, timeout-2.4.0, requests-mock-1.12.1, syrupy-6.1.1, mock-3.15.1, aiohttp-1.1.1, anyio-4.9.0, asyncio-1.4.0, durations-1.9.0, cov-7.1.0, time-machine-3.5.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=module, asyncio_default_test_loop_scope=module
+collected 31 items
+
+products/workflows/backend/tests/api/test_email_sends.py /home/coder/.t3/worktrees/posthog/t3-9fda773c/.flox/cache/venv/lib/python3.14/site-packages/django/core/handlers/base.py:61: UserWarning: No directory at: /home/coder/dev/posthog/.claude/worktrees/agent-a6e04d0d98f6becc8/staticfiles/
+  mw_instance = middleware(adapted_handler)
+/home/coder/.t3/worktrees/posthog/t3-9fda773c/.flox/cache/venv/lib/python3.14/site-packages/langchain_core/_api/deprecation.py:27: UserWarning: Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater.
+  from pydantic.v1.fields import FieldInfo as FieldInfoV1
+[2m2026-10-14T14:05:37.012605Z[0m [[33m[1mwarning  [0m] [1mrequest_memory_growth         [0m [[0m[1m[34mposthog.middleware[0m][0m [36mmethod[0m=[35mPOST[0m [36mpid[0m=[35m3324805[0m [36mrequest_path[0m=[35m/api/projects/@current/emails/[0m [36mrss_mb_delta[0m=[35m405.5[0m [36mrss_mb_end[0m=[35m1252.5[0m [36mrss_mb_start[0m=[35m847.0[0m [36mtid[0m=[35m273586304786464[0m [36mworker_pid[0m=[35m3324805[0m
+Default migration data already present.
+Default migration data already present.
+./home/coder/.t3/worktrees/posthog/t3-9fda773c/.flox/cache/venv/lib/python3.14/site-packages/django/core/handlers/base.py:61: UserWarning: No directory at: /home/coder/dev/posthog/.claude/worktrees/agent-a6e04d0d98f6becc8/staticfiles/
+  mw_instance = middleware(adapted_handler)
+[2m2026-10-14T14:05:37.063696Z[0m [[33m[1mwarning  [0m] [1mForbidden: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.063804Z[0m [[33m[1mwarning  [0m] [1mForbidden: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.108307Z[0m [[33m[1mwarning  [0m] [1mForbidden: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.108417Z[0m [[33m[1mwarning  [0m] [1mForbidden: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.148178Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.148280Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.189945Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.190042Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.225421Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.225514Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.274013Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.274118Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.312193Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.312288Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.347359Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.347453Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.381779Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.381872Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.415158Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.415244Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.449799Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.449904Z[0m [[33m[1mwarning  [0m] [1mBad Request: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.487897Z[0m [[33m[1mwarning  [0m] [1mUnprocessable Content: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.487989Z[0m [[33m[1mwarning  [0m] [1mUnprocessable Content: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.527258Z[0m [[33m[1mwarning  [0m] [1mUnprocessable Content: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.527373Z[0m [[33m[1mwarning  [0m] [1mUnprocessable Content: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.563054Z[0m [[33m[1mwarning  [0m] [1mUnprocessable Content: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.563144Z[0m [[33m[1mwarning  [0m] [1mUnprocessable Content: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.601638Z[0m [[33m[1mwarning  [0m] [1mPayment Required: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.601738Z[0m [[33m[1mwarning  [0m] [1mPayment Required: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.641610Z[0m [[33m[1mwarning  [0m] [1mLocked: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.641719Z[0m [[33m[1mwarning  [0m] [1mLocked: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.684497Z[0m [[31m[1merror    [0m] [1mrequest_finished              [0m [[0m[1m[34mdjango_structlog.middlewares.request[0m][0m [36mcode[0m=[35m503[0m [36mcontainer_hostname[0m=[35munknown[0m [36mhost[0m=[35m[0m [36mip[0m=[35m127.0.0.1[0m [36mpid[0m=[35m3324805[0m [36mrequest[0m=[35m'POST /api/projects/@current/emails/'[0m [36mrequest_id[0m=[35m456a8e92-ee88-44f3-9b57-5a3cc628f090[0m [36mrss_mb[0m=[35m1256.9[0m [36mtid[0m=[35m273586304786464[0m [36muser_id[0m=[35m-1[0m [36mworker_pid[0m=[35m3324805[0m [36mx_forwarded_for[0m=[35m[0m
+[2m2026-10-14T14:05:37.684905Z[0m [[31m[1merror    [0m] [1mService Unavailable: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.684957Z[0m [[31m[1merror    [0m] [1mService Unavailable: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.724696Z[0m [[31m[1merror    [0m] [1mrequest_finished              [0m [[0m[1m[34mdjango_structlog.middlewares.request[0m][0m [36mcode[0m=[35m503[0m [36mcontainer_hostname[0m=[35munknown[0m [36mhost[0m=[35m[0m [36mip[0m=[35m127.0.0.1[0m [36mpid[0m=[35m3324805[0m [36mrequest[0m=[35m'POST /api/projects/@current/emails/'[0m [36mrequest_id[0m=[35mc56246b1-8dac-4720-96e0-d40987e9d02c[0m [36mrss_mb[0m=[35m1257.2[0m [36mtid[0m=[35m273586304786464[0m [36muser_id[0m=[35m-1[0m [36mworker_pid[0m=[35m3324805[0m [36mx_forwarded_for[0m=[35m[0m
+[2m2026-10-14T14:05:37.725077Z[0m [[31m[1merror    [0m] [1mService Unavailable: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.725141Z[0m [[31m[1merror    [0m] [1mService Unavailable: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.767727Z[0m [[31m[1merror    [0m] [1mrequest_finished              [0m [[0m[1m[34mdjango_structlog.middlewares.request[0m][0m [36mcode[0m=[35m503[0m [36mcontainer_hostname[0m=[35munknown[0m [36mhost[0m=[35m[0m [36mip[0m=[35m127.0.0.1[0m [36mpid[0m=[35m3324805[0m [36mrequest[0m=[35m'POST /api/projects/@current/emails/'[0m [36mrequest_id[0m=[35m41953f18-c7f9-4735-aea7-80440e54c693[0m [36mrss_mb[0m=[35m1257.6[0m [36mtid[0m=[35m273586304786464[0m [36muser_id[0m=[35m-1[0m [36mworker_pid[0m=[35m3324805[0m [36mx_forwarded_for[0m=[35m[0m
+[2m2026-10-14T14:05:37.768106Z[0m [[31m[1merror    [0m] [1mService Unavailable: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.768157Z[0m [[31m[1merror    [0m] [1mService Unavailable: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.809203Z[0m [[31m[1merror    [0m] [1mrequest_finished              [0m [[0m[1m[34mdjango_structlog.middlewares.request[0m][0m [36mcode[0m=[35m503[0m [36mcontainer_hostname[0m=[35munknown[0m [36mhost[0m=[35m[0m [36mip[0m=[35m127.0.0.1[0m [36mpid[0m=[35m3324805[0m [36mrequest[0m=[35m'POST /api/projects/@current/emails/'[0m [36mrequest_id[0m=[35mf7248d18-3b0c-4016-8af3-ffc6cccedd16[0m [36mrss_mb[0m=[35m1258.0[0m [36mtid[0m=[35m273586304786464[0m [36muser_id[0m=[35m-1[0m [36mworker_pid[0m=[35m3324805[0m [36mx_forwarded_for[0m=[35m[0m
+[2m2026-10-14T14:05:37.809572Z[0m [[31m[1merror    [0m] [1mService Unavailable: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.809626Z[0m [[31m[1merror    [0m] [1mService Unavailable: /api/projects/@current/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.859599Z[0m [[33m[1mwarning  [0m] [1mForbidden: /api/projects/6/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.859694Z[0m [[33m[1mwarning  [0m] [1mForbidden: /api/projects/6/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:37.918433Z[0m [[33m[1mwarning  [0m] [1mForbidden: /api/projects/6/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:37.918527Z[0m [[33m[1mwarning  [0m] [1mForbidden: /api/projects/6/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:38.046589Z[0m [[33m[1mwarning  [0m] [1mUnauthorized: /api/projects/6/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:38.046701Z[0m [[33m[1mwarning  [0m] [1mUnauthorized: /api/projects/6/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:38.076323Z[0m [[33m[1mwarning  [0m] [1mUnauthorized: /api/projects/6/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:38.076449Z[0m [[33m[1mwarning  [0m] [1mUnauthorized: /api/projects/6/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:38.115711Z[0m [[33m[1mwarning  [0m] [1mForbidden: /api/projects/6/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:38.115809Z[0m [[33m[1mwarning  [0m] [1mForbidden: /api/projects/6/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.[2m2026-10-14T14:05:38.168215Z[0m [[33m[1mwarning  [0m] [1mForbidden: /api/projects/6/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+[2m2026-10-14T14:05:38.168321Z[0m [[33m[1mwarning  [0m] [1mForbidden: /api/projects/6/emails/[0m [[0m[1m[34mdjango.request[0m][0m [36mpid[0m=[35m3324805[0m [36mtid[0m=[35m273586304786464[0m
+.....
+
+============================= 31 passed in 14.57s ==============================

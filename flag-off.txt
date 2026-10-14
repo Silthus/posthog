@@ -1,0 +1,3 @@
+$ curl -X POST http://127.0.0.1:8011/api/projects/@current/emails/ -H 'Authorization: Bearer phs_...' -d '{"from":"Acme <hello@example.com>","to":"jane@example.com","subject":"Flag off","text":"Hi"}'
+{"type":"authentication_error","code":"email_api_not_enabled","detail":"Sending email through the API is not enabled for this project. The email API is in beta and is turned on one project at a time. Contact PostHog support to ask for access. Retrying does not help until then.","attr":null,"docs_url":"https://posthog.com/docs/workflows/email-api#email_api_not_enabled"}
+HTTP 403

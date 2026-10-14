@@ -1,0 +1,18 @@
+{
+ "subject": "Ticket 471: Tom & Jerry say <hi>",
+ "from": [
+  {
+   "address": "hello@example.com",
+   "name": "Tom & Jerry"
+  }
+ ],
+ "to": [
+  {
+   "address": "jane@example.com",
+   "name": ""
+  }
+ ],
+ "html": "Hi Jane,<br>\nthis came from one API call.",
+ "text": "Hi Jane,\nthis came from one API call.",
+ "date": "2026-10-14T14:37:05.000Z"
+}
