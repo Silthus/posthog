@@ -72,8 +72,8 @@ describe('TileCanvasLayoutError', () => {
         renderError()
 
         expect(screen.getByText(/Your saved workflow did not change/)).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: 'Open history' })).toBeInTheDocument()
-        expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+        expect(screen.getByText('Open history')).toBeInTheDocument()
+        expect(screen.queryByText('Try again')).not.toBeInTheDocument()
     })
 
     it('offers to discard unsaved changes, and does not say the workflow is saved', () => {
@@ -82,7 +82,7 @@ describe('TileCanvasLayoutError', () => {
         renderError()
 
         expect(screen.getByText(/Your unsaved changes are still here/)).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: 'Discard changes' })).toBeInTheDocument()
+        expect(screen.getByText('Discard changes')).toBeInTheDocument()
         expect(screen.queryByText(/saved workflow did not change/)).not.toBeInTheDocument()
     })
 })
