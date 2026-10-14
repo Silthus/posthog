@@ -487,6 +487,15 @@ describe('viewportAnchoredOn', () => {
         expect(anchored.zoom).toBe(0.3)
     })
 
+    it('slides a frame sideways into view when it would open past the edge of the canvas', () => {
+        const frame = place(300, 620, 520, 300, 750)
+
+        const anchored = viewportAnchoredOn(stack, frame, { x: 100 - 430, y: 150 - 600, zoom: 1 }, canvas)
+
+        expect(anchored.zoom).toBe(1)
+        expect({ left: anchored.x + frame.x, top: anchored.y + frame.y }).toEqual({ left: 24, top: 150 })
+    })
+
     it('brings a stack into view when the frame it replaces started above the canvas', () => {
         const frame = place(300, 0, 520, 3000)
         const next = place(470, 0, 180, 90)

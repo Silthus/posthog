@@ -636,19 +636,28 @@ function anchorInRoom(anchor: Point, next: PathPlace, zoom: number, room: Screen
 }
 
 function zoomToShowFrom(anchor: Point, next: PathPlace, room: ScreenBounds, zoom: number): number {
-    const around = reach(next)
     const fitting = Math.min(
-        (anchor.x - room.left) / Math.max(around.left, 1),
-        (room.right - anchor.x) / Math.max(around.right, 1),
-        (room.bottom - anchor.y) / Math.max(around.bottom, 1)
+        (room.right - room.left) / Math.max(next.width, 1),
+        (room.bottom - anchor.y) / Math.max(reach(next).bottom, 1)
     )
     return fitting >= zoom ? zoom : Math.max(fitting, Math.min(zoom, MIN_READABLE_ZOOM))
 }
 
+/** Slides the view sideways only as far as needed for a box as wide as the canvas or narrower to show whole. */
+function slideIntoRoom(x: number, box: Point & Size, zoom: number, room: ScreenBounds): number {
+    const left = x + box.x * zoom
+    const right = left + box.width * zoom
+    if (right - left > room.right - room.left) {
+        return x
+    }
+    return x + Math.max(0, room.left - left) - Math.max(0, right - room.right)
+}
+
 /**
  * Keeps a path where the person saw it as it opens or collapses: the arrow into the path stays where it was on screen,
- * and everything else moves around it. Zooms out only as far as the new place needs, never below a readable zoom, and
- * never zooms in. A path opened from a stack out of view is centred instead.
+ * and everything else moves around it. A frame that would open past the side of the canvas slides in just enough to
+ * show whole. Zooms out only as far as the new place needs, never below a readable zoom, and never zooms in. A path
+ * opened from a stack out of view is centred instead.
  */
 export function viewportAnchoredOn(previous: PathPlace, next: PathPlace, viewport: Viewport, canvas: Size): Viewport {
     const room = roomBounds(canvas)
@@ -657,7 +666,8 @@ export function viewportAnchoredOn(previous: PathPlace, next: PathPlace, viewpor
     }
     const anchor = anchorInRoom(onScreen(previous.entry, viewport), next, viewport.zoom, room)
     const zoom = zoomToShowFrom(anchor, next, room, viewport.zoom)
-    return { x: anchor.x - next.entry.x * zoom, y: anchor.y - next.entry.y * zoom, zoom }
+    const x = slideIntoRoom(anchor.x - next.entry.x * zoom, next, zoom, room)
+    return { x, y: anchor.y - next.entry.y * zoom, zoom }
 }
 
 /** Fits the workflow, but never shrinks it below a readable zoom: people pan to see the rest of a big one. */
