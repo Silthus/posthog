@@ -12,7 +12,7 @@ from django.utils import timezone
 import structlog
 
 from posthog.api.app_metrics2 import fetch_app_metric_totals_by_source, fetch_app_metric_totals_by_team_and_source
-from posthog.models.integration import Integration
+from posthog.models.integration import SANDBOX_EMAIL_PROVIDER, Integration
 
 from products.workflows.backend.facade.contracts import (
     EMAIL_HEALTH_METRIC_NAMES,
@@ -216,6 +216,7 @@ def verified_email_domains(*, team_id: int) -> list[str]:
         dict.fromkeys(
             domain
             for domain in Integration.objects.filter(team_id=team_id, kind="email", config__verified=True)
+            .exclude(config__contains={"provider": SANDBOX_EMAIL_PROVIDER})
             .order_by("id")
             .values_list("config__domain", flat=True)
             if domain
