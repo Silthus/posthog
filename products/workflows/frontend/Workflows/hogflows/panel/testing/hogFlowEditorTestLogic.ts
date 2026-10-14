@@ -47,6 +47,7 @@ import { isSlackMessageTriggerConfig } from '../../registry/triggers/slackTrigge
 import { HogflowTestResult } from '../../steps/types'
 import { createExampleEvent, createExampleEventForTrigger } from '../../testEventFactory'
 import type { HogFlow } from '../../types'
+import { testEmailRecipientLogic } from './testEmailRecipientLogic'
 
 // Time range constants for event search
 const STANDARD_SEARCH_DAYS = 7
@@ -149,6 +150,8 @@ export interface hogFlowEditorTestLogicValues {
     groupTypes: Map<GroupTypeIndex, GroupType> // groupsModel
     mode: HogFlowEditorMode // hogFlowEditorLogic
     selectedNodeId: string | null // hogFlowEditorLogic
+    testingV2Enabled: boolean // testEmailRecipientLogic
+    testRunRequested: boolean // workflowLogic
     triggerAction: TriggerAction | null // workflowLogic
     workflow: HogFlow // workflowLogic
     workflowSanitized: HogFlow // workflowLogic
@@ -195,9 +198,18 @@ export interface hogFlowEditorTestLogicActions {
         from: string
         to: string
     } // hogFlowEditorLogic
+    setMode: (mode: 'build' | 'logs' | 'metrics' | 'test' | 'variables') => {
+        mode: 'build' | 'logs' | 'metrics' | 'test' | 'variables'
+    } // hogFlowEditorLogic
     setSelectedNodeId: (selectedNodeId: string | null) => {
         selectedNodeId: string | null
     } // hogFlowEditorLogic
+    clearTestRunRequest: () => {
+        value: true
+    } // workflowLogic
+    openTestPane: () => {
+        value: true
+    } // workflowLogic
     cancelSampleGlobalsLoading: () => {
         value: true
     }
@@ -263,6 +275,9 @@ export interface hogFlowEditorTestLogicActions {
     }
     resetTestInvocation: (values?: HogflowTestInvocation) => {
         values?: HogflowTestInvocation
+    }
+    runRequestedTestWhenReady: () => {
+        value: true
     }
     setCanTryExtendedSearch: (canTryExtendedSearch: boolean) => {
         canTryExtendedSearch: boolean
@@ -870,15 +885,22 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
     connect((props: WorkflowLogicProps) => ({
         values: [
             workflowLogic(props),
-            ['workflow', 'workflowSanitized', 'triggerAction'],
+            ['workflow', 'workflowSanitized', 'triggerAction', 'testRunRequested'],
             hogFlowEditorLogic,
             ['selectedNodeId', 'mode'],
             groupsModel,
             ['groupTypes'],
             groupsAccessLogic,
             ['groupsEnabled'],
+            testEmailRecipientLogic,
+            ['testingV2Enabled'],
         ],
-        actions: [hogFlowEditorLogic, ['setSelectedNodeId', 'setAnimatingEdgePair']],
+        actions: [
+            hogFlowEditorLogic,
+            ['setSelectedNodeId', 'setAnimatingEdgePair', 'setMode'],
+            workflowLogic(props),
+            ['openTestPane', 'clearTestRunRequest'],
+        ],
     })),
     actions({
         setTestResult: (testResult: HogflowTestResult | null) => ({ testResult }),
@@ -904,6 +926,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
         setEventSelectorOpen: (eventSelectorOpen: boolean) => ({ eventSelectorOpen }),
         setLastSearchedEventName: (eventName: string | null) => ({ eventName }),
         resetAccumulatedVariables: true,
+        runRequestedTestWhenReady: true,
     }),
     reducers({
         testResult: [
@@ -1314,6 +1337,7 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
             },
             submit: async (testInvocation: HogflowTestInvocation) => {
                 try {
+                    // nosemgrep: prefer-codegen-api-namespaced-workflows
                     const apiResponse = await api.hogFlows.createTestInvocation(values.workflow.id, {
                         configuration: values.workflowSanitized,
                         globals: {
@@ -1353,6 +1377,22 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
         },
     })),
     listeners(({ values, actions }) => ({
+        runRequestedTestWhenReady: () => {
+            const isTestingTrigger = values.mode === 'test' && values.selectedNodeId === values.triggerAction?.id
+            const testEventReady = !!values.sampleGlobals && !values.sampleGlobalsLoading
+            if (values.testRunRequested && isTestingTrigger && testEventReady && !values.isTestInvocationSubmitting) {
+                actions.clearTestRunRequest()
+                actions.setEventPanelOpen([])
+                actions.submitTestInvocation()
+            }
+        },
+        openTestPane: () => actions.runRequestedTestWhenReady(),
+        setMode: ({ mode }) => {
+            if (mode !== 'test' && values.testRunRequested) {
+                actions.clearTestRunRequest()
+            }
+            actions.runRequestedTestWhenReady()
+        },
         reloadSampleGlobalsOrDefer: () => {
             if (values.mode === 'test') {
                 actions.loadSampleGlobals()
@@ -1367,6 +1407,15 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
         },
         loadSampleGlobalsSuccess: () => {
             actions.setTestInvocationValue('globals', JSON.stringify(values.sampleGlobals, null, 2))
+            if (!values.sampleGlobals && values.testRunRequested) {
+                actions.clearTestRunRequest()
+            }
+            actions.runRequestedTestWhenReady()
+        },
+        loadSampleGlobalsFailure: () => {
+            if (values.testRunRequested) {
+                actions.clearTestRunRequest()
+            }
         },
         setSampleGlobals: () => {
             actions.setTestInvocationValue('globals', JSON.stringify(values.sampleGlobals, null, 2))
@@ -1374,7 +1423,11 @@ export const hogFlowEditorTestLogic = kea<hogFlowEditorTestLogicType>([
         cancelSampleGlobalsLoading: () => {
             // Just mark as cancelled - we'll ignore any results that come back
         },
-        setSelectedNodeId: () => {
+        setSelectedNodeId: ({ selectedNodeId }) => {
+            if (values.testRunRequested && selectedNodeId !== values.triggerAction?.id) {
+                actions.clearTestRunRequest()
+            }
+            actions.runRequestedTestWhenReady()
             // When we switch back to a trigger node, reset the flags
             // so we can try loading again
             if (values.noMatchingEvents) {
