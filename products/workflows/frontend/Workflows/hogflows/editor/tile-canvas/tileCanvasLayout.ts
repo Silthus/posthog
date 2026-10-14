@@ -2,6 +2,7 @@ import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk.bundled.js'
 
 import { getElk } from 'lib/elk'
 
+import { getEdgeId } from '../../edgeId'
 import { isInPathGroup, openPathFrames, PathGroup, Point, VisibleEdge, VisibleNode } from './tileCanvasModel'
 
 export const TILE_SIZE = 64
@@ -333,6 +334,12 @@ export function entryX(points: Point[] | undefined, top: number, fallback: numbe
         return a.x === b.x && Math.min(a.y, b.y) <= top && Math.max(a.y, b.y) >= top
     })
     return crossing?.x ?? fallback
+}
+
+/** Where the arrow into an open path crosses the top of its frame. */
+export function frameEntryX(group: PathGroup, box: Box, layout: CanvasLayout, edges: VisibleEdge[]): number {
+    const entry = edges.find((edge) => edge.originalEdgeKeys.includes(getEdgeId(group.entryEdge)))
+    return entryX(entry ? layout.edges[entry.id]?.points : undefined, box.y, box.x + box.width / 2)
 }
 
 export function canvasBounds(layout: CanvasLayout, sizes: Record<string, NodeSize>): Box | undefined {

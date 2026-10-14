@@ -262,44 +262,62 @@ describe('tileCanvasLogic', () => {
     })
 
     describe('paths', () => {
+        let layoutSpy: jest.SpyInstance
+
         beforeEach(async () => {
             jest.mocked(loadAppMetricsTotals).mockResolvedValue({})
             logic = await mountSavedCanvas()
             jest.useFakeTimers()
+            // The tests hand the canvas its layouts, so a real one must not land in between.
+            layoutSpy = jest.spyOn(tileCanvasLayout, 'layoutTileCanvas').mockReturnValue(new Promise(() => {}))
         })
 
-        afterEach(() => jest.useRealTimers())
+        afterEach(() => {
+            jest.useRealTimers()
+            layoutSpy.mockRestore()
+        })
 
-        it('asks the canvas to bring an opened path into view once its frame is laid out', () => {
+        const stackSize = { width: 180, height: 90, anchor: { x: 32, y: 32, width: 64, height: 64 } }
+        const stackAt = { x: 200, y: 300 }
+        const stack = { ...stackAt, width: 180, height: 90, entry: { x: 232, y: 300 } }
+        const frame = { x: 40, y: 300, width: 520, height: 260 }
+        const framePlace = { ...frame, entry: { x: 300, y: 300 } }
+        const layoutWith = (
+            positions: Record<string, { x: number; y: number }>,
+            frames: Record<string, typeof frame>
+        ): tileCanvasLayout.CanvasLayout => ({ positions, edges: {}, frames, width: 600, height: 600 })
+
+        it('opens a path where its stack was on screen', () => {
             const [group] = logic.values.pathGroups
-            const frame = { x: 40, y: 300, width: 520, height: 260 }
+            logic.actions.setMeasuredSizes({ [group.id]: stackSize })
+            logic.actions.setLayout(layoutWith({ [group.id]: stackAt }, {}))
 
             logic.actions.openPath(group.id)
-            logic.actions.setLayout({
-                positions: {},
-                edges: {},
-                frames: { [`frame:${group.id}`]: frame },
-                width: 600,
-                height: 600,
-            })
+            logic.actions.setLayout(layoutWith({}, { [`frame:${group.id}`]: frame }))
 
-            expect(logic.values.frameFocus).toEqual({ box: frame, request: 1 })
+            expect(logic.values.viewportFocus).toEqual({ place: framePlace, anchor: stack, request: 1 })
+        })
+
+        it('collapses a path into a stack where its frame was on screen', () => {
+            const [group] = logic.values.pathGroups
+            logic.actions.setOpenPathIds([group.id])
+            logic.actions.setLayout(layoutWith({}, { [`frame:${group.id}`]: frame }))
+
+            logic.actions.collapsePath(group.id)
+            jest.advanceTimersByTime(1000)
+            logic.actions.setMeasuredSizes({ [group.id]: stackSize })
+            logic.actions.setLayout(layoutWith({ [group.id]: stackAt }, {}))
+
+            expect(logic.values.viewportFocus).toEqual({ place: stack, anchor: framePlace, request: 1 })
         })
 
         it('brings the path of a step picked elsewhere into view', () => {
             const group = logic.values.pathGroups.find((candidate) => candidate.memberIds.includes('a2'))!
-            const frame = { x: 0, y: 120, width: 300, height: 200 }
 
             logic.actions.setSelectedNodeId('a2')
-            logic.actions.setLayout({
-                positions: {},
-                edges: {},
-                frames: { [`frame:${group.id}`]: frame },
-                width: 0,
-                height: 0,
-            })
+            logic.actions.setLayout(layoutWith({}, { [`frame:${group.id}`]: frame }))
 
-            expect(logic.values.frameFocus?.box).toEqual(frame)
+            expect(logic.values.viewportFocus).toEqual({ place: framePlace, anchor: null, request: 1 })
         })
 
         it('collapses every path someone collapses in quick succession', () => {

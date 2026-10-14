@@ -4,7 +4,14 @@ import { MutableRefObject, RefObject, useEffect, useRef } from 'react'
 
 import { canvasBounds } from './tileCanvasLayout'
 import { tileCanvasLogic } from './tileCanvasLogic'
-import { Point, readableFitViewport, Size, viewportAfterResize, viewportToFit } from './tileCanvasModel'
+import {
+    Point,
+    readableFitViewport,
+    Size,
+    viewportAfterResize,
+    viewportAnchoredOn,
+    viewportToFit,
+} from './tileCanvasModel'
 
 const FOCUS_MS = 400
 
@@ -61,24 +68,29 @@ function useFitOnRequest(wrapperRef: RefObject<HTMLDivElement>): void {
     }, [fitRequest])
 }
 
-function useFocusOnFrame(wrapperRef: RefObject<HTMLDivElement>): void {
+function useFocusOnPath(wrapperRef: RefObject<HTMLDivElement>): void {
     const reactFlow = useReactFlow()
-    const { frameFocus } = useValues(tileCanvasLogic)
+    const { viewportFocus } = useValues(tileCanvasLogic)
     useEffect(() => {
         const wrapper = wrapperRef.current
-        if (!wrapper || !frameFocus) {
+        if (!wrapper || !viewportFocus) {
             return
         }
         const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        void reactFlow.setViewport(viewportToFit(frameFocus.box, sizeOf(wrapper), reactFlow.getViewport().zoom), {
-            duration: reduceMotion ? 0 : FOCUS_MS,
-        })
+        const viewport = reactFlow.getViewport()
+        const canvas = sizeOf(wrapper)
+        const target = viewportFocus.anchor
+            ? viewportAnchoredOn(viewportFocus.anchor, viewportFocus.place, viewport, canvas)
+            : viewportToFit(viewportFocus.place, canvas, viewport.zoom)
+        // An anchored move runs while the path motion moves the nodes, and the canvas's own transition then moves the
+        // view in step with them. A second, animated move on top would let the path drift away from its anchor.
+        void reactFlow.setViewport(target, { duration: reduceMotion || viewportFocus.anchor ? 0 : FOCUS_MS })
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [frameFocus?.request])
+    }, [viewportFocus?.request])
 }
 
 export function useCanvasViewport(wrapperRef: RefObject<HTMLDivElement>): void {
     useViewportFollowsResize(wrapperRef)
     useFitOnRequest(wrapperRef)
-    useFocusOnFrame(wrapperRef)
+    useFocusOnPath(wrapperRef)
 }

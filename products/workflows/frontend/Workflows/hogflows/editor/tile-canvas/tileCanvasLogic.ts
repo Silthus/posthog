@@ -40,8 +40,8 @@ import { isWorkflowTreeComplete } from '../../tree/workflowTree'
 import type { DropzoneNode, HogFlow, HogFlowActionNode, HogFlowEdge } from '../../types'
 import { destinationSteps, workflowStepSections } from '../../workflowStepCatalog'
 import {
-    Box,
     CanvasLayout,
+    frameEntryX,
     frameId,
     layoutTileCanvas,
     NodeSize,
@@ -56,9 +56,11 @@ import {
     countableStepMetrics,
     PaletteSection,
     PathGroup,
+    PathPlace,
     Point,
     stepCount,
     stepCountsRequest,
+    VisibleEdge,
     VisibleGraph,
 } from './tileCanvasModel'
 
@@ -70,6 +72,41 @@ export type TemplateNameOf = (templateId: string) => string | undefined
 
 const PATH_LEAVE_MS = 260
 const PATH_MOTION_MS = 1100
+
+export interface PendingPathFocus {
+    groupId: string
+    shows: 'frame' | 'stack'
+    /** Where the path was before it opened or collapsed. Absent for a path opened from elsewhere, such as a link. */
+    anchor: PathPlace | null
+}
+
+export interface ViewportFocus {
+    place: PathPlace
+    anchor: PathPlace | null
+    request: number
+}
+
+function stackPlace(
+    layout: CanvasLayout | null,
+    sizes: Record<string, NodeSize> | null,
+    groupId: string
+): PathPlace | null {
+    const position = layout?.positions[groupId]
+    const size = sizes?.[groupId]
+    return position && size
+        ? {
+              ...position,
+              width: size.width,
+              height: size.height,
+              entry: { x: position.x + (size.anchor?.x ?? size.width / 2), y: position.y },
+          }
+        : null
+}
+
+function framePlace(layout: CanvasLayout | null, group: PathGroup, edges: VisibleEdge[]): PathPlace | null {
+    const box = layout?.frames[frameId(group)]
+    return layout && box ? { ...box, entry: { x: frameEntryX(group, box, layout, edges), y: box.y } } : null
+}
 
 /** Where steps fly out of when a path opens: the middle of the stack's tile. */
 function stackOrigin(layout: CanvasLayout | null, sizes: Record<string, NodeSize> | null, groupId: string): Point {
@@ -142,8 +179,8 @@ export interface tileCanvasLogicValues {
     commandPaletteQuery: string | null
     fitRequest: number
     fitsNextLayout: boolean
-    frameFocus: { box: Box; request: number } | null
-    focusGroupId: string | null
+    viewportFocus: ViewportFocus | null
+    pendingPathFocus: PendingPathFocus | null
     frameSpecs: PathFrameSpec[]
     isSavedWorkflow: boolean
     isHistoryOpen: boolean
@@ -281,11 +318,18 @@ export interface tileCanvasLogicActions {
     openPath: (groupId: string) => {
         groupId: string
     }
-    focusFrame: (box: Box) => {
-        box: Box
+    focusPath: (
+        place: PathPlace,
+        anchor?: PathPlace | null
+    ) => {
+        place: PathPlace
+        anchor: PathPlace | null
     }
     focusPathAfterLayout: (groupId: string) => {
         groupId: string
+    }
+    setPendingPathFocus: (pendingPathFocus: PendingPathFocus | null) => {
+        pendingPathFocus: PendingPathFocus | null
     }
     openQuickAdd: (edgeKey: string) => {
         edgeKey: string
@@ -431,8 +475,9 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
     actions({
         activateNode: (nodeId: string) => ({ nodeId }),
         openPath: (groupId: string) => ({ groupId }),
-        focusFrame: (box: Box) => ({ box }),
+        focusPath: (place: PathPlace, anchor: PathPlace | null = null) => ({ place, anchor }),
         focusPathAfterLayout: (groupId: string) => ({ groupId }),
+        setPendingPathFocus: (pendingPathFocus: PendingPathFocus | null) => ({ pendingPathFocus }),
         collapsePath: (groupId: string) => ({ groupId }),
         toggleAllPaths: true,
         setOpenPathIds: (openPathIds: string[]) => ({ openPathIds }),
@@ -462,19 +507,18 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
     }),
     reducers({
         openPathIds: [[] as string[], { setOpenPathIds: (_, { openPathIds }) => openPathIds }],
-        focusGroupId: [
-            null as string | null,
+        pendingPathFocus: [
+            null as PendingPathFocus | null,
             {
-                openPath: (_, { groupId }) => groupId,
-                focusPathAfterLayout: (_, { groupId }) => groupId,
-                focusFrame: () => null,
-                collapsePath: () => null,
+                setPendingPathFocus: (_, { pendingPathFocus }) => pendingPathFocus,
+                focusPathAfterLayout: (_, { groupId }) => ({ groupId, shows: 'frame', anchor: null }),
+                focusPath: () => null,
                 toggleAllPaths: () => null,
             },
         ],
-        frameFocus: [
-            null as { box: Box; request: number } | null,
-            { focusFrame: (state, { box }) => ({ box, request: (state?.request ?? 0) + 1 }) },
+        viewportFocus: [
+            null as ViewportFocus | null,
+            { focusPath: (state, { place, anchor }) => ({ place, anchor, request: (state?.request ?? 0) + 1 }) },
         ],
         motion: [null as CanvasMotion | null, { setMotion: (_, { motion }) => motion }],
         placingSource: [
@@ -531,7 +575,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         layout: [null as CanvasLayout | null, { setLayout: (_, { layout }) => layout }],
         layoutError: [null as string | null, { setLayoutError: (_, { message }) => message, setLayout: () => null }],
         fitRequest: [0, { requestFit: (count) => count + 1 }],
-        fitsNextLayout: [true, { fitNextLayout: () => true, requestFit: () => false, focusFrame: () => false }],
+        fitsNextLayout: [true, { fitNextLayout: () => true, requestFit: () => false, focusPath: () => false }],
     }),
     loaders(({ values }) => ({
         stepCounts: [
@@ -686,6 +730,11 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             },
             openPath: ({ groupId }) => {
                 capturePathToggled('opened', groupId)
+                actions.setPendingPathFocus({
+                    groupId,
+                    shows: 'frame',
+                    anchor: stackPlace(values.layout, values.measuredSizes, groupId),
+                })
                 beginPathMotion({
                     kind: 'expand',
                     groupId,
@@ -700,6 +749,11 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 }
                 const origin = frameOrigin(values.layout, group)
                 capturePathToggled('collapsed', groupId)
+                actions.setPendingPathFocus({
+                    groupId,
+                    shows: 'stack',
+                    anchor: framePlace(values.layout, group, values.visibleGraph.edges),
+                })
                 beginPathMotion({ kind: 'collapse', groupId, origin })
                 cache.disposables.add(() => {
                     const timer = window.setTimeout(() => {
@@ -803,10 +857,15 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 }
             },
             setLayout: ({ layout }) => {
-                const focusGroup = values.pathGroups.find((group) => group.id === values.focusGroupId)
-                const box = focusGroup && layout.frames[frameId(focusGroup)]
-                if (box) {
-                    actions.focusFrame(box)
+                const focus = values.pendingPathFocus
+                const group = focus && values.pathGroups.find((candidate) => candidate.id === focus.groupId)
+                const place =
+                    group &&
+                    (focus.shows === 'frame'
+                        ? framePlace(layout, group, values.visibleGraph.edges)
+                        : stackPlace(layout, values.measuredSizes, group.id))
+                if (focus && place) {
+                    actions.focusPath(place, focus.anchor)
                 } else if (values.fitsNextLayout) {
                     actions.requestFit()
                 }

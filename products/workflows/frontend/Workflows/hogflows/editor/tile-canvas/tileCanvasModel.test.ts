@@ -8,10 +8,12 @@ import {
     layoutMiniFlow,
     PaletteCommand,
     PaletteSection,
+    PathPlace,
     stepCount,
     stepCountsRequest,
     viewportAfterResize,
     readableFitViewport,
+    viewportAnchoredOn,
     viewportToFit,
 } from './tileCanvasModel'
 
@@ -425,6 +427,81 @@ describe('viewportToFit', () => {
         expect(viewport.zoom).toBeCloseTo(expected.zoom)
         expect(viewport.x).toBeCloseTo(expected.x)
         expect(viewport.y).toBeCloseTo(expected.y)
+    })
+})
+
+describe('viewportAnchoredOn', () => {
+    const canvas = { width: 1000, height: 700 }
+    const place = (x: number, y: number, width: number, height: number, entryX = x + width / 2): PathPlace => ({
+        x,
+        y,
+        width,
+        height,
+        entry: { x: entryX, y },
+    })
+    const stack = place(400, 600, 180, 90, 430)
+    const entryOnScreen = (
+        of: PathPlace,
+        viewport: { x: number; y: number; zoom: number }
+    ): { x: number; y: number } => ({
+        x: viewport.x + of.entry.x * viewport.zoom,
+        y: viewport.y + of.entry.y * viewport.zoom,
+    })
+
+    it.each([
+        {
+            name: 'opens a path where the arrow met its stack, at the same zoom',
+            next: place(300, 620, 520, 300),
+            zoom: 1,
+        },
+        {
+            name: 'collapses a path into a stack where the arrow met its frame, even zoomed far out',
+            next: place(380, 1400, 180, 90, 410),
+            zoom: 0.2,
+        },
+    ])('$name', ({ next, zoom }) => {
+        const viewport = { x: 500 - 430 * zoom, y: 150 - 600 * zoom, zoom }
+
+        const anchored = viewportAnchoredOn(stack, next, viewport, canvas)
+
+        expect(anchored.zoom).toBe(zoom)
+        expect(entryOnScreen(next, anchored)).toEqual(entryOnScreen(stack, viewport))
+    })
+
+    it.each([
+        { name: 'zooms out just enough to show a tall frame from where its stack was', height: 692.5, zoom: 0.8 },
+        { name: 'stops zooming out at a readable zoom', height: 5000, zoom: 0.66 },
+    ])('$name', ({ height, zoom }) => {
+        const viewport = { x: 500 - 430, y: 50 - 600, zoom: 1 }
+        const frame = place(300, 620, 520, height)
+
+        const anchored = viewportAnchoredOn(stack, frame, viewport, canvas)
+
+        expect(anchored.zoom).toBeCloseTo(zoom)
+        expect(entryOnScreen(frame, anchored)).toEqual(entryOnScreen(stack, viewport))
+    })
+
+    it('keeps a zoom the person set below the readable one', () => {
+        const anchored = viewportAnchoredOn(stack, place(300, 620, 520, 5000), { x: 0, y: 0, zoom: 0.3 }, canvas)
+
+        expect(anchored.zoom).toBe(0.3)
+    })
+
+    it('brings a stack into view when the frame it replaces started above the canvas', () => {
+        const frame = place(300, 0, 520, 3000)
+        const next = place(470, 0, 180, 90)
+
+        const anchored = viewportAnchoredOn(frame, next, { x: 0, y: -1000, zoom: 1 }, canvas)
+
+        expect(entryOnScreen(next, anchored)).toEqual({ x: 560, y: 32 })
+    })
+
+    it('centres a path that opens from a stack out of view', () => {
+        const frame = place(300, 620, 520, 300)
+
+        expect(viewportAnchoredOn(stack, frame, { x: 0, y: -5000, zoom: 1 }, canvas)).toEqual(
+            viewportToFit(frame, canvas, 1)
+        )
     })
 })
 

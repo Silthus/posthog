@@ -571,6 +571,94 @@ export function viewportToFit(frame: Point & Size, canvas: Size, zoom: number): 
 }
 
 const MIN_READABLE_ZOOM = 0.66
+/** How much of a path must show around where its arrow enters, in canvas pixels. */
+const ANCHOR_HEAD = 120
+
+/** Where a path sits on the canvas, and where the arrow into it meets it. */
+export interface PathPlace extends Point, Size {
+    entry: Point
+}
+
+interface ScreenBounds {
+    left: number
+    top: number
+    right: number
+    bottom: number
+}
+
+function roomBounds(canvas: Size): ScreenBounds {
+    return {
+        left: FIT_MARGIN.side,
+        top: FIT_MARGIN.top,
+        right: canvas.width - FIT_MARGIN.side,
+        bottom: canvas.height - FIT_MARGIN.bottom,
+    }
+}
+
+const onScreen = (point: Point, viewport: Viewport): Point => ({
+    x: viewport.x + point.x * viewport.zoom,
+    y: viewport.y + point.y * viewport.zoom,
+})
+
+function isOnScreen(box: Point & Size, viewport: Viewport, room: ScreenBounds): boolean {
+    const topLeft = onScreen(box, viewport)
+    return (
+        topLeft.x < room.right &&
+        topLeft.x + box.width * viewport.zoom > room.left &&
+        topLeft.y < room.bottom &&
+        topLeft.y + box.height * viewport.zoom > room.top
+    )
+}
+
+const clamp = (value: number, low: number, high: number): number => Math.min(Math.max(value, low), Math.max(low, high))
+
+/** How far a place reaches from its entry to each side, in canvas pixels. */
+function reach(place: PathPlace): ScreenBounds {
+    return {
+        left: place.entry.x - place.x,
+        top: place.entry.y - place.y,
+        right: place.x + place.width - place.entry.x,
+        bottom: place.y + place.height - place.entry.y,
+    }
+}
+
+/** Moves the anchor only as far as needed for the part of the next place around its entry to show. */
+function anchorInRoom(anchor: Point, next: PathPlace, zoom: number, room: ScreenBounds): Point {
+    const around = reach(next)
+    return {
+        x: clamp(
+            anchor.x,
+            room.left + Math.min(around.left, ANCHOR_HEAD) * zoom,
+            room.right - Math.min(around.right, ANCHOR_HEAD) * zoom
+        ),
+        y: clamp(anchor.y, room.top, room.bottom - Math.min(around.bottom, ANCHOR_HEAD) * zoom),
+    }
+}
+
+function zoomToShowFrom(anchor: Point, next: PathPlace, room: ScreenBounds, zoom: number): number {
+    const around = reach(next)
+    const fitting = Math.min(
+        (anchor.x - room.left) / Math.max(around.left, 1),
+        (room.right - anchor.x) / Math.max(around.right, 1),
+        (room.bottom - anchor.y) / Math.max(around.bottom, 1)
+    )
+    return fitting >= zoom ? zoom : Math.max(fitting, Math.min(zoom, MIN_READABLE_ZOOM))
+}
+
+/**
+ * Keeps a path where the person saw it as it opens or collapses: the arrow into the path stays where it was on screen,
+ * and everything else moves around it. Zooms out only as far as the new place needs, never below a readable zoom, and
+ * never zooms in. A path opened from a stack out of view is centred instead.
+ */
+export function viewportAnchoredOn(previous: PathPlace, next: PathPlace, viewport: Viewport, canvas: Size): Viewport {
+    const room = roomBounds(canvas)
+    if (!isOnScreen(previous, viewport, room)) {
+        return viewportToFit(next, canvas, viewport.zoom)
+    }
+    const anchor = anchorInRoom(onScreen(previous.entry, viewport), next, viewport.zoom, room)
+    const zoom = zoomToShowFrom(anchor, next, room, viewport.zoom)
+    return { x: anchor.x - next.entry.x * zoom, y: anchor.y - next.entry.y * zoom, zoom }
+}
 
 /** Fits the workflow, but never shrinks it below a readable zoom: people pan to see the rest of a big one. */
 export function readableFitViewport(bounds: Point & Size, canvas: Size): Viewport {
