@@ -55,6 +55,7 @@ exports[`HogFlowManager returns the hog flow 1`] = `
     "exit_condition": "exit_on_conversion",
     "id": "<REPLACED-UUID-0>",
     "name": "Test Hog Flow team 1",
+    "origin_product": null,
     "status": "active",
     "team_id": "TEAM_ID",
     "trigger": {
@@ -126,6 +127,7 @@ exports[`HogFlowManager returns the hog flow 1`] = `
     "exit_condition": "exit_on_conversion",
     "id": "<REPLACED-UUID-1>",
     "name": "Test Hog Flow team 1 - other",
+    "origin_product": null,
     "status": "active",
     "team_id": "TEAM_ID",
     "trigger": {
