@@ -31,11 +31,25 @@ export interface CanvasCommands {
     view: CanvasCommand[]
 }
 
-type PanelDefinition = Omit<PanelCommand, 'run'>
+type PanelDefinition = Omit<PanelCommand, 'run'> & { needsSavedWorkflow?: boolean }
 
 const PANELS: PanelDefinition[] = [
-    { id: 'test', mode: 'test', label: 'Test', hint: 'Run the workflow for one person', icon: <IconPlay /> },
-    { id: 'logs', mode: 'logs', label: 'Logs', hint: 'Recent runs, newest first', icon: <IconList /> },
+    {
+        id: 'test',
+        mode: 'test',
+        label: 'Test',
+        hint: 'Run the workflow for one person',
+        icon: <IconPlay />,
+        needsSavedWorkflow: true,
+    },
+    {
+        id: 'logs',
+        mode: 'logs',
+        label: 'Logs',
+        hint: 'Recent runs, newest first',
+        icon: <IconList />,
+        needsSavedWorkflow: true,
+    },
     {
         id: 'variables',
         mode: 'variables',
@@ -51,6 +65,7 @@ const METRICS_PANEL: PanelDefinition = {
     label: 'Metrics',
     hint: 'How many people each step reached',
     icon: <IconGraph />,
+    needsSavedWorkflow: true,
 }
 
 const HISTORY_PANEL: PanelDefinition = {
@@ -59,10 +74,8 @@ const HISTORY_PANEL: PanelDefinition = {
     label: 'History',
     hint: 'See and restore previous versions',
     icon: <IconClock />,
+    needsSavedWorkflow: true,
 }
-
-/** Test runs, logs, metrics and history all read the saved workflow. */
-const NEEDS_SAVED_WORKFLOW = new Set<TileCanvasPanelMode>(['test', 'logs'])
 
 function tracked<Command extends CanvasCommand>(command: Command): Command {
     return {
@@ -80,8 +93,10 @@ export function useCanvasCommands(): CanvasCommands {
     const hasPaths = pathGroups.length > 0
 
     return useMemo((): CanvasCommands => {
-        const openable = (panel: PanelDefinition): PanelCommand =>
-            tracked({ ...panel, run: () => openPanel(panel.mode) })
+        const available = (panels: PanelDefinition[]): PanelCommand[] =>
+            panels
+                .filter((panel) => isSavedWorkflow || !panel.needsSavedWorkflow)
+                .map(({ needsSavedWorkflow: _, ...panel }) => tracked({ ...panel, run: () => openPanel(panel.mode) }))
         const pathsCommand: CanvasCommand = {
             id: 'paths',
             label: allPathsCollapsed ? 'Open all paths' : 'Collapse all paths',
@@ -96,10 +111,8 @@ export function useCanvasCommands(): CanvasCommands {
             run: requestFit,
         }
         return {
-            panel: (isSavedWorkflow ? PANELS : PANELS.filter((panel) => !NEEDS_SAVED_WORKFLOW.has(panel.mode))).map(
-                openable
-            ),
-            morePanels: (isSavedWorkflow ? [METRICS_PANEL, HISTORY_PANEL] : []).map(openable),
+            panel: available(PANELS),
+            morePanels: available([METRICS_PANEL, HISTORY_PANEL]),
             view: [...(hasPaths ? [pathsCommand] : []), fitCommand].map(tracked),
         }
     }, [openPanel, isSavedWorkflow, hasPaths, allPathsCollapsed, toggleAllPaths, requestFit])
