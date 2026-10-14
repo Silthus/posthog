@@ -233,6 +233,27 @@ describe('createQueryWrapper _posthogUrl', () => {
 
         expect(result._posthogUrl).toBe(`http://localhost:8010/project/1${expectedPath}`)
     })
+
+    it.each([
+        [
+            'encodes a query-string placeholder value',
+            { flagKey: 'a b&c' },
+            '/feature_flags?tab=overview&search=a%20b%26c',
+        ],
+        ['drops only the parameter whose placeholder is unset', {}, '/feature_flags?tab=overview'],
+    ])('%s', async (_name, params, expectedPath) => {
+        const context = createMockContext()
+        const tool = createQueryWrapper({
+            name: 'test',
+            schema: z.object({ flagKey: z.string().optional() }),
+            kind: 'FeatureFlagHealthQuery',
+            urlPrefix: '/feature_flags?tab=overview&search={flagKey}',
+        })()
+
+        const result = (await tool.handler(context, params)) as any
+
+        expect(result._posthogUrl).toBe(`http://localhost:8010/project/1${expectedPath}`)
+    })
 })
 
 describe('createQueryWrapper output_format handling', () => {

@@ -115,6 +115,47 @@ function encodeRouterPathSegment(value: string): string {
     )
 }
 
+function placeholderValue(placeholder: string, query: Record<string, unknown>): string | undefined {
+    const paramName = /^\{(\w+)\}$/.exec(placeholder)?.[1]
+    const value = paramName === undefined ? undefined : query[paramName]
+    if ((typeof value !== 'string' && typeof value !== 'number') || value === '') {
+        return undefined
+    }
+    return String(value)
+}
+
+function resolvePath(path: string, query: Record<string, unknown>): string {
+    const segments: string[] = []
+    for (const segment of path.split('/')) {
+        if (!segment.includes('{')) {
+            segments.push(segment)
+            continue
+        }
+        const value = placeholderValue(segment, query)
+        if (value === undefined) {
+            break
+        }
+        segments.push(encodeRouterPathSegment(value))
+    }
+    return segments.join('/')
+}
+
+function resolveSearch(search: string, query: Record<string, unknown>): string {
+    const params: string[] = []
+    for (const param of search.split('&')) {
+        const [key, placeholder = ''] = param.split('=')
+        if (!placeholder.includes('{')) {
+            params.push(param)
+            continue
+        }
+        const value = placeholderValue(placeholder, query)
+        if (value !== undefined) {
+            params.push(`${key}=${encodeURIComponent(value)}`)
+        }
+    }
+    return params.length > 0 ? `?${params.join('&')}` : ''
+}
+
 /**
  * Fill `{param}` placeholders in a `urlPrefix` from the query body. A placeholder the query
  * leaves unset (or sets to something other than a non-empty string/number) truncates the path
@@ -125,20 +166,11 @@ function resolveUrlPrefix(urlPrefix: string, query: Record<string, unknown>): st
     if (!urlPrefix.includes('{')) {
         return urlPrefix
     }
-    const segments: string[] = []
-    for (const segment of urlPrefix.split('/')) {
-        if (!segment.includes('{')) {
-            segments.push(segment)
-            continue
-        }
-        const paramName = /^\{(\w+)\}$/.exec(segment)?.[1]
-        const value = paramName === undefined ? undefined : query[paramName]
-        if ((typeof value !== 'string' && typeof value !== 'number') || value === '') {
-            break
-        }
-        segments.push(encodeRouterPathSegment(String(value)))
+    const searchStart = urlPrefix.indexOf('?')
+    if (searchStart === -1) {
+        return resolvePath(urlPrefix, query)
     }
-    return segments.join('/')
+    return resolvePath(urlPrefix.slice(0, searchStart), query) + resolveSearch(urlPrefix.slice(searchStart + 1), query)
 }
 
 function buildInsightUrl(

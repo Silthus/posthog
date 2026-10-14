@@ -7,6 +7,7 @@ import { withUiApp } from '@/resources/ui-apps'
 import { validateDistinctIdPersonIdExclusive } from '@/schema/tool-inputs'
 import { castStringToInt, normalizeParamAliases } from '@/tools/cast-helpers'
 import hooks_updateFeatureFlag from '@/tools/featureFlags/updateFeatureFlagHooks'
+import { createQueryWrapper } from '@/tools/query-wrapper-factory'
 import { withToolHooks } from '@/tools/tool-hooks'
 import { withPostHogUrl, pickResponseFields, type WithPostHogUrl } from '@/tools/tool-utils'
 import type { Context, ToolBase, ZodObjectAny } from '@/tools/types'
@@ -1057,6 +1058,71 @@ const updateFeatureFlag = (): ToolBase<
     ),
 })
 
+// --- Query wrapper schemas from schema.json ---
+
+const DateRange = z.object({
+    date_from: z
+        .string()
+        .nullable()
+        .describe(
+            'Start of the date range. Accepts ISO 8601 timestamps (e.g., 2024-01-15T00:00:00Z) or relative formats: -7d (7 days ago), -2w (2 weeks ago), -1m (1 month ago),\n-1h (1 hour ago), -1mStart (start of last month), -1yStart (start of last year).'
+        )
+        .optional(),
+    date_to: z
+        .string()
+        .nullable()
+        .describe(
+            'End of the date range. Same format as date_from. Omit or null for "now". A calendar day without a time (2024-01-15) is inclusive: it rounds to the last moment of that day in the project timezone, unless explicitDate is set.'
+        )
+        .optional(),
+    daysOfWeek: z
+        .union([
+            z.array(
+                z.union([
+                    z.literal(1),
+                    z.literal(2),
+                    z.literal(3),
+                    z.literal(4),
+                    z.literal(5),
+                    z.literal(6),
+                    z.literal(7),
+                ])
+            ),
+            z.null(),
+        ])
+        .describe(
+            'Restrict the query to events occurring on these ISO days of week (1=Monday to 7=Sunday), evaluated in the project timezone. Omit or empty for all days. Only applied by insight queries.'
+        )
+        .optional(),
+    excludeIncompletePeriods: z.coerce
+        .boolean()
+        .nullable()
+        .describe(
+            'Exclude the current, still-collecting period by clipping date_to to the end of the last complete interval (evaluated in the project timezone). No-op when the range contains no complete interval. Only applied by insight queries.'
+        )
+        .default(false)
+        .optional(),
+    explicitDate: z.coerce
+        .boolean()
+        .nullable()
+        .describe(
+            'Whether the date_from and date_to should be used verbatim. Disables rounding to the start and end of period.'
+        )
+        .default(false)
+        .optional(),
+})
+
+const positive_integer = z.coerce.number().int().min(1)
+
+const FeatureFlagHealthQuery = z.object({
+    alpha: z.coerce.number().optional(),
+    dateRange: DateRange.optional(),
+    flagKey: z.string(),
+    kind: z.literal('FeatureFlagHealthQuery').default('FeatureFlagHealthQuery'),
+    minExposedPerArm: positive_integer.optional(),
+    toleratedExcess: z.coerce.number().optional(),
+})
+
 export const GENERATED_TOOLS: Record<string, () => ToolBase<ZodObjectAny>> = {
     'create-feature-flag': createFeatureFlag,
     'delete-feature-flag': deleteFeatureFlag,
@@ -1086,4 +1152,10 @@ export const GENERATED_TOOLS: Record<string, () => ToolBase<ZodObjectAny>> = {
     'scheduled-changes-list': scheduledChangesList,
     'scheduled-changes-update': scheduledChangesUpdate,
     'update-feature-flag': updateFeatureFlag,
+    'query-feature-flag-health': createQueryWrapper({
+        name: 'query-feature-flag-health',
+        schema: FeatureFlagHealthQuery,
+        kind: 'FeatureFlagHealthQuery',
+        urlPrefix: '/feature_flags?search={flagKey}',
+    }),
 }
