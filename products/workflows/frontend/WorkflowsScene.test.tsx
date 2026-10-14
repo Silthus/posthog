@@ -137,13 +137,17 @@ describe('WorkflowsScene', () => {
     })
 
     it.each([
-        ['shows Owner when no columns are saved', null, ['Name', 'Status', 'Owner', 'Updated', '', '']],
+        ['shows Owner when no columns are saved', null, ['', 'Name', 'Tags', 'Status', 'Owner', 'Updated', '', '']],
         [
             'ignores a saved column the list no longer has',
             ['health', 'tags'],
-            ['Name', 'Status', 'Health', 'Updated', '', ''],
+            ['', 'Name', 'Tags', 'Status', 'Health', 'Updated', '', ''],
         ],
-        ['shows Kind beside the name', ['type', 'owner'], ['Name', 'Kind', 'Status', 'Owner', 'Updated', '', '']],
+        [
+            'shows Kind beside the name',
+            ['type', 'owner'],
+            ['', 'Name', 'Tags', 'Kind', 'Status', 'Owner', 'Updated', '', ''],
+        ],
     ])('%s', async (_, savedColumns, expectedHeaders) => {
         if (savedColumns) {
             localStorage.setItem(
