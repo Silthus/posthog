@@ -31,11 +31,12 @@ const fieldIf = (label: string, value: string | undefined): Field[] => (value ? 
 
 function emailFacts(email: EmailContent, action: HogFlowAction): StepFacts {
     const isTransactional = action.type === 'function_email' && action.config.message_category_type === 'transactional'
+    const preheader = email.preheader && plainVariables(email.preheader)
     return {
-        headline: email.subject,
-        detail: email.preheader,
+        headline: plainVariables(email.subject),
+        detail: preheader,
         fields: [
-            ['Preview', email.preheader ?? 'None'],
+            ['Preview', preheader ?? 'None'],
             ['To', email.to],
             ['Type', isTransactional ? 'Transactional' : 'Marketing'],
         ],

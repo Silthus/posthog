@@ -75,6 +75,20 @@ describe('stepFacts', () => {
     it.each<[string, HogFlowAction, string, string | undefined]>([
         ['an email', email, 'Welcome to Example Co.', 'Your first doc takes two minutes'],
         [
+            'an email that greets the person by name',
+            step('greet', 'function_email', {
+                template_id: 'template-email',
+                inputs: inputs({
+                    email: {
+                        subject: 'Three tricks for {{ person.properties.first_name }}',
+                        preheader: 'Picked for {{person.properties.first_name}} and the team',
+                    },
+                }),
+            }),
+            'Three tricks for first name',
+            'Picked for first name and the team',
+        ],
+        [
             'a Slack message',
             fn('notify', 'template-slack', {
                 channel: 'C123|#support',
