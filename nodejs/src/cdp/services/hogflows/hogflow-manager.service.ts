@@ -27,6 +27,7 @@ const HOG_FLOW_FIELDS = [
     'description',
     'version',
     'status',
+    'origin_product',
     'created_at',
     'updated_at',
     'trigger',
@@ -141,6 +142,20 @@ export class HogFlowManagerService {
         return (await this.lazyLoader.get(id)) ?? null
     }
 
+    // For a caller that knows the flow exists because Django created it moments ago: a cached
+    // absence or a lagging read replica must not hide it, so a miss reads the primary.
+    public async getHogFlowReadingPrimaryOnMiss(id: HogFlow['id']): Promise<HogFlow | null> {
+        const cached = await this.getHogFlow(id)
+        if (cached) {
+            return cached
+        }
+        const fresh = (await this.fetchHogFlows([id], PostgresUse.COMMON_WRITE))[id] ?? null
+        if (fresh) {
+            this.lazyLoader.markForRefresh(id)
+        }
+        return fresh
+    }
+
     public async getHogFlows(ids: HogFlow['id'][]): Promise<Record<HogFlow['id'], HogFlow | null>> {
         return await this.lazyLoader.getMany(ids)
     }
@@ -172,11 +187,14 @@ export class HogFlowManagerService {
         return byTeam
     }
 
-    private async fetchHogFlows(ids: string[]): Promise<Record<string, HogFlow | undefined>> {
+    private async fetchHogFlows(
+        ids: string[],
+        use: PostgresUse = PostgresUse.COMMON_READ
+    ): Promise<Record<string, HogFlow | undefined>> {
         logger.debug('[HogFlowManager]', 'Fetching hog flows', { ids })
 
         const response = await this.postgres.query<HogFlow>(
-            PostgresUse.COMMON_READ,
+            use,
             `SELECT ${HOG_FLOW_FIELDS.join(', ')} FROM posthog_hogflow WHERE id = ANY($1)`,
             [ids],
             'fetchHogFlows'

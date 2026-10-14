@@ -1,10 +1,12 @@
 import json
+from dataclasses import asdict
 from datetime import timedelta
 from typing import Optional, Union
 
 import requests
 import structlog
 
+from posthog.dataclasses import frozen
 from posthog.jwt import PosthogJwtAudience
 from posthog.models.utils import UUIDT
 from posthog.redis import get_client
@@ -245,6 +247,57 @@ def resume_workflow_step(team_id: int, origin_key: str, status: str, result: dic
         headers={"Authorization": f"Bearer {_mint_step_resume_jwt(team_id, origin_key)}"},
         timeout=10,
     )
+
+
+WORKFLOWS_API_SEND_JWT_PURPOSE = ScopedServiceJwtPurpose(
+    audience=PosthogJwtAudience.WORKFLOWS_API_SEND,
+    settings_name="WORKFLOWS_API_SEND_JWT_SECRETS",
+    default_ttl=timedelta(minutes=2),
+)
+
+
+@frozen
+class ApiSendEmail:
+    """The API sends workflow's email step reads each field from `variables.email`."""
+
+    to: str
+    integration_id: int
+    from_email: str
+    from_name: str
+    reply_to: str
+    cc: str
+    bcc: str
+    subject: str
+    text: str
+    html: str
+
+
+@frozen
+class ApiSendInvocation:
+    invocation_id: str
+    distinct_id: str | None
+    email: ApiSendEmail
+
+
+class HogFlowApiSendTimeout(Exception):
+    """The plugin server did not answer in time, so the send may or may not be queued."""
+
+
+def create_hog_flow_api_send(team_id: int, hog_flow_id: str, send: ApiSendInvocation) -> requests.Response:
+    """Queue one email on the team's API sends workflow. 402 means over quota, 423 means the flow's
+    email sending is paused, and a replay of an already queued invocation id answers 200."""
+    if not WORKFLOWS_API_SEND_JWT_PURPOSE.enabled():
+        raise RuntimeError("WORKFLOWS_API_SEND_JWT_SECRET is not configured — cannot queue an API send")
+    token = WORKFLOWS_API_SEND_JWT_PURPOSE.mint({"team_id": team_id, "hog_flow_id": hog_flow_id})
+    try:
+        return internal_requests.post(
+            CDP_API_URL + f"/api/projects/{team_id}/hog_flows/{hog_flow_id}/api_sends",
+            json=asdict(send),
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=5,
+        )
+    except requests.Timeout as error:
+        raise HogFlowApiSendTimeout(str(error)) from error
 
 
 def cancel_hog_flow_invocations(team_id: int, hog_flow_id: str, payload: dict) -> requests.Response:

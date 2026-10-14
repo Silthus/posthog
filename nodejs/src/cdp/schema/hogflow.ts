@@ -69,6 +69,10 @@ const HogFlowTriggerSchema = z.discriminatedUnion('type', [
     z.object({
         type: z.literal('schedule'),
     }),
+    // Started only by the email API's api_sends route, never by an event.
+    z.object({
+        type: z.literal('api_send'),
+    }),
     z.object({
         type: z.literal('batch'),
         filters: z.object({
@@ -318,6 +322,7 @@ export const HogFlowSchema = z.object({
     version: z.number(),
     name: z.string(),
     status: z.enum(['active', 'draft', 'archived']),
+    origin_product: z.string().optional().nullable(),
     trigger: HogFlowTriggerSchema,
     trigger_masking: HogFlowTriggerMaskingSchema.optional().nullable(),
     conversion: z

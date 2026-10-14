@@ -6,6 +6,7 @@ import { DateTime, Duration } from 'luxon'
 import { FixtureHogFlowBuilder, SimpleHogFlowRepresentation } from '~/cdp/_tests/builders/hogflow.builder'
 import { createHogExecutionGlobals, insertHogFunctionTemplate, insertIntegration } from '~/cdp/_tests/fixtures'
 import { HogFlow } from '~/cdp/schema/hogflow'
+import { template as emailTemplate } from '~/cdp/templates/_destinations/email/email.template'
 import { template as posthogCaptureTemplate } from '~/cdp/templates/_destinations/posthog_capture/posthog-capture.template'
 import { template as customerTaskTemplate } from '~/cdp/templates/_destinations/posthog_customer_analytics/posthog-create-customer-task.template'
 import { template as setVariableTemplate } from '~/cdp/templates/_destinations/posthog_workflows/posthog-set-variable.template'
@@ -3146,6 +3147,91 @@ describe('Hogflow Executor', () => {
             // Verify email_sent metric was emitted
             const emailSentMetrics = emailResult.metrics.filter((m) => m.metric_name === 'email_sent')
             expect(emailSentMetrics).toHaveLength(1)
+        })
+
+        it("renders an API send's variables into the email queue params as written", async () => {
+            await insertIntegration(hub.postgres, team.id, {
+                id: integrationId,
+                kind: 'email',
+                config: { email: 'hello@example.com', domain: 'example.com', verified: true, provider: 'maildev' },
+            })
+            await insertHogFunctionTemplate(hub.postgres, emailTemplate)
+
+            // The graph get_or_create_api_sends_flow writes (products/workflows/backend/services/api_sends_flow.py).
+            const raw = (field: string): string => `{{ variables.email.${field} | raw }}`
+            const hogFlow = new FixtureHogFlowBuilder()
+                .withTeamId(team.id)
+                .withExitCondition('exit_only_at_end')
+                .withWorkflow({
+                    actions: {
+                        trigger_node: { type: 'trigger', config: { type: 'api_send' } },
+                        api_send_email: {
+                            type: 'function_email',
+                            config: {
+                                template_id: 'template-email',
+                                message_category_type: 'transactional',
+                                inputs: {
+                                    email: {
+                                        templating: 'liquid',
+                                        value: {
+                                            to: { email: raw('to') },
+                                            from: {
+                                                integrationId: '{{ variables.email.integration_id }}',
+                                                email: raw('from_email'),
+                                                name: raw('from_name'),
+                                            },
+                                            replyTo: raw('reply_to'),
+                                            cc: raw('cc'),
+                                            bcc: raw('bcc'),
+                                            subject: raw('subject'),
+                                            text: raw('text'),
+                                            html: raw('html'),
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        exit_node: { type: 'exit', config: { reason: 'Email queued' } },
+                    },
+                    edges: [
+                        { from: 'trigger_node', to: 'api_send_email', type: 'continue' },
+                        { from: 'api_send_email', to: 'exit_node', type: 'continue' },
+                    ],
+                })
+                .build()
+            const invocation = createExampleHogFlowInvocation(hogFlow, {
+                event: { ...createHogExecutionGlobals().event, event: '$workflows_api_send' },
+                variables: {
+                    email: {
+                        to: 'jane@example.com',
+                        integration_id: integrationId,
+                        from_email: 'hello@example.com',
+                        from_name: 'Tom & Jerry',
+                        reply_to: 'support@example.com',
+                        cc: '',
+                        bcc: '',
+                        subject: 'Tom & Jerry say <hi>',
+                        text: 'Hi Jane & co',
+                        html: '<p>Hi Jane & co</p>',
+                    },
+                },
+            })
+
+            const result = await executor.execute(invocation)
+
+            expect(result.error).toBeUndefined()
+            expect(result.invocation.queue).toBe('email')
+            expect(result.invocation.queueParameters).toEqual({
+                type: 'email',
+                to: { email: 'jane@example.com' },
+                from: { integrationId, email: 'hello@example.com', name: 'Tom & Jerry' },
+                replyTo: 'support@example.com',
+                cc: '',
+                bcc: '',
+                subject: 'Tom & Jerry say <hi>',
+                text: 'Hi Jane & co',
+                html: '<p>Hi Jane & co</p>',
+            })
         })
     })
 })

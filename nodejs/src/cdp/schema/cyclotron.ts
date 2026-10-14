@@ -153,7 +153,9 @@ export const CyclotronInvocationQueueParametersEmailSchema = z.object({
     }),
     replyTo: z.string().optional(),
     from: z.object({
-        integrationId: z.number(),
+        // A Liquid-templated input renders the id as a string, e.g. the API sends workflow's
+        // "{{ variables.email.integration_id }}".
+        integrationId: z.union([z.number(), z.string().regex(/^\d+$/).transform(Number)]),
         integrationIds: z.array(z.number()).max(MAX_WORKFLOW_EMAIL_SENDERS).optional(),
         // Templated per-invocation sender overrides. EmailService requires the rendered
         // address to be on the selected integration's verified domain before it reaches the provider.

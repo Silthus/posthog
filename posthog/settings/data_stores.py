@@ -601,6 +601,12 @@ WORKFLOWS_STEP_RESUME_JWT_SECRETS = get_list(
     get_from_env("WORKFLOWS_STEP_RESUME_JWT_SECRET", "local-dev-workflows-step-resume-jwt" if DEBUG or TEST else "")
 )
 
+# Scoped JWT keys for the email API's api_sends route. Empty outside dev/test, so no send is queued
+# until provisioned. The dev/test value must match the plugin server's default (nodejs/src/cdp/config.ts).
+WORKFLOWS_API_SEND_JWT_SECRETS = get_list(
+    get_from_env("WORKFLOWS_API_SEND_JWT_SECRET", "local-dev-workflows-api-send-jwt" if DEBUG or TEST else "")
+)
+
 # Signs the tokens a workflow's "Create AI task" action calls back with. The dev/test value
 # must match the plugin server's minting default so local workflows work with no setup.
 TASKS_CREATE_JWT_SECRETS = get_list(

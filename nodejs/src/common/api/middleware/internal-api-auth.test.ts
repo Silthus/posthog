@@ -192,6 +192,7 @@ describe('createInternalApiAuthMiddleware', () => {
             ['/api/projects/1/hog_flows/some-uuid/reschedule_parked'],
             ['/api/projects/1/hog_flows/some-uuid/invocations/cancel'],
             ['/api/projects/1/hog_flows/some-uuid/batch_jobs/some-job-id/cancel'],
+            ['/api/projects/1/hog_flows/some-uuid/api_sends'],
         ])('should skip auth for scoped-JWT route %s, which authenticates in its handler', (path) => {
             const middleware = createInternalApiAuthMiddleware({ secret: 'test-secret' })
             const req = mockRequest(path, {})

@@ -4,6 +4,7 @@ import { mockFetch } from '../../tests/helpers/mocks/request.mock'
 
 import { Server } from 'http'
 import jwt from 'jsonwebtoken'
+import { Pool } from 'pg'
 import supertest from 'supertest'
 import express from 'ultimate-express'
 
@@ -33,6 +34,8 @@ import { insertHogFlow as _insertHogFlow } from './_tests/fixtures-hogflows'
 import { CdpApi } from './cdp-api'
 import { CdpConsumerBaseDeps } from './consumers/cdp-base.consumer'
 import { posthogFilterOutPlugin } from './legacy-plugins/_transformations/posthog-filter-out-plugin/template'
+import { CyclotronJobQueuePostgresV2 } from './services/job-queue/job-queue-postgres-v2'
+import { JobQueue } from './services/job-queue/job-queue.interface'
 import { BASE_REDIS_KEY, HogWatcherState } from './services/monitoring/hog-watcher.service'
 import { compileHog } from './templates/compiler'
 import { HogFunctionInvocationGlobals, HogFunctionType } from './types'
@@ -2033,6 +2036,217 @@ describe('CDP API', () => {
             } finally {
                 api['stepResumeJwt'] = savedJwt
             }
+        })
+    })
+
+    describe('hogflow api sends', () => {
+        let apiSendsFlow: HogFlow
+        let queue: CyclotronJobQueuePostgresV2
+        let cyclotronPool: Pool
+        let mockedQueue: JobQueue
+
+        const email = {
+            to: 'jane@example.com',
+            integration_id: 42,
+            from_email: 'hello@example.com',
+            from_name: 'Tom & Jerry',
+            reply_to: '',
+            cc: '',
+            bcc: '',
+            subject: 'Tom & Jerry say <hi>',
+            text: 'Hi Jane',
+            html: '<p>Hi Jane</p>',
+        }
+
+        // Raw audience literal and Python claim names: the wire contract with Django's
+        // WORKFLOWS_API_SEND_JWT_PURPOSE, so drift on either side breaks here.
+        const mintApiSendToken = (
+            teamId: number,
+            hogFlowId: string,
+            { secret = 'local-dev-workflows-api-send-jwt', audience = 'posthog:workflows:api_send' } = {}
+        ) => jwt.sign({ team_id: teamId, hog_flow_id: hogFlowId }, secret, { audience, expiresIn: '2m' })
+
+        const postApiSend = (
+            flow: Pick<HogFlow, 'id' | 'team_id'>,
+            body: object,
+            headers: Record<string, string> = {
+                Authorization: `Bearer ${mintApiSendToken(flow.team_id, flow.id)}`,
+            }
+        ) => supertest(app).post(`/api/projects/${flow.team_id}/hog_flows/${flow.id}/api_sends`).set(headers).send(body)
+
+        const sendBody = (overrides: object = {}) => ({
+            invocation_id: new UUIDT().toString(),
+            distinct_id: 'user_42',
+            email,
+            ...overrides,
+        })
+
+        const queuedJobs = async () =>
+            (
+                await cyclotronPool.query(
+                    `SELECT id, team_id, function_id, distinct_id, queue_name, state FROM cyclotron_jobs`
+                )
+            ).rows.map((row) => ({ ...row, state: parseJSON(row.state.toString('utf-8')).state }))
+
+        // A team has one API sends workflow, so every further flow gets a team of its own.
+        const insertApiSendsFlowForNewTeam = async (overrides: Partial<HogFlow> = {}) =>
+            insertApiSendsFlow({ team_id: await createTeam(hub.postgres, team.organization_id), ...overrides })
+
+        const insertApiSendsFlow = (overrides: Partial<HogFlow> = {}) =>
+            insertHogFlow({
+                id: new UUIDT().toString(),
+                name: 'API sends',
+                status: 'active',
+                version: 1,
+                origin_product: 'api_sends',
+                exit_condition: 'exit_only_at_end',
+                trigger: { type: 'api_send' },
+                edges: [],
+                actions: [],
+                billable_action_types: ['function_email'],
+                ...overrides,
+            })
+
+        beforeAll(async () => {
+            cyclotronPool = new Pool({ connectionString: hub.CYCLOTRON_NODE_DATABASE_URL })
+            queue = new CyclotronJobQueuePostgresV2(hub.CONSUMER_BATCH_SIZE, hub)
+            await queue.startAsProducer()
+        })
+
+        afterAll(async () => {
+            await queue.stopProducer()
+            await cyclotronPool.end()
+        })
+
+        beforeEach(async () => {
+            await cyclotronPool.query('DELETE FROM cyclotron_jobs')
+            mockedQueue = api['hogflowQueue']
+            api['hogflowQueue'] = queue
+            apiSendsFlow = await insertApiSendsFlow()
+        })
+
+        afterEach(() => {
+            api['hogflowQueue'] = mockedQueue
+            jest.restoreAllMocks()
+        })
+
+        it.each([
+            ['the caller distinct id', 'user_42', 'user_42'],
+            ['a synthetic distinct id without one', null, 'api-send-'],
+        ])('queues one invocation with the caller id and %s', async (_desc, distinctId, expectedDistinctId) => {
+            const body = sendBody({ distinct_id: distinctId })
+
+            const res = await postApiSend(apiSendsFlow, body)
+
+            expect(res.status).toEqual(200)
+            expect(res.body).toEqual({ status: 'queued', invocation_id: body.invocation_id })
+            const jobs = await queuedJobs()
+            expect(jobs).toHaveLength(1)
+            expect(jobs[0]).toMatchObject({
+                id: body.invocation_id,
+                team_id: team.id,
+                function_id: apiSendsFlow.id,
+                queue_name: 'hogflow',
+            })
+            expect(jobs[0].distinct_id).toEqual(
+                distinctId ? expectedDistinctId : `${expectedDistinctId}${body.invocation_id}`
+            )
+            expect(jobs[0].state.event).toMatchObject({
+                event: '$workflows_api_send',
+                distinct_id: jobs[0].distinct_id,
+            })
+            expect(jobs[0].state.variables).toEqual({ email })
+        })
+
+        it('answers a replayed id with 200 and queues nothing new', async () => {
+            const body = sendBody()
+            await postApiSend(apiSendsFlow, body)
+
+            const replay = await postApiSend(apiSendsFlow, body)
+
+            expect(replay.status).toEqual(200)
+            expect(replay.body).toEqual({ status: 'queued', invocation_id: body.invocation_id })
+            expect(await queuedJobs()).toHaveLength(1)
+        })
+
+        it('loads a flow created after a lookup found nothing', async () => {
+            const lateFlow = {
+                id: new UUIDT().toString(),
+                team_id: await createTeam(hub.postgres, team.organization_id),
+            }
+            const early = await postApiSend(lateFlow, sendBody())
+            expect(early.status).toEqual(404)
+
+            // Inserted without the reload Django publishes, so only the route itself can find it.
+            await _insertHogFlow(hub.postgres, { ...apiSendsFlow, ...lateFlow })
+
+            const res = await postApiSend(lateFlow, sendBody())
+
+            expect(res.status).toEqual(200)
+            expect(await queuedJobs()).toHaveLength(1)
+        })
+
+        it.each([
+            ['no token', () => ({})],
+            [
+                'a token signed with the wrong key',
+                () => ({
+                    Authorization: `Bearer ${mintApiSendToken(team.id, apiSendsFlow.id, { secret: 'wrong-key' })}`,
+                }),
+            ],
+            [
+                "another workflow's token",
+                () => ({ Authorization: `Bearer ${mintApiSendToken(team.id, new UUIDT().toString())}` }),
+            ],
+            [
+                "another team's token",
+                () => ({ Authorization: `Bearer ${mintApiSendToken(team.id + 1, apiSendsFlow.id)}` }),
+            ],
+            [
+                'a token for another audience',
+                () => ({
+                    Authorization: `Bearer ${mintApiSendToken(team.id, apiSendsFlow.id, {
+                        audience: 'posthog:workflows:cancel_invocations',
+                    })}`,
+                }),
+            ],
+        ])('rejects a request with %s', async (_desc, headers) => {
+            const res = await postApiSend(apiSendsFlow, sendBody(), headers())
+
+            expect(res.status).toEqual(401)
+            expect(await queuedJobs()).toHaveLength(0)
+        })
+
+        it.each<[string, () => Promise<Pick<HogFlow, 'id' | 'team_id'>>, number]>([
+            ['a workflow that is not the API sends workflow', () => insertApiSendsFlow({ origin_product: null }), 404],
+            ['an inactive API sends workflow', () => insertApiSendsFlowForNewTeam({ status: 'archived' }), 409],
+            [
+                'a team over its email quota',
+                () => {
+                    jest.spyOn(cdpDeps.quotaLimiting, 'isTeamQuotaLimited').mockResolvedValue(true)
+                    return Promise.resolve(apiSendsFlow)
+                },
+                402,
+            ],
+            [
+                'an API sends workflow with email sending paused',
+                () => insertApiSendsFlowForNewTeam({ email_sending_paused_at: new Date().toISOString() }),
+                423,
+            ],
+        ])('refuses %s and queues nothing', async (_desc, flowFor, expectedStatus) => {
+            const flow = await flowFor()
+
+            const res = await postApiSend(flow, sendBody())
+
+            expect(res.status).toEqual(expectedStatus)
+            expect(await queuedJobs()).toHaveLength(0)
+        })
+
+        it('rejects a body whose invocation id is not a UUID', async () => {
+            const res = await postApiSend(apiSendsFlow, sendBody({ invocation_id: 'not-a-uuid' }))
+
+            expect(res.status).toEqual(400)
+            expect(await queuedJobs()).toHaveLength(0)
         })
     })
 

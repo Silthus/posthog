@@ -40,12 +40,19 @@ import { HogExecutorAsyncService, HogExecutorExecuteAsyncOptions } from './servi
 import { MAX_ASYNC_STEPS } from './services/hog-executor.service'
 import { HogInputsService } from './services/hog-inputs.service'
 import {
+    API_SENDS_ORIGIN_PRODUCT,
+    ApiSendInvocationSchema,
+    createApiSendInvocation,
+    isUniqueViolation,
+} from './services/hogflows/api-send'
+import {
     BatchResolverState,
     HOGFLOW_BATCH_RESOLVE_QUEUE,
     serializeResolverState,
 } from './services/hogflows/batch-resolver.types'
 import { HogFlowExecutorService, createHogFlowInvocation } from './services/hogflows/hogflow-executor.service'
 import { HogFlowManagerService } from './services/hogflows/hogflow-manager.service'
+import { checkHogFlowQuotaLimits } from './services/hogflows/hogflow-quota-limiting'
 import { matchesWaitUntilCondition } from './services/hogflows/hogflow-utils'
 import { WorkflowStepResumeSchema } from './services/hogflows/step-resume.service'
 import { InvocationResultsService } from './services/invocation-results.service'
@@ -158,6 +165,7 @@ export class CdpApi {
     private cancelInvocationsJwt: ScopedServiceJwt
     private cancelBatchJwt: ScopedServiceJwt
     private stepResumeJwt: ScopedServiceJwt
+    private apiSendJwt: ScopedServiceJwt
 
     constructor(
         private config: PluginsServerConfig,
@@ -224,6 +232,10 @@ export class CdpApi {
         this.stepResumeJwt = new ScopedServiceJwt(
             PosthogJwtAudience.WORKFLOWS_STEP_RESUME,
             config.WORKFLOWS_STEP_RESUME_JWT_SECRET || ''
+        )
+        this.apiSendJwt = new ScopedServiceJwt(
+            PosthogJwtAudience.WORKFLOWS_API_SEND,
+            config.WORKFLOWS_API_SEND_JWT_SECRET || ''
         )
     }
 
@@ -306,6 +318,7 @@ export class CdpApi {
             asyncHandler(this.postHogFlowCancelBatchJob)
         )
         router.post('/api/projects/:team_id/workflow_steps/resume', asyncHandler(this.postWorkflowStepResume))
+        router.post('/api/projects/:team_id/hog_flows/:id/api_sends', asyncHandler(this.postHogFlowApiSend))
         router.get('/api/projects/:team_id/hog_functions/:id/status', asyncHandler(this.getFunctionStatus()))
         router.patch('/api/projects/:team_id/hog_functions/:id/status', asyncHandler(this.patchFunctionStatus()))
         router.get('/api/hog_functions/states', asyncHandler(this.getFunctionStates()))
@@ -1224,6 +1237,63 @@ export class CdpApi {
             logger.error('Error resuming workflow step', {
                 error: e instanceof Error ? e.message : String(e),
             })
+            return res.status(500).json({ error: e instanceof Error ? e.message : String(e) })
+        }
+    }
+
+    // Django mints the invocation id, so a retry after a timeout finds the job already queued.
+    private postHogFlowApiSend = async (req: ModifiedRequest, res: express.Response): Promise<any> => {
+        try {
+            if (!this.apiSendJwt.enabled) {
+                return res.status(503).json({
+                    error: 'API send auth not configured (WORKFLOWS_API_SEND_JWT_SECRET unset)',
+                })
+            }
+            if (!this.verifyScopedWorkflowJwt(this.apiSendJwt, req, res, 'api send')) {
+                return
+            }
+            const parsed = ApiSendInvocationSchema.safeParse(req.body)
+            if (!parsed.success) {
+                return res.status(400).json({ error: parsed.error.issues.map((issue) => issue.message) })
+            }
+
+            const team = await this.deps.teamManager.getTeam(parseInt(req.params.team_id)).catch(() => null)
+            if (!team) {
+                return res.status(404).json({ error: 'Team not found' })
+            }
+            const hogFlow = await this.hogFlowManager.getHogFlowReadingPrimaryOnMiss(req.params.id)
+            if (!hogFlow || hogFlow.team_id !== team.id || hogFlow.origin_product !== API_SENDS_ORIGIN_PRODUCT) {
+                return res.status(404).json({ error: 'API sends workflow not found' })
+            }
+            if (hogFlow.status !== 'active') {
+                return res.status(409).json({ error: 'API sends workflow is not active' })
+            }
+            if ((await checkHogFlowQuotaLimits(hogFlow, team.id, this.deps.quotaLimiting)).isLimited) {
+                return res.status(402).json({ error: 'quota_limited' })
+            }
+            if (hogFlow.email_sending_paused_at) {
+                return res.status(423).json({ error: 'sending_paused' })
+            }
+
+            const invocation = createApiSendInvocation(parsed.data, hogFlow, {
+                id: team.id,
+                name: team.name,
+                url: `${this.config.SITE_URL ?? 'http://localhost:8000'}/project/${team.id}`,
+            })
+            this.invocationResultsService.invocationResultsRowsService.queueLifecycleRow(invocation, 'running')
+            try {
+                await this.hogflowQueue.queueInvocations([invocation])
+            } catch (error) {
+                this.invocationResultsService.invocationResultsRowsService.dropQueuedRowsFor([invocation.id])
+                if (!isUniqueViolation(error)) {
+                    throw error
+                }
+            }
+            await this.invocationResultsService.invocationResultsRowsService.flush()
+
+            return res.json({ status: 'queued', invocation_id: invocation.id })
+        } catch (e) {
+            logger.error('Error queueing api send', { error: e instanceof Error ? e.message : String(e) })
             return res.status(500).json({ error: e instanceof Error ? e.message : String(e) })
         }
     }

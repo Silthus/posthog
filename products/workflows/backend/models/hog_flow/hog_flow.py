@@ -60,6 +60,7 @@ TRIGGER_TYPES: Final[frozenset[str]] = frozenset(
         "data-warehouse-table",
         "data-warehouse-view",
         "internal-event",
+        "api_send",
     }
 )
 

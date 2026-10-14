@@ -36,6 +36,8 @@ const SCOPED_AUTH_PATH_PATTERNS = [
     /^\/api\/projects\/[^/]+\/hog_flows\/[^/]+\/batch_jobs\/[^/]+\/cancel$/,
     // CdpApi.postWorkflowStepResume, verified against WORKFLOWS_STEP_RESUME_JWT_SECRET, audience-pinned.
     /^\/api\/projects\/[^/]+\/workflow_steps\/resume$/,
+    // CdpApi.postHogFlowApiSend, verified against WORKFLOWS_API_SEND_JWT_SECRET, audience-pinned.
+    /^\/api\/projects\/[^/]+\/hog_flows\/[^/]+\/api_sends$/,
 ]
 
 export interface InternalApiAuthOptions {
