@@ -366,6 +366,7 @@ export const productRoutes: Record<string, [string, string]> = {
     '/heatmaps/:id': ['Heatmap', 'heatmap'],
     '/wizard/runs': ['WizardRuns', 'wizardRuns'],
     '/workflows': ['Workflows', 'workflows'],
+    '/workflows/api-sends': ['WorkflowsApiSends', 'workflowsApiSends'],
     '/workflows/:tab': ['Workflows', 'workflows'],
     '/workflows/:id/:tab': ['Workflow', 'workflowTab'],
     '/workflows/library/templates/:id': ['WorkflowsLibraryTemplate', 'workflowsLibraryTemplate'],
@@ -1271,6 +1272,7 @@ export const productConfiguration: Record<string, any> = {
         docsHref: 'https://posthog.com/docs/workflows',
     },
     Workflow: { name: 'Workflows', iconType: 'workflows', projectBased: true },
+    WorkflowsApiSends: { name: 'Workflows', iconType: 'workflows', projectBased: true },
     WorkflowsLibraryTemplate: { name: 'Workflows', iconType: 'workflows', projectBased: true },
     Broadcasts: {
         name: 'Broadcasts',
@@ -1955,6 +1957,7 @@ export const productUrls = {
     workflows: (tab?: WorkflowsSceneTab): string => `/workflows${tab ? `/${tab}` : ''}`,
     workflow: (id: string, tab: string): string => `/workflows/${id}/${tab}`,
     workflowNew: (): string => '/workflows/new/workflow',
+    workflowsApiSends: (): string => '/workflows/api-sends',
     workflowsLibraryMessage: (id: string): string => `/workflows/library/messages/${id}`,
     workflowsLibraryTemplate: (id?: string): string => `/workflows/library/templates/${id}`,
     workflowsLibraryTemplateNew: (): string => '/workflows/library/templates/new',
@@ -2372,7 +2375,14 @@ export const getTreeItemsProducts = (): FileSystemImport[] => [
         iconType: 'broadcasts',
         iconColor: ['var(--color-product-broadcasts-light)', 'var(--color-product-broadcasts-dark)'],
         sceneKey: 'Broadcasts',
-        sceneKeys: ['Workflows', 'Workflow', 'WorkflowsLibraryTemplate', 'Broadcasts', 'Broadcast'],
+        sceneKeys: [
+            'Workflows',
+            'Workflow',
+            'WorkflowsApiSends',
+            'WorkflowsLibraryTemplate',
+            'Broadcasts',
+            'Broadcast',
+        ],
     },
     {
         path: 'Business intelligence',
@@ -3338,7 +3348,14 @@ export const getTreeItemsProducts = (): FileSystemImport[] => [
         iconType: 'workflows',
         iconColor: ['var(--color-product-workflows-light)'] as FileSystemIconColor,
         sceneKey: 'Workflows',
-        sceneKeys: ['Workflows', 'Workflow', 'WorkflowsLibraryTemplate', 'Broadcasts', 'Broadcast'],
+        sceneKeys: [
+            'Workflows',
+            'Workflow',
+            'WorkflowsApiSends',
+            'WorkflowsLibraryTemplate',
+            'Broadcasts',
+            'Broadcast',
+        ],
     },
 ]
 
