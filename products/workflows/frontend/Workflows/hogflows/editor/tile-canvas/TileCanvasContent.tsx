@@ -106,7 +106,7 @@ export function TileCanvasContent(): JSX.Element {
         if (command === 'activate') {
             activateNode(nodeId)
         } else if (hasMenu(nodeId)) {
-            openStepMenu(nodeId)
+            openStepMenu(nodeId, true)
         }
     }
 

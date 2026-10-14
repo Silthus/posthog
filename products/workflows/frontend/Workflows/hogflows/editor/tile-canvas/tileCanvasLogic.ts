@@ -198,6 +198,7 @@ export interface tileCanvasLogicValues {
     stepCounts: Record<string, HogFlowEditorActionMetrics> | null
     stepCountsLoading: boolean
     stepMenuActionId: string | null
+    stepMenuFromKeyboard: boolean
     stepMetrics: Record<string, HogFlowEditorActionMetrics> | null
     countOf: StepCountOf
     templateNameOf: TemplateNameOf
@@ -333,8 +334,12 @@ export interface tileCanvasLogicActions {
     openQuickAdd: (edgeKey: string) => {
         edgeKey: string
     }
-    openStepMenu: (actionId: string) => {
+    openStepMenu: (
+        actionId: string,
+        fromKeyboard?: boolean
+    ) => {
         actionId: string
+        fromKeyboard: boolean
     }
     placeAt: (edge: HogFlowEdge) => {
         edge: HogFlowEdge
@@ -490,7 +495,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         closeCommandPalette: true,
         openQuickAdd: (edgeKey: string) => ({ edgeKey }),
         closeQuickAdd: true,
-        openStepMenu: (actionId: string) => ({ actionId }),
+        openStepMenu: (actionId: string, fromKeyboard = false) => ({ actionId, fromKeyboard }),
         closeStepMenu: true,
         startPlacing: (step: CreateActionType) => ({ step }),
         addStepAt: (step: CreateActionType, edge: HogFlowEdge) => ({ step, edge }),
@@ -565,6 +570,10 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 cancel: () => false,
                 setSelectedNodeId: (state, { selectedNodeId }) => (selectedNodeId ? false : state),
             },
+        ],
+        stepMenuFromKeyboard: [
+            false,
+            { openStepMenu: (_, { fromKeyboard }) => fromKeyboard, closeStepMenu: () => false, cancel: () => false },
         ],
         stepMenuActionId: [
             null as string | null,
