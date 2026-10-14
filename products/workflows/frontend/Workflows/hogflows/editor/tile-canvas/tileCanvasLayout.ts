@@ -65,8 +65,13 @@ export function pathFrameSpecs(
     }))
 }
 
+/** Where the arrow into a laid-out tile or stack meets it. */
+export function tileEntry(position: Point, size: NodeSize): Point {
+    return { x: position.x + (size.anchor ? size.anchor.x : size.width / 2), y: position.y }
+}
+
 function tilePorts(size: NodeSize, count: number): { in: Point; out: Point[] } {
-    const centerX = size.anchor ? size.anchor.x : size.width / 2
+    const centerX = tileEntry({ x: 0, y: 0 }, size).x
     return {
         in: { x: centerX, y: 0 },
         out: Array.from({ length: count }, (_, index) => ({

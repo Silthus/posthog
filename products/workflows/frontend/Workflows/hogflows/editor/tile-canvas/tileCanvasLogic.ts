@@ -47,6 +47,7 @@ import {
     NodeSize,
     PathFrameSpec,
     pathFrameSpecs,
+    tileEntry,
 } from './tileCanvasLayout'
 import {
     CanvasMotion,
@@ -95,12 +96,7 @@ function stackPlace(
     const position = layout?.positions[groupId]
     const size = sizes?.[groupId]
     return position && size
-        ? {
-              ...position,
-              width: size.width,
-              height: size.height,
-              entry: { x: position.x + (size.anchor?.x ?? size.width / 2), y: position.y },
-          }
+        ? { ...position, width: size.width, height: size.height, entry: tileEntry(position, size) }
         : null
 }
 

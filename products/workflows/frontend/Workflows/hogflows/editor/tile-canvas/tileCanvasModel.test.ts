@@ -515,6 +515,10 @@ describe('viewportAnchoredOn', () => {
 })
 
 describe('readableFitViewport', () => {
+    const canvas = { width: 1000, height: 700 }
+    const entryOnScreen = (entry: { x: number; y: number }, viewport: { x: number; y: number; zoom: number }): number =>
+        viewport.x + entry.x * viewport.zoom
+
     it.each([
         { name: 'fits a small workflow at full size', bounds: { x: 0, y: 0, width: 400, height: 300 }, zoom: 1 },
         {
@@ -524,10 +528,21 @@ describe('readableFitViewport', () => {
         },
         { name: 'keeps a long workflow readable too', bounds: { x: 0, y: 0, width: 400, height: 6000 }, zoom: 0.66 },
     ])('$name', ({ bounds, zoom }) => {
-        const viewport = readableFitViewport(bounds, { width: 1000, height: 700 })
+        expect(readableFitViewport(bounds, canvas, { x: bounds.width / 2, y: 0 }).zoom).toBeCloseTo(zoom)
+    })
 
-        expect(viewport.zoom).toBeCloseTo(zoom)
-        expect(viewport.x).toBeGreaterThanOrEqual(0)
+    it('starts a workflow too wide to fit at its trigger, in the middle of the canvas', () => {
+        const trigger = { x: 2000, y: 0 }
+
+        const viewport = readableFitViewport({ x: 0, y: 0, width: 4000, height: 300 }, canvas, trigger)
+
+        expect(entryOnScreen(trigger, viewport)).toBeCloseTo(500)
+    })
+
+    it('keeps the left edge of a wide workflow in view when its trigger sits near that edge', () => {
+        const viewport = readableFitViewport({ x: 0, y: 0, width: 4000, height: 300 }, canvas, { x: 100, y: 0 })
+
+        expect(viewport.x).toBeCloseTo(24)
     })
 })
 

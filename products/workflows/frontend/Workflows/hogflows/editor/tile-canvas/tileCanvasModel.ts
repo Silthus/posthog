@@ -670,16 +670,25 @@ export function viewportAnchoredOn(previous: PathPlace, next: PathPlace, viewpor
     return { x, y: anchor.y - next.entry.y * zoom, zoom }
 }
 
-/** Fits the workflow, but never shrinks it below a readable zoom: people pan to see the rest of a big one. */
-export function readableFitViewport(bounds: Point & Size, canvas: Size): Viewport {
+/**
+ * Fits the workflow, but never shrinks it below a readable zoom: people pan to see the rest of a big one. A workflow
+ * too wide to fit starts at its trigger, in the middle of the canvas, since it usually sits above the middle of its
+ * paths and the left edge would show only empty canvas.
+ */
+export function readableFitViewport(bounds: Point & Size, canvas: Size, trigger: Point): Viewport {
     const width = bounds.width + FIT_MARGIN.side * 2
     const height = bounds.height + FIT_MARGIN.top + FIT_MARGIN.bottom
     const zoom = Math.min(1, Math.max(MIN_READABLE_ZOOM, Math.min(canvas.width / width, canvas.height / height)))
-    return {
-        x: Math.max(FIT_MARGIN.side, (canvas.width - bounds.width * zoom) / 2) - bounds.x * zoom,
-        y: FIT_MARGIN.top - bounds.y * zoom,
-        zoom,
-    }
+    const room = roomBounds(canvas)
+    const fitsWidth = bounds.width * zoom <= room.right - room.left
+    const x = fitsWidth
+        ? (canvas.width - bounds.width * zoom) / 2 - bounds.x * zoom
+        : clamp(
+              canvas.width / 2 - trigger.x * zoom,
+              room.right - (bounds.x + bounds.width) * zoom,
+              room.left - bounds.x * zoom
+          )
+    return { x, y: FIT_MARGIN.top - bounds.y * zoom, zoom }
 }
 
 export interface MiniFlowLayout {

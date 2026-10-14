@@ -2,7 +2,7 @@ import { useReactFlow } from '@xyflow/react'
 import { useValues } from 'kea'
 import { MutableRefObject, RefObject, useEffect, useRef } from 'react'
 
-import { canvasBounds } from './tileCanvasLayout'
+import { canvasBounds, tileEntry } from './tileCanvasLayout'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import {
     Point,
@@ -57,12 +57,16 @@ function useViewportFollowsResize(wrapperRef: RefObject<HTMLDivElement>): void {
 /** Edits keep the viewport the person panned or zoomed to; only an explicit fit request moves it. */
 function useFitOnRequest(wrapperRef: RefObject<HTMLDivElement>): void {
     const reactFlow = useReactFlow()
-    const { fitRequest, layout, measuredSizes } = useValues(tileCanvasLogic)
+    const { fitRequest, layout, measuredSizes, visibleGraph } = useValues(tileCanvasLogic)
     useEffect(() => {
         const wrapper = wrapperRef.current
         const bounds = layout && measuredSizes ? canvasBounds(layout, measuredSizes) : undefined
-        if (wrapper && bounds) {
-            void reactFlow.setViewport(readableFitViewport(bounds, sizeOf(wrapper)))
+        if (wrapper && layout && measuredSizes && bounds) {
+            const trigger = visibleGraph.nodes.find((node) => node.kind === 'step' && node.action.type === 'trigger')
+            const position = trigger && layout.positions[trigger.id]
+            const size = trigger && measuredSizes[trigger.id]
+            const entry = position && size ? tileEntry(position, size) : { x: bounds.x + bounds.width / 2, y: bounds.y }
+            void reactFlow.setViewport(readableFitViewport(bounds, sizeOf(wrapper), entry))
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fitRequest])
