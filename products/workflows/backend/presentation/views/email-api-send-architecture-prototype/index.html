@@ -35,7 +35,7 @@
   th { background: var(--accent-soft); font-weight: 600; }
   nav.toc { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; margin: 16px 0; columns: 2; font-size: 14px; }
   nav.toc a { color: var(--accent); text-decoration: none; display: block; }
-  .mermaid { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 8px 0 16px; }
+  .mermaid { overflow-x: auto; text-align: center; background: white; border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 8px 0 16px; }
   .legend span { display: inline-block; padding: 2px 10px; border-radius: 4px; margin-right: 6px; border: 1px solid var(--line); font-size: 13px; }
   .card { background: white; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
   .card.locked { border-left-color: #78716c; }
@@ -49,7 +49,7 @@
 </style>
 <script type="module">
   import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'
-  mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose', flowchart: { htmlLabels: true } })
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose', flowchart: { htmlLabels: true, useMaxWidth: false }, sequence: { useMaxWidth: false, width: 110, actorMargin: 50, messageMargin: 32 }, themeVariables: { fontSize: '16px' } })
 </script>
 </head>
 <body>
@@ -91,50 +91,32 @@
 </table>
 
 <h2 id="map">3. Change map</h2>
-<div class="legend"><span style="background:var(--new)">new</span><span style="background:var(--changed)">changed</span><span style="background:var(--extended)">extended</span><span style="background:var(--untouched)">untouched</span></div>
+<div class="legend"><span style="background:var(--new)">new</span><span style="background:var(--extended)">extended</span><span style="background:var(--untouched)">untouched</span></div>
 <pre class="mermaid">
-flowchart LR
-  subgraph client["Customer code"]
-    SDK["posthog-node<br/>emails.send()<br/>(ticket #464+)"]
-    CURL["cURL / any HTTP client"]
-  end
-  subgraph django["Django: products/workflows/backend"]
-    VIEW["EmailSendViewSet.create<br/>presentation/views/email_sends.py<br/>auth · scope · flag · throttles · idempotency"]
-    SER["EmailSendRequestSerializer<br/>payload validation"]
-    SENDER["resolve_api_sender()<br/>services/api_send_sender.py<br/>from → verified integration"]
-    HIDDEN["get_or_create_api_sends_flow()<br/>services/api_sends_flow.py"]
-    ERR["EmailSendError catalog<br/>services/api_send_errors.py"]
-    PSA["plugin_server_api<br/>create_hog_flow_api_send()<br/>scoped JWT"]
-    READS["hog_flow_reads.workflow_type_q<br/>+ api_sends owned type"]
-    SCOPES["posthog/scopes.py<br/>email_send:write + PSAK allowlist"]
-  end
-  subgraph cdp["Node CDP: nodejs/src/cdp"]
-    API["CdpApi.postHogFlowApiSend<br/>/hog_flows/:id/api_sends"]
-    AUTH["internal-api-auth exemption<br/>+ ScopedServiceJwt verify"]
-    EXEC["HogFlowExecutor<br/>createHogFlowInvocation"]
-    STEP["email step (template-email)<br/>hog_function.ts pre-send checks"]
-    Q["email queue · fast lane<br/>email-priority.ts"]
-    ES["EmailService.executeSendEmail"]
-    SCHEMA["cyclotron.ts email params<br/>integrationId coerce"]
-  end
-  SDK --> VIEW
-  CURL --> VIEW
-  VIEW --> SER
-  VIEW --> SENDER
-  VIEW --> HIDDEN
-  VIEW --> ERR
-  VIEW --> PSA --> API
-  API --> AUTH
-  API --> EXEC --> STEP --> Q --> ES
-  STEP --> SCHEMA
+flowchart TB
+  SDK["Customer code<br/>posthog-node emails.send() · cURL"]
+  VIEW["<b>EmailSendViewSet.create</b><br/>views/email_sends.py<br/>auth · scope · flag · throttles · idempotency"]
+  SVC["<b>api_send_service.send</b><br/>validate payload · resolve sender<br/>get_or_create API sends flow · error catalog"]
+  PSA["<b>plugin_server_api.create_hog_flow_api_send</b><br/>mints scoped JWT"]
+  API["<b>CdpApi.postHogFlowApiSend</b><br/>/hog_flows/:id/api_sends<br/>verify JWT · flow active · quota · pause"]
+  EXEC["createHogFlowInvocation<br/>hogflow queue"]
+  STEP["email step (template-email)<br/>pre-send checks"]
+  ES["email queue fast lane<br/>EmailService.executeSendEmail → SES"]
+  SCOPES["posthog/scopes.py<br/>email_send:write + PSAK allowlist"]
+  READS["hog_flow_reads.py<br/>api_send owned type"]
+  AUTH["internal-api-auth.ts<br/>route exemption"]
+  SCHEMA["cyclotron.ts<br/>integrationId coerce"]
+  SDK --> VIEW --> SVC --> PSA --> API --> EXEC --> STEP --> ES
+  SCOPES -.- VIEW
+  READS -.- SVC
+  AUTH -.- API
+  SCHEMA -.- STEP
   classDef new fill:#dcfce7,stroke:#16a34a
-  classDef changed fill:#fef3c7,stroke:#d97706
   classDef extended fill:#dbeafe,stroke:#2563eb
   classDef untouched fill:#f5f5f4,stroke:#a8a29e
-  class VIEW,SER,SENDER,HIDDEN,ERR,API new
-  class PSA,READS,SCOPES,AUTH,SCHEMA extended
-  class EXEC,STEP,Q,ES untouched
-  class SDK,CURL untouched
+  class VIEW,SVC,API new
+  class PSA,SCOPES,READS,AUTH,SCHEMA extended
+  class SDK,EXEC,STEP,ES untouched
 </pre>
 <p>The email step, the email queue and <code>EmailService</code> do not change. The only change below the CDP route is a one-line coercion in the email queue schema (card C5). Everything else is a new entry point that feeds the existing path.</p>
 
@@ -370,46 +352,41 @@ CATALOG: Final[dict[EmailSendErrorCode, EmailSendErrorSpec]] = {...}</code></pre
 <pre class="mermaid">
 sequenceDiagram
   autonumber
-  participant C as Customer code
-  participant V as Django EmailSendViewSet
-  participant S as api_send_service
-  participant R as Redis cache
-  participant P as Postgres
-  participant N as CDP api_sends route
-  participant Q as hogflow queue → email queue
-  C->>V: POST /emails (phs_, Idempotency-Key)
-  V->>V: auth · scope · throttles · flag · serializer
-  V->>S: send(team, payload, key)
-  S->>R: reserve key (hash, send_id, in_progress)
-  S->>P: resolve sender (integrations, default sender)
-  S->>P: get_or_create API sends flow
-  S->>N: POST api_sends (scoped JWT, invocation_id)
-  N->>N: verify JWT · flow active · quota · pause
-  N->>Q: queue invocation (id = send_id)
-  N-->>S: 200 queued
-  S->>R: mark key done
-  V-->>C: 200 { id }
-  Q-->>Q: email step → executeSendEmail → SES (async)
+  participant C as Customer
+  participant D as Django
+  participant R as Redis
+  participant N as CDP route
+  C->>D: POST /emails (phs_, key)
+  D->>D: auth, scope, flag, validate
+  D->>R: reserve key, send id X
+  D->>D: resolve sender, flow
+  D->>N: api_sends (JWT, id X)
+  N->>N: active, quota, pause
+  N->>N: enqueue invocation X
+  N-->>D: 200 queued
+  D->>R: mark key done
+  D-->>C: 200 { id: X }
+  Note over N: later: email step, SES
 </pre>
 <h3>10.2 Failure path: a timeout to CDP, then a retry</h3>
 <pre class="mermaid">
 sequenceDiagram
   autonumber
-  participant C as Customer code
-  participant S as api_send_service
-  participant R as Redis cache
-  participant N as CDP api_sends route
-  C->>S: send (key K)
-  S->>R: reserve K → send_id X
-  S->>N: POST api_sends (invocation_id X)
-  N--xS: read timeout (job may be queued)
-  S->>R: keep reservation for K
-  S-->>C: 503 send_service_unavailable
-  C->>S: retry (key K, same body)
-  S->>R: K reserved, same hash, not done → resend with X
-  S->>N: POST api_sends (invocation_id X)
-  N-->>S: duplicate job id → 200 queued
-  S-->>C: 200 { id: X }
+  participant C as Customer
+  participant D as Django
+  participant R as Redis
+  participant N as CDP route
+  C->>D: send (key K)
+  D->>R: reserve K, send id X
+  D->>N: api_sends (id X)
+  N--xD: timeout
+  D->>R: keep K reserved
+  D-->>C: 503 retry
+  C->>D: retry (key K)
+  D->>R: K, same body, not done
+  D->>N: api_sends (id X)
+  N-->>D: duplicate id, 200
+  D-->>C: 200 { id: X }
 </pre>
 <h3>10.3 Read path</h3>
 <p>No synchronous read in this slice. Status is read from the API sends workflow's logs (by id) and from the delivery events on the person (section 8).</p>
