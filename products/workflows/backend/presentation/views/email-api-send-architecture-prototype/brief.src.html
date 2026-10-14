@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PROTOTYPE: API send contract architecture brief (#463), round 1 locked, round 2 open</title>
+<title>PROTOTYPE: API send contract architecture brief (#463), rounds 1 and 2 locked</title>
 <style>
   :root {
     --accent: #c2410c;
@@ -106,19 +106,21 @@ flowchart TB
   READS["hog_flow_reads.py<br/>api_send owned type"]
   AUTH["internal-api-auth.ts<br/>route exemption"]
   SCHEMA["cyclotron.ts<br/>integrationId coerce"]
+  REDIR["<b>/workflows/api-sends</b><br/>frontend redirect route<br/>manifest.tsx"]
   SDK --> VIEW --> SVC --> PSA --> API --> EXEC --> STEP --> ES
   SCOPES -.- VIEW
   READS -.- SVC
+  REDIR -.-|"?type=api_send"| READS
   AUTH -.- API
   SCHEMA -.- STEP
   classDef new fill:#dcfce7,stroke:#16a34a
   classDef extended fill:#dbeafe,stroke:#2563eb
   classDef untouched fill:#f5f5f4,stroke:#a8a29e
-  class VIEW,SVC,API new
+  class VIEW,SVC,API,REDIR new
   class PSA,SCOPES,READS,AUTH,SCHEMA extended
   class SDK,EXEC,STEP,ES untouched
 </pre>
-<p>The email step, the email queue and <code>EmailService</code> do not change. The only change below the CDP route is a one-line coercion in the email queue schema (card C5). Everything else is a new entry point that feeds the existing path.</p>
+<p>The only frontend change is the redirect route (card C16). The email step, the email queue and <code>EmailService</code> do not change. The only change below the CDP route is a one-line coercion in the email queue schema (card C5). Everything else is a new entry point that feeds the existing path.</p>
 
 <h2 id="endpoint">4. Contract: the public endpoint</h2>
 <pre><code>POST /api/projects/@current/emails/          # also /api/projects/{project_id}/emails/
@@ -139,7 +141,10 @@ Content-Type: application/json
 }
 
 200 OK
-{ "id": "0192f0c4-7b1e-7c3a-9a4e-3f1d2c5b6a70" }
+{
+  "id": "0192f0c4-7b1e-7c3a-9a4e-3f1d2c5b6a70",
+  "url": "https://us.posthog.com/project/123/workflows/0192f0c1-…/invocations"     // the API sends workflow, card C16
+}
 </code></pre>
 
 <h3>4.1 Django view (stub)</h3>
@@ -199,7 +204,11 @@ HogFlow(
   <li>The flow's graph is owned by code. When the code shape changes, <code>get_or_create</code> rewrites the graph on a version mismatch, so no data migration is needed.</li>
 </ul>
 <p><b>New: a per-team singleton.</b> Broadcasts and loops create one flow per broadcast or loop (<code>products/workflows/frontend/Broadcasts/broadcastWizardLogic.ts:1989</code>, <code>products/desktop/packages/ui/src/features/loops/loopHogFlowMapping.ts:279</code>), from the client, and nothing deduplicates them. The model's only constraint is <code>(team, version, id)</code> (<code>hog_flow.py:128</code>). A singleton that trusted backend code creates is new, so card C8 decides how it stays single.</p>
-<p><b>Out of the list, in Workflows.</b> The workflow list filters by type through <code>workflow_type_q</code> (<code>products/workflows/backend/services/hog_flow_reads.py:388-405</code>), and the Workflows page asks for <code>messaging</code>, <code>automation</code> and <code>loop</code> (<code>products/workflows/frontend/Workflows/workflowsLogic.ts:25</code>). Adding <code>"api_send": HogFlow.OriginProduct.API_SENDS</code> to <code>OWNED_WORKFLOW_TYPES</code> keeps the flow out of that page, the way broadcasts already leave it. A client that lists without a type filter still sees it; the update path refuses edits to it. Its sends stay visible in the normal flow page (metrics, logs, invocation results). There is no Workflows UI entry in this map: a person opens the page by a direct link (card C9), and card C16 decides where that link comes from.</p>
+<p><b>Out of the list, in Workflows.</b> The workflow list filters by type through <code>workflow_type_q</code> (<code>products/workflows/backend/services/hog_flow_reads.py:388-405</code>), and the Workflows page asks for <code>messaging</code>, <code>automation</code> and <code>loop</code> (<code>products/workflows/frontend/Workflows/workflowsLogic.ts:25</code>). Adding <code>"api_send": HogFlow.OriginProduct.API_SENDS</code> to <code>OWNED_WORKFLOW_TYPES</code> keeps the flow out of that page, the way broadcasts already leave it. A client that lists without a type filter still sees it; the update path refuses edits to it. Its sends stay visible in the normal flow page (metrics, logs, invocation results). There is no Workflows UI entry in this map: a person opens the page by a direct link (card C9), from two places (card C16):</p>
+<ul>
+  <li><b>Every accepted send returns it</b> as <code>url</code> (section 8).</li>
+  <li><b>A fixed redirect route</b> <code>/project/{id}/workflows/api-sends</code>, registered in <code>products/workflows/manifest.tsx</code>. It lists workflows with <code>?type=api_send</code>, which the new owned type already supports, and replaces the URL with the flow's Invocations tab. When the team has never sent, it shows a short empty state ("No emails sent through the API yet") with a link to the docs, and does not create the flow (card L6). Docs and the skill print this link, because it is the same for every team.</li>
+</ul>
 <p><b>Pausing and quota.</b> Because it is a normal hog flow, the per-workflow email pause (<code>email_sending_paused_at</code> on the model), team suspension, the team sending-tier cap and pacing all apply unchanged in the email worker (<code>email.service.ts:405</code>, <code>:437</code>, <code>:530</code>, <code>:556</code>), and the hogflow worker cancels a run whose flow is not active (<code>consumers/cdp-cyclotron-worker-hogflow.consumer.ts:105</code>). <b>Billing quota does not apply by itself:</b> it is checked only on event-trigger admission (<code>hog-flow-invocation-pipeline.service.ts:195</code>), and the scheduled route skips it. The new route runs the same check, <code>checkHogFlowQuotaLimits</code> (<code>nodejs/src/cdp/services/hogflows/hogflow-quota-limiting.ts:23</code>), before it enqueues (card C15). Paused and quota-limited sends are rejected in the response, not only logged.</p>
 
 <h2 id="cdp">6. Contract: Django → CDP</h2>
@@ -293,7 +302,8 @@ email: {
 
 <h2 id="return">8. What the call returns, and status later</h2>
 <pre><code>// accepted
-200 { "id": "&lt;send id = invocation id&gt;" }
+200 { "id": "&lt;send id = invocation id&gt;",
+      "url": "&lt;site url&gt;/project/{project id}/workflows/{API sends flow id}/invocations" }
 
 // rejected (section 9)
 4xx/5xx { "type": "validation_error" | "authentication_error" | "throttled_error" | "server_error",
@@ -304,8 +314,9 @@ email: {
 
 // posthog-node (#464): never throws on API errors
 const { data, error } = await posthog.emails.send({...})
-// data:  { id } | null
+// data:  { id, url } | null
 // error: { code, message, statusCode, docsUrl, field } | null</code></pre>
+<p><b>The link (card C16).</b> Built in Django from <code>SITE_URL</code>, the project id and the flow id it already holds, on the frontend route <code>urls.workflow(id, "invocations")</code> (<code>products/workflows/manifest.tsx:71</code>). It points at the flow, not at one invocation: the page has no per-invocation deep link today, so the send id is what a person looks for there. Docs and the agent skill print the fixed link <code>/workflows/api-sends</code> instead (section 5).</p>
 <p><b>Status later.</b> The send id is the invocation id, so with no new storage:</p>
 <ul>
   <li>The API sends workflow's logs use the invocation id as <code>instance_id</code> (<code>hog-function-monitoring.service.ts:175</code>; filter at <code>posthog/api/log_entries.py:108</code>), so Workflows shows each send, including asynchronous outcomes (suppressed, bounce prevented, provider error).</li>
@@ -401,16 +412,17 @@ sequenceDiagram
 </ul>
 
 <h2 id="cards">12. Decision cards</h2>
-<h3>Open in round 2</h3>
+<h3>Locked in round 2</h3>
+<p class="muted">Michael answered round 2 on 2026-10-14: options 1 and 2 together. No card is open.</p>
 
-<div class="card"><h4>C16 · Where the direct link to the API sends workflow comes from<span class="status open">open</span></h4>
+<div class="card locked"><h4>C16 · Where the direct link to the API sends workflow comes from<span class="status locked">locked</span></h4>
 <p>C9 leaves no Workflows UI entry, and the flow id differs per team, so a person needs the link from somewhere.</p>
 <ol>
   <li><b>The accepted response carries it:</b> <code>200 { "id": ..., "url": "https://…/project/{id}/workflows/{flow id}/invocations" }</code>, and posthog-node returns it in <code>data.url</code>. The link lands wherever the developer or agent logs the result, right when they need it. One additive field, so the shape still reads as Resend-like.</li>
   <li><b>A stable redirect route</b> <code>/workflows/api-sends</code> that resolves the team's flow and opens it. Docs and the skill can print one fixed link; a small frontend route, which is UI work C9 deferred.</li>
   <li><b>The agent looks it up</b> through the MCP: list workflows with <code>?type=api_send</code> and build the link. No API change; only agents with the MCP can find it, and a person without one cannot.</li>
 </ol>
-<div class="rec"><b>Recommend 1.</b> No UI, no lookup, and the link reaches both people and agents at the moment of the first send. The response stays one object with two fields.</div></div>
+<div class="rec"><b>Locked by Michael, round 2 (2026-10-14): options 1 and 2.</b> The response carries <code>url</code> for the moment of a send; the fixed <code>/workflows/api-sends</code> route gives docs and the skill one link for every team. The route is the only frontend change in this map.</div></div>
 
 <h3>Locked in round 1</h3>
 <p class="muted">Michael answered round 1 on 2026-10-14: every recommendation, except C9, which takes option 3.</p>
@@ -543,11 +555,13 @@ sequenceDiagram
 <p>Locked by the code: Node has no default-sender fallback and requires <code>from.integrationId</code> (<code>email-sender-selection.ts:8-20</code>; <code>send-email.ts:9</code>). Only Django knows <code>default_email_integration_id</code>.</p></div>
 <div class="card locked"><h4>L5 · The flag is backend-only and says so<span class="status locked">locked</span></h4>
 <p>Locked by the map: off returns <code>403 email_api_not_enabled</code>, not a 404, so an agent knows the call is right and the project is not enabled.</p></div>
+<div class="card locked"><h4>L6 · Opening the redirect route never creates the flow<span class="status locked">locked</span></h4>
+<p>Locked by the invariant in section 5: only the send path creates the API sends flow. A team that never sent sees an empty state with a docs link. Reopen if you want the page to work before the first send.</p></div>
 
 <h2 id="blast">13. Blast radius</h2>
 <ul>
   <li><b>Can break:</b> the email queue schema coercion (C5) touches every email job's parse; the workflow list filter gains a type, so a mistake there could hide or show the wrong flows on the Workflows page.</li>
-  <li><b>Who notices:</b> Workflows users (list), every email send (schema), the flagged projects (the endpoint).</li>
+  <li><b>Who notices:</b> Workflows users (list), every email send (schema), the flagged projects (the endpoint and the redirect route).</li>
   <li><b>Everything else is additive</b> and behind the flag: the endpoint, the scope, the CDP route, the flow type.</li>
   <li><b>Out of scope:</b> the posthog-node method and the agent skill (later tickets), batch sends, templates, scheduled sends, outbound webhooks, the trial sender, sending tier changes.</li>
 </ul>
