@@ -19,6 +19,7 @@ import { SceneExport } from 'scenes/sceneTypes'
 import { urls } from 'scenes/urls'
 
 import { SceneContent } from '~/layout/scenes/components/SceneContent'
+import { SceneTitlePanelButton } from '~/layout/scenes/components/SceneTitlePanelButton'
 import { ProductKey } from '~/queries/schema/schema-general'
 import { ActivityScope } from '~/types'
 
@@ -48,7 +49,6 @@ import { WorkflowMetrics } from './WorkflowMetrics'
 import { WorkflowRevisions } from './WorkflowRevisions'
 import { WorkflowSceneHeader } from './WorkflowSceneHeader'
 import { WorkflowSceneLogicProps, WorkflowTab, workflowSceneLogic } from './workflowSceneLogic'
-import { WorkflowSceneTabActions } from './WorkflowSceneTabActions'
 import { TRIGGER_PREFILL_PARAM } from './workflowTriggerPrefill'
 
 export const scene: SceneExport<WorkflowSceneLogicProps> = {
@@ -231,10 +231,7 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
     const renderScene = (editorShowsHeaderInBar: boolean): JSX.Element => {
         const headerInWorkflowBar = editorShowsHeaderInBar && (activeTab === 'workflow' || !isSavedWorkflow)
         return (
-            <SceneContent
-                className={clsx('h-full flex flex-col grow', headerInWorkflowBar && '@container/workflow-scene')}
-                data-attr="workflow-scene"
-            >
+            <SceneContent className="h-full flex flex-col grow" data-attr="workflow-scene">
                 <BindLogic logic={workflowLogic} props={workflowProps}>
                     <WorkflowSceneHeader {...props} headerInWorkflowBar={headerInWorkflowBar} />
                     <WorkflowEmailPauseBanner />
@@ -248,7 +245,7 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
                             onChange={(tab) => router.actions.push(urls.workflow(props.id ?? 'new', tab))}
                             tabs={tabs}
                             sceneInset
-                            rightSlot={headerInWorkflowBar ? <WorkflowSceneTabActions /> : undefined}
+                            rightSlot={headerInWorkflowBar ? <SceneTitlePanelButton /> : undefined}
                             className={clsx({
                                 'flex flex-col grow [&>div]:flex [&>div]:flex-col [&>div]:grow':
                                     currentTab === 'workflow',

@@ -8,12 +8,12 @@ import { useDebouncedValue } from 'lib/hooks/useDebouncedValue'
 
 import { SceneBreadcrumbBackButton } from '~/layout/scenes/components/SceneBreadcrumbs'
 import { SceneDescription } from '~/layout/scenes/components/SceneDescription'
+import { SceneTitlePanelButton } from '~/layout/scenes/components/SceneTitlePanelButton'
 import { SceneName } from '~/layout/scenes/components/SceneTitleSection'
 
 import type { HogFlowEditorLayout } from './hogflows/hogFlowEditorLogic'
 import { WorkflowActions } from './WorkflowActions'
 import { WorkflowLogicProps, workflowLogic } from './workflowLogic'
-import { WorkflowSceneTabActions } from './WorkflowSceneTabActions'
 
 type WorkflowHeaderBarProps = WorkflowLogicProps & {
     editorLayout: HogFlowEditorLayout
@@ -163,8 +163,8 @@ export function WorkflowHeaderBar({
                 <div className="flex flex-wrap items-center gap-1.5">
                     <WorkflowActions {...props} />
                 </div>
-                {/* A saved workflow shows these beside its tabs, and a new one has no tabs yet. */}
-                {!isSaved && <WorkflowSceneTabActions />}
+                {/* A saved workflow shows the AI and side panel buttons beside its tabs, and a new one has no tabs yet. */}
+                {!isSaved && <SceneTitlePanelButton />}
             </div>
         </div>
     )
