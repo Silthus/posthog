@@ -14,6 +14,7 @@ import { createWorkflowEditorStoryDecorator } from '../workflowEditorStoryFixtur
 import { tileCanvasLogic } from './tileCanvasLogic'
 import {
     AI_SUPPORT_TRIAGE,
+    LONG_EMAILS,
     TICKET_TO_SLACK,
     TILE_CANVAS_WORKFLOWS,
     TRIAL_TO_PAID,
@@ -97,3 +98,4 @@ export const PathsCollapsed = canvasStory(AI_SUPPORT_TRIAGE.id)
 export const PathsOpen = canvasStory(AI_SUPPORT_TRIAGE.id, { openAllPaths: true })
 export const WithStepCounts = canvasStory(TRIAL_TO_PAID.id, { metrics: TRIAL_TO_PAID_METRICS })
 export const TimeWindowAndWebhook = canvasStory(TICKET_TO_SLACK.id, { openAllPaths: true })
+export const LongEmails = canvasStory(LONG_EMAILS.id)

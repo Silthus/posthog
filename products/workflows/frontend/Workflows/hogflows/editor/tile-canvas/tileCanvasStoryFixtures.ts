@@ -65,6 +65,40 @@ const email = (id: string, subject: string, preheader: string, body: string, cta
         },
     })
 
+const emailStep = (id: string, subject: string, preheader: string, html: string, text: string): HogFlowAction =>
+    step(id, 'function_email', subject, {
+        template_id: 'template-email',
+        message_category_type: 'marketing',
+        inputs: {
+            email: {
+                value: {
+                    to: { name: '', email: '{{ person.properties.email }}' },
+                    from: { integrationId: 1 },
+                    subject,
+                    preheader,
+                    html,
+                    text,
+                },
+            },
+        },
+    })
+
+const FIRST_NAME = '{{ person.properties.first_name }}'
+const LONG_LINK =
+    'https://example.com/templates/onboarding/checklists/2026/q4/engineering-team-handbook-template-with-sections-for-architecture-decision-records-and-runbooks?utm_source=email&utm_medium=lifecycle'
+
+const newsletterHtml = [
+    '<html><body style="margin:0;background:#f5f5f4;font-family:Helvetica,Arial,sans-serif;color:#1f2937">',
+    '<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff">',
+    `<tr><td style="padding:24px 40px"><h1 style="margin:0;font-size:26px">Hi ${FIRST_NAME}, here is your October digest</h1></td></tr>`,
+    '<tr><td style="padding:8px 40px"><div role="img" aria-label="A desk with a laptop" style="height:180px;background:#ede9fe">Image: a desk with a laptop</div></td></tr>',
+    '<tr><td style="padding:8px 40px"><h2 style="font-size:20px">Shared templates</h2><p>Any doc can now become a template for the whole workspace. <a href="https://example.com/docs/templates">Read how templates work</a>.</p></td></tr>',
+    '<tr><td style="padding:8px 40px"><h2 style="font-size:20px">What your team read most</h2><ul><li>Quarterly planning notes</li><li>Onboarding checklist for new engineers</li><li>Design review: settings page</li></ul></td></tr>',
+    `<tr><td style="padding:8px 40px"><p>Reply to this email if there is something you want us to build next, ${FIRST_NAME}.</p></td></tr>`,
+    '<tr><td style="padding:20px 40px"><a href="https://example.com/workspace" style="background:#6d28d9;color:#ffffff;padding:12px 24px">Open your workspace</a></td></tr>',
+    '</table></body></html>',
+].join('')
+
 const eventTrigger = (event: string): Config => ({
     type: 'event',
     filters: { events: [{ id: event, name: event, type: 'events' }], properties: [], actions: [] },
@@ -269,8 +303,49 @@ export const TICKET_TO_SLACK = flow(
     ]
 )
 
+export const LONG_EMAILS = flow(
+    'storybook-tile-long-emails',
+    'Long emails',
+    [
+        step('trigger_node', 'trigger', 'Signed up', eventTrigger('Signed up')),
+        emailStep(
+            'newsletter',
+            'Your October digest: shared templates, faster search, offline drafts, and the twelve docs your team opened most this month',
+            `Everything new this month, the docs ${FIRST_NAME}'s team keeps coming back to, the shortcuts power users swear by, and a first look at November`,
+            newsletterHtml,
+            'Your October digest.'
+        ),
+        emailStep(
+            'long_link',
+            'Start from a template: example.com/templates/engineering-team-handbook-with-architecture-decision-records',
+            'Supercalifragilisticdocumentationtemplategallerylaunchweekeditionforengineeringteams',
+            emailHtml(
+                '#6d28d9',
+                'Start from a template',
+                `The most copied template this week: <a href="${LONG_LINK}">${LONG_LINK}</a>`,
+                'Browse the gallery'
+            ),
+            `The most copied template this week: ${LONG_LINK}`
+        ),
+        emailStep(
+            'plain_text',
+            'A quick note from the team about inviting your teammates',
+            '',
+            '',
+            `Hi ${FIRST_NAME},\n\nDocs get better when two people look at them. You can invite three people for free from Settings, then Members.\n\nReply to this email if you have questions. A person reads every reply.`
+        ),
+        exit('exit_node', 'Welcome finished'),
+    ],
+    [
+        next('trigger_node', 'newsletter'),
+        next('newsletter', 'long_link'),
+        next('long_link', 'plain_text'),
+        next('plain_text', 'exit_node'),
+    ]
+)
+
 export const TILE_CANVAS_WORKFLOWS: Record<string, HogFlow> = Object.fromEntries(
-    [AI_SUPPORT_TRIAGE, TRIAL_TO_PAID, TICKET_TO_SLACK].map((workflow) => [workflow.id, workflow])
+    [AI_SUPPORT_TRIAGE, TRIAL_TO_PAID, TICKET_TO_SLACK, LONG_EMAILS].map((workflow) => [workflow.id, workflow])
 )
 
 export const TRIAL_TO_PAID_METRICS: Record<string, HogFlowEditorActionMetrics> = Object.fromEntries(
