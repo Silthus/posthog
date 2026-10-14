@@ -57,7 +57,7 @@ export function TileStepNode({
             ref={ref}
             className="flex cursor-pointer items-start gap-3 text-primary"
             title={hover.mounted ? undefined : action.name}
-            onMouseEnter={hover.onMouseEnter}
+            onMouseMove={hover.onMouseMove}
             onMouseLeave={hover.onMouseLeave}
             data-attr={interactive ? 'workflow-tile-step' : undefined}
             onContextMenu={

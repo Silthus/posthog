@@ -9,6 +9,7 @@ import { pathSummary } from './stepFacts'
 import { TileBadge } from './TileBadge'
 import { TILE_SIZE } from './tileCanvasLayout'
 import { pathActions, PathGroup, pathColor } from './tileCanvasModel'
+import { isPointerMove } from './useHoverIntent'
 import { useRaisedNode } from './useRaisedNode'
 
 const PEEK_CLOSE_MS = 220
@@ -43,8 +44,8 @@ export function TileStackNode({
             className="flex cursor-pointer items-start gap-3 text-primary"
             title={peek ? undefined : 'Open this path'}
             data-attr={interactive ? 'workflow-tile-stack' : undefined}
-            onMouseEnter={() => {
-                if (interactive) {
+            onMouseMove={(event) => {
+                if (interactive && isPointerMove(event)) {
                     window.clearTimeout(closeTimer.current)
                     setPeek(true)
                 }
