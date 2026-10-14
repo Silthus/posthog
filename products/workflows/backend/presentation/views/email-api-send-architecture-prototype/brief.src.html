@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PROTOTYPE: API send contract architecture brief (#463), round 1 open</title>
+<title>PROTOTYPE: API send contract architecture brief (#463), round 1 locked, round 2 open</title>
 <style>
   :root {
     --accent: #c2410c;
@@ -199,7 +199,7 @@ HogFlow(
   <li>The flow's graph is owned by code. When the code shape changes, <code>get_or_create</code> rewrites the graph on a version mismatch, so no data migration is needed.</li>
 </ul>
 <p><b>New: a per-team singleton.</b> Broadcasts and loops create one flow per broadcast or loop (<code>products/workflows/frontend/Broadcasts/broadcastWizardLogic.ts:1989</code>, <code>products/desktop/packages/ui/src/features/loops/loopHogFlowMapping.ts:279</code>), from the client, and nothing deduplicates them. The model's only constraint is <code>(team, version, id)</code> (<code>hog_flow.py:128</code>). A singleton that trusted backend code creates is new, so card C8 decides how it stays single.</p>
-<p><b>Out of the list, in Workflows.</b> The workflow list filters by type through <code>workflow_type_q</code> (<code>products/workflows/backend/services/hog_flow_reads.py:388-405</code>), and the Workflows page asks for <code>messaging</code>, <code>automation</code> and <code>loop</code> (<code>products/workflows/frontend/Workflows/workflowsLogic.ts:25</code>). Adding <code>"api_send": HogFlow.OriginProduct.API_SENDS</code> to <code>OWNED_WORKFLOW_TYPES</code> keeps the flow out of that page, the way broadcasts already leave it. A client that lists without a type filter still sees it; the update path refuses edits to it. Its sends stay visible in the normal flow page (metrics, logs, invocation results), reached from one "API sends" entry in Workflows (card C9).</p>
+<p><b>Out of the list, in Workflows.</b> The workflow list filters by type through <code>workflow_type_q</code> (<code>products/workflows/backend/services/hog_flow_reads.py:388-405</code>), and the Workflows page asks for <code>messaging</code>, <code>automation</code> and <code>loop</code> (<code>products/workflows/frontend/Workflows/workflowsLogic.ts:25</code>). Adding <code>"api_send": HogFlow.OriginProduct.API_SENDS</code> to <code>OWNED_WORKFLOW_TYPES</code> keeps the flow out of that page, the way broadcasts already leave it. A client that lists without a type filter still sees it; the update path refuses edits to it. Its sends stay visible in the normal flow page (metrics, logs, invocation results). There is no Workflows UI entry in this map: a person opens the page by a direct link (card C9), and card C16 decides where that link comes from.</p>
 <p><b>Pausing and quota.</b> Because it is a normal hog flow, the per-workflow email pause (<code>email_sending_paused_at</code> on the model), team suspension, the team sending-tier cap and pacing all apply unchanged in the email worker (<code>email.service.ts:405</code>, <code>:437</code>, <code>:530</code>, <code>:556</code>), and the hogflow worker cancels a run whose flow is not active (<code>consumers/cdp-cyclotron-worker-hogflow.consumer.ts:105</code>). <b>Billing quota does not apply by itself:</b> it is checked only on event-trigger admission (<code>hog-flow-invocation-pipeline.service.ts:195</code>), and the scheduled route skips it. The new route runs the same check, <code>checkHogFlowQuotaLimits</code> (<code>nodejs/src/cdp/services/hogflows/hogflow-quota-limiting.ts:23</code>), before it enqueues (card C15). Paused and quota-limited sends are rejected in the response, not only logged.</p>
 
 <h2 id="cdp">6. Contract: Django → CDP</h2>
@@ -401,124 +401,136 @@ sequenceDiagram
 </ul>
 
 <h2 id="cards">12. Decision cards</h2>
-<h3>Open in round 1</h3>
+<h3>Open in round 2</h3>
 
-<div class="card"><h4>C1 · Which keys can send<span class="status open">open</span></h4>
+<div class="card"><h4>C16 · Where the direct link to the API sends workflow comes from<span class="status open">open</span></h4>
+<p>C9 leaves no Workflows UI entry, and the flow id differs per team, so a person needs the link from somewhere.</p>
+<ol>
+  <li><b>The accepted response carries it:</b> <code>200 { "id": ..., "url": "https://…/project/{id}/workflows/{flow id}/invocations" }</code>, and posthog-node returns it in <code>data.url</code>. The link lands wherever the developer or agent logs the result, right when they need it. One additive field, so the shape still reads as Resend-like.</li>
+  <li><b>A stable redirect route</b> <code>/workflows/api-sends</code> that resolves the team's flow and opens it. Docs and the skill can print one fixed link; a small frontend route, which is UI work C9 deferred.</li>
+  <li><b>The agent looks it up</b> through the MCP: list workflows with <code>?type=api_send</code> and build the link. No API change; only agents with the MCP can find it, and a person without one cannot.</li>
+</ol>
+<div class="rec"><b>Recommend 1.</b> No UI, no lookup, and the link reaches both people and agents at the moment of the first send. The response stays one object with two fields.</div></div>
+
+<h3>Locked in round 1</h3>
+<p class="muted">Michael answered round 1 on 2026-10-14: every recommendation, except C9, which takes option 3.</p>
+
+<div class="card locked"><h4>C1 · Which keys can send<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Project secret API key only.</b> Matches the map's auth decision and the SDK's <code>secretKey</code>. One auth path to test and document.</li>
   <li><b>Also personal API keys with the same scope.</b> Lets the MCP or a person send from a script. A second path, and a send then belongs to a user, not a project.</li>
 </ol>
-<div class="rec"><b>Recommend 1.</b> YAGNI: the map names <code>phs_</code>. A personal key can come with the MCP send tool, which is out of this map.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1. YAGNI: the map names <code>phs_</code>. A personal key can come with the MCP send tool, which is out of this map.</div></div>
 
-<div class="card"><h4>C2 · Scope name<span class="status open">open</span></h4>
+<div class="card locked"><h4>C2 · Scope name<span class="status locked">locked</span></h4>
 <ol>
   <li><b><code>email_send:write</code></b>: a new scope object for exactly this action. A key with it can only send.</li>
   <li><b><code>email:write</code></b>: reads better, but "email" invites later reads or writes on senders and templates under the same object, which would widen what a send key can do.</li>
   <li><b>Reuse <code>hog_flow:write</code></b>: no new scope, but a send key could edit every workflow.</li>
 </ol>
-<div class="rec"><b>Recommend 1.</b> The map asks for a dedicated scope; scope actions are only <code>read</code>/<code>write</code>, so the object carries the meaning.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1. The map asks for a dedicated scope; scope actions are only <code>read</code>/<code>write</code>, so the object carries the meaning.</div></div>
 
-<div class="card"><h4>C3 · Throttle rates<span class="status open">open</span></h4>
+<div class="card locked"><h4>C3 · Throttle rates<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Loops' rates</b> (60/min burst, 1000/h sustained, per key and per team). Already reviewed for a PSAK endpoint; a signup spike above 60/min gets 429s.</li>
   <li><b>Higher burst for email</b> (for example 300/min burst, 5000/h sustained per team). Fits signup bursts; the sending-tier cap in the email worker still bounds actual delivery.</li>
 </ol>
-<div class="rec"><b>Recommend 2</b>, with the numbers as settings so they can change without a deploy. The throttle protects the API, the tier cap protects reputation, and a 429 on a password reset is worse than a short queue delay.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 2. with the numbers as settings so they can change without a deploy. The throttle protects the API, the tier cap protects reputation, and a 429 on a password reset is worse than a short queue delay.</div></div>
 
-<div class="card"><h4>C4 · Idempotency storage<span class="status open">open</span></h4>
+<div class="card locked"><h4>C4 · Idempotency storage<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Cache reservation, 24 h</b>, the <code>hog_flow.run</code> pattern plus a request hash. No migration. A cache eviction inside 24 h can let a retry send twice.</li>
   <li><b>A small Postgres table</b> <code>(team_id, key) unique → send_id, request_hash, created_at</code>, the loops pattern. Exactly-once across evictions; a migration, a cleanup job, and one write per send.</li>
   <li><b>Key passed to CDP</b> and used to derive the invocation id (a UUIDv5 of team and key). Duplicate enqueue is refused by the queue itself; no Django storage, but no "same key, other body" check.</li>
 </ol>
-<div class="rec"><b>Recommend 1 now, with 3's idea folded in:</b> the reservation stores the Django-minted send id, so a retry reuses it and the queue refuses a duplicate (card C11). Move to 2 only if a duplicate shows up in practice.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1, with 3's idea folded in: the reservation stores the Django-minted send id, so a retry reuses it and the queue refuses a duplicate (card C11). Move to 2 only if a duplicate shows up in practice.</div></div>
 
-<div class="card"><h4>C5 · How the per-send sender reaches the email step<span class="status open">open</span></h4>
+<div class="card locked"><h4>C5 · How the per-send sender reaches the email step<span class="status locked">locked</span></h4>
 <p><code>from.integrationId</code> is <code>z.number()</code> (<code>cyclotron.ts:156</code>), and Liquid renders strings, so a templated id fails the schema.</p>
 <ol>
   <li><b>Coerce:</b> <code>integrationId: z.coerce.number()</code>. One line; every existing caller already sends a number, so nothing else changes.</li>
   <li><b>Hog templating for that one field</b> (<code>variables.email.integration_id</code> as bytecode keeps the number). No schema change, but mixes two templating modes in one input, which the editor does not expect.</li>
   <li><b>Pre-rendered queue params:</b> the CDP route puts <code>queueParameters</code> on the invocation and skips the step's rendering. No templating at all, but it bypasses the pre-send checks in <code>hog_function.ts</code> and adds a second way into the email queue.</li>
 </ol>
-<div class="rec"><b>Recommend 1.</b> Smallest change; keeps the step, its pre-send checks and its metrics on the one path the map asks for.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1. Smallest change; keeps the step, its pre-send checks and its metrics on the one path the map asks for.</div></div>
 
-<div class="card"><h4>C6 · Recipients per send<span class="status open">open</span></h4>
+<div class="card locked"><h4>C6 · Recipients per send<span class="status locked">locked</span></h4>
 <ol>
   <li><b>One <code>to</code></b> (a string, or an array with one item), plus <code>cc</code> and <code>bcc</code>. Matches the email queue (<code>to</code> is one object, <code>cyclotron.ts:150-153</code>) and one invocation per send. Deviates from Resend, which takes up to 50 <code>to</code>.</li>
   <li><b>Up to N <code>to</code>, fanned out</b> into N invocations, one id each. Resend-like call shape, but the response becomes a list and each recipient sees only their own address, unlike Resend.</li>
   <li><b>Up to N <code>to</code> in one message</b>: needs <code>to</code> to become a list in the queue schema and in <code>EmailService</code>.</li>
 </ol>
-<div class="rec"><b>Recommend 1.</b> Transactional mail is one recipient; the error <code>too_many_recipients</code> tells an agent exactly what to do. The array form keeps room for 2 later without a breaking change.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1. Transactional mail is one recipient; the error <code>too_many_recipients</code> tells an agent exactly what to do. The array form keeps room for 2 later without a breaking change.</div></div>
 
-<div class="card"><h4>C7 · Trigger type of the hidden flow<span class="status open">open</span></h4>
+<div class="card locked"><h4>C7 · Trigger type of the hidden flow<span class="status locked">locked</span></h4>
 <ol>
   <li><b>New trigger type <code>api_send</code></b>, added to <code>TRIGGER_TYPES</code> (<code>hog_flow.py:52-62</code>) and the Node trigger schema. It never matches an event; only the new route starts it. Clear in logs and the editor.</li>
   <li><b>Reuse <code>schedule</code></b> with no schedule. No new type, but the schedule machinery and the <code>run</code> endpoint would treat it as a scheduled flow.</li>
   <li><b>Reuse <code>manual</code></b>. Closer in meaning, but the editor offers a "run" button for manual flows.</li>
 </ol>
-<div class="rec"><b>Recommend 1.</b> A distinct type keeps every existing trigger path from ever starting this flow.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1. A distinct type keeps every existing trigger path from ever starting this flow.</div></div>
 
-<div class="card"><h4>C8 · Preventing a second API sends flow<span class="status open">open</span></h4>
+<div class="card locked"><h4>C8 · Preventing a second API sends flow<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Partial unique index</b> <code>(team_id) WHERE origin_product = 'api_sends'</code> plus <code>get_or_create</code>. The database enforces it; a concurrent first send retries the read after an <code>IntegrityError</code>. One migration, built concurrently.</li>
   <li><b><code>select_for_update</code> on the team's <code>TeamWorkflowsConfig</code> row</b>, then read or create. No migration; follows the repo rule to lock the product's team extension row, not <code>Team</code>.</li>
   <li><b>Store the flow id on <code>TeamWorkflowsConfig</code></b> (<code>api_sends_hog_flow_id</code>) and create it under that row lock. Fast lookup by id; one more column.</li>
 </ol>
-<div class="rec"><b>Recommend 1.</b> The invariant lives in the database, where a later caller cannot forget it.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1. The invariant lives in the database, where a later caller cannot forget it.</div></div>
 
-<div class="card"><h4>C9 · Where API sends show in Workflows<span class="status open">open</span></h4>
+<div class="card locked"><h4>C9 · Where API sends show in Workflows<span class="status locked">locked</span></h4>
 <ol>
   <li><b>One "API sends" row pinned in the Workflows list</b>, read-only, opening the standard flow page (metrics, logs). Discoverable; the editor is locked for this flow.</li>
   <li><b>An "API sends" tab</b> next to broadcasts. More room for a later sends table; more UI now.</li>
   <li><b>No UI in this map:</b> reachable only by direct link from the docs. Least work; "sends show up in Workflows" is not met.</li>
 </ol>
-<div class="rec"><b>Recommend 1</b>, in its own small frontend PR after the backend works.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14): option 3, not the recommendation.</b> No Workflows UI change to start with. A person reaches the API sends workflow by a direct link to its page, <code>/project/{id}/workflows/{flow id}/invocations</code> (route at <code>products/workflows/manifest.tsx:71</code>; tabs at <code>WorkflowScene.tsx:168-242</code>). Where that link comes from is card C16.</div></div>
 
-<div class="card"><h4>C10 · Signing key for the CDP call<span class="status open">open</span></h4>
+<div class="card locked"><h4>C10 · Signing key for the CDP call<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Its own key</b> <code>WORKFLOWS_API_SEND_JWT_SECRETS</code> / <code>WORKFLOWS_API_SEND_JWT_SECRET</code>. Follows the one-key-per-use-case convention (<code>products/workflows/backend/service_jwt.py:11-14</code>); one more secret to provision per environment.</li>
   <li><b>Share the web-tier cancel key</b> (<code>WORKFLOWS_CANCEL_JWT_SECRETS</code>) with a new audience, like cancel-batch does (<code>plugin_server_api.py:191-196</code>). Nothing new to provision.</li>
 </ol>
-<div class="rec"><b>Recommend 1.</b> Follows the convention the repo already states; provisioning is a one-time infra step, and the route fails closed until it is set.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1. Follows the convention the repo already states; provisioning is a one-time infra step, and the route fails closed until it is set.</div></div>
 
-<div class="card"><h4>C11 · Who mints the send id<span class="status open">open</span></h4>
+<div class="card locked"><h4>C11 · Who mints the send id<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Django mints a UUIDT</b> and passes it as <code>invocation_id</code>; CDP uses it and treats a duplicate job id as "already queued". Retries after a timeout are safe.</li>
   <li><b>CDP mints it</b>, as the scheduled route does (<code>hogflow-executor.service.ts:87</code>). No change in <code>createHogFlowInvocation</code>; a timeout leaves Django without an id, so a retry can send twice.</li>
 </ol>
-<div class="rec"><b>Recommend 1.</b> It is what makes "sent at most once" true end to end.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1. It is what makes "sent at most once" true end to end.</div></div>
 
-<div class="card"><h4>C12 · Text-only emails<span class="status open">open</span></h4>
+<div class="card locked"><h4>C12 · Text-only emails<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Django derives <code>html</code></b> from <code>text</code> (escape, line breaks to <code>&lt;br&gt;</code>). No Node change.</li>
   <li><b>Make <code>html</code> optional</b> in the queue schema and let SES send text only. Truer to the caller; touches the SES and maildev builders for every email.</li>
 </ol>
-<div class="rec"><b>Recommend 1.</b> Smallest change in the shared send path.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1. Smallest change in the shared send path.</div></div>
 
-<div class="card"><h4>C13 · Sends without <code>distinctId</code>, and the engagement toggle<span class="status open">open</span></h4>
+<div class="card locked"><h4>C13 · Sends without <code>distinctId</code>, and the engagement toggle<span class="status locked">locked</span></h4>
 <p>Delivery events need <code>capture_workflows_engagement_events</code>, which defaults to off (<code>team_workflows_config.py:14</code>), and a distinct id.</p>
 <ol>
   <li><b>No <code>distinctId</code> → synthetic distinct id <code>api-send-&lt;send id&gt;</code></b>, and leave the toggle as the team set it. No person is polluted by default; events appear only when the team turned them on.</li>
   <li><b>No <code>distinctId</code> → use the recipient address.</b> Events always have a person, but every API send without an id creates a person for its recipient.</li>
   <li><b>Force delivery events on for API sends</b> regardless of the toggle. Status by events always works; it changes what a team captures without them opting in.</li>
 </ol>
-<div class="rec"><b>Recommend 1</b>, and say in the docs and skill that status by events needs <code>distinctId</code> and the toggle. Logs by id work either way.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1. and say in the docs and skill that status by events needs <code>distinctId</code> and the toggle. Logs by id work either way.</div></div>
 
-<div class="card"><h4>C14 · A status endpoint for the send key<span class="status open">open</span></h4>
+<div class="card locked"><h4>C14 · A status endpoint for the send key<span class="status locked">locked</span></h4>
 <ol>
   <li><b>Not in this map.</b> The id finds the send in the workflow logs and in the existing <code>invocation_results/{id}</code> endpoint (with a <code>hog_flow:read</code> key); events carry delivery state. Matches the map's "status from events on the person".</li>
   <li><b><code>GET /emails/{id}</code></b>, a thin wrapper over the existing invocation result for the API sends flow, with an <code>email_send:read</code> scope. Resend-like; one more endpoint and scope, and its "succeeded" still does not mean delivered.</li>
 </ol>
-<div class="rec"><b>Recommend 1.</b> YAGNI; the wrapper is small and can follow when an agent needs to poll.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1. YAGNI; the wrapper is small and can follow when an agent needs to poll.</div></div>
 
-<div class="card"><h4>C15 · Where the billing quota is checked<span class="status open">open</span></h4>
+<div class="card locked"><h4>C15 · Where the billing quota is checked<span class="status locked">locked</span></h4>
 <p>Scheduled enqueue skips quota admission today, so an API send would too unless the new path checks it.</p>
 <ol>
   <li><b>In the CDP route</b> with <code>checkHogFlowQuotaLimits</code> before enqueue, returning 402. Same Redis source and same function the event pipeline uses.</li>
   <li><b>In Django</b> from the billing quota-limited team list (<code>ee/billing/quota_limiting.py:876</code>). Rejects before any CDP call; a second reader of the same state.</li>
   <li><b>In the hogflow worker</b> for every non-event invocation. Also fixes scheduled runs; changes behavior for existing flows, so not in this slice.</li>
 </ol>
-<div class="rec"><b>Recommend 1.</b> One check, one source, in the route this brief adds. Option 3 is worth its own ticket.</div></div>
+<div class="rec"><b>Locked by Michael, round 1 (2026-10-14), as recommended.</b> Option 1. One check, one source, in the route this brief adds. Option 3 is worth its own ticket.</div></div>
 
 <h3>Locked by the map or the code</h3>
 <div class="card locked"><h4>L1 · One hidden workflow per team<span class="status locked">locked</span></h4>
