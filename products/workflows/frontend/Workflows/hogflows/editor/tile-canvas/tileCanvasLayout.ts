@@ -89,6 +89,8 @@ const LAYOUT_OPTIONS: Record<string, string> = {
     'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
     'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
     'elk.layered.crossingMinimization.forceNodeModelOrder': 'true',
+    // Each path starts in the row under its split, so a path that opens does not push the paths beside it down.
+    'elk.layered.layering.strategy': 'LONGEST_PATH_SOURCE',
     'elk.edgeLabels.placement': 'CENTER',
 }
 
@@ -97,13 +99,16 @@ const FLAT_ONLY_OPTIONS: Record<string, string> = {
     'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
 }
 
+/** An open frame is taller than the stacks in its row, and they line up with its top, not its middle. */
+const ROW_ALIGNMENT = { 'elk.alignment': 'TOP' }
+
 function leafNode(id: string, size: NodeSize, portCount: number): ElkNode {
     const ports = tilePorts(size, portCount)
     return {
         id,
         width: size.width,
         height: size.height,
-        layoutOptions: { 'elk.portConstraints': 'FIXED_POS' },
+        layoutOptions: { 'elk.portConstraints': 'FIXED_POS', ...ROW_ALIGNMENT },
         ports: [
             { id: `${id}:in`, ...ports.in, width: 1, height: 1, layoutOptions: { 'elk.port.side': 'NORTH' } },
             ...ports.out.map((point, index) => ({
@@ -133,15 +138,25 @@ function elkRootOptions(nested: boolean): Record<string, string> {
     }
 }
 
+/**
+ * ELK gives an arrow's label a row of its own. A path whose name shows on its stack or frame has no label on its
+ * arrow, so it gets a blank one, and every path of a split starts in the same row. ELK skips a label with no text.
+ */
+function elkLabels(edge: VisibleEdge): ElkExtendedEdge['labels'] {
+    if (edge.label) {
+        return [
+            { id: `${edge.id}:label`, text: edge.label, width: edgeLabelWidth(edge.label), height: EDGE_LABEL_HEIGHT },
+        ]
+    }
+    return edge.portCount > 1 ? [{ id: `${edge.id}:label`, text: ' ', width: 1, height: EDGE_LABEL_HEIGHT }] : []
+}
+
 function elkEdge(edge: VisibleEdge): ElkExtendedEdge {
-    const label = edge.label
     return {
         id: edge.id,
         sources: [`${edge.source}:out:${edge.portIndex}`],
         targets: [`${edge.target}:in`],
-        labels: label
-            ? [{ id: `${edge.id}:label`, text: label, width: edgeLabelWidth(label), height: EDGE_LABEL_HEIGHT }]
-            : [],
+        labels: elkLabels(edge),
     }
 }
 
@@ -154,6 +169,7 @@ function elkFrame(frame: PathFrameSpec): ElkNode {
             'elk.padding': FRAME_PADDING_OPTION,
             'elk.nodeSize.constraints': 'MINIMUM_SIZE',
             'elk.nodeSize.minimum': `(${frame.minWidth}, 40)`,
+            ...ROW_ALIGNMENT,
         },
     }
 }
