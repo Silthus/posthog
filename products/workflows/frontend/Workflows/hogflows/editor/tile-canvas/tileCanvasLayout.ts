@@ -157,7 +157,11 @@ function elkFrame(frame: PathFrameSpec): ElkNode {
     }
 }
 
-/** Each node goes into the deepest open frame that holds it, and each frame into its parent frame. */
+/**
+ * Each node goes into the deepest open frame that holds it, and each frame into its parent frame.
+ * ELK keeps the children in the order they are given, so a frame takes the place of its first step: an opened path
+ * stays between the same neighbours instead of moving to the end of its row.
+ */
 function assignFrameChildren(
     root: ElkNode,
     sizes: Record<string, NodeSize>,
@@ -165,19 +169,35 @@ function assignFrameChildren(
     frames: PathFrameSpec[]
 ): void {
     const containers = new Map(frames.map((frame) => [frame.id, elkFrame(frame)]))
+    const specs = new Map(frames.map((frame) => [frame.id, frame]))
+    const containerOf = (id: string | null | undefined): ElkNode => containers.get(id ?? '') ?? root
     const deepestFrameOf = new Map<string, string>()
+    const framesStartingAt = new Map<string, PathFrameSpec[]>()
     ;[...frames]
         .sort((a, b) => a.group.depth - b.group.depth)
-        .forEach((frame) => frame.memberIds.forEach((id) => deepestFrameOf.set(id, frame.id)))
+        .forEach((frame) => {
+            frame.memberIds.forEach((id) => deepestFrameOf.set(id, frame.id))
+            const first = frame.memberIds[0] ?? ''
+            framesStartingAt.set(first, [...(framesStartingAt.get(first) ?? []), frame])
+        })
+    const placed = new Set<string>()
+    const placeFrame = (frame: PathFrameSpec): void => {
+        if (placed.has(frame.id)) {
+            return
+        }
+        placed.add(frame.id)
+        const parent = specs.get(frame.parentId ?? '')
+        if (parent) {
+            placeFrame(parent)
+        }
+        containerOf(frame.parentId).children?.push(containers.get(frame.id) as ElkNode)
+    }
     const portCounts = new Map(edges.map((edge) => [edge.source, edge.portCount]))
     Object.entries(sizes).forEach(([id, size]) => {
-        const owner = containers.get(deepestFrameOf.get(id) ?? '') ?? root
-        owner.children?.push(leafNode(id, size, portCounts.get(id) ?? 1))
+        framesStartingAt.get(id)?.forEach(placeFrame)
+        containerOf(deepestFrameOf.get(id)).children?.push(leafNode(id, size, portCounts.get(id) ?? 1))
     })
-    frames.forEach((frame) => {
-        const parent = (frame.parentId && containers.get(frame.parentId)) || root
-        parent.children?.push(containers.get(frame.id) as ElkNode)
-    })
+    frames.forEach(placeFrame)
 }
 
 function buildElkGraph(sizes: Record<string, NodeSize>, edges: VisibleEdge[], frames: PathFrameSpec[]): ElkNode {
