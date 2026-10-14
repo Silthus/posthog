@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PROTOTYPE: API send contract architecture brief (#463), round 1 open</title>
+<style>
+  :root {
+    --accent: #c2410c;
+    --accent-soft: #fff1e8;
+    --ink: #1c1917;
+    --muted: #57534e;
+    --line: #e7e5e4;
+    --bg: #fafaf9;
+    --code: #f5f5f4;
+    --new: #dcfce7;
+    --changed: #fef3c7;
+    --extended: #dbeafe;
+    --untouched: #f5f5f4;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 24px 96px; }
+  .banner { background: var(--accent); color: white; padding: 8px 24px; font-weight: 600; font-size: 13px; letter-spacing: .02em; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 20px; margin: 48px 0 8px; padding-top: 12px; border-top: 2px solid var(--accent); }
+  h3 { font-size: 16px; margin: 24px 0 6px; }
+  p, li { max-width: 880px; }
+  .muted { color: var(--muted); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; font-size: 13.5px; background: white; }
+  th, td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); font-weight: 600; }
+  nav.toc { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; margin: 16px 0; columns: 2; font-size: 14px; }
+  nav.toc a { color: var(--accent); text-decoration: none; display: block; }
+  .mermaid { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 8px 0 16px; }
+  .legend span { display: inline-block; padding: 2px 10px; border-radius: 4px; margin-right: 6px; border: 1px solid var(--line); font-size: 13px; }
+  .card { background: white; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+  .card.locked { border-left-color: #78716c; }
+  .card h4 { margin: 0 0 6px; font-size: 15px; }
+  .status { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 10px; margin-left: 6px; vertical-align: 1px; }
+  .status.open { background: var(--accent); color: white; }
+  .status.locked { background: #78716c; color: white; }
+  .card ol, .card ul { margin: 6px 0; padding-left: 22px; }
+  .rec { background: var(--accent-soft); border-radius: 6px; padding: 6px 10px; margin-top: 6px; }
+  .pill { display: inline-block; font-size: 12px; padding: 0 7px; border-radius: 9px; background: var(--code); border: 1px solid var(--line); }
+</style>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose', flowchart: { htmlLabels: true } })
+</script>
+</head>
+<body>
+<div class="banner">PROTOTYPE · throwaway architecture brief for Silthus/posthog#463 · lives only on branch <code style="background:none;color:white">prototype/email-api-send-contract</code> · not production code</div>
+<main>
+
+<h1>How does an API send become an invocation on the hidden "API sends" workflow?</h1>
+<p class="muted">Map Silthus/posthog#461 · ticket #463 · baseline: <code>master</code> at <code>c25e3ca2105</code>. Every <code>path:line</code> points at that commit.</p>
+
+<nav class="toc">
+  <a href="#question">1. Question</a>
+  <a href="#glossary">2. Glossary</a>
+  <a href="#map">3. Change map</a>
+  <a href="#endpoint">4. Contract: the public endpoint</a>
+  <a href="#hidden">5. Contract: the hidden workflow</a>
+  <a href="#cdp">6. Contract: Django → CDP</a>
+  <a href="#mapping">7. Payload → email step → email queue</a>
+  <a href="#return">8. What the call returns, and status later</a>
+  <a href="#errors">9. Error catalog</a>
+  <a href="#flows">10. Flows</a>
+  <a href="#data">11. Data, caching, performance</a>
+  <a href="#cards">12. Decision cards</a>
+  <a href="#blast">13. Blast radius</a>
+</nav>
+
+<h2 id="question">1. Question</h2>
+<p>Code in a project calls <code>posthog.emails.send({ from, to, subject, html, text, replyTo, cc, bcc, distinctId })</code> with a project secret API key (<code>phs_</code>), and one transactional email arrives. The map (#461) settles the approach: each send runs as one invocation on the team's hidden "API sends" workflow, owned by the API the way broadcasts and loops own their workflows through <code>origin_product</code>, so billing, quota, metrics, pausing and the Workflows logs work unchanged. This brief shapes the contract along that path: the Django endpoint (auth, scope, flag, idempotency, throttles), how the hidden workflow is found or created and kept out of the workflow list, the Django → CDP call (a scoped service JWT, no new <code>INTERNAL_API_SECRET</code> caller), how the payload lands in the existing email step and email queue, what the call returns, and where every agent-facing error code comes from.</p>
+<p><b>Destination:</b> the contract that the implementation tickets after this one build, test-first, behind a backend flag.</p>
+
+<h2 id="glossary">2. Glossary</h2>
+<table>
+  <tr><th>Term</th><th>Meaning</th></tr>
+  <tr><td><b>API send</b></td><td>One email sent by one <code>POST</code> to the email endpoint. One API send is one hog flow invocation.</td></tr>
+  <tr><td><b>API sends workflow</b></td><td>The one hidden <code>HogFlow</code> per team with <code>origin_product = "api_sends"</code>: trigger → one transactional email step → exit. Created by trusted code on the first send, never by a user.</td></tr>
+  <tr><td><b>Default sender</b></td><td><code>TeamWorkflowsConfig.default_email_integration_id</code> (<code>products/workflows/backend/models/team_workflows_config.py:56</code>), a plain id of an email integration.</td></tr>
+  <tr><td><b>Verified sender</b></td><td>An email <code>Integration</code> with <code>config["verified"] == True</code> (set by DNS verification, <code>posthog/models/integration/email.py:83</code>; checked at send time in <code>email.service.ts:943</code>).</td></tr>
+  <tr><td><b>Send id</b></td><td>The id the call returns. It is the hog flow invocation id (a UUIDT), minted by Django so that a retry after a timeout reuses it.</td></tr>
+  <tr><td><b>Accepted / rejected</b></td><td>Accepted: the invocation is on the <code>hogflow</code> queue. Rejected: a synchronous error with a code from section 9. Everything after acceptance (suppression, bounce prevention, provider errors) is asynchronous and shows in the workflow logs and delivery events, not in the HTTP response.</td></tr>
+</table>
+
+<h2 id="map">3. Change map</h2>
+<div class="legend"><span style="background:var(--new)">new</span><span style="background:var(--changed)">changed</span><span style="background:var(--extended)">extended</span><span style="background:var(--untouched)">untouched</span></div>
+<pre class="mermaid">
+flowchart LR
+  subgraph client["Customer code"]
+    SDK["posthog-node<br/>emails.send()<br/>(ticket #464+)"]
+    CURL["cURL / any HTTP client"]
+  end
+  subgraph django["Django: products/workflows/backend"]
+    VIEW["EmailSendViewSet.create<br/>presentation/views/email_sends.py<br/>auth · scope · flag · throttles · idempotency"]
+    SER["EmailSendRequestSerializer<br/>payload validation"]
+    SENDER["resolve_api_sender()<br/>services/api_send_sender.py<br/>from → verified integration"]
+    HIDDEN["get_or_create_api_sends_flow()<br/>services/api_sends_flow.py"]
+    ERR["EmailSendError catalog<br/>services/api_send_errors.py"]
+    PSA["plugin_server_api<br/>create_hog_flow_api_send()<br/>scoped JWT"]
+    READS["hog_flow_reads.workflow_type_q<br/>+ api_sends owned type"]
+    SCOPES["posthog/scopes.py<br/>email_send:write + PSAK allowlist"]
+  end
+  subgraph cdp["Node CDP: nodejs/src/cdp"]
+    API["CdpApi.postHogFlowApiSend<br/>/hog_flows/:id/api_sends"]
+    AUTH["internal-api-auth exemption<br/>+ ScopedServiceJwt verify"]
+    EXEC["HogFlowExecutor<br/>createHogFlowInvocation"]
+    STEP["email step (template-email)<br/>hog_function.ts pre-send checks"]
+    Q["email queue · fast lane<br/>email-priority.ts"]
+    ES["EmailService.executeSendEmail"]
+    SCHEMA["cyclotron.ts email params<br/>integrationId coerce"]
+  end
+  SDK --> VIEW
+  CURL --> VIEW
+  VIEW --> SER
+  VIEW --> SENDER
+  VIEW --> HIDDEN
+  VIEW --> ERR
+  VIEW --> PSA --> API
+  API --> AUTH
+  API --> EXEC --> STEP --> Q --> ES
+  STEP --> SCHEMA
+  classDef new fill:#dcfce7,stroke:#16a34a
+  classDef changed fill:#fef3c7,stroke:#d97706
+  classDef extended fill:#dbeafe,stroke:#2563eb
+  classDef untouched fill:#f5f5f4,stroke:#a8a29e
+  class VIEW,SER,SENDER,HIDDEN,ERR,API new
+  class PSA,READS,SCOPES,AUTH,SCHEMA extended
+  class EXEC,STEP,Q,ES untouched
+  class SDK,CURL untouched
+</pre>
+<p>The email step, the email queue and <code>EmailService</code> do not change. The only change below the CDP route is a one-line coercion in the email queue schema (card C5). Everything else is a new entry point that feeds the existing path.</p>
+
+<h2 id="endpoint">4. Contract: the public endpoint</h2>
+<pre><code>POST /api/projects/@current/emails/          # also /api/projects/{project_id}/emails/
+Authorization: Bearer phs_...                # project secret API key, scope email_send:write
+Idempotency-Key: signup-welcome-user-42      # optional, ≤ 256 chars
+Content-Type: application/json
+
+{
+  "from": "Acme &lt;hello@acme.com&gt;",         // optional: default sender when absent; must be verified
+  "to": "jane@example.com",                  // string, or an array with one address (card C6)
+  "subject": "Welcome to Acme",
+  "html": "&lt;p&gt;Hi Jane&lt;/p&gt;",               // html or text, at least one
+  "text": "Hi Jane",
+  "replyTo": "support@acme.com",             // string or string[]
+  "cc": ["ops@acme.com"],                    // string or string[]
+  "bcc": "audit@acme.com",                   // string or string[]
+  "distinctId": "user_42"                    // optional: ties delivery events to the person
+}
+
+200 OK
+{ "id": "0192f0c4-7b1e-7c3a-9a4e-3f1d2c5b6a70" }
+</code></pre>
+
+<h3>4.1 Django view (stub)</h3>
+<pre><code># products/workflows/backend/presentation/views/email_sends.py  (new)
+class EmailSendViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
+    scope_object = "email_send"
+    authentication_classes = [ProjectSecretAPIKeyAuthentication]          # card C1
+    permission_classes = [IsAuthenticated, APIScopePermission]
+    psak_allowed_actions = ["create"]
+    throttle_classes = [EmailSendPsakBurstThrottle, EmailSendPsakSustainedThrottle,
+                        EmailSendTeamBurstThrottle, EmailSendTeamSustainedThrottle]
+
+    @extend_schema(request=EmailSendRequestSerializer, responses={200: EmailSendResponseSerializer})
+    def create(self, request: Request, **kwargs) -> Response:
+        require_email_api_enabled(self.team)                     # email_api_not_enabled
+        payload = EmailSendRequestSerializer(data=request.data).validated_or_raise()
+        send = api_send_service.send(self.team, payload, idempotency_key_from(request))
+        return Response(EmailSendResponseSerializer(send).data)
+</code></pre>
+<p>The view stays thin: it reads input, calls <code>api_send_service.send</code>, formats output. All logic lives in the service, so tests call it directly.</p>
+
+<h3>4.2 Each concern and its reference in the code</h3>
+<table>
+  <tr><th>Concern</th><th>Shape</th><th>Reference it follows</th></tr>
+  <tr><td>Auth</td><td><code>ProjectSecretAPIKeyAuthentication</code> only. <code>@current</code> resolves to the key's own project, because <code>ProjectSecretAPIKeyUser</code> is a synthetic user bound to <code>psak.team</code> (<code>posthog/auth.py:495-504</code>, used by <code>posthog/api/routing.py:609-618</code>). An explicit <code>{project_id}</code> of another project gets 403 (<code>posthog/permissions.py:916-923</code>).</td><td>Loops <code>trigger</code>: <code>products/tasks/backend/presentation/views/loops.py:145-157</code>, <code>:387</code></td></tr>
+  <tr><td>Scope</td><td>New <code>APIScopeObject</code> <code>"email_send"</code>, action <code>write</code> → <code>email_send:write</code>. Added to <code>PROJECT_SECRET_API_KEY_ALLOWED_API_SCOPE_ACTION</code> (<code>posthog/scopes.py:249-278</code>) and its frontend twin (<code>frontend/src/lib/scopes.tsx:370</code>), which <code>posthog/test/test_scopes.py:522-529</code> keeps in sync. Card C2.</td><td><code>("loop", "write")</code> at <code>posthog/scopes.py:267</code></td></tr>
+  <tr><td>Flag</td><td>Backend flag <code>workflows-email-api</code>, evaluated on <code>str(team.uuid)</code> with organization and project groups, fail closed on error. Off → <code>403 email_api_not_enabled</code>. A PSAK has no user distinct id, so the user-keyed loops check does not fit.</td><td><code>products/workflows/backend/services/email_draft.py:144-163</code></td></tr>
+  <tr><td>Idempotency</td><td><code>Idempotency-Key</code> header. Cache reservation <code>email_api_send:{team_id}:{key}</code>, 24 h TTL, holds <code>{request_hash, send_id, state}</code>. Same key and body: replay returns the same <code>id</code>. Same key, other body: <code>422 idempotency_key_reused</code>. In flight: <code>409 idempotency_key_in_progress</code>. Card C4.</td><td><code>hog_flow.run</code>: <code>products/workflows/backend/presentation/views/hog_flow.py:2108-2112</code>, <code>:6378</code></td></tr>
+  <tr><td>Throttles</td><td>The PSAK-aware pair, per key and per team, burst and sustained. The base <code>PersonalApiKeyRateThrottle</code> skips PSAK requests, so the PSAK bases are required. 429 → <code>rate_limited</code>, with <code>Retry-After</code>. The team sending-tier cap still applies later in the email worker. Card C3.</td><td><code>loops.py:87-106</code>, <code>:183-191</code>; cache keys <code>posthog/rate_limit.py:499</code>, <code>:520</code></td></tr>
+  <tr><td>Analytics</td><td>Capture <code>email api send</code> server-side with <code>auth_method = psak</code>; <code>report_user_action</code> drops synthetic users.</td><td>Repo rule "every feature is tracked end to end"</td></tr>
+</table>
+
+<h2 id="hidden">5. Contract: the hidden workflow</h2>
+<pre><code># products/workflows/backend/facade/enums.py:65  (extended)
+class HogFlowOriginProduct(LabeledStrEnum):
+    LOOPS = "loops", "Loops"
+    BROADCASTS = "broadcasts", "Broadcasts"
+    API_SENDS = "api_sends", "API sends"                    # new
+
+# products/workflows/backend/services/api_sends_flow.py  (new)
+def get_or_create_api_sends_flow(team: Team) -&gt; HogFlow:
+    """One active flow per team. Concurrent first sends converge on one row."""
+
+# Shape of the row it creates
+HogFlow(
+    team=team, name="API sends", origin_product="api_sends", status="active",
+    trigger={"type": "api_send"},                                   # card C7
+    actions=[trigger, email_step, exit],                            # section 7
+    edges=[trigger → email_step, email_step → exit],
+    billable_action_types=["function_email"],
+)
+</code></pre>
+<p><b>Invariants.</b></p>
+<ul>
+  <li>Exactly one live API sends flow per team. A partial unique index on <code>(team_id) WHERE origin_product = 'api_sends'</code> makes a duplicate impossible; <code>get_or_create</code> under that constraint makes concurrent first sends converge (card C8).</li>
+  <li>Only trusted code creates or edits it. The hog flow serializer already refuses to change <code>origin_product</code> after create (<code>hog_flow.py:3149-3155</code>); the update path also refuses edits to an <code>api_sends</code> flow's graph.</li>
+  <li>The flow's graph is owned by code. When the code shape changes, <code>get_or_create</code> rewrites the graph on a version mismatch, so no data migration is needed.</li>
+</ul>
+<p><b>New: a per-team singleton.</b> Broadcasts and loops create one flow per broadcast or loop (<code>products/workflows/frontend/Broadcasts/broadcastWizardLogic.ts:1989</code>, <code>products/desktop/packages/ui/src/features/loops/loopHogFlowMapping.ts:279</code>), from the client, and nothing deduplicates them. The model's only constraint is <code>(team, version, id)</code> (<code>hog_flow.py:128</code>). A singleton that trusted backend code creates is new, so card C8 decides how it stays single.</p>
+<p><b>Out of the list, in Workflows.</b> The workflow list filters by type through <code>workflow_type_q</code> (<code>products/workflows/backend/services/hog_flow_reads.py:388-405</code>), and the Workflows page asks for <code>messaging</code>, <code>automation</code> and <code>loop</code> (<code>products/workflows/frontend/Workflows/workflowsLogic.ts:25</code>). Adding <code>"api_send": HogFlow.OriginProduct.API_SENDS</code> to <code>OWNED_WORKFLOW_TYPES</code> keeps the flow out of that page, the way broadcasts already leave it. A client that lists without a type filter still sees it; the update path refuses edits to it. Its sends stay visible in the normal flow page (metrics, logs, invocation results), reached from one "API sends" entry in Workflows (card C9).</p>
+<p><b>Pausing and quota.</b> Because it is a normal hog flow, the per-workflow email pause (<code>email_sending_paused_at</code> on the model), team suspension, the team sending-tier cap and pacing all apply unchanged in the email worker (<code>email.service.ts:405</code>, <code>:437</code>, <code>:530</code>, <code>:556</code>), and the hogflow worker cancels a run whose flow is not active (<code>consumers/cdp-cyclotron-worker-hogflow.consumer.ts:105</code>). <b>Billing quota does not apply by itself:</b> it is checked only on event-trigger admission (<code>hog-flow-invocation-pipeline.service.ts:195</code>), and the scheduled route skips it. The new route runs the same check, <code>checkHogFlowQuotaLimits</code> (<code>nodejs/src/cdp/services/hogflows/hogflow-quota-limiting.ts:23</code>), before it enqueues (card C15). Paused and quota-limited sends are rejected in the response, not only logged.</p>
+
+<h2 id="cdp">6. Contract: Django → CDP</h2>
+<h3>Before: the closest existing call uses the shared internal secret</h3>
+<pre><code># posthog/plugins/plugin_server_api.py:107-118
+def create_hog_flow_scheduled_invocation(team_id, hog_flow_id, variables) -&gt; requests.Response:
+    return internal_requests.post(
+        CDP_API_URL + f"/api/projects/{team_id}/hog_flows/{hog_flow_id}/scheduled_invocations",
+        json={"variables": variables},
+        headers=get_internal_api_headers(),        # x-internal-api-secret, plugin_server_api.py:20-21
+        timeout=10,
+    )
+# Node: CdpApi.postHogflowScheduledInvocation, nodejs/src/cdp/cdp-api.ts:879-951
+#   requires trigger.type == "schedule", synthetic event distinct_id = "workflow-&lt;flow id&gt;",
+#   mints its own invocation id, returns { status: "queued", invocation_id }</code></pre>
+<p>Reusing it would add an <code>INTERNAL_API_SECRET</code> caller and would not let Django choose the invocation id or the distinct id, so the API send gets its own route.</p>
+
+<h3>After: a dedicated route signed with a scoped service JWT</h3>
+<pre><code># posthog/jwt.py  (extended)
+class PosthogJwtAudience:
+    WORKFLOWS_API_SEND = "posthog:workflows:api_send"            # new
+
+# posthog/plugins/plugin_server_api.py  (extended)
+WORKFLOWS_API_SEND_JWT_PURPOSE = ScopedServiceJwtPurpose(
+    audience=PosthogJwtAudience.WORKFLOWS_API_SEND,
+    settings_name="WORKFLOWS_API_SEND_JWT_SECRETS",                # card C10
+    default_ttl=timedelta(minutes=2),
+)
+
+def create_hog_flow_api_send(team_id: int, hog_flow_id: str, send: ApiSendInvocation) -&gt; requests.Response:
+    token = WORKFLOWS_API_SEND_JWT_PURPOSE.mint({"team_id": team_id, "hog_flow_id": hog_flow_id})
+    return internal_requests.post(
+        CDP_API_URL + f"/api/projects/{team_id}/hog_flows/{hog_flow_id}/api_sends",
+        json=send.to_json(),
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=5,
+    )
+
+@frozen
+class ApiSendInvocation:
+    invocation_id: str                 # UUIDT minted by Django, also the returned send id
+    distinct_id: str | None
+    email: ApiSendEmail                # section 7, already resolved and validated</code></pre>
+<pre><code>// nodejs/src/cdp/cdp-api.ts  (new route next to :284)
+router.post('/api/projects/:team_id/hog_flows/:id/api_sends', asyncHandler(this.postHogFlowApiSend))
+
+// nodejs/src/common/api/middleware/internal-api-auth.ts:32-36  (extended exemption list)
+/^\/api\/projects\/[^/]+\/hog_flows\/[^/]+\/api_sends$/,
+
+private postHogFlowApiSend = async (req, res) =&gt; {
+    if (!this.verifyScopedWorkflowJwt(this.apiSendJwt, req, res, 'api send')) return   // cdp-api.ts:1075-1098
+    // 1. load team and flow; 404 unless flow.team_id matches and origin_product == "api_sends"; 409 unless active
+    // 1b. checkHogFlowQuotaLimits(flow) → 402 { error: "quota_limited" }        (card C15)
+    // 1c. flow.email_sending_paused_at set → 423 { error: "sending_paused" }
+    // 2. build globals: event { uuid, event: "$workflows_api_send", distinct_id, properties: {} },
+    //    variables: { email: body.email }, project
+    // 3. createHogFlowInvocation(globals, flow, filterGlobals) with id := body.invocation_id
+    // 4. queueInvocations([invocation]); a duplicate job id means "already queued" → 200
+    // 5. res.json({ status: "queued", invocation_id })
+}</code></pre>
+<p><b>Invariants.</b> The token is pinned to one team and one flow, and lives two minutes. The route accepts only a flow with <code>origin_product = "api_sends"</code>, so a token cannot start any other workflow. The invocation id comes from Django, so a Django retry after a timeout enqueues nothing new (card C11).</p>
+<p><b>Error modes.</b> 401 bad token, 404 team or flow, 402 quota limited, 423 paused, 400 schema, 500 queue error. Django maps 402 to <code>quota_limit_exceeded</code>, 423 to <code>sending_paused</code>, and every other non-200 and every timeout to <code>503 send_service_unavailable</code>, keeps the idempotency reservation on a timeout, and releases it on a definite failure, the same way <code>hog_flow.run</code> does.</p>
+<p><b>Performance.</b> One Postgres write to the cyclotron queue plus one lifecycle row, the same cost as a scheduled invocation. Sending happens later in the email worker, so the HTTP call stays fast and does not wait for SES.</p>
+
+<h2 id="mapping">7. Payload → email step → email queue</h2>
+<p>The flow's one email step is the existing <code>function_email</code> action (<code>nodejs/src/cdp/schema/hogflow.ts:228-253</code>) on <code>template-email</code> (<code>nodejs/src/cdp/templates/_destinations/email/email.template.ts</code>, code <code>sendEmail(inputs.email)</code>). Its config sets <code>message_category_type: "transactional"</code>, which is what the email worker reads (<code>email.service.ts:873</code>, <code>:1128</code>) to drop unsubscribe headers and skip opt-out checks, and what <code>email-priority.ts:21-37</code> reads to put the send on the fast lane. Suppression still applies (<code>recipient-preferences.service.ts:108</code>).</p>
+<p>Its <code>email</code> input reads every field from the invocation's variables. Liquid escapes output by default (<code>nodejs/src/cdp/utils/liquid.ts:93</code>, <code>outputEscape: 'escape'</code>), so every field uses <code>| raw</code>, or a subject like "Tom &amp; Jerry" would arrive as "Tom &amp;amp; Jerry".</p>
+<pre><code>// email step inputs, written by get_or_create_api_sends_flow (liquid templating)
+email: {
+  to:      { email: "{{ variables.email.to | raw }}" },
+  from:    { integrationId: "{{ variables.email.integration_id }}",   // coerced, card C5
+             email: "{{ variables.email.from_email | raw }}",
+             name:  "{{ variables.email.from_name | raw }}" },
+  replyTo: "{{ variables.email.reply_to | raw }}",
+  cc:      "{{ variables.email.cc | raw }}",
+  bcc:     "{{ variables.email.bcc | raw }}",
+  subject: "{{ variables.email.subject | raw }}",
+  text:    "{{ variables.email.text | raw }}",
+  html:    "{{ variables.email.html | raw }}",
+}</code></pre>
+<table>
+  <tr><th>API field</th><th>Django turns it into</th><th>Email queue param (<code>cyclotron.ts:148-170</code>)</th></tr>
+  <tr><td><code>from</code> (optional)</td><td><code>resolve_api_sender</code>: parse <code>Name &lt;addr&gt;</code>; pick the team's email integration whose email equals the address, else one on the same domain; absent → the default sender. It must be verified. Unknown domain → <code>sender_not_found</code>; not verified → <code>sender_not_verified</code>; absent and no default → <code>no_default_sender</code>.</td><td><code>from.integrationId</code>, <code>from.email</code> (an override on the integration's domain, honored at <code>email.service.ts:964-1000</code>), <code>from.name</code></td></tr>
+  <tr><td><code>to</code></td><td>One address, syntax-checked (card C6).</td><td><code>to.email</code></td></tr>
+  <tr><td><code>cc</code>, <code>bcc</code>, <code>replyTo</code></td><td>String or array, each address syntax-checked, joined with <code>", "</code>.</td><td><code>cc</code>, <code>bcc</code>, <code>replyTo</code> (comma-separated strings, parsed at <code>email.service.ts:302-336</code>)</td></tr>
+  <tr><td><code>subject</code></td><td>Required, one line.</td><td><code>subject</code></td></tr>
+  <tr><td><code>html</code>, <code>text</code></td><td>At least one. Only <code>text</code> → <code>html</code> is the escaped text with line breaks (card C12), because the queue requires <code>html</code> (<code>cyclotron.ts:169</code>).</td><td><code>html</code>, <code>text</code></td></tr>
+  <tr><td><code>distinctId</code></td><td>Passed through.</td><td>Not a queue field. It becomes <code>event.distinct_id</code> of the synthetic event, which the delivery events and the tracking code read (<code>email-tracking.service.ts:112-116</code>; <code>email.service.ts:1055-1062</code>). Card C13.</td></tr>
+</table>
+<p>Pre-send checks in the action handler keep running (<code>nodejs/src/cdp/services/hogflows/actions/hog_function.ts:362-433</code>): suppression and bounce prevention apply, opt-out and the marketing frequency cap do not, because the step is transactional.</p>
+
+<h2 id="return">8. What the call returns, and status later</h2>
+<pre><code>// accepted
+200 { "id": "&lt;send id = invocation id&gt;" }
+
+// rejected (section 9)
+4xx/5xx { "type": "validation_error" | "authentication_error" | "throttled_error" | "server_error",
+          "code": "sender_not_verified",
+          "detail": "What happened. Why. How to fix it.",
+          "attr": "from" | null,
+          "docs_url": "https://posthog.com/docs/workflows/email-api#sender_not_verified" }
+
+// posthog-node (#464): never throws on API errors
+const { data, error } = await posthog.emails.send({...})
+// data:  { id } | null
+// error: { code, message, statusCode, docsUrl, field } | null</code></pre>
+<p><b>Status later.</b> The send id is the invocation id, so with no new storage:</p>
+<ul>
+  <li>The API sends workflow's logs use the invocation id as <code>instance_id</code> (<code>hog-function-monitoring.service.ts:175</code>; filter at <code>posthog/api/log_entries.py:108</code>), so Workflows shows each send, including asynchronous outcomes (suppressed, bounce prevented, provider error).</li>
+  <li>An endpoint already returns one invocation's result: <code>GET /hog_flows/{flow}/invocation_results/{invocation_id}</code> (<code>products/workflows/backend/presentation/views/hog_flow.py:5795-5805</code>), with running, succeeded, failed, canceled. "Succeeded" means the run finished, not that the email was delivered (<code>hog-invocation-results.service.ts:565</code>). It needs <code>hog_flow:read</code>, not the send key.</li>
+  <li>With <code>distinctId</code>, the delivery events (<code>$workflows_email_sent</code>, <code>_delivered</code>, <code>_opened</code>, <code>_link_clicked</code>, <code>_bounced</code>, <code>_blocked</code>, <code>_failed</code>; names at <code>email-tracking.service.ts:92-100</code>, emitted at <code>email.service.ts:689-712</code>) land on that person, so the customer queries them like any event.</li>
+  <li>A <code>GET /emails/{id}</code> status endpoint is not in this slice (card C14).</li>
+</ul>
+
+<h2 id="errors">9. Error catalog</h2>
+<p>One module owns every code, its status, its message and its docs anchor. The view and services raise <code>EmailSendError(code, attr=...)</code>; the platform exception handler (<code>posthog/exceptions.py:216-247</code>) renders the shape in section 8, plus <code>docs_url</code>. Each message says what happened, why, and how to fix it, in plain words an agent can act on.</p>
+<pre><code># products/workflows/backend/services/api_send_errors.py  (new; full stub in api_send_errors_stub.py)
+class EmailSendErrorCode(StrEnum):
+    EMAIL_API_NOT_ENABLED = "email_api_not_enabled"
+    ...
+@frozen
+class EmailSendErrorSpec:
+    status: int
+    message: str      # what · why · fix
+    attr: str | None
+CATALOG: Final[dict[EmailSendErrorCode, EmailSendErrorSpec]] = {...}</code></pre>
+<table>
+  <tr><th>Code</th><th>Status</th><th>Raised in</th><th>Message (what · why · fix)</th></tr>
+  <tr><td><code>email_api_not_enabled</code></td><td>403</td><td>view, <code>require_email_api_enabled</code></td><td>Sending email through the API is not enabled for this project. The feature is in a limited beta. Ask PostHog support to enable it.</td></tr>
+  <tr><td><code>authentication_failed</code></td><td>401</td><td>platform, <code>ProjectSecretAPIKeyAuthentication</code></td><td>Existing platform message. Catalog documents it: use a project secret API key that starts with <code>phs_</code>.</td></tr>
+  <tr><td><code>permission_denied</code></td><td>403</td><td>platform, <code>APIScopePermission</code></td><td>Existing platform message. Catalog documents it: give the key the <code>email_send:write</code> scope in project settings.</td></tr>
+  <tr><td><code>invalid_request</code></td><td>400</td><td>serializer</td><td>A field is missing or has the wrong type (<code>attr</code> names it). Fix the field and retry.</td></tr>
+  <tr><td><code>missing_body</code></td><td>400</td><td>serializer</td><td>The email has no content. <code>html</code> and <code>text</code> are both empty. Send at least one.</td></tr>
+  <tr><td><code>invalid_address</code></td><td>400</td><td>serializer</td><td>An address in <code>attr</code> is not a valid email address. Use the form <code>name@example.com</code> or <code>Name &lt;name@example.com&gt;</code>.</td></tr>
+  <tr><td><code>too_many_recipients</code></td><td>400</td><td>serializer</td><td>The email names more recipients than one send allows. Send one call per <code>to</code> recipient, and keep <code>cc</code> plus <code>bcc</code> under the limit.</td></tr>
+  <tr><td><code>sender_not_found</code></td><td>422</td><td><code>resolve_api_sender</code></td><td>No email sender in this project matches the <code>from</code> domain. Add and verify a sender for that domain in Workflows → Channels, or remove <code>from</code> to use the default sender.</td></tr>
+  <tr><td><code>sender_not_verified</code></td><td>422</td><td><code>resolve_api_sender</code></td><td>The sender for this domain exists, but its DNS records are not verified, so it cannot send. Finish domain verification in Workflows → Channels, then retry.</td></tr>
+  <tr><td><code>no_default_sender</code></td><td>422</td><td><code>resolve_api_sender</code></td><td><code>from</code> is empty and the project has no default sender. Pass <code>from</code> with an address on a verified domain, or set a default sender in Workflows → Channels.</td></tr>
+  <tr><td><code>sending_paused</code></td><td>423</td><td>CDP route, mapped by <code>api_send_service</code></td><td>Email sending is paused for API sends in this project, so the email was not queued. Open the API sends workflow in Workflows to see why and resume it.</td></tr>
+  <tr><td><code>quota_limit_exceeded</code></td><td>402</td><td>CDP route (<code>checkHogFlowQuotaLimits</code>), mapped by <code>api_send_service</code></td><td>Existing <code>QuotaLimitExceeded</code> (<code>posthog/exceptions.py:27-30</code>). Catalog adds the docs link.</td></tr>
+  <tr><td><code>idempotency_key_in_progress</code></td><td>409</td><td>idempotency reservation</td><td>A send with this <code>Idempotency-Key</code> is still being accepted. Wait a second and retry with the same key.</td></tr>
+  <tr><td><code>idempotency_key_reused</code></td><td>422</td><td>idempotency reservation</td><td>This <code>Idempotency-Key</code> was used in the last 24 hours with a different email. Use a new key for a new email.</td></tr>
+  <tr><td><code>rate_limited</code></td><td>429</td><td>throttles</td><td>Too many sends in a short time for this key or project. Wait for <code>Retry-After</code> seconds, then retry with the same <code>Idempotency-Key</code>.</td></tr>
+  <tr><td><code>send_service_unavailable</code></td><td>503</td><td><code>api_send_service</code>, CDP call</td><td>PostHog could not queue the email right now. Retry with the same <code>Idempotency-Key</code>; the email is sent at most once.</td></tr>
+</table>
+<p>The copy above is draft; <code>/writing-user-facing-copy</code> applies when it lands. "Workflows → Channels" is a placeholder for the real settings path.</p>
+
+<h2 id="flows">10. Flows</h2>
+<h3>10.1 Write path: an accepted send</h3>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as Customer code
+  participant V as Django EmailSendViewSet
+  participant S as api_send_service
+  participant R as Redis cache
+  participant P as Postgres
+  participant N as CDP api_sends route
+  participant Q as hogflow queue → email queue
+  C->>V: POST /emails (phs_, Idempotency-Key)
+  V->>V: auth · scope · throttles · flag · serializer
+  V->>S: send(team, payload, key)
+  S->>R: reserve key (hash, send_id, in_progress)
+  S->>P: resolve sender (integrations, default sender)
+  S->>P: get_or_create API sends flow
+  S->>N: POST api_sends (scoped JWT, invocation_id)
+  N->>N: verify JWT · flow active · quota · pause
+  N->>Q: queue invocation (id = send_id)
+  N-->>S: 200 queued
+  S->>R: mark key done
+  V-->>C: 200 { id }
+  Q-->>Q: email step → executeSendEmail → SES (async)
+</pre>
+<h3>10.2 Failure path: a timeout to CDP, then a retry</h3>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as Customer code
+  participant S as api_send_service
+  participant R as Redis cache
+  participant N as CDP api_sends route
+  C->>S: send (key K)
+  S->>R: reserve K → send_id X
+  S->>N: POST api_sends (invocation_id X)
+  N--xS: read timeout (job may be queued)
+  S->>R: keep reservation for K
+  S-->>C: 503 send_service_unavailable
+  C->>S: retry (key K, same body)
+  S->>R: K reserved, same hash, not done → resend with X
+  S->>N: POST api_sends (invocation_id X)
+  N-->>S: duplicate job id → 200 queued
+  S-->>C: 200 { id: X }
+</pre>
+<h3>10.3 Read path</h3>
+<p>No synchronous read in this slice. Status is read from the API sends workflow's logs (by id) and from the delivery events on the person (section 8).</p>
+
+<h2 id="data">11. Data, caching, performance</h2>
+<ul>
+  <li><b>Schema:</b> one new <code>HogFlowOriginProduct</code> choice (no column change, <code>origin_product</code> is a <code>CharField</code>), and one partial unique index on <code>posthog_hogflow (team_id) WHERE origin_product = 'api_sends'</code> (card C8). The index ships as its own migration PR, built concurrently.</li>
+  <li><b>No new table.</b> Idempotency lives in the cache (card C4); status lives in the existing invocation results and events.</li>
+  <li><b>Cache keys:</b> <code>email_api_send:{team_id}:{idempotency_key}</code>, 24 h. Throttles use the existing <code>psak:{key_id}</code> and <code>psak-team:{team_id}</code> buckets.</li>
+  <li><b>Hot path per send:</b> one cache add, two small indexed reads (integrations, team workflows config), one hog flow read (cache it per team for a minute), one HTTP call to CDP, one queue insert. No ClickHouse read.</li>
+  <li><b>First send per team:</b> one extra insert to create the flow, then the CDP flow manager loads it on its next reload. The route must load a flow it has not cached yet (card C7 notes it).</li>
+</ul>
+
+<h2 id="cards">12. Decision cards</h2>
+<h3>Open in round 1</h3>
+
+<div class="card"><h4>C1 · Which keys can send<span class="status open">open</span></h4>
+<ol>
+  <li><b>Project secret API key only.</b> Matches the map's auth decision and the SDK's <code>secretKey</code>. One auth path to test and document.</li>
+  <li><b>Also personal API keys with the same scope.</b> Lets the MCP or a person send from a script. A second path, and a send then belongs to a user, not a project.</li>
+</ol>
+<div class="rec"><b>Recommend 1.</b> YAGNI: the map names <code>phs_</code>. A personal key can come with the MCP send tool, which is out of this map.</div></div>
+
+<div class="card"><h4>C2 · Scope name<span class="status open">open</span></h4>
+<ol>
+  <li><b><code>email_send:write</code></b>: a new scope object for exactly this action. A key with it can only send.</li>
+  <li><b><code>email:write</code></b>: reads better, but "email" invites later reads or writes on senders and templates under the same object, which would widen what a send key can do.</li>
+  <li><b>Reuse <code>hog_flow:write</code></b>: no new scope, but a send key could edit every workflow.</li>
+</ol>
+<div class="rec"><b>Recommend 1.</b> The map asks for a dedicated scope; scope actions are only <code>read</code>/<code>write</code>, so the object carries the meaning.</div></div>
+
+<div class="card"><h4>C3 · Throttle rates<span class="status open">open</span></h4>
+<ol>
+  <li><b>Loops' rates</b> (60/min burst, 1000/h sustained, per key and per team). Already reviewed for a PSAK endpoint; a signup spike above 60/min gets 429s.</li>
+  <li><b>Higher burst for email</b> (for example 300/min burst, 5000/h sustained per team). Fits signup bursts; the sending-tier cap in the email worker still bounds actual delivery.</li>
+</ol>
+<div class="rec"><b>Recommend 2</b>, with the numbers as settings so they can change without a deploy. The throttle protects the API, the tier cap protects reputation, and a 429 on a password reset is worse than a short queue delay.</div></div>
+
+<div class="card"><h4>C4 · Idempotency storage<span class="status open">open</span></h4>
+<ol>
+  <li><b>Cache reservation, 24 h</b>, the <code>hog_flow.run</code> pattern plus a request hash. No migration. A cache eviction inside 24 h can let a retry send twice.</li>
+  <li><b>A small Postgres table</b> <code>(team_id, key) unique → send_id, request_hash, created_at</code>, the loops pattern. Exactly-once across evictions; a migration, a cleanup job, and one write per send.</li>
+  <li><b>Key passed to CDP</b> and used to derive the invocation id (a UUIDv5 of team and key). Duplicate enqueue is refused by the queue itself; no Django storage, but no "same key, other body" check.</li>
+</ol>
+<div class="rec"><b>Recommend 1 now, with 3's idea folded in:</b> the reservation stores the Django-minted send id, so a retry reuses it and the queue refuses a duplicate (card C11). Move to 2 only if a duplicate shows up in practice.</div></div>
+
+<div class="card"><h4>C5 · How the per-send sender reaches the email step<span class="status open">open</span></h4>
+<p><code>from.integrationId</code> is <code>z.number()</code> (<code>cyclotron.ts:156</code>), and Liquid renders strings, so a templated id fails the schema.</p>
+<ol>
+  <li><b>Coerce:</b> <code>integrationId: z.coerce.number()</code>. One line; every existing caller already sends a number, so nothing else changes.</li>
+  <li><b>Hog templating for that one field</b> (<code>variables.email.integration_id</code> as bytecode keeps the number). No schema change, but mixes two templating modes in one input, which the editor does not expect.</li>
+  <li><b>Pre-rendered queue params:</b> the CDP route puts <code>queueParameters</code> on the invocation and skips the step's rendering. No templating at all, but it bypasses the pre-send checks in <code>hog_function.ts</code> and adds a second way into the email queue.</li>
+</ol>
+<div class="rec"><b>Recommend 1.</b> Smallest change; keeps the step, its pre-send checks and its metrics on the one path the map asks for.</div></div>
+
+<div class="card"><h4>C6 · Recipients per send<span class="status open">open</span></h4>
+<ol>
+  <li><b>One <code>to</code></b> (a string, or an array with one item), plus <code>cc</code> and <code>bcc</code>. Matches the email queue (<code>to</code> is one object, <code>cyclotron.ts:150-153</code>) and one invocation per send. Deviates from Resend, which takes up to 50 <code>to</code>.</li>
+  <li><b>Up to N <code>to</code>, fanned out</b> into N invocations, one id each. Resend-like call shape, but the response becomes a list and each recipient sees only their own address, unlike Resend.</li>
+  <li><b>Up to N <code>to</code> in one message</b>: needs <code>to</code> to become a list in the queue schema and in <code>EmailService</code>.</li>
+</ol>
+<div class="rec"><b>Recommend 1.</b> Transactional mail is one recipient; the error <code>too_many_recipients</code> tells an agent exactly what to do. The array form keeps room for 2 later without a breaking change.</div></div>
+
+<div class="card"><h4>C7 · Trigger type of the hidden flow<span class="status open">open</span></h4>
+<ol>
+  <li><b>New trigger type <code>api_send</code></b>, added to <code>TRIGGER_TYPES</code> (<code>hog_flow.py:52-62</code>) and the Node trigger schema. It never matches an event; only the new route starts it. Clear in logs and the editor.</li>
+  <li><b>Reuse <code>schedule</code></b> with no schedule. No new type, but the schedule machinery and the <code>run</code> endpoint would treat it as a scheduled flow.</li>
+  <li><b>Reuse <code>manual</code></b>. Closer in meaning, but the editor offers a "run" button for manual flows.</li>
+</ol>
+<div class="rec"><b>Recommend 1.</b> A distinct type keeps every existing trigger path from ever starting this flow.</div></div>
+
+<div class="card"><h4>C8 · Preventing a second API sends flow<span class="status open">open</span></h4>
+<ol>
+  <li><b>Partial unique index</b> <code>(team_id) WHERE origin_product = 'api_sends'</code> plus <code>get_or_create</code>. The database enforces it; a concurrent first send retries the read after an <code>IntegrityError</code>. One migration, built concurrently.</li>
+  <li><b><code>select_for_update</code> on the team's <code>TeamWorkflowsConfig</code> row</b>, then read or create. No migration; follows the repo rule to lock the product's team extension row, not <code>Team</code>.</li>
+  <li><b>Store the flow id on <code>TeamWorkflowsConfig</code></b> (<code>api_sends_hog_flow_id</code>) and create it under that row lock. Fast lookup by id; one more column.</li>
+</ol>
+<div class="rec"><b>Recommend 1.</b> The invariant lives in the database, where a later caller cannot forget it.</div></div>
+
+<div class="card"><h4>C9 · Where API sends show in Workflows<span class="status open">open</span></h4>
+<ol>
+  <li><b>One "API sends" row pinned in the Workflows list</b>, read-only, opening the standard flow page (metrics, logs). Discoverable; the editor is locked for this flow.</li>
+  <li><b>An "API sends" tab</b> next to broadcasts. More room for a later sends table; more UI now.</li>
+  <li><b>No UI in this map:</b> reachable only by direct link from the docs. Least work; "sends show up in Workflows" is not met.</li>
+</ol>
+<div class="rec"><b>Recommend 1</b>, in its own small frontend PR after the backend works.</div></div>
+
+<div class="card"><h4>C10 · Signing key for the CDP call<span class="status open">open</span></h4>
+<ol>
+  <li><b>Its own key</b> <code>WORKFLOWS_API_SEND_JWT_SECRETS</code> / <code>WORKFLOWS_API_SEND_JWT_SECRET</code>. Follows the one-key-per-use-case convention (<code>products/workflows/backend/service_jwt.py:11-14</code>); one more secret to provision per environment.</li>
+  <li><b>Share the web-tier cancel key</b> (<code>WORKFLOWS_CANCEL_JWT_SECRETS</code>) with a new audience, like cancel-batch does (<code>plugin_server_api.py:191-196</code>). Nothing new to provision.</li>
+</ol>
+<div class="rec"><b>Recommend 1.</b> Follows the convention the repo already states; provisioning is a one-time infra step, and the route fails closed until it is set.</div></div>
+
+<div class="card"><h4>C11 · Who mints the send id<span class="status open">open</span></h4>
+<ol>
+  <li><b>Django mints a UUIDT</b> and passes it as <code>invocation_id</code>; CDP uses it and treats a duplicate job id as "already queued". Retries after a timeout are safe.</li>
+  <li><b>CDP mints it</b>, as the scheduled route does (<code>hogflow-executor.service.ts:87</code>). No change in <code>createHogFlowInvocation</code>; a timeout leaves Django without an id, so a retry can send twice.</li>
+</ol>
+<div class="rec"><b>Recommend 1.</b> It is what makes "sent at most once" true end to end.</div></div>
+
+<div class="card"><h4>C12 · Text-only emails<span class="status open">open</span></h4>
+<ol>
+  <li><b>Django derives <code>html</code></b> from <code>text</code> (escape, line breaks to <code>&lt;br&gt;</code>). No Node change.</li>
+  <li><b>Make <code>html</code> optional</b> in the queue schema and let SES send text only. Truer to the caller; touches the SES and maildev builders for every email.</li>
+</ol>
+<div class="rec"><b>Recommend 1.</b> Smallest change in the shared send path.</div></div>
+
+<div class="card"><h4>C13 · Sends without <code>distinctId</code>, and the engagement toggle<span class="status open">open</span></h4>
+<p>Delivery events need <code>capture_workflows_engagement_events</code>, which defaults to off (<code>team_workflows_config.py:14</code>), and a distinct id.</p>
+<ol>
+  <li><b>No <code>distinctId</code> → synthetic distinct id <code>api-send-&lt;send id&gt;</code></b>, and leave the toggle as the team set it. No person is polluted by default; events appear only when the team turned them on.</li>
+  <li><b>No <code>distinctId</code> → use the recipient address.</b> Events always have a person, but every API send without an id creates a person for its recipient.</li>
+  <li><b>Force delivery events on for API sends</b> regardless of the toggle. Status by events always works; it changes what a team captures without them opting in.</li>
+</ol>
+<div class="rec"><b>Recommend 1</b>, and say in the docs and skill that status by events needs <code>distinctId</code> and the toggle. Logs by id work either way.</div></div>
+
+<div class="card"><h4>C14 · A status endpoint for the send key<span class="status open">open</span></h4>
+<ol>
+  <li><b>Not in this map.</b> The id finds the send in the workflow logs and in the existing <code>invocation_results/{id}</code> endpoint (with a <code>hog_flow:read</code> key); events carry delivery state. Matches the map's "status from events on the person".</li>
+  <li><b><code>GET /emails/{id}</code></b>, a thin wrapper over the existing invocation result for the API sends flow, with an <code>email_send:read</code> scope. Resend-like; one more endpoint and scope, and its "succeeded" still does not mean delivered.</li>
+</ol>
+<div class="rec"><b>Recommend 1.</b> YAGNI; the wrapper is small and can follow when an agent needs to poll.</div></div>
+
+<div class="card"><h4>C15 · Where the billing quota is checked<span class="status open">open</span></h4>
+<p>Scheduled enqueue skips quota admission today, so an API send would too unless the new path checks it.</p>
+<ol>
+  <li><b>In the CDP route</b> with <code>checkHogFlowQuotaLimits</code> before enqueue, returning 402. Same Redis source and same function the event pipeline uses.</li>
+  <li><b>In Django</b> from the billing quota-limited team list (<code>ee/billing/quota_limiting.py:876</code>). Rejects before any CDP call; a second reader of the same state.</li>
+  <li><b>In the hogflow worker</b> for every non-event invocation. Also fixes scheduled runs; changes behavior for existing flows, so not in this slice.</li>
+</ol>
+<div class="rec"><b>Recommend 1.</b> One check, one source, in the route this brief adds. Option 3 is worth its own ticket.</div></div>
+
+<h3>Locked by the map or the code</h3>
+<div class="card locked"><h4>L1 · One hidden workflow per team<span class="status locked">locked</span></h4>
+<p>Locked by the map (#461, charting decision "Execution"). This brief shapes the contract only.</p></div>
+<div class="card locked"><h4>L2 · No new <code>INTERNAL_API_SECRET</code> caller<span class="status locked">locked</span></h4>
+<p>Locked by the ticket and <code>.agents/security.md</code>. The scoped-JWT routes in <code>cdp-api.ts:1075-1098</code> and the exemption list in <code>internal-api-auth.ts:32-36</code> are the model.</p></div>
+<div class="card locked"><h4>L3 · Always transactional<span class="status locked">locked</span></h4>
+<p>Locked by the map. Set on the hidden flow's email step as <code>message_category_type: "transactional"</code>; the caller cannot change it.</p></div>
+<div class="card locked"><h4>L4 · The default sender resolves in Django<span class="status locked">locked</span></h4>
+<p>Locked by the code: Node has no default-sender fallback and requires <code>from.integrationId</code> (<code>email-sender-selection.ts:8-20</code>; <code>send-email.ts:9</code>). Only Django knows <code>default_email_integration_id</code>.</p></div>
+<div class="card locked"><h4>L5 · The flag is backend-only and says so<span class="status locked">locked</span></h4>
+<p>Locked by the map: off returns <code>403 email_api_not_enabled</code>, not a 404, so an agent knows the call is right and the project is not enabled.</p></div>
+
+<h2 id="blast">13. Blast radius</h2>
+<ul>
+  <li><b>Can break:</b> the email queue schema coercion (C5) touches every email job's parse; the workflow list filter gains a type, so a mistake there could hide or show the wrong flows on the Workflows page.</li>
+  <li><b>Who notices:</b> Workflows users (list), every email send (schema), the flagged projects (the endpoint).</li>
+  <li><b>Everything else is additive</b> and behind the flag: the endpoint, the scope, the CDP route, the flow type.</li>
+  <li><b>Out of scope:</b> the posthog-node method and the agent skill (later tickets), batch sends, templates, scheduled sends, outbound webhooks, the trial sender, sending tier changes.</li>
+</ul>
+
+</main>
+</body>
+</html>
