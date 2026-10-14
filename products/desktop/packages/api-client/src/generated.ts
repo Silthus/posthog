@@ -15710,6 +15710,10 @@ export namespace Schemas {
          * Mixin for serializers to add user access control fields
          */
         description?: string | undefined;
+        /**
+         * Mixin for serializers to add user access control fields
+         */
+        tags?: Array<string> | undefined;
         version: number;
         /**
          * Mixin for serializers to add user access control fields
@@ -15807,6 +15811,10 @@ export namespace Schemas {
         id: string;
         name: string | null;
         description: string;
+        /**
+         * Mixin for serializers to add user access control fields
+         */
+        tags?: Array<string> | undefined;
         version: number;
         status: HogFlowStateEnum & unknown;
         origin_product: HogFlowOriginProductEnum | NullEnum;
@@ -15870,6 +15878,10 @@ export namespace Schemas {
          * Mixin for serializers to add user access control fields
          */
         description?: string | undefined;
+        /**
+         * Mixin for serializers to add user access control fields
+         */
+        tags?: Array<string> | undefined;
         version: number;
         /**
          * Mixin for serializers to add user access control fields
@@ -19323,6 +19335,7 @@ export namespace Schemas {
         id: string;
         name: string | null;
         description: string;
+        tags: Array<string>;
         version: number;
         status: HogFlowStateEnum;
         origin_product: HogFlowOriginProductEnum | NullEnum;
