@@ -1,0 +1,12 @@
+E       AssertionError: assert 'PostHog manages' in 'Invalid trigger type'
+E       assert 'PostHog manages' in "Template not found. template_id must be the literal 'template-email' for this step type."
+E       assert 200 == 400
+E        +  where 200 = <Response status_code=200, "application/json">.status_code
+E       AssertionError: assert 'PostHog manages' in 'Invalid trigger type'
+E       AssertionError: assert 'PostHog manages' in 'Invalid trigger type'
+FAILED products/workflows/backend/tests/api/test_hog_flow.py::TestHogFlowAPI::test_api_sends_flow_refuses_graph_edits_0_graph_through_update
+FAILED products/workflows/backend/tests/api/test_hog_flow.py::TestHogFlowAPI::test_api_sends_flow_refuses_graph_edits_1_trigger_through_update
+FAILED products/workflows/backend/tests/api/test_hog_flow.py::TestHogFlowAPI::test_api_sends_flow_refuses_graph_edits_2_variables_through_update
+FAILED products/workflows/backend/tests/api/test_hog_flow.py::TestHogFlowAPI::test_api_sends_flow_refuses_graph_edits_3_step_through_graph_endpoint
+FAILED products/workflows/backend/tests/api/test_hog_flow.py::TestHogFlowAPI::test_api_sends_flow_refuses_graph_edits_4_email_through_email_step_endpoint
+5 failed, 2 passed, 445 deselected in 14.43s

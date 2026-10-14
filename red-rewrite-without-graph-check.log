@@ -1,0 +1,36 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ TestGetOrCreateApiSendsFlow.test_rewrites_an_outdated_graph_and_bumps_the_version _
+products/workflows/backend/test/test_api_sends_flow.py:109: in test_rewrites_an_outdated_graph_and_bumps_the_version
+    assert rewritten.actions == created.actions
+E   AssertionError: assert equals failed
+E                   'email': '{{ vari                'email': '{{ vari 
+E     ables.email.to | raw }}',        ables.email.to | raw }}',       
+E                 },                               },                  
+E               },                               },                    
+E             },                               },                      
+E           },                               },                        
+E           'message_category_type':         'message_category_type':  ...
+E     
+E     ...Full output truncated (8 lines hidden), use '-vv' to show
+---------------------------- Captured stdout setup -----------------------------
+Created defaults:
+- Auth group: Billing Team
+- Auth group: ClickHouse Team
+- Data color theme: Default Theme
+- Growth enrichment prompt config: ai_pilled
+- OAuth app: PostHog Streamlit Apps
+- Dashboard template: Product analytics
+- Dashboard template: Flagged Feature Usage
+- Dashboard template: Website Metrics
+- Dashboard template: AARRR – Pirate Metrics
+- Dashboard template: CSP Violation Reports
+- Dashboard template: API usage metrics
+- Dashboard template: Landing Pages Report
+- Dashboard template: Mobile Analytics
+- Dashboard template: Product Analytics
+- Dashboard template: Real time analytics
+Default migration data already present.
+=========================== short test summary info ============================
+FAILED products/workflows/backend/test/test_api_sends_flow.py::TestGetOrCreateApiSendsFlow::test_rewrites_an_outdated_graph_and_bumps_the_version
+1 failed, 2 deselected in 6.88s
