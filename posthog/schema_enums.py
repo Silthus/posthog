@@ -1505,6 +1505,13 @@ class ExternalQueryStatus(StrEnum):
     ERROR = "error"
 
 
+class FeatureFlagHealthVerdict(StrEnum):
+    PASS_ = "pass"
+    HARM = "harm"
+    INSUFFICIENT_DATA = "insufficient_data"
+    TELEMETRY_FAILURE = "telemetry_failure"
+
+
 class Tag(StrEnum):
     ALPHA = "alpha"
     BETA = "beta"
@@ -2419,6 +2426,7 @@ class NodeKind(StrEnum):
     MCP_TOOL_TOP_USERS_QUERY = "MCPToolTopUsersQuery"
     MCP_TOOL_FAILURES_QUERY = "MCPToolFailuresQuery"
     MCP_TOOL_FAILURE_OCCURRENCES_QUERY = "MCPToolFailureOccurrencesQuery"
+    FEATURE_FLAG_HEALTH_QUERY = "FeatureFlagHealthQuery"
     MCP_TOOL_STATS_QUERY = "MCPToolStatsQuery"
     MCP_TOOL_DAILY_STATS_QUERY = "MCPToolDailyStatsQuery"
     MCP_TOOL_QUALITY_ROWS_QUERY = "MCPToolQualityRowsQuery"

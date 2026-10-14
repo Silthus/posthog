@@ -675,6 +675,12 @@ export const QUERY_TYPES_METADATA: Record<NodeKind, InsightTypeMetadata> = {
         icon: IconPieChart,
         inMenu: false,
     },
+    [NodeKind.FeatureFlagHealthQuery]: {
+        name: 'Feature flag health',
+        description: 'Affected-user rates for flag-on and flag-off users.',
+        icon: IconPieChart,
+        inMenu: false,
+    },
     [NodeKind.MCPToolStatsQuery]: {
         name: 'MCP tool stats',
         description: 'Summary stats for a single MCP tool.',

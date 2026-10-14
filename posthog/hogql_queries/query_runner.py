@@ -54,6 +54,7 @@ from posthog.schema import (
     EventsQuery,
     EventTaxonomyQuery,
     ExperimentExposureQuery,
+    FeatureFlagHealthQuery,
     FilterLogicalOperator,
     FunnelCorrelationActorsQuery,
     FunnelCorrelationQuery,
@@ -603,6 +604,7 @@ RunnableQueryNode = Union[
     MCPToolTopUsersQuery,
     MCPToolFailuresQuery,
     MCPToolFailureOccurrencesQuery,
+    FeatureFlagHealthQuery,
     MCPToolStatsQuery,
     MCPToolDailyStatsQuery,
     MCPToolQualityRowsQuery,
@@ -1394,6 +1396,18 @@ def get_query_runner(
             modifiers=modifiers,
             user=user,
         )
+    if kind == "FeatureFlagHealthQuery":
+        from products.feature_flags.backend.facade.queries import FeatureFlagHealthQueryRunner
+
+        return FeatureFlagHealthQueryRunner(
+            query=cast(FeatureFlagHealthQuery | dict[str, Any], query),
+            team=team,
+            timings=timings,
+            limit_context=limit_context,
+            modifiers=modifiers,
+            user=user,
+        )
+
     if kind == "MCPToolStatsQuery":
         from products.mcp_analytics.backend.facade.queries import MCPToolStatsQueryRunner
 
