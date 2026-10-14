@@ -237,6 +237,10 @@ See [Client Types](#client-types) section for detailed explanation.
    }
    ```
 
+## Domain Connect access
+
+The default-off `workflows-email-from-code` flag lets OAuth tokens and Personal API Keys check whether a domain supports Domain Connect with `integration:read`, and request an email Domain Connect apply URL with `integration:write`. Scoped credentials cannot request reverse proxy apply URLs, and their `redirect_uri` must point back to PostHog. Existing session calls for email and reverse proxy setup do not require this flag.
+
 ## Available Scopes
 
 OAuth supports all the same scopes as Personal API Keys. Each scope has a `read` and/or `write` action (e.g., `experiment:read`, `experiment:write`).
