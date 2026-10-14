@@ -1,0 +1,39 @@
+Detected: Jest test (via @posthog/frontend)
+🚀 pnpm --filter=@posthog/frontend exec jest products/workflows/frontend/ApiSends/apiSendsSceneLogic.test.ts
+[90m12:24:23:715[0m [34m[client-request-interceptor][0m constructing the interceptor...
+[90m12:24:23:728[0m [34m[xhr][0m constructing the interceptor...
+[90m12:24:23:728[0m [34m[fetch][0m constructing the interceptor...
+[90m12:24:23:728[0m [34m[websocket][0m constructing the interceptor...
+[90m12:24:23:728[0m [34m[interceptor-source][0m constructing the interceptor...
+FAIL ../products/workflows/frontend/ApiSends/apiSendsSceneLogic.test.ts
+  ● Test suite failed to run
+
+    Cannot find module './apiSendsSceneLogic' from '../products/workflows/frontend/ApiSends/apiSendsSceneLogic.test.ts'
+
+    However, Jest was able to find:
+    	'./apiSendsSceneLogic.test.ts'
+
+    You might want to include a file extension in your import, or update your 'moduleFileExtensions', which is currently ['js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'json', 'node'].
+
+    See https://jestjs.io/docs/configuration#modulefileextensions-arraystring
+
+       8 | import { initKeaTests } from '~/test/init'
+       9 |
+    > 10 | import { apiSendsSceneLogic } from './apiSendsSceneLogic'
+         | ^
+      11 |
+      12 | const API_SENDS_FLOW_ID = '01a13a4d-0000-0000-0000-000000000001'
+      13 | const ORDINARY_FLOW_ID = '01a13a4d-0000-0000-0000-000000000002'
+
+      at Resolver._throwModNotFoundError (../node_modules/.pnpm/jest-resolve@29.7.0/node_modules/jest-resolve/build/resolver.js:427:11)
+      at Object.<anonymous> (../products/workflows/frontend/ApiSends/apiSendsSceneLogic.test.ts:10:1)
+
+Test Suites: 1 failed, 1 total
+Tests:       0 total
+Snapshots:   0 total
+Time:        1.482 s, estimated 2 s
+Ran all test suites matching /products\/workflows\/frontend\/ApiSends\/apiSendsSceneLogic.test.ts/i.
+undefined
+<repo>/frontend:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: jest products/workflows/frontend/ApiSends/apiSendsSceneLogic.test.ts
+💥 Command failed: pnpm --filter=@posthog/frontend exec jest products/workflows/frontend/ApiSends/apiSendsSceneLogic.test.ts
