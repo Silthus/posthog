@@ -138,6 +138,7 @@ export function TileCanvasContent(): JSX.Element {
                     zoomActivationKeyCode={['Meta', 'Control']}
                     nodesDraggable={false}
                     nodesConnectable={false}
+                    edgesFocusable={false}
                     colorMode={isDarkModeOn ? 'dark' : 'light'}
                     onNodeClick={(_, node) => activateNode(node.id)}
                     onPaneClick={handlePaneClick}
