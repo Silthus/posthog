@@ -107,6 +107,29 @@ function tileNode(node: VisibleNode, layout: CanvasLayout, state: CanvasNodeStat
     return [{ id: node.id, type: 'tile', position, data, measured, ...STATIC }]
 }
 
+const missingFrom = <Item extends { id: string }>(items: Item[], present: Item[]): Item[] => {
+    const ids = new Set(present.map((item) => item.id))
+    return items.filter((item) => !ids.has(item.id))
+}
+
+/**
+ * Laying out the canvas takes a moment. Until the new layout lands, a stack that opens stays where the last layout put
+ * it, with its arrows, so its steps can fly out of it instead of out of an empty gap. The steps and frame of a path
+ * that collapses have already faded out, so they do not come back.
+ */
+export function withLeavingStacks(current: VisibleGraph, laidOut: VisibleGraph | null): VisibleGraph {
+    const leaving = laidOut ? missingFrom(laidOut.nodes, current.nodes).filter((node) => node.kind === 'stack') : []
+    if (!laidOut || !leaving.length) {
+        return current
+    }
+    const nodes = [...current.nodes, ...leaving]
+    const drawnIds = new Set(nodes.map((node) => node.id))
+    const edges = missingFrom(laidOut.edges, current.edges).filter(
+        (edge) => drawnIds.has(edge.source) && drawnIds.has(edge.target)
+    )
+    return { nodes, edges: [...current.edges, ...edges] }
+}
+
 export function buildCanvasNodes(
     layout: CanvasLayout | null,
     frameSpecs: PathFrameSpec[],

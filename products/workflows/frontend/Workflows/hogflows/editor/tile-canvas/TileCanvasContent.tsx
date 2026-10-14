@@ -43,7 +43,7 @@ export function TileCanvasContent(): JSX.Element {
     const wrapperRef = useRef<HTMLDivElement>(null)
     const { isDarkModeOn } = useValues(themeLogic)
     const {
-        visibleGraph,
+        drawnGraph,
         frameSpecs,
         layout,
         motion,
@@ -75,13 +75,13 @@ export function TileCanvasContent(): JSX.Element {
         }
         previousNodes.current = keepUnchangedNodes(
             previousNodes.current,
-            buildCanvasNodes(layout, frameSpecs, visibleGraph, state)
+            buildCanvasNodes(layout, frameSpecs, drawnGraph, state)
         )
         return previousNodes.current
     }, [
         layout,
         frameSpecs,
-        visibleGraph,
+        drawnGraph,
         workflow,
         pathGroups,
         motion,
@@ -91,10 +91,10 @@ export function TileCanvasContent(): JSX.Element {
         countOf,
         templateNameOf,
     ])
-    const edges = useMemo(() => buildCanvasEdges(visibleGraph, layout), [visibleGraph, layout])
+    const edges = useMemo(() => buildCanvasEdges(drawnGraph, layout), [drawnGraph, layout])
 
     const hasMenu = (nodeId: string): boolean =>
-        visibleGraph.nodes.some((node) => node.id === nodeId && node.kind === 'step' && hasStepMenu(node.action))
+        drawnGraph.nodes.some((node) => node.id === nodeId && node.kind === 'step' && hasStepMenu(node.action))
 
     const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
         const nodeId = focusedTileId(event)

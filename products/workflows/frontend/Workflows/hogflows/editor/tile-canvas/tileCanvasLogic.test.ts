@@ -311,6 +311,21 @@ describe('tileCanvasLogic', () => {
             expect(logic.values.viewportFocus).toEqual({ place: stack, anchor: framePlace, request: 1 })
         })
 
+        it('keeps an opening stack on the canvas, opened once, until the layout that opens it lands', () => {
+            const [group] = logic.values.pathGroups
+            const drawnIds = (): string[] => logic.values.drawnGraph.nodes.map((node) => node.id)
+            logic.actions.setLayout(layoutWith({ [group.id]: stackAt }, {}), logic.values.visibleGraph)
+
+            logic.actions.openPath(group.id)
+            const whileLayingOut = drawnIds()
+            logic.actions.activateNode(group.id)
+            logic.actions.setLayout(layoutWith({}, { [`frame:${group.id}`]: frame }), logic.values.visibleGraph)
+
+            expect(whileLayingOut).toContain(group.id)
+            expect(logic.values.openPathIds).toEqual([group.id])
+            expect(drawnIds()).not.toContain(group.id)
+        })
+
         it('brings the path of a step picked elsewhere into view', () => {
             const group = logic.values.pathGroups.find((candidate) => candidate.memberIds.includes('a2'))!
 

@@ -63,6 +63,7 @@ import {
     VisibleEdge,
     VisibleGraph,
 } from './tileCanvasModel'
+import { withLeavingStacks } from './tileCanvasNodes'
 
 export type TileCanvasPanelMode = HogFlowEditorMode | 'history'
 
@@ -182,6 +183,8 @@ export interface tileCanvasLogicValues {
     viewportFocus: ViewportFocus | null
     pendingPathFocus: PendingPathFocus | null
     frameSpecs: PathFrameSpec[]
+    drawnGraph: VisibleGraph
+    laidOutGraph: VisibleGraph | null
     isSavedWorkflow: boolean
     isHistoryOpen: boolean
     isPanelOpen: boolean
@@ -353,8 +356,12 @@ export interface tileCanvasLogicActions {
     selectStep: (actionId: string) => {
         actionId: string
     }
-    setLayout: (layout: CanvasLayout) => {
+    setLayout: (
+        layout: CanvasLayout,
+        laidOutGraph?: VisibleGraph | null
+    ) => {
         layout: CanvasLayout
+        laidOutGraph: VisibleGraph | null
     }
     setLayoutError: (message: string) => {
         message: string
@@ -389,6 +396,7 @@ export interface tileCanvasLogicMeta {
         pathGroups: (workflow: HogFlow) => PathGroup[]
         visibleGraph: (workflow: HogFlow, pathGroups: PathGroup[], openPathIds: string[]) => VisibleGraph
         frameSpecs: (pathGroups: PathGroup[], openPathIds: string[], visibleGraph: VisibleGraph) => PathFrameSpec[]
+        drawnGraph: (visibleGraph: VisibleGraph, laidOutGraph: VisibleGraph | null) => VisibleGraph
         allPathsCollapsed: (pathGroups: PathGroup[], openPathIds: string[]) => boolean
         isSavedWorkflow: (workflow: HogFlow) => boolean
         panelMode: (
@@ -498,7 +506,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         closePanel: true,
         cancel: true,
         setMeasuredSizes: (sizes: Record<string, NodeSize>) => ({ sizes }),
-        setLayout: (layout: CanvasLayout) => ({ layout }),
+        setLayout: (layout: CanvasLayout, laidOutGraph: VisibleGraph | null = null) => ({ layout, laidOutGraph }),
         setLayoutError: (message: string) => ({ message }),
         retryLayout: true,
         requestFit: true,
@@ -573,6 +581,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
         ],
         measuredSizes: [null as Record<string, NodeSize> | null, { setMeasuredSizes: (_, { sizes }) => sizes }],
         layout: [null as CanvasLayout | null, { setLayout: (_, { layout }) => layout }],
+        laidOutGraph: [null as VisibleGraph | null, { setLayout: (_, { laidOutGraph }) => laidOutGraph }],
         layoutError: [null as string | null, { setLayoutError: (_, { message }) => message, setLayout: () => null }],
         fitRequest: [0, { requestFit: (count) => count + 1 }],
         fitsNextLayout: [true, { fitNextLayout: () => true, requestFit: () => false, focusPath: () => false }],
@@ -634,6 +643,11 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             (s) => [s.pathGroups, s.openPathIds, s.visibleGraph],
             (groups: PathGroup[], openPathIds: string[], graph: VisibleGraph): PathFrameSpec[] =>
                 pathFrameSpecs(groups, openPathIds, graph.nodes),
+        ],
+        drawnGraph: [
+            (s) => [s.visibleGraph, s.laidOutGraph],
+            (graph: VisibleGraph, laidOutGraph: VisibleGraph | null): VisibleGraph =>
+                withLeavingStacks(graph, laidOutGraph),
         ],
         allPathsCollapsed: [
             (s) => [s.pathGroups, s.openPathIds],
@@ -832,7 +846,8 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             },
             setMeasuredSizes: async ({ sizes }, breakpoint) => {
                 await breakpoint(10)
-                const input = { sizes, edges: values.visibleGraph.edges, frames: values.frameSpecs }
+                const graph = values.visibleGraph
+                const input = { sizes, edges: graph.edges, frames: values.frameSpecs }
                 // Measuring again after fonts load or a re-render often finds nothing new, and a fresh layout would restart the motion.
                 if (objectsEqual(input, cache.layoutInput)) {
                     return
@@ -841,7 +856,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                     const layout = await layoutTileCanvas(sizes, input.edges, input.frames)
                     breakpoint()
                     cache.layoutInput = input
-                    actions.setLayout(layout)
+                    actions.setLayout(layout, graph)
                 } catch (error) {
                     if (isBreakpoint(error as Error)) {
                         throw error
