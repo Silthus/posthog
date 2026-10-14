@@ -1,4 +1,4 @@
-import { Background, BackgroundVariant, Controls, EdgeTypes, NodeTypes, Panel, ReactFlow } from '@xyflow/react'
+import { Background, BackgroundVariant, EdgeTypes, NodeTypes, Panel, ReactFlow } from '@xyflow/react'
 import { useActions, useValues } from 'kea'
 import { KeyboardEvent, useMemo, useRef } from 'react'
 
@@ -10,6 +10,7 @@ import { CommandBar } from './CommandBar'
 import { PathChip } from './PathChip'
 import { PathFrame } from './PathFrame'
 import { PlacementHint } from './PlacementHint'
+import { TileCanvasControls } from './TileCanvasControls'
 import { TileCanvasLayoutError } from './TileCanvasLayoutError'
 import { tileCanvasLogic } from './tileCanvasLogic'
 import { TileCanvasMeasureLayer } from './TileCanvasMeasureLayer'
@@ -149,7 +150,7 @@ export function TileCanvasContent(): JSX.Element {
                             <CommandBar />
                         </div>
                     </Panel>
-                    <Controls showInteractive={false} />
+                    <TileCanvasControls />
                 </ReactFlow>
                 {layoutError && <TileCanvasLayoutError message={layoutError} />}
             </div>
