@@ -94,6 +94,7 @@ export interface EmailContent {
     preheader?: string
     to: string
     html?: string
+    text?: string
 }
 
 export function emailContent(action: HogFlowAction): EmailContent | undefined {
@@ -107,5 +108,6 @@ export function emailContent(action: HogFlowAction): EmailContent | undefined {
         preheader: asText(email.preheader),
         to: /person\.properties\.email/.test(toEmail) ? 'Their email address' : toEmail || 'Not set',
         html: asText(email.html),
+        text: asText(email.text),
     }
 }
