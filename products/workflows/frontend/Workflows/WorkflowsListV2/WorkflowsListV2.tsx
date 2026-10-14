@@ -2,10 +2,8 @@ import { useActions, useValues } from 'kea'
 
 import { LemonButton } from '@posthog/lemon-ui'
 
-import { FEATURE_FLAGS } from 'lib/constants'
 import { useOnMountEffect } from 'lib/hooks/useOnMountEffect'
 import { LemonTable } from 'lib/lemon-ui/LemonTable'
-import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 
 import { AutomationEmptyState } from '../../setupGuide/AutomationEmptyState'
 import { AutomationSuggestionBanner } from '../../setupGuide/AutomationSuggestionBanner'
@@ -19,8 +17,6 @@ import { workflowsListV2Logic } from './workflowsListV2Logic'
 const PAGE_SIZE = 100
 
 export function WorkflowsListV2(): JSX.Element {
-    const { featureFlags } = useValues(featureFlagLogic)
-    const guidedOnboardingEnabled = !!featureFlags[FEATURE_FLAGS.WORKFLOWS_GUIDED_ONBOARDING]
     const {
         rows,
         filteredRows,
@@ -39,7 +35,6 @@ export function WorkflowsListV2(): JSX.Element {
         metricsLoaded,
     } = useValues(workflowsListV2Logic)
     const { setValue, loadWorkflows, loadMetrics, clearFilters } = useActions(workflowsListV2Logic)
-    const showAutomationEmptyState = guidedOnboardingEnabled && isUnfilteredAutomationView
 
     useOnMountEffect(() => {
         // Leaving the new-workflow scene keeps its logic mounted, so drop it here as WorkflowsTable does.
@@ -81,7 +76,7 @@ export function WorkflowsListV2(): JSX.Element {
                 </div>
             )
         }
-        if (listLoaded && filteredRows.length === 0 && showAutomationEmptyState && !searchPending) {
+        if (listLoaded && filteredRows.length === 0 && isUnfilteredAutomationView && !searchPending) {
             return <AutomationEmptyState />
         }
         if (listLoaded && rows.length > 0 && filteredRows.length === 0 && !searchPending && !healthPending) {
@@ -119,7 +114,7 @@ export function WorkflowsListV2(): JSX.Element {
 
     return (
         <div className="flex flex-col gap-3 min-w-0" data-attr="workflows-list-v2">
-            {guidedOnboardingEnabled && <MessagingSetupReminderBanner />}
+            <MessagingSetupReminderBanner />
             <FacetSearchBar
                 facets={facets}
                 items={rows}
@@ -135,7 +130,7 @@ export function WorkflowsListV2(): JSX.Element {
                 </div>
             )}
             {renderBody()}
-            {guidedOnboardingEnabled && <AutomationSuggestionBanner />}
+            <AutomationSuggestionBanner />
         </div>
     )
 }
