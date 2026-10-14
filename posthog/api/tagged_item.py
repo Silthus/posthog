@@ -488,15 +488,15 @@ def _rename_team_tag_once(team_id: int, name: str, new_name: str) -> str:
             .order_by("name")
             .select_for_update()
         }
-        source = locked_tags.get(name)
-        if source is None:
+        locked_source = locked_tags.get(name)
+        if locked_source is None:
             raise Http404
         target = locked_tags.get(new_name)
         if target is None:
-            source.name = new_name
-            source.save(update_fields=["name"])
+            locked_source.name = new_name
+            locked_source.save(update_fields=["name"])
         else:
-            _merge_tag_into(team_id, source, target)
+            _merge_tag_into(team_id, locked_source, target)
         for parents in tagged_parents:
             parents.update(updated_at=timezone.now())
     return new_name
