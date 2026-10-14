@@ -79,7 +79,7 @@ export function TileHoverCard({
             )}
             <div className="relative flex items-start gap-3">
                 <TileFace action={action} tile={tile} count={count} showEmail={showEmail} />
-                <TileCaption facts={tile.facts} />
+                <TileCaption facts={tile.facts} size="card" />
                 <div
                     className="absolute right-0 top-0 text-[10px] font-semibold uppercase tracking-wider"
                     style={{ color: tile.color }}
