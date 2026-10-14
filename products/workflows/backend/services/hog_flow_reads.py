@@ -380,14 +380,15 @@ def _to_workflow(
 
 
 # A workflow's type is what owns it, else what it does. `loop` and `broadcast` name the surfaces that
-# have their own page, and the behavioural values exclude them: a flow those surfaces own is tagged
-# by surface in the UI (see WorkflowTypeTag), so returning it under `messaging` would contradict the
+# have their own page, `api_send` names the email API's hidden flow, and the behavioural values exclude
+# all three: a flow a surface owns is tagged by surface in the UI (see WorkflowTypeTag), so returning it under `messaging` would contradict the
 # tag on the row. Accepting several lets a list say which surfaces it covers, which is how the
 # workflows page asks for everything except the ones that moved out.
-WORKFLOW_TYPES: Final[tuple[str, ...]] = ("messaging", "automation", "loop", "broadcast")
+WORKFLOW_TYPES: Final[tuple[str, ...]] = ("messaging", "automation", "loop", "broadcast", "api_send")
 OWNED_WORKFLOW_TYPES: Final[dict[str, str]] = {
     "loop": HogFlow.OriginProduct.LOOPS,
     "broadcast": HogFlow.OriginProduct.BROADCASTS,
+    "api_send": HogFlow.OriginProduct.API_SENDS,
 }
 
 

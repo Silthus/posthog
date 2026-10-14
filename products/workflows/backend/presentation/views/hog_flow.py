@@ -2837,6 +2837,8 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
         return bool(request is not None and getattr(request, "data", None) and request.data.get("stage_draft"))
 
     def to_internal_value(self, data):
+        self._refuse_edits_to_api_sends_content(data)
+
         # When used as a nested field (the `configuration` override on test invocations) DRF never
         # binds `self.instance`, so fall back to the flow passed in via context so recovery still works.
         instance = cast(Optional[WorkflowEditState], self.instance) or self.context.get("instance")
@@ -2985,6 +2987,21 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             "email_sending_resumed_at",
             "last_run",
         ]
+
+    def _refuse_edits_to_api_sends_content(self, data: Any) -> None:
+        # Runs before field validation, which would otherwise answer with whatever check the edit
+        # trips first. The update, graph, email step, publish and proposal paths all validate here.
+        instance = cast(Optional[WorkflowEditState], self.instance)
+        if instance is None or instance.origin_product != HogFlowOriginProduct.API_SENDS:
+            return
+        edited = sorted(set(data.keys()) & API_SENDS_CODE_OWNED_FIELDS) if isinstance(data, Mapping) else []
+        if edited:
+            raise serializers.ValidationError(
+                {
+                    edited[0]: "PostHog manages this workflow's steps for the email API, so they can't be edited. "
+                    "You can still rename it or change its email sending rate limit."
+                }
+            )
 
     def validate_origin_product(self, value: str | None) -> str | None:
         if value == HogFlowOriginProduct.API_SENDS:
@@ -4128,6 +4145,8 @@ def mint_audience_confirm_token(
 
 
 WRITABLE_DRAFT_CONTENT_FIELDS = frozenset(DRAFT_CONTENT_FIELDS) - frozenset(HogFlowSerializer.Meta.read_only_fields)
+# The rate limit stays editable because it only paces the sends, while the rest decides what they are.
+API_SENDS_CODE_OWNED_FIELDS = frozenset(DRAFT_CONTENT_FIELDS) - {"email_sending_rate_limit"}
 
 
 class HogFlowVersionMetricsRequestSerializer(AppMetricsRequestSerializer):
@@ -4178,7 +4197,7 @@ class HogFlowVersionMetricsRequestSerializer(AppMetricsRequestSerializer):
             OpenApiParameter(
                 "type",
                 OpenApiTypes.STR,
-                description="Comma-separated workflow types. `loop` and `broadcast` return the workflows those surfaces own; `messaging` returns the remaining workflows with an email, SMS, or push action, and `automation` the rest.",
+                description="Comma-separated workflow types. `loop` and `broadcast` return the workflows those surfaces own, and `api_send` the hidden workflow that runs emails sent through the email API; `messaging` returns the remaining workflows with an email, SMS, or push action, and `automation` the rest.",
             ),
             OpenApiParameter(
                 "origin_product",

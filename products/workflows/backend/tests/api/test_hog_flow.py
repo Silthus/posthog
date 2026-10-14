@@ -46,6 +46,7 @@ from products.workflows.backend.presentation.views.hog_flow import (
     _should_validate_strictly,
     mint_audience_confirm_token,
 )
+from products.workflows.backend.services.api_sends_flow import get_or_create_api_sends_flow
 
 _AUDIENCE_CONDITION = {"key": "email", "type": "person", "value": "x", "operator": "icontains"}
 _WIDER_AUDIENCE_CONDITION = {"key": "email", "type": "person", "value": "@", "operator": "icontains"}
@@ -398,6 +399,7 @@ class TestHogFlowAPI(APIBaseTest):
             ("automation", "automation", {"Webhook sync"}),
             ("loop", "loop", {"Loop with email action"}),
             ("broadcast", "broadcast", {"Announcement"}),
+            ("api_send", "api_send", {"API sends"}),
             # What the workflows page sends: everything except the surfaces with their own page.
             (
                 "everything_but_broadcasts",
@@ -448,6 +450,7 @@ class TestHogFlowAPI(APIBaseTest):
             origin_product="broadcasts",
             actions=[{"id": "a", "type": "function_email", "config": {}}],
         )
+        get_or_create_api_sends_flow(self.team)
 
         response = self.client.get(f"/api/projects/{self.team.id}/hog_flows?type={workflow_type}")
         assert response.status_code == 200, response.json()
@@ -625,6 +628,80 @@ class TestHogFlowAPI(APIBaseTest):
         assert response.status_code == 400, response.json()
         assert response.json()["attr"] == "origin_product"
         assert not HogFlow.objects.filter(team=self.team, origin_product="api_sends").exists()
+
+    @parameterized.expand(
+        [
+            (
+                "graph_through_update",
+                "",
+                lambda actions: {"actions": [actions[0], actions[2]], "edges": []},
+            ),
+            (
+                "trigger_through_update",
+                "",
+                lambda actions: {
+                    "actions": [
+                        {**actions[0], "config": {"type": "event", "filters": {"events": [{"id": "$pageview"}]}}},
+                        *actions[1:],
+                    ]
+                },
+            ),
+            (
+                "variables_through_update",
+                "",
+                lambda actions: {"variables": [{"key": "email", "type": "string", "label": "Email", "default": ""}]},
+            ),
+            (
+                "step_through_graph_endpoint",
+                "/graph",
+                lambda actions: {
+                    "operations": [
+                        {
+                            "op": "update_action",
+                            "id": actions[1]["id"],
+                            "patch": {"config": {"message_category_type": "marketing"}},
+                        }
+                    ]
+                },
+            ),
+            (
+                "email_through_email_step_endpoint",
+                "/actions/api_send_email/email",
+                lambda actions: {"email_patch": {"subject": "Changed subject"}},
+            ),
+        ]
+    )
+    def test_api_sends_flow_refuses_graph_edits(self, _name, path, build_body):
+        flow = get_or_create_api_sends_flow(self.team)
+
+        response = self.client.patch(
+            f"/api/projects/{self.team.id}/hog_flows/{flow.id}{path}", build_body(flow.actions), format="json"
+        )
+
+        assert response.status_code == 400, response.json()
+        assert "PostHog manages" in response.json()["detail"]
+        stored = HogFlow.objects.get(pk=flow.pk)
+        assert (stored.actions, stored.edges, stored.trigger, stored.draft) == (
+            flow.actions,
+            flow.edges,
+            flow.trigger,
+            None,
+        )
+
+    def test_api_sends_flow_can_be_renamed_and_resume_email_sending(self):
+        flow = get_or_create_api_sends_flow(self.team)
+        HogFlow.objects.filter(pk=flow.pk).update(
+            email_sending_paused_at=timezone.now(), email_sending_paused_reason="Hard bounces reached 5%."
+        )
+
+        rename = self.client.patch(f"/api/projects/{self.team.id}/hog_flows/{flow.id}", {"name": "Product emails"})
+        resume = self.client.post(f"/api/projects/{self.team.id}/hog_flows/{flow.id}/resume_email_sending")
+
+        assert rename.status_code == 200, rename.json()
+        assert resume.status_code == 200, resume.json()
+        stored = HogFlow.objects.get(pk=flow.pk)
+        assert stored.name == "Product emails"
+        assert stored.email_sending_paused_at is None
 
     def test_mcp_list_is_metadata_only_and_hides_action_secrets(self):
         # A webhook action whose headers carry a bearer token — the kind of credential-like value

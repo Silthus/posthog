@@ -124456,7 +124456,7 @@ export namespace Schemas {
      */
     trigger?: string;
     /**
-     * Comma-separated workflow types. `loop` and `broadcast` return the workflows those surfaces own; `messaging` returns the remaining workflows with an email, SMS, or push action, and `automation` the rest.
+     * Comma-separated workflow types. `loop` and `broadcast` return the workflows those surfaces own, and `api_send` the hidden workflow that runs emails sent through the email API; `messaging` returns the remaining workflows with an email, SMS, or push action, and `automation` the rest.
      */
     type?: string;
     updated_at?: string;
