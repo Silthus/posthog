@@ -210,7 +210,9 @@ describe('WorkflowsScene', () => {
         await waitFor(() => expect(shownRowNames()).toEqual(['Welcome series', 'Renewal reminder', 'Spring promo']))
         expect(router.values.searchParams).toEqual({ q: 'type:messaging' })
         expect(workflowsLogic.findMounted()).toBeNull()
-        expect(oldListRequests).toEqual([])
+        // The setup reminder banner asks for one messaging workflow to decide whether it shows.
+        const oldListPageRequests = oldListRequests.filter((url) => new URL(url).searchParams.get('limit') !== '1')
+        expect(oldListPageRequests).toEqual([])
     })
 
     it('keeps the old list when the flag is off and never asks for the v2 list', async () => {
