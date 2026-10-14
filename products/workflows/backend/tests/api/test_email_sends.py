@@ -208,7 +208,7 @@ class TestEmailSendsAPI(APIBaseTest):
         _flag: MagicMock,
     ) -> None:
         url = f"/api/projects/{self.team.id}/emails/"
-        headers: dict[str, str] = {}
+        headers: dict[str, Any] = {}
         match credential:
             case "personal_key":
                 headers["HTTP_AUTHORIZATION"] = (
