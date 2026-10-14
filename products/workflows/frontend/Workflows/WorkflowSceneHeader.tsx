@@ -26,7 +26,14 @@ import { workflowLogic } from './workflowLogic'
 import { WorkflowSceneLogicProps } from './workflowSceneLogic'
 import { WorkflowScenePanel } from './WorkflowScenePanel'
 
-export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.Element => {
+type WorkflowSceneHeaderProps = WorkflowSceneLogicProps & {
+    headerInWorkflowBar?: boolean
+}
+
+export const WorkflowSceneHeader = ({
+    headerInWorkflowBar = false,
+    ...props
+}: WorkflowSceneHeaderProps = {}): JSX.Element => {
     const { workflow, hasUnsavedChanges, hasStagedDraft, workflowLoading, workflowUserAccessLevel } =
         useValues(workflowLogic)
     const { setWorkflowValue, duplicate, archiveWorkflow, publishDraft, discardDraft } = useActions(workflowLogic)
@@ -148,22 +155,26 @@ export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.El
                     </SceneMenuBarMenu>
                 </SceneMenuBar>
             )}
-            <SceneTitleSection
-                name={workflow?.name}
-                description={workflow?.description}
-                resourceType={{ type: 'workflows' }}
-                canEdit
-                onNameChange={(name) => setWorkflowValue('name', name)}
-                onDescriptionChange={(description) => setWorkflowValue('description', description)}
-                isLoading={workflowLoading && !workflow}
-                renameDebounceMs={200}
-                actions={
-                    <>
-                        <WorkflowActions {...props} />
-                        {isSavedWorkflow && <WorkflowScenePanel {...props} />}
-                    </>
-                }
-            />
+            {headerInWorkflowBar ? (
+                isSavedWorkflow && <WorkflowScenePanel {...props} />
+            ) : (
+                <SceneTitleSection
+                    name={workflow?.name}
+                    description={workflow?.description}
+                    resourceType={{ type: 'workflows' }}
+                    canEdit
+                    onNameChange={(name) => setWorkflowValue('name', name)}
+                    onDescriptionChange={(description) => setWorkflowValue('description', description)}
+                    isLoading={workflowLoading && !workflow}
+                    renameDebounceMs={200}
+                    actions={
+                        <>
+                            <WorkflowActions {...props} />
+                            {isSavedWorkflow && <WorkflowScenePanel {...props} />}
+                        </>
+                    }
+                />
+            )}
         </>
     )
 }
