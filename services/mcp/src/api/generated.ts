@@ -333,6 +333,7 @@ export namespace Schemas {
      * * `error_tracking` - error_tracking
      * * `evaluation` - evaluation
      * * `element` - element
+     * * `email_send` - email_send
      * * `event_definition` - event_definition
      * * `experiment` - experiment
      * * `experiment_holdout` - experiment_holdout
@@ -454,6 +455,7 @@ export namespace Schemas {
       ErrorTracking: 'error_tracking',
       Evaluation: 'evaluation',
       Element: 'element',
+      EmailSend: 'email_send',
       EventDefinition: 'event_definition',
       Experiment: 'experiment',
       ExperimentHoldout: 'experiment_holdout',
@@ -575,6 +577,7 @@ export namespace Schemas {
        * * `error_tracking` - error_tracking
        * * `evaluation` - evaluation
        * * `element` - element
+       * * `email_send` - email_send
        * * `event_definition` - event_definition
        * * `experiment` - experiment
        * * `experiment_holdout` - experiment_holdout
@@ -819,6 +822,7 @@ export namespace Schemas {
        * * `error_tracking` - error_tracking
        * * `evaluation` - evaluation
        * * `element` - element
+       * * `email_send` - email_send
        * * `event_definition` - event_definition
        * * `experiment` - experiment
        * * `experiment_holdout` - experiment_holdout
@@ -1226,6 +1230,7 @@ export namespace Schemas {
        * * `error_tracking` - error_tracking
        * * `evaluation` - evaluation
        * * `element` - element
+       * * `email_send` - email_send
        * * `event_definition` - event_definition
        * * `experiment` - experiment
        * * `experiment_holdout` - experiment_holdout
@@ -39106,6 +39111,60 @@ export namespace Schemas {
       source_id: string;
     }
 
+    export interface EmailSendError {
+      /** Error class: validation_error, authentication_error, throttled_error or server_error. */
+      type: string;
+      /** Stable error code to branch on. The docs page has a section for each code. */
+      code: string;
+      /** What happened, why, and how to fix it. */
+      detail: string;
+      /**
+         * The request field the error is about, if any.
+         * @nullable
+         */
+      attr: string | null;
+      /** Link to the docs section for this error code. */
+      docs_url: string;
+    }
+
+    export interface EmailSendRequest {
+      /** The one recipient, as `name@example.com` or `Name <name@example.com>`. A list must hold exactly one address. */
+      to: string | string[];
+      /**
+         * Subject line. One line, sent exactly as written.
+         * @maxLength 998
+         */
+      subject: string;
+      /** HTML body. Send `html`, `text`, or both. */
+      html?: string;
+      /** Plain-text body. Without `html`, the HTML body is this text, escaped, with line breaks kept. */
+      text?: string;
+      /** Reply-to address, or a list of them. */
+      replyTo?: string | string[];
+      /** Cc address, or a list of them. */
+      cc?: string | string[];
+      /** Bcc address, or a list of them. */
+      bcc?: string | string[];
+      /**
+         * Distinct ID of the person the email goes to. Delivery events, such as opened and clicked, land on this person.
+         * @maxLength 400
+         * @nullable
+         */
+      distinctId?: string | null;
+      /**
+         * Sender, as `name@example.com` or `Name <name@example.com>`, on a verified sender domain of the project. Leave it out to send from the project's default sender.
+         * @nullable
+         */
+      from?: string | null;
+    }
+
+    export interface EmailSendResponse {
+      /** ID of the send. The API sends workflow's logs list each send by this ID. */
+      id: string;
+      /** Link to the API sends workflow in PostHog, where this send shows up. */
+      url: string;
+    }
+
     /**
      * How much workflow email this project may send, and how much of that it has used.
      */
@@ -65735,6 +65794,7 @@ export namespace Schemas {
        * * `error_tracking` - error_tracking
        * * `evaluation` - evaluation
        * * `element` - element
+       * * `email_send` - email_send
        * * `event_definition` - event_definition
        * * `experiment` - experiment
        * * `experiment_holdout` - experiment_holdout

@@ -9,6 +9,58 @@
  */
 import * as zod from 'zod'
 
+/**
+ * Send one transactional email from a verified sender of the project. Needs a project secret API key with the email_send:write scope. The email is accepted once it is queued; delivery happens after the response. Every error carries a stable code and a docs_url.
+ * @summary Send an email
+ */
+export const emailsCreateBodySubjectMax = 998
+
+export const emailsCreateBodyHtmlDefault = ``
+export const emailsCreateBodyTextDefault = ``
+export const emailsCreateBodyReplyToDefault = []
+export const emailsCreateBodyCcDefault = []
+export const emailsCreateBodyBccDefault = []
+export const emailsCreateBodyDistinctIdMax = 400
+
+export const EmailsCreateBody = /* @__PURE__ */ zod.object({
+    to: zod
+        .union([zod.string(), zod.array(zod.string())])
+        .describe(
+            'The one recipient, as `name@example.com` or `Name <name@example.com>`. A list must hold exactly one address.'
+        ),
+    subject: zod.string().max(emailsCreateBodySubjectMax).describe('Subject line. One line, sent exactly as written.'),
+    html: zod.string().default(emailsCreateBodyHtmlDefault).describe('HTML body. Send `html`, `text`, or both.'),
+    text: zod
+        .string()
+        .default(emailsCreateBodyTextDefault)
+        .describe('Plain-text body. Without `html`, the HTML body is this text, escaped, with line breaks kept.'),
+    replyTo: zod
+        .union([zod.string(), zod.array(zod.string())])
+        .default(emailsCreateBodyReplyToDefault)
+        .describe('Reply-to address, or a list of them.'),
+    cc: zod
+        .union([zod.string(), zod.array(zod.string())])
+        .default(emailsCreateBodyCcDefault)
+        .describe('Cc address, or a list of them.'),
+    bcc: zod
+        .union([zod.string(), zod.array(zod.string())])
+        .default(emailsCreateBodyBccDefault)
+        .describe('Bcc address, or a list of them.'),
+    distinctId: zod
+        .string()
+        .max(emailsCreateBodyDistinctIdMax)
+        .nullish()
+        .describe(
+            'Distinct ID of the person the email goes to. Delivery events, such as opened and clicked, land on this person.'
+        ),
+    from: zod
+        .string()
+        .nullish()
+        .describe(
+            "Sender, as `name@example.com` or `Name <name@example.com>`, on a verified sender domain of the project. Leave it out to send from the project's default sender."
+        ),
+})
+
 export const hogFlowTemplatesCreateBodyNameMax = 400
 
 export const hogFlowTemplatesCreateBodyImageUrlMax = 8201

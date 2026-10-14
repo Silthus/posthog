@@ -130,3 +130,7 @@ SES_ISP_DIMENSIONS: list[str] = [
     "Gmx",
     "Tencent",
 ]
+
+# The most cc and bcc addresses one email API send may name together. SES allows 50 recipients per
+# message, and every send already has its one to address.
+EMAIL_API_MAX_CC_BCC_RECIPIENTS: int = get_from_env("EMAIL_API_MAX_CC_BCC_RECIPIENTS", 49, type_cast=int)

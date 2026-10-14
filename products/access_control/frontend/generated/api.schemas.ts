@@ -80,6 +80,7 @@ export const ResolvedAccessSourceSubjectEnumApi = {
  * * `error_tracking` - error_tracking
  * * `evaluation` - evaluation
  * * `element` - element
+ * * `email_send` - email_send
  * * `event_definition` - event_definition
  * * `experiment` - experiment
  * * `experiment_holdout` - experiment_holdout
@@ -200,6 +201,7 @@ export const ScopeObjectEnumApi = {
     ErrorTracking: 'error_tracking',
     Evaluation: 'evaluation',
     Element: 'element',
+    EmailSend: 'email_send',
     EventDefinition: 'event_definition',
     Experiment: 'experiment',
     ExperimentHoldout: 'experiment_holdout',
@@ -343,6 +345,7 @@ export interface ProjectAccessSourceApi {
      * * `error_tracking` - error_tracking
      * * `evaluation` - evaluation
      * * `element` - element
+     * * `email_send` - email_send
      * * `event_definition` - event_definition
      * * `experiment` - experiment
      * * `experiment_holdout` - experiment_holdout
@@ -506,6 +509,7 @@ export interface AccessControlObjectRuleApi {
      * * `error_tracking` - error_tracking
      * * `evaluation` - evaluation
      * * `element` - element
+     * * `email_send` - email_send
      * * `event_definition` - event_definition
      * * `experiment` - experiment
      * * `experiment_holdout` - experiment_holdout
@@ -894,6 +898,7 @@ export interface AccessControlObjectRuleResourceApi {
      * * `error_tracking` - error_tracking
      * * `evaluation` - evaluation
      * * `element` - element
+     * * `email_send` - email_send
      * * `event_definition` - event_definition
      * * `experiment` - experiment
      * * `experiment_holdout` - experiment_holdout
@@ -1179,6 +1184,7 @@ export interface ResolvedAccessApi {
      * * `error_tracking` - error_tracking
      * * `evaluation` - evaluation
      * * `element` - element
+     * * `email_send` - email_send
      * * `event_definition` - event_definition
      * * `experiment` - experiment
      * * `experiment_holdout` - experiment_holdout

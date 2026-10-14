@@ -15,6 +15,8 @@ import type {
     BlastRadiusRequestApi,
     EmailDraftApi,
     EmailDraftRequestApi,
+    EmailSendRequestApi,
+    EmailSendResponseApi,
     EmailSendingSuspensionStatusApi,
     HogFlowApi,
     HogFlowBatchJobApi,
@@ -103,6 +105,27 @@ export const internalHogFlowsProcessDueSchedulesCreate = async (options?: Reques
     return apiMutator<void>(getInternalHogFlowsProcessDueSchedulesCreateUrl(), {
         ...options,
         method: 'POST',
+    })
+}
+
+export const getEmailsCreateUrl = (projectId: string) => {
+    return `/api/projects/${projectId}/emails/`
+}
+
+/**
+ * Send one transactional email from a verified sender of the project. Needs a project secret API key with the email_send:write scope. The email is accepted once it is queued; delivery happens after the response. Every error carries a stable code and a docs_url.
+ * @summary Send an email
+ */
+export const emailsCreate = async (
+    projectId: string,
+    emailSendRequestApi: EmailSendRequestApi,
+    options?: RequestInit
+): Promise<EmailSendResponseApi> => {
+    return apiMutator<EmailSendResponseApi>(getEmailsCreateUrl(projectId), {
+        ...options,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        body: JSON.stringify(emailSendRequestApi),
     })
 }
 

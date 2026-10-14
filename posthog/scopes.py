@@ -57,6 +57,7 @@ APIScopeObject = Literal[
     "error_tracking",
     "evaluation",
     "element",
+    "email_send",
     "event_definition",
     "experiment",
     "experiment_holdout",
@@ -232,6 +233,9 @@ OAUTH_HIDDEN_SCOPE_OBJECTS: frozenset[APIScopeObject] = frozenset(
         # `is_staff`. Distinct from the public `batch_import` object on purpose: that one is
         # OAuth-advertised, and a customer-grantable scope must never name a staff surface.
         "batch_import_support",
+        # Sending email through the email API, behind a flag. Only project secret API keys send,
+        # so OAuth clients and the personal API key picker never offer it.
+        "email_send",
     }
 )
 
@@ -271,6 +275,8 @@ PROJECT_SECRET_API_KEY_ALLOWED_API_SCOPE_ACTION: list[tuple[APIScopeObject, APIS
     # Both are needed together; every other replay_scanner and session_recording route stays PSAK-denied.
     ("replay_scanner", "write"),
     ("session_recording", "read"),
+    # Sending email through POST /emails/, a server-to-server call. The endpoint refuses every other credential.
+    ("email_send", "write"),
 ]
 
 # Server-side scope assignment string-set constants (see RFC: server-side scope
