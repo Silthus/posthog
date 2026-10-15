@@ -37,6 +37,7 @@ from products.cdp.backend.templates.hog_function_template import sync_template_t
 from products.cohorts.backend.models.cohort import Cohort, CohortType
 from products.skills.backend.models.skills import LLMSkill
 from products.tasks.backend.facade.contracts import WorkflowLastRunDTO
+from products.tasks.backend.facade.workflow_tasks import MAX_OUTPUT_FIELD_DESCRIPTION_LENGTH
 from products.workflows.backend.facade.writes import update_workflow
 from products.workflows.backend.models.hog_flow.hog_flow import SUPPORTED_ACTION_TYPES, HogFlow
 from products.workflows.backend.models.hog_flow_batch_job.hog_flow_batch_job import HogFlowBatchJob
@@ -1267,6 +1268,15 @@ class TestHogFlowAPI(APIBaseTest):
             ("empty_string", ""),
             ("dict_without_key", {"result_path": "r"}),
             ("list_with_invalid_entry", ["a", 42]),
+            ("description_not_a_string", {"key": "verdict", "result_path": "output.verdict", "description": 42}),
+            (
+                "description_too_long",
+                {
+                    "key": "verdict",
+                    "result_path": "output.verdict",
+                    "description": "x" * (MAX_OUTPUT_FIELD_DESCRIPTION_LENGTH + 1),
+                },
+            ),
         ]
     )
     def test_output_variable_invalid_shapes_rejected(self, _name, sent):
