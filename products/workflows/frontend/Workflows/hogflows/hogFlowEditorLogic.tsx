@@ -20,7 +20,9 @@ import type { DragEvent, RefObject } from 'react'
 import { lemonToast } from '@posthog/lemon-ui'
 
 import { AppMetricsTotalsRequest, loadAppMetricsTotals } from 'lib/components/AppMetrics/appMetricsLogic'
+import { FEATURE_FLAGS } from 'lib/constants'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
+import { FeatureFlagsSet, featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { trackedActionToUrl } from 'lib/logic/scenes/trackedActionToUrl'
 import { uuid } from 'lib/utils/dom'
 import { objectsEqual, reconcileById } from 'lib/utils/objects'
@@ -185,6 +187,10 @@ export const HOG_FLOW_EDITOR_MODES = ['build', 'variables', 'test', 'metrics', '
 export type HogFlowEditorMode = (typeof HOG_FLOW_EDITOR_MODES)[number]
 export const HOG_FLOW_EDITOR_DEFAULT_PANEL_WIDTH = 592
 export type HogFlowEditorLayout = 'simple' | 'advanced'
+
+export type HogFlowEditorAnalyticsLayout = 'list' | 'graph'
+
+const EDIT_EVENT_THROTTLE_MS = 10_000
 export type HogFlowEditorActionMetrics = {
     actionId: string
     succeeded: number
@@ -212,12 +218,14 @@ export interface hogFlowEditorLogicValues {
     categoriesLoading: boolean // optOutCategoriesLogic
     currentTeam: TeamPublicType | TeamType | null // teamLogic
     edgesByActionId: Record<string, HogFlowEdge[]> // workflowLogic
+    featureFlags: FeatureFlagsSet // featureFlagLogic
     hogFunctionTemplatesById: Record<string, HogFunctionTemplateType> // workflowLogic
     workflow: HogFlow // workflowLogic
     actionMetricsById: Record<string, HogFlowEditorActionMetrics> | null
     actionMetricsByIdLoading: boolean
     animatingEdgePair: string | null
     dropzoneNodes: DropzoneNode[]
+    analyticsEditorLayout: HogFlowEditorAnalyticsLayout
     edges: HogFlowActionEdge[]
     editorLayout: HogFlowEditorLayout
     highlightedDropzoneNodeId: string | null
@@ -1975,6 +1983,16 @@ export interface hogFlowEditorLogicActions {
               }
         payload?: any
     } // workflowLogic
+    autoSaveWorkflow: () => {
+        value: true
+    } // workflowLogic
+    saveWorkflowSuccess: (
+        originalWorkflow: HogFlow,
+        payload?: HogFlow
+    ) => {
+        originalWorkflow: HogFlow
+        payload?: HogFlow
+    } // workflowLogic
     setWorkflowAction: (
         actionId: string,
         action: HogFlowAction
@@ -2159,6 +2177,10 @@ export interface hogFlowEditorLogicActions {
 export interface hogFlowEditorLogicMeta {
     key: string
     __keaTypeGenInternalSelectorTypes: {
+        analyticsEditorLayout: (
+            editorLayout: HogFlowEditorLayout,
+            featureFlags: FeatureFlagsSet
+        ) => HogFlowEditorAnalyticsLayout
         nodesById: (nodes: HogFlowActionNode[]) => Record<string, HogFlowActionNode>
         selectedNode: (
             nodes: HogFlowActionNode[],
@@ -2192,6 +2214,8 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
         values: [
             workflowLogic,
             ['workflow', 'edgesByActionId', 'hogFunctionTemplatesById'],
+            featureFlagLogic,
+            ['featureFlags'],
             optOutCategoriesLogic(),
             ['categories', 'categoriesLoading'],
             integrationsLogic,
@@ -2201,7 +2225,14 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
         ],
         actions: [
             workflowLogic,
-            ['setWorkflowInfo', 'setWorkflowAction', 'setWorkflowActionEdges', 'loadWorkflowSuccess'],
+            [
+                'setWorkflowInfo',
+                'setWorkflowAction',
+                'setWorkflowActionEdges',
+                'loadWorkflowSuccess',
+                'autoSaveWorkflow',
+                'saveWorkflowSuccess',
+            ],
             optOutCategoriesLogic(),
             ['loadCategories'],
         ],
@@ -2383,6 +2414,11 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
     })),
 
     selectors({
+        analyticsEditorLayout: [
+            (s) => [s.editorLayout, s.featureFlags],
+            (editorLayout: HogFlowEditorLayout, featureFlags: FeatureFlagsSet): HogFlowEditorAnalyticsLayout =>
+                featureFlags[FEATURE_FLAGS.WORKFLOWS_LINEAR_VIEW] && editorLayout === 'simple' ? 'list' : 'graph',
+        ],
         nodesById: [
             (s) => [s.nodes],
             (nodes: HogFlowActionNode[]): Record<string, HogFlowActionNode> => {
@@ -2502,9 +2538,27 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
             },
         ],
     })),
-    listeners(({ values, actions }) => {
+    listeners(({ values, actions, cache }) => {
         let animationTimeout: ReturnType<typeof setTimeout> | null = null
         return {
+            autoSaveWorkflow: () => {
+                // Config edits fire per keystroke, so only the first edit in each window is reported.
+                const now = Date.now()
+                if (now - (cache.lastEditEventAt ?? 0) < EDIT_EVENT_THROTTLE_MS) {
+                    return
+                }
+                cache.lastEditEventAt = now
+                posthog.capture('workflow edited', {
+                    workflow_id: values.workflow.id,
+                    editor_layout: values.analyticsEditorLayout,
+                })
+            },
+            saveWorkflowSuccess: () => {
+                posthog.capture('workflow saved', {
+                    workflow_id: values.workflow.id,
+                    editor_layout: values.analyticsEditorLayout,
+                })
+            },
             onEdgesChange: ({ edges }) => {
                 actions.setEdges(applyEdgeChanges(edges, values.edges))
             },

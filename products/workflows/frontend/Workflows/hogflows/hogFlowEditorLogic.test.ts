@@ -1,4 +1,8 @@
 import { expectLogic } from 'kea-test-utils'
+import posthog from 'posthog-js'
+
+import { FEATURE_FLAGS } from 'lib/constants'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 
 import { initKeaTests } from '~/test/init'
 
@@ -742,6 +746,53 @@ describe('hogFlowEditorLogic', () => {
             logic.actions.setEdges(edges)
             logic.actions.showDropzones()
             expect(branchJoinDropzones()).toEqual(expected)
+        })
+    })
+    describe('editor layout analytics', () => {
+        let captureSpy: jest.SpyInstance
+
+        const setListViewFlag = (isOn: boolean): void => {
+            const flagKey = FEATURE_FLAGS.WORKFLOWS_LINEAR_VIEW
+            featureFlagLogic.actions.setFeatureFlags(isOn ? [flagKey] : [], isOn ? { [flagKey]: true } : {})
+        }
+
+        beforeEach(() => {
+            jest.useFakeTimers().setSystemTime(new Date('2026-01-01T00:00:00Z'))
+            captureSpy = jest.spyOn(posthog, 'capture').mockImplementation()
+        })
+
+        afterEach(() => {
+            captureSpy.mockRestore()
+            jest.useRealTimers()
+        })
+
+        it.each([
+            { name: 'list when the list view flag is on', flagOn: true, layout: 'simple', expected: 'list' },
+            { name: 'graph after switching to graph view', flagOn: true, layout: 'advanced', expected: 'graph' },
+            { name: 'graph when the list view flag is off', flagOn: false, layout: 'simple', expected: 'graph' },
+        ] as const)('reports $name and throttles edit events', ({ flagOn, layout, expected }) => {
+            setListViewFlag(flagOn)
+            logic.actions.setEditorLayout(layout)
+
+            logic.actions.autoSaveWorkflow()
+            logic.actions.autoSaveWorkflow()
+            jest.setSystemTime(new Date('2026-01-01T00:00:11Z'))
+            logic.actions.autoSaveWorkflow()
+
+            const editCalls = captureSpy.mock.calls.filter(([event]) => event === 'workflow edited')
+            expect(editCalls).toHaveLength(2)
+            expect(editCalls[0][1]).toMatchObject({ editor_layout: expected })
+        })
+
+        it('reports the editor layout on save', () => {
+            setListViewFlag(true)
+
+            logic.actions.saveWorkflowSuccess(logic.values.workflow)
+
+            expect(captureSpy).toHaveBeenCalledWith(
+                'workflow saved',
+                expect.objectContaining({ editor_layout: 'list' })
+            )
         })
     })
 })
