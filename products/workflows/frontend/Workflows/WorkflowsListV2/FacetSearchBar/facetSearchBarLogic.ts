@@ -173,8 +173,9 @@ function filterNamedBy(draft: FacetDraft, { facets, items, value, matchesText }:
         return null
     }
     const facet = findFacet(facets, draft.facetKey)!
-    const typed = draft.partial.toLowerCase()
-    const namesOf = (v: string): string[] => [v.toLowerCase(), formatFacetValue(facet, v).toLowerCase()]
+    const comparable = (text: string): string => (facet.caseSensitive ? text : text.toLowerCase())
+    const typed = comparable(draft.partial)
+    const namesOf = (v: string): string[] => [comparable(v), comparable(formatFacetValue(facet, v))]
     const values = createFacetCounter(
         items,
         { filters: value.filters, text: draft.rest },

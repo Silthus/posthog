@@ -52,6 +52,7 @@ export function buildWorkflowListFacets(
     return [
         {
             key: 'in',
+            aliases: ['path', 'folder'],
             label: 'in',
             description: 'Project folder',
             caseSensitive: true,

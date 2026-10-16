@@ -639,7 +639,7 @@ export const workflowFoldersLogic = kea<workflowFoldersLogicType>([
                         if (item.kind === 'workflow') {
                             return facet.getValues(item.row)
                         }
-                        if (facet.key === 'type') {
+                        if (facet.key === 'kind') {
                             return ['email-template']
                         }
                         if (facet.key !== 'in') {

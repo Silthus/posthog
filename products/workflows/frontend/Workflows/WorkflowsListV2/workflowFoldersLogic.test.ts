@@ -235,12 +235,12 @@ describe('workflowFoldersLogic', () => {
         expect(logic.values.folderPaths).toContain('Empty')
     })
 
-    it('matches email templates when either of two type pills applies', async () => {
+    it('matches email templates when either of two kind pills applies', async () => {
         await expectLogic(logic).toFinishAllListeners()
         logic.actions.setValue({
             filters: [
-                { facet: 'type', value: 'messaging', negated: false },
-                { facet: 'type', value: 'email-template', negated: false },
+                { facet: 'kind', value: 'messaging', negated: false },
+                { facet: 'kind', value: 'email-template', negated: false },
             ],
             text: '',
         })
@@ -446,14 +446,14 @@ describe('workflowFoldersLogic', () => {
         unmountMoveTo()
     })
 
-    it('offers email templates in the type facet and scopes their matches', async () => {
+    it('offers email templates in the kind facet and scopes their matches', async () => {
         await expectLogic(logic).toFinishAllListeners()
-        const type = logic.values.folderFacets.find((facet) => facet.key === 'type')!
+        const type = logic.values.folderFacets.find((facet) => facet.key === 'kind')!
         expect(logic.values.folderSearchItems.flatMap(type.getValues)).toContain('email-template')
         logic.actions.setValue({
             filters: [
                 { facet: 'in', value: 'Billing', negated: false },
-                { facet: 'type', value: 'email-template', negated: false },
+                { facet: 'kind', value: 'email-template', negated: false },
             ],
             text: '',
         })

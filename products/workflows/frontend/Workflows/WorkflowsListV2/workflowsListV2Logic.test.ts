@@ -109,34 +109,38 @@ describe('workflowsListV2Logic', () => {
         expect(logic.values.value.filters).toEqual([])
     })
 
-    it('opens a project folder and restores its in scope from the URL', async () => {
-        logic = workflowsListV2Logic()
-        logic.mount()
-        await expectLogic(logic).toFinishAllListeners()
-        const unmountTree = projectTreeDataLogic.mount()
-        const workflow = FIXTURE_WORKFLOWS[0]
-        projectTreeDataLogic.actions.loadFolderSuccess(
-            'Campaigns',
-            [{ id: 'file-welcome', path: 'Campaigns/Welcome', type: 'hog_flow', ref: workflow.id }],
-            false,
-            1
-        )
-        projectTreeDataLogic.actions.loadFolderSuccess(
-            'campaigns',
-            [{ id: 'file-renewal', path: 'campaigns/Renewal', type: 'hog_flow', ref: FIXTURE_WORKFLOWS[1].id }],
-            false,
-            1
-        )
-        logic.actions.setValue({ filters: [{ facet: 'in', value: 'Campaigns', negated: false }], text: '' })
-        expect(shownIds(logic)).toEqual([workflow.id])
-        unmountTree()
-        await expectLogic(logic).toFinishAllListeners()
-        expect(router.values.searchParams.q).toBe('in:Campaigns')
-        logic.actions.clearFilters()
-        router.actions.push(urls.workflows(), { q: 'in:Campaigns' })
-        await expectLogic(logic).toFinishAllListeners()
-        expect(shownIds(logic)).toEqual([workflow.id])
-    })
+    it.each(['in', 'path', 'folder', 'Folder'])(
+        'opens a project folder and restores it from %s: in the URL',
+        async (key) => {
+            logic = workflowsListV2Logic()
+            logic.mount()
+            await expectLogic(logic).toFinishAllListeners()
+            const unmountTree = projectTreeDataLogic.mount()
+            const workflow = FIXTURE_WORKFLOWS[0]
+            projectTreeDataLogic.actions.loadFolderSuccess(
+                'Campaigns',
+                [{ id: 'file-welcome', path: 'Campaigns/Welcome', type: 'hog_flow', ref: workflow.id }],
+                false,
+                1
+            )
+            projectTreeDataLogic.actions.loadFolderSuccess(
+                'campaigns',
+                [{ id: 'file-renewal', path: 'campaigns/Renewal', type: 'hog_flow', ref: FIXTURE_WORKFLOWS[1].id }],
+                false,
+                1
+            )
+            logic.actions.setValue({ filters: [{ facet: 'in', value: 'Campaigns', negated: false }], text: '' })
+            expect(shownIds(logic)).toEqual([workflow.id])
+            unmountTree()
+            await expectLogic(logic).toFinishAllListeners()
+            expect(router.values.searchParams.q).toBe('in:Campaigns')
+            logic.actions.clearFilters()
+            router.actions.push(urls.workflows(), { q: `${key}:Campaigns` })
+            await expectLogic(logic).toFinishAllListeners()
+            expect(shownIds(logic)).toEqual([workflow.id])
+            expect(router.values.searchParams.q).toBe('in:Campaigns')
+        }
+    )
 
     it('does not treat a shortcut-only folder as the workflow folder', async () => {
         logic = workflowsListV2Logic()
