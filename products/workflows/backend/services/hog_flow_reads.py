@@ -8,7 +8,7 @@ from uuid import UUID
 
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Count, F, OuterRef, Q, QuerySet, Subquery, Value
+from django.db.models import Count, F, OuterRef, Q, QuerySet, Subquery, Value, Window
 from django.db.models.expressions import RawSQL
 from django.db.models.functions import Coalesce
 
@@ -25,9 +25,12 @@ from products.workflows.backend.facade.contracts import (
     WorkflowNotFound,
     WorkflowPage,
     WorkflowRef,
+    WorkflowSearchMatch,
+    WorkflowSearchPage,
 )
 from products.workflows.backend.facade.enums import HogFlowScheduleStatus, HogFlowType, WorkflowProposalStatus
 from products.workflows.backend.models.hog_flow.hog_flow import MESSAGING_ACTION_TYPES, HogFlow
+from products.workflows.backend.models.hog_flow.search_text import search_pattern
 from products.workflows.backend.models.hog_flow_schedule import HogFlowSchedule
 from products.workflows.backend.models.workflow_proposal import WorkflowProposal
 from products.workflows.backend.services.batch_jobs import hog_flow_ids_with_broadcast_status
@@ -328,6 +331,74 @@ def _list_queryset(
     if queryset.filter(by_name).exists():
         return queryset.filter(by_name)
     return queryset.filter(Q(_action_content_matches(regex_pattern)))
+
+
+_SEARCH_ROW_FIELDS: Final[tuple[str, ...]] = (
+    "id",
+    "name",
+    "description",
+    "version",
+    "status",
+    "origin_product",
+    "created_at",
+    "created_by",
+    "updated_at",
+    "team",
+)
+
+
+def search_hog_flows(queryset: QuerySet[HogFlow], term: str, *, with_steps: bool) -> QuerySet[HogFlow]:
+    pattern = search_pattern(term)
+    # Rows saved before `search_text` existed stay null until the rebuild command runs, so they match the source
+    # columns the way the list search does.
+    by_stored_text = Q(search_text__iregex=pattern)
+    by_source_columns = Q(search_text__isnull=True) & (
+        Q(name__iregex=pattern) | Q(description__iregex=pattern) | Q(_action_content_matches(pattern))
+    )
+    fields = (*_SEARCH_ROW_FIELDS, "actions", "draft") if with_steps else _SEARCH_ROW_FIELDS
+    return queryset.filter(by_stored_text | by_source_columns).select_related("created_by").only(*fields)
+
+
+def search_workflows(
+    *,
+    team_id: int,
+    query: WorkflowListQuery,
+    term: str,
+    with_steps: bool,
+    user_access_control: "UserAccessControl | None",
+    include_all_if_admin: bool,
+    offset: int,
+    limit: int,
+) -> WorkflowSearchPage:
+    queryset = search_hog_flows(
+        _list_queryset(team_id, query, user_access_control, include_all_if_admin), term, with_steps=with_steps
+    )
+    flows = list(queryset.annotate(_search_total=Window(Count("id")))[offset : offset + limit])
+    count = flows[0]._search_total if flows else queryset.count() if offset else 0
+    if user_access_control is not None and flows:
+        user_access_control.preload_object_access_controls(cast("list[models.Model]", flows))
+    return WorkflowSearchPage(
+        count=count,
+        results=[
+            WorkflowSearchMatch(
+                id=flow.id,
+                name=flow.name,
+                description=flow.description,
+                version=flow.version,
+                status=flow.status,
+                origin_product=flow.origin_product,
+                created_at=flow.created_at,
+                created_by=flow.created_by,
+                updated_at=flow.updated_at,
+                user_access_level=user_access_control.get_user_access_level(flow)
+                if user_access_control is not None
+                else None,
+                actions=flow.actions if with_steps else None,
+                draft=flow.draft if with_steps else None,
+            )
+            for flow in flows
+        ],
+    )
 
 
 def _to_workflow(

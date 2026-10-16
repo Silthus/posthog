@@ -925,6 +925,21 @@ function buildPathExpr(
 
 type ResponseFilterHelper = 'pickResponseFields' | 'omitResponseFields' | 'stripNullFields'
 
+function enrichUrlResponseField(config: ToolConfig): string | undefined {
+    if (!config.enrich_url) {
+        return undefined
+    }
+    const { field, source } = parseEnrichUrl(config.enrich_url)
+    return source === 'result' ? field : undefined
+}
+
+function selectedFieldsWithLinkFieldExpr(config: ToolConfig): string {
+    const linkField = enrichUrlResponseField(config)
+    return linkField && config.response?.include?.includes(linkField)
+        ? `[...params.fields, '${linkField}']`
+        : 'params.fields'
+}
+
 function buildResponseFilter(config: ToolConfig): {
     code: string
     helperImports: ResponseFilterHelper[]
@@ -941,7 +956,7 @@ function buildResponseFilter(config: ToolConfig): {
         // `include`, so an absent `fields` falls back to the full allowlist (an empty array is
         // rejected at validation) and no separate intersection is needed.
         const pathsExpr = config.response.selectable
-            ? `params.fields?.length ? params.fields : [${paths}]`
+            ? `params.fields?.length ? ${selectedFieldsWithLinkFieldExpr(config)} : [${paths}]`
             : `[${paths}]`
         helperImports.push('pickResponseFields')
         shapeItem = (target) => `pickResponseFields(${target}, ${pathsExpr})`
