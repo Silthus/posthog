@@ -184,7 +184,7 @@ export function FacetSearchBar<TItem>({
                     className="h-auto min-h-10 flex-wrap gap-y-1 py-1 [&_.LemonInput__input]:min-w-40"
                     value={input}
                     placeholder={value.filters.length ? 'Add a filter or search' : placeholder}
-                    onChange={setInput}
+                    onChange={(next) => setInput(next, inputRef.current?.selectionEnd ?? next.length)}
                     onKeyDown={onKeyDown}
                     onFocus={() => setOpen(true)}
                     onBlur={() => setOpen(false)}

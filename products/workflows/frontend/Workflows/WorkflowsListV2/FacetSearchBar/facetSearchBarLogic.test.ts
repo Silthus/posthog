@@ -39,6 +39,7 @@ const FACETS: FacetDefinition<Item>[] = [
         description: 'Found by typing',
         order: 3,
         getValues: () => ['one'],
+        resolveValue: (value) => (value === 'first' ? 'one' : value),
     },
     {
         key: 'health',
@@ -154,6 +155,12 @@ describe('facetSearchBarLogic', () => {
             'status:dra',
             'Draft is already a filter',
         ],
+        [
+            'a value a pill already resolves to',
+            [{ facet: 'stageName', value: 'first', negated: false }],
+            'stageName:o',
+            'one is already a filter',
+        ],
         ['a facet whose values have not loaded', [], 'health:', 'Health shows once run metrics load'],
     ])('says why no values are left for %s', (_, filters, input, label) => {
         mountWith({ filters, text: '' })
@@ -182,11 +189,23 @@ describe('facetSearchBarLogic', () => {
         ['a value another value starts with', [], 'sends:deals'],
         ['a value in an open quote', [], 'sends:"Deals for you'],
         ['a value that is already a pill', [{ facet: 'status', value: 'draft', negated: false }], 'status:draft'],
+        [
+            'a value a pill already resolves to',
+            [{ facet: 'stageName', value: 'first', negated: false }],
+            'stageName:one',
+        ],
     ])('waits for Space on %s', (_, filters, typed) => {
         mountWith({ filters, text: '' })
         logic.actions.setInput(typed)
         expect(onChange).not.toHaveBeenCalled()
         expect(logic.values.input).toEqual(typed)
+    })
+
+    it('waits for Space on a value whose caret is not at the end', () => {
+        mountWith({ filters: [], text: '' })
+        logic.actions.setInput('status:active', 'status:act'.length)
+        expect(onChange).not.toHaveBeenCalled()
+        expect(logic.values.input).toEqual('status:active')
     })
 
     it.each([

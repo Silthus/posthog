@@ -12,6 +12,7 @@ import {
     findFacet,
     formatFacetValue,
     normalizeFacetValue,
+    resolvedFacetFilterKey,
     sortFacets,
 } from './facetQuery'
 
@@ -186,8 +187,8 @@ function filterNamedBy(draft: FacetDraft, { facets, items, value, matchesText }:
         return null
     }
     const filter = { facet: facet.key, value: named[0], negated: draft.negated }
-    const key = facetFilterKey(filter)
-    return value.filters.some((existing) => facetFilterKey(existing) === key) ? null : filter
+    const key = resolvedFacetFilterKey(facets, filter)
+    return value.filters.some((existing) => resolvedFacetFilterKey(facets, existing) === key) ? null : filter
 }
 
 function buildSuggestions(
@@ -195,7 +196,7 @@ function buildSuggestions(
     draft: FacetDraft | null,
     { facets, items, value, matchesText }: SuggestionSource
 ): FacetSuggestion[] {
-    const chosen = new Set(value.filters.map(facetFilterKey))
+    const chosen = new Set(value.filters.map((filter) => resolvedFacetFilterKey(facets, filter)))
 
     if (draft) {
         const facet = findFacet(facets, draft.facetKey)!
@@ -211,7 +212,7 @@ function buildSuggestions(
             return !partial || label.includes(partial) || v.toLowerCase().includes(partial)
         })
         const isChosen = (v: string): boolean =>
-            chosen.has(facetFilterKey({ facet: facet.key, value: v, negated: draft.negated }))
+            chosen.has(resolvedFacetFilterKey(facets, { facet: facet.key, value: v, negated: draft.negated }))
         const rows = matching
             .filter(({ value: v }) => !isChosen(v))
             .slice(0, MAX_VALUE_SUGGESTIONS)
@@ -281,7 +282,7 @@ function buildSuggestions(
                     continue
                 }
                 const filter = { facet: facet.key, value: v, negated }
-                if (chosen.has(facetFilterKey(filter))) {
+                if (chosen.has(resolvedFacetFilterKey(facets, filter))) {
                     continue
                 }
                 matches.push({
@@ -340,8 +341,12 @@ export interface facetSearchBarLogicActions {
     setHighlightedIndex: (index: number) => {
         index: number
     }
-    setInput: (input: string) => {
+    setInput: (
+        input: string,
+        caret?: number
+    ) => {
         input: string
+        caret: number
     }
     setOpen: (open: boolean) => {
         open: boolean
@@ -388,7 +393,7 @@ export const facetSearchBarLogic = kea<facetSearchBarLogicType>([
     key((props) => props.id),
     path((key) => ['products', 'workflows', 'frontend', 'facetSearchBarLogic', key]),
     actions({
-        setInput: (input: string) => ({ input }),
+        setInput: (input: string, caret?: number) => ({ input, caret: caret ?? input.length }),
         syncInput: (input: string) => ({ input }),
         setOpen: (open: boolean) => ({ open }),
         setComposing: (composing: boolean) => ({ composing }),
@@ -404,7 +409,8 @@ export const facetSearchBarLogic = kea<facetSearchBarLogicType>([
         input: [
             (props.value?.text ?? '') as string,
             {
-                setInput: (state, { input }) => (isRedundantSpace(state, input) ? state : input),
+                setInput: (state, { input, caret }) =>
+                    caret === input.length && isRedundantSpace(state, input) ? state : input,
                 syncInput: (_, { input }) => input,
             },
         ],
@@ -496,13 +502,16 @@ export const facetSearchBarLogic = kea<facetSearchBarLogicType>([
         ],
     }),
     listeners(({ actions, values, props }) => ({
-        setInput: () => {
+        setInput: ({ caret }) => {
             const input = values.input
-            // Typed or pasted `facet:value` tokens become pills as soon as they are complete.
-            const { filters, remaining } = extractCompleteFilters(input, props.facets)
-            const known = new Set(props.value.filters.map(facetFilterKey))
+            // Typed or pasted `facet:value` tokens become pills as soon as they are complete. An input method may
+            // still change the value, so during a composition nothing becomes a pill until it ends.
+            const { filters, remaining } = values.composing
+                ? { filters: [], remaining: input }
+                : extractCompleteFilters(input, props.facets)
+            const known = new Set(props.value.filters.map((filter) => resolvedFacetFilterKey(props.facets, filter)))
             const added = filters.filter((filter) => {
-                const key = facetFilterKey(filter)
+                const key = resolvedFacetFilterKey(props.facets, filter)
                 // A pasted query can repeat a token; each pill is added once.
                 if (known.has(key)) {
                     return false
@@ -512,9 +521,9 @@ export const facetSearchBarLogic = kea<facetSearchBarLogicType>([
             })
             let nextInput = filters.length ? remaining : input
             let draft = parseFacetDraft(nextInput, props.facets)
-            // An input method may still change the value, so it commits once the composition ends.
+            // A value corrected in its middle is still being typed.
             const named =
-                draft && !values.composing
+                draft && !values.composing && caret >= input.length
                     ? filterNamedBy(draft, {
                           ...props,
                           value: { ...props.value, filters: [...props.value.filters, ...added] },

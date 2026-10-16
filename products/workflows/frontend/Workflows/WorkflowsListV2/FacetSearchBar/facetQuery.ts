@@ -68,6 +68,12 @@ export function facetFilterKey(filter: FacetFilter): string {
     return `${filter.negated ? '-' : ''}${filter.facet}:${filter.value.toLowerCase()}`
 }
 
+/** Compares the values the pills match, so a creator name and that creator's uuid are the same pill. */
+export function resolvedFacetFilterKey<TItem>(facets: FacetDefinition<TItem>[], filter: FacetFilter): string {
+    const facet = findFacet(facets, filter.facet)
+    return facetFilterKey({ ...filter, value: facet?.resolveValue?.(filter.value) ?? filter.value })
+}
+
 const TOKEN = /(-?)([\w-]+):(?:"((?:[^"\\]|\\.)*)"|(\S*))/y
 
 /** Reads `facet:value`, `-facet:value` and `facet:"quoted value"`. Unknown facets, empty values and repeats are dropped. */

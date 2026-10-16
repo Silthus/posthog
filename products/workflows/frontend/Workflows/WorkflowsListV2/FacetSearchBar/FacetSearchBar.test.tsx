@@ -177,16 +177,29 @@ describe('FacetSearchBar', () => {
         expect(input()).toHaveValue('status:')
     })
 
-    it('commits a value that names one option only once the IME composition ends', async () => {
+    it.each([
+        ['a value that names one option', 'status:active', 'status:active'],
+        ['a value and a space', 'status:draft ', 'status:draft'],
+        ['a closed quoted value', 'sends:"Your trial ends"', 'sends:"Your trial ends"'],
+    ])('adds %s as a pill only once the IME composition ends', async (_, composed, query) => {
         const user = setup()
         await user.click(input())
         fireEvent.compositionStart(input())
-        fireEvent.change(input(), { target: { value: 'status:active' } })
+        fireEvent.change(input(), { target: { value: composed } })
         expect(shown('query')).toEqual('')
+        expect(input()).toHaveValue(composed)
 
         fireEvent.compositionEnd(input())
-        expect(shown('query')).toEqual('status:active')
+        expect(shown('query')).toEqual(query)
         expect(input()).toHaveValue('')
+    })
+
+    it('leaves a value corrected in its middle as a draft', async () => {
+        const user = setup()
+        await user.click(input())
+        await user.keyboard('status:actiive{ArrowLeft}{ArrowLeft}{ArrowLeft}{Backspace}')
+        expect(input()).toHaveValue('status:active')
+        expect(shown('query')).toEqual('')
     })
 
     it('keeps focus in the input when the popover chrome is pressed', async () => {
