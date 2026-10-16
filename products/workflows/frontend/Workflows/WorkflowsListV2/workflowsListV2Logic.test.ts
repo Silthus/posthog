@@ -79,12 +79,12 @@ describe('workflowsListV2Logic', () => {
     it.each(['messaging', 'automation'])('opens templates for the active %s facet', (type) => {
         logic = workflowsListV2Logic()
         logic.mount()
-        logic.actions.setValue({ filters: [{ facet: 'type', value: type, negated: false }], text: '' })
+        logic.actions.setValue({ filters: [{ facet: 'kind', value: type, negated: false }], text: '' })
         expect(logic.values.templateTypeFilter).toBe(type)
         logic.actions.setValue({
             filters: [
-                { facet: 'type', value: 'messaging', negated: false },
-                { facet: 'type', value: 'automation', negated: false },
+                { facet: 'kind', value: 'messaging', negated: false },
+                { facet: 'kind', value: 'automation', negated: false },
             ],
             text: '',
         })
@@ -106,15 +106,24 @@ describe('workflowsListV2Logic', () => {
         ])
     })
 
-    it('reads created-by:me as the signed-in user', async () => {
+    it.each([
+        ['createdBy:me', 'createdBy:me'],
+        ['CREATEDBY:me', 'createdBy:me'],
+        ['created-by:me', 'createdBy:me'],
+        ['by:me', 'createdBy:me'],
+        ['Author:me', 'createdBy:me'],
+        ['user:me', 'createdBy:me'],
+        ['type:messaging createdBy:me', 'createdBy:me'],
+    ])('reads %s as the signed-in user and links to %s', async (q, canonical) => {
         userLogic.actions.loadUserSuccess({ ...MOCK_DEFAULT_USER, uuid: FIXTURE_USERS.lin.uuid, first_name: 'Lin' })
-        router.actions.push(urls.workflows(), { q: 'created-by:me' })
+        router.actions.push(urls.workflows(), { q })
         logic = workflowsListV2Logic()
         logic.mount()
 
         await expectLogic(logic).toDispatchActions(['loadWorkflowsSuccess'])
         expect(shownIds(logic)).toEqual(['wf-sync'])
-        expect(logic.values.facets.find((facet) => facet.key === 'created-by')?.formatValue?.('me')).toEqual('Lin')
+        expect(router.values.searchParams).toEqual({ q: canonical })
+        expect(logic.values.facets.find((facet) => facet.key === 'createdBy')?.formatValue?.('me')).toEqual('Lin')
     })
 
     it('follows next links for as many pages as the project has', async () => {
@@ -142,7 +151,7 @@ describe('workflowsListV2Logic', () => {
     it.each([
         ['an owner as the list shows it', 'owner:@maya', ['wf-welcome']],
         ['a health label', 'health:"No runs"', ['wf-page-two', 'wf-sync', 'wf-old-promo']],
-        ['a creator name', 'created-by:Ada', ['wf-welcome', 'wf-page-two', 'wf-renewal', 'wf-old-promo']],
+        ['a creator name', 'createdBy:Ada', ['wf-welcome', 'wf-page-two', 'wf-renewal', 'wf-old-promo']],
     ])('matches a link with %s', async (_, q, ids) => {
         router.actions.push(urls.workflows(), { q })
         logic = workflowsListV2Logic()
@@ -165,7 +174,7 @@ describe('workflowsListV2Logic', () => {
                 ],
             },
         })
-        router.actions.push(urls.workflows(), { q: 'created-by:Ada' })
+        router.actions.push(urls.workflows(), { q: 'createdBy:Ada' })
         logic = workflowsListV2Logic()
         logic.mount()
 
@@ -321,7 +330,7 @@ describe('workflowsListV2Logic', () => {
         logic.mount()
 
         expect(router.values.searchParams).toEqual({
-            q: `status:active type:loop trigger:schedule created-by:${FIXTURE_USERS.lin.uuid}`,
+            q: `status:active kind:loop trigger:schedule createdBy:${FIXTURE_USERS.lin.uuid}`,
             text: 'renew',
             other: 'kept',
         })
@@ -329,9 +338,9 @@ describe('workflowsListV2Logic', () => {
         expect(logic.values.value).toEqual({
             filters: [
                 { facet: 'status', value: 'active', negated: false },
-                { facet: 'type', value: 'loop', negated: false },
+                { facet: 'kind', value: 'loop', negated: false },
                 { facet: 'trigger', value: 'schedule', negated: false },
-                { facet: 'created-by', value: FIXTURE_USERS.lin.uuid, negated: false },
+                { facet: 'createdBy', value: FIXTURE_USERS.lin.uuid, negated: false },
             ],
             text: 'renew',
         })

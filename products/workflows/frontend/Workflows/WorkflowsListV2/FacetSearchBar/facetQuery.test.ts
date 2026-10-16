@@ -23,7 +23,7 @@ const FACETS: FacetDefinition<Item>[] = [
         description: 'Email subject',
         getValues: (item) => item.subjects,
     },
-    { key: 'from', label: 'From', description: 'Sender', getValues: (item) => item.senders },
+    { key: 'sentBy', aliases: ['from'], label: 'Sent by', description: 'Sender', getValues: (item) => item.senders },
 ]
 
 const ITEMS: Item[] = [
@@ -48,6 +48,8 @@ describe('facetQuery', () => {
         ['nope:x status:draft', [{ facet: 'status', value: 'draft', negated: false }]],
         ['status: status:""', []],
         ['STATUS:active', [{ facet: 'status', value: 'active', negated: false }]],
+        ['sentby:b@example.com', [{ facet: 'sentBy', value: 'b@example.com', negated: false }]],
+        ['-FROM:b@example.com', [{ facet: 'sentBy', value: 'b@example.com', negated: true }]],
     ])('parses %s', (query, filters) => {
         expect(parseFacetQuery(query, FACETS)).toEqual(filters)
     })
@@ -57,15 +59,18 @@ describe('facetQuery', () => {
         '-status:archived status:draft',
         'sends:"Your trial ends"',
         'sends:"Say \\"hi\\""',
-        'from:a@example.com -sends:Deals',
+        'sentBy:a@example.com -sends:Deals',
     ])('round-trips %s', (query) => {
         const filters = parseFacetQuery(query, FACETS)
         expect(serializeFacetQuery(filters)).toEqual(query)
         expect(parseFacetQuery(serializeFacetQuery(filters), FACETS)).toEqual(filters)
     })
 
-    it('serializes an alias to the canonical key', () => {
-        expect(serializeFacetQuery(parseFacetQuery('subject:Deals', FACETS))).toEqual('sends:Deals')
+    it.each([
+        ['subject:Deals', 'sends:Deals'],
+        ['From:a@example.com SENTBY:b@example.com', 'sentBy:a@example.com sentBy:b@example.com'],
+    ])('serializes %s with the canonical key', (query, serialized) => {
+        expect(serializeFacetQuery(parseFacetQuery(query, FACETS))).toEqual(serialized)
     })
 
     it.each<[string, FacetSearchValue, string[]]>([
@@ -86,7 +91,7 @@ describe('facetQuery', () => {
             {
                 filters: [
                     { facet: 'status', value: 'draft', negated: false },
-                    { facet: 'from', value: 'b@example.com', negated: false },
+                    { facet: 'sentBy', value: 'b@example.com', negated: false },
                 ],
                 text: '',
             },
@@ -94,7 +99,7 @@ describe('facetQuery', () => {
         ],
         [
             'negation excludes, and an item with no values passes it',
-            { filters: [{ facet: 'from', value: 'a@example.com', negated: true }], text: '' },
+            { filters: [{ facet: 'sentBy', value: 'a@example.com', negated: true }], text: '' },
             ['Renewal', 'Sync'],
         ],
         [
@@ -120,7 +125,7 @@ describe('facetQuery', () => {
         const value: FacetSearchValue = {
             filters: [
                 { facet: 'status', value: 'draft', negated: false },
-                { facet: 'from', value: 'b@example.com', negated: false },
+                { facet: 'sentBy', value: 'b@example.com', negated: false },
             ],
             text: '',
         }
@@ -128,7 +133,7 @@ describe('facetQuery', () => {
             { value: 'archived', count: 1 },
             { value: 'draft', count: 1 },
         ])
-        expect(countFacetValues(ITEMS, 'from', value, FACETS, matchesText)).toEqual([
+        expect(countFacetValues(ITEMS, 'sentBy', value, FACETS, matchesText)).toEqual([
             { value: 'b@example.com', count: 1 },
         ])
         expect(countFacetValues(ITEMS, 'status', { filters: [], text: 'e' }, FACETS, matchesText)).toEqual([

@@ -137,7 +137,7 @@ export const LoadError: Story = {
 
 export const NarrowScene: Story = {
     parameters: {
-        pageUrl: workflowsUrl({ q: 'type:messaging -status:archived', text: 'reminder' }),
+        pageUrl: workflowsUrl({ q: 'kind:messaging -status:archived', text: 'reminder' }),
         // The navigation collapses at this width, which leaves a 520px scene.
         testOptions: { viewport: { width: 552, height: 900 } },
     },

@@ -75,7 +75,7 @@ describe('WorkflowsScene', () => {
     it('keeps guided automation setup on an empty automation view', async () => {
         workflows = FIXTURE_WORKFLOWS.filter((workflow) => workflow.type === 'messaging')
         featureFlagLogic.actions.setFeatureFlags([], { [FEATURE_FLAGS.WORKFLOWS_LIST_V2]: true })
-        router.actions.push(urls.workflows(), { q: 'type:automation' })
+        router.actions.push(urls.workflows(), { q: 'kind:automation' })
         render(
             <Provider>
                 <WorkflowsScene />
@@ -165,7 +165,7 @@ describe('WorkflowsScene', () => {
     })
 
     it.each([
-        ['the type facet', true, { q: 'type:messaging' }],
+        ['the kind facet', true, { q: 'kind:messaging' }],
         ['the old list type tab', false, { type: 'messaging' }],
     ])('opens the template chooser on %s', async (_, listV2, searchParams) => {
         window.POSTHOG_APP_CONTEXT = {
@@ -208,7 +208,7 @@ describe('WorkflowsScene', () => {
         )
 
         await waitFor(() => expect(shownRowNames()).toEqual(['Welcome series', 'Renewal reminder', 'Spring promo']))
-        expect(router.values.searchParams).toEqual({ q: 'type:messaging' })
+        expect(router.values.searchParams).toEqual({ q: 'kind:messaging' })
         expect(workflowsLogic.findMounted()).toBeNull()
         // The setup reminder banner asks for one messaging workflow to decide whether it shows.
         const oldListPageRequests = oldListRequests.filter((url) => new URL(url).searchParams.get('limit') !== '1')

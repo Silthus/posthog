@@ -72,9 +72,9 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const LEGACY_PARAMS = ['status', 'type', 'trigger_type', 'created_by', 'search', 'page'] as const
 const LEGACY_VALUES: Record<string, (value: string) => boolean> = {
     status: (value) => value in STATUS_LABELS,
-    type: (value) => value in TYPE_LABELS,
+    kind: (value) => value in TYPE_LABELS,
     trigger: (value) => value in TRIGGER_LABELS,
-    'created-by': (value) => UUID_PATTERN.test(value),
+    createdBy: (value) => UUID_PATTERN.test(value),
 }
 
 // Parsing only needs facet keys and aliases, which don't depend on the loaded rows.
@@ -146,9 +146,9 @@ function legacyParamsToValue(searchParams: Record<string, unknown>): FacetSearch
     const filters: FacetFilter[] = []
     const pairs: [string, string][] = [
         ['status', 'status'],
-        ['type', 'type'],
+        ['type', 'kind'],
         ['trigger_type', 'trigger'],
-        ['created_by', 'created-by'],
+        ['created_by', 'createdBy'],
     ]
     for (const [param, facet] of pairs) {
         const raw = searchParams[param]
@@ -481,14 +481,14 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
             (value: FacetSearchValue): boolean =>
                 !value.text &&
                 value.filters.length === 1 &&
-                value.filters[0].facet === 'type' &&
+                value.filters[0].facet === 'kind' &&
                 value.filters[0].value === 'automation' &&
                 !value.filters[0].negated,
         ],
         templateTypeFilter: [
             (s) => [s.value],
             (value: FacetSearchValue): WorkflowTemplateTypeFilter => {
-                const types = value.filters.filter((filter) => filter.facet === 'type')
+                const types = value.filters.filter((filter) => filter.facet === 'kind')
                 const positive = [...new Set(types.filter((filter) => !filter.negated).map((filter) => filter.value))]
                 const type = positive.length === 1 ? positive[0] : 'all'
                 return (type === 'messaging' || type === 'automation') &&
@@ -507,7 +507,7 @@ export const workflowsListV2Logic = kea<workflowsListV2LogicType>([
             (s) => [s.rows, s.user],
             (rows: WorkflowListRow[], user: UserType | null): FacetDefinition<WorkflowListRow>[] =>
                 buildWorkflowListFacets(rows).map((facet) =>
-                    facet.key === 'created-by'
+                    facet.key === 'createdBy'
                         ? {
                               ...facet,
                               resolveValue: (value: string): string =>

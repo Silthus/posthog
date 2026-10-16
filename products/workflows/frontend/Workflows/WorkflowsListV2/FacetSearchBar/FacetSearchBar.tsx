@@ -49,6 +49,7 @@ export function FacetSearchBar<TItem>({
     const {
         setInput,
         setOpen,
+        setComposing,
         moveHighlight,
         applySuggestion,
         applyHighlighted,
@@ -164,7 +165,11 @@ export function FacetSearchBar<TItem>({
     return (
         // The input's blur is the one close path: pressing outside moves the focus away.
         <Popover visible={open} overlay={overlay} placement="bottom-start">
-            <div className="w-full min-w-0">
+            <div
+                className="w-full min-w-0"
+                onCompositionStart={() => setComposing(true)}
+                onCompositionEnd={() => setComposing(false)}
+            >
                 <LemonInput
                     type="text"
                     fullWidth

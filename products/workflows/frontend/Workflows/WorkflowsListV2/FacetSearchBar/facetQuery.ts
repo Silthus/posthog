@@ -1,7 +1,7 @@
 export interface FacetDefinition<TItem> {
-    /** Typed before the colon, lowercase: `status`. */
+    /** Typed before the colon, in any case, and shown in suggestions and the URL: `createdBy`. */
     key: string
-    /** Other keys that resolve to this facet: `creator` for `created-by`. */
+    /** Other keys that resolve to this facet: `author` for `createdBy`. Shown nowhere. */
     aliases?: string[]
     /** Sentence case, shown in pills and suggestions: `Created by`. */
     label: string
@@ -15,6 +15,8 @@ export interface FacetDefinition<TItem> {
     resolveValue?: (value: string) => string
     /** Display form of a stored value: `active` → `Active`, a user uuid → a name. */
     formatValue?: (value: string) => string
+    /** A typed value that matches no loaded value is still worth a pill, such as a person's name. */
+    freeTextValues?: boolean
     /** Shown instead of the usual reason when no item has a value yet, such as while the values load. */
     emptyLabel?: string
     /** Listed when the input is empty. Other facets are found by typing. */
@@ -41,9 +43,13 @@ export interface FacetValueCount {
 
 export type MatchesText<TItem> = (item: TItem, text: string) => boolean
 
+export function facetNames<TItem>(facet: FacetDefinition<TItem>): string[] {
+    return [facet.key, ...(facet.aliases ?? [])].map((name) => name.toLowerCase())
+}
+
 export function findFacet<TItem>(facets: FacetDefinition<TItem>[], key: string): FacetDefinition<TItem> | undefined {
     const lowered = key.toLowerCase()
-    return facets.find((facet) => facet.key === lowered || facet.aliases?.includes(lowered))
+    return facets.find((facet) => facetNames(facet).includes(lowered))
 }
 
 export function formatFacetValue<TItem>(facet: FacetDefinition<TItem> | undefined, value: string): string {

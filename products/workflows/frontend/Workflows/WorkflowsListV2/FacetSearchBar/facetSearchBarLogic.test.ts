@@ -27,11 +27,19 @@ const FACETS: FacetDefinition<Item>[] = [
         aliases: ['subject'],
         label: 'Sends',
         description: 'Email subject',
+        freeTextValues: true,
         showOnFocus: true,
         order: 2,
         getValues: (item) => item.subjects,
     },
-    { key: 'stage', label: 'Stage', description: 'Found by typing', order: 3, getValues: () => ['one'] },
+    {
+        key: 'stageName',
+        aliases: ['phase'],
+        label: 'Stage',
+        description: 'Found by typing',
+        order: 3,
+        getValues: () => ['one'],
+    },
     {
         key: 'health',
         label: 'Health',
@@ -46,7 +54,7 @@ const ITEMS: Item[] = [
     { name: 'Welcome', status: 'active', subjects: ['Start here', 'Status update'] },
     { name: 'Renewal', status: 'draft', subjects: ['Renew now'] },
     { name: 'Sync', status: 'draft', subjects: [] },
-    { name: 'Promo', status: 'archived', subjects: ['Deals'] },
+    { name: 'Promo', status: 'archived', subjects: ['Deals', 'Deals for you'] },
 ]
 
 const matchesText = (item: Item, text: string): boolean => item.name.toLowerCase().includes(text.toLowerCase())
@@ -81,13 +89,25 @@ describe('facetSearchBarLogic', () => {
         logic.actions.setInput('sta')
         expect(logic.values.suggestions.map((s) => [s.kind, s.label, s.count])).toEqual([
             ['facet', 'status:', undefined],
-            ['facet', 'stage:', undefined],
+            ['facet', 'stageName:', undefined],
             ['search', 'Search for "sta"', undefined],
             ['value', 'Sends: Start here', 1],
             ['value', 'Sends: Status update', 1],
         ])
         expect(logic.values.title).toEqual('Search or filter')
         expect(onChange).toHaveBeenLastCalledWith({ filters: [], text: 'sta' })
+    })
+
+    it.each([
+        ['the key in another case', 'STAGEN', 'stageName:'],
+        ['an alias', 'pha', 'stageName:'],
+        ['a negated alias', '-Subj', '-sends:'],
+    ])('offers the canonical key for %s', (_, typed, key) => {
+        mountWith({ filters: [], text: '' })
+        logic.actions.setInput(typed)
+        expect(logic.values.suggestions.filter((s) => s.kind === 'facet').map((s) => [s.label, s.nextInput])).toEqual([
+            [key, key],
+        ])
     })
 
     it('lists a facet draft values with counts that ignore the facet pills, minus picked values', () => {
@@ -119,12 +139,13 @@ describe('facetSearchBarLogic', () => {
 
     it.each([
         ['a typed value nothing has', [], 'status:zzz', 'No value matches "zzz"'],
-        ['a value the search rules out', [], 'promo sends:renew', 'No value matches "renew" with your search'],
+        ['a value the search rules out', [], 'syn status:arch', 'No value matches "arch" with your search'],
+        ['a free text value nothing has', [], 'sends:zzz', 'No match for "zzz". Press Space to search anyway.'],
         [
-            'a value other pills rule out',
+            'a free text value other pills rule out',
             [{ facet: 'status', value: 'archived', negated: false }],
             'sends:renew',
-            'No value matches "renew" with your other filters',
+            'No match for "renew" with your other filters. Press Space to search anyway.',
         ],
         ['no values left for the search', [], 'zzz sends:', 'No values to pick with your search'],
         [
@@ -138,6 +159,44 @@ describe('facetSearchBarLogic', () => {
         mountWith({ filters, text: '' })
         logic.actions.setInput(input)
         expect(logic.values.suggestions.map((s) => [s.kind, s.label])).toEqual([['none', label]])
+    })
+
+    it.each([
+        ['a value', 'status:active', [{ facet: 'status', value: 'active', negated: false }], ''],
+        ['a label in another case', 'status:ARCHIVED', [{ facet: 'status', value: 'archived', negated: false }], ''],
+        [
+            'a negated value after text',
+            'wel -status:active',
+            [{ facet: 'status', value: 'active', negated: true }],
+            'wel ',
+        ],
+    ])('commits %s that names exactly one option without Space', (_, typed, filters, input) => {
+        mountWith({ filters: [], text: '' })
+        logic.actions.setInput(typed)
+        expect(onChange).toHaveBeenLastCalledWith({ filters, text: input.trim() })
+        expect(logic.values.input).toEqual(input)
+    })
+
+    it.each([
+        ['the start of several values', [], 'status:a'],
+        ['a value another value starts with', [], 'sends:deals'],
+        ['a value in an open quote', [], 'sends:"Deals for you'],
+        ['a value that is already a pill', [{ facet: 'status', value: 'draft', negated: false }], 'status:draft'],
+    ])('waits for Space on %s', (_, filters, typed) => {
+        mountWith({ filters, text: '' })
+        logic.actions.setInput(typed)
+        expect(onChange).not.toHaveBeenCalled()
+        expect(logic.values.input).toEqual(typed)
+    })
+
+    it.each([
+        ['status:active', ''],
+        ['wel status:active', 'wel '],
+    ])('drops the space typed right after %s commits', (typed, input) => {
+        mountWith({ filters: [], text: '' })
+        logic.actions.setInput(typed)
+        logic.actions.setInput(`${logic.values.input} `)
+        expect(logic.values.input).toEqual(input)
     })
 
     it('stores a typed value in the form the facet keeps', () => {

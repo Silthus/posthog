@@ -177,6 +177,18 @@ describe('FacetSearchBar', () => {
         expect(input()).toHaveValue('status:')
     })
 
+    it('commits a value that names one option only once the IME composition ends', async () => {
+        const user = setup()
+        await user.click(input())
+        fireEvent.compositionStart(input())
+        fireEvent.change(input(), { target: { value: 'status:active' } })
+        expect(shown('query')).toEqual('')
+
+        fireEvent.compositionEnd(input())
+        expect(shown('query')).toEqual('status:active')
+        expect(input()).toHaveValue('')
+    })
+
     it('keeps focus in the input when the popover chrome is pressed', async () => {
         const user = setup()
         await user.click(input())
