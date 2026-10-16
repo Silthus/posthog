@@ -57,7 +57,7 @@ describe('saved workflow view actions', () => {
                 onDelete={jest.fn()}
             />
         )
-        await userEvent.click(screen.getByRole('button', { name: 'Load the latest version of Active flows' }))
+        await userEvent.click(screen.getByLabelText('Load the latest version of Active flows'))
         expect(onReset).toHaveBeenCalledTimes(1)
     })
 })

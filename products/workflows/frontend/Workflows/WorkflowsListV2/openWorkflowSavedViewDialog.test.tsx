@@ -56,7 +56,7 @@ describe('saved workflow view dialog', () => {
         expect(remove).not.toHaveBeenCalled()
 
         act(() => openDeleteWorkflowSavedViewDialog('Active flows', remove))
-        await userEvent.click(await screen.findByRole('button', { name: 'Delete view' }))
+        await userEvent.click(await screen.findByText('Delete view'))
         await waitFor(() => expect(screen.queryByText('Delete Active flows?')).not.toBeInTheDocument())
         expect(remove).toHaveBeenCalledTimes(1)
     })
