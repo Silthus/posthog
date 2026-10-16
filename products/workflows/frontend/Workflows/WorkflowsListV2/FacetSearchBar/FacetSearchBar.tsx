@@ -168,7 +168,7 @@ export function FacetSearchBar<TItem>({
             <div
                 className="w-full min-w-0"
                 onCompositionStart={() => setComposing(true)}
-                onCompositionEnd={() => setComposing(false)}
+                onCompositionEnd={() => setComposing(false, inputRef.current?.selectionEnd ?? undefined)}
             >
                 <LemonInput
                     type="text"

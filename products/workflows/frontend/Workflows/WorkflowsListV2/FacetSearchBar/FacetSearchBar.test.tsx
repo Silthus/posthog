@@ -194,6 +194,17 @@ describe('FacetSearchBar', () => {
         expect(input()).toHaveValue('')
     })
 
+    it('leaves a value composed in its middle as a draft when the composition ends', async () => {
+        const user = setup()
+        await user.click(input())
+        fireEvent.compositionStart(input())
+        fireEvent.change(input(), { target: { value: 'status:active' } })
+        input().setSelectionRange('status:act'.length, 'status:act'.length)
+        fireEvent.compositionEnd(input())
+        expect(shown('query')).toEqual('')
+        expect(input()).toHaveValue('status:active')
+    })
+
     it('leaves a value corrected in its middle as a draft', async () => {
         const user = setup()
         await user.click(input())

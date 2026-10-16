@@ -335,8 +335,12 @@ export interface facetSearchBarLogicActions {
     removeLastFilter: () => {
         value: true
     }
-    setComposing: (composing: boolean) => {
+    setComposing: (
+        composing: boolean,
+        caret?: number
+    ) => {
         composing: boolean
+        caret: number | undefined
     }
     setHighlightedIndex: (index: number) => {
         index: number
@@ -396,7 +400,7 @@ export const facetSearchBarLogic = kea<facetSearchBarLogicType>([
         setInput: (input: string, caret?: number) => ({ input, caret: caret ?? input.length }),
         syncInput: (input: string) => ({ input }),
         setOpen: (open: boolean) => ({ open }),
-        setComposing: (composing: boolean) => ({ composing }),
+        setComposing: (composing: boolean, caret?: number) => ({ composing, caret }),
         setHighlightedIndex: (index: number) => ({ index }),
         moveHighlight: (delta: number) => ({ delta }),
         applySuggestion: (suggestion: FacetSuggestion) => ({ suggestion }),
@@ -545,9 +549,9 @@ export const facetSearchBarLogic = kea<facetSearchBarLogicType>([
                 reportFilterChange(props.id, 'added', filter, 'typed')
             }
         },
-        setComposing: ({ composing }) => {
+        setComposing: ({ composing, caret }) => {
             if (!composing) {
-                actions.setInput(values.input)
+                actions.setInput(values.input, caret)
             }
         },
         moveHighlight: ({ delta }) => {

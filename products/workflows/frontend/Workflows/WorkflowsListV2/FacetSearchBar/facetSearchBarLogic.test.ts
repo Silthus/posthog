@@ -218,6 +218,13 @@ describe('facetSearchBarLogic', () => {
         expect(logic.values.input).toEqual(input)
     })
 
+    it('drops a typed token that a pill already resolves to', () => {
+        mountWith({ filters: [{ facet: 'stageName', value: 'first', negated: false }], text: '' })
+        logic.actions.setInput('stageName:one ')
+        expect(onChange).not.toHaveBeenCalled()
+        expect(logic.values.input).toEqual('')
+    })
+
     it('stores a typed value in the form the facet keeps', () => {
         mountWith({ filters: [], text: '' })
         logic.actions.setInput('status:Draft ')
