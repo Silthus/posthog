@@ -1,8 +1,9 @@
 import type { AiFirstHandoffLogicProps } from 'scenes/max/aiFirstCreate/aiFirstHandoffLogic'
 import { projectLogic } from 'scenes/projectLogic'
+import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
 
-import { hogFlowsList } from '../generated/api'
+import { hogFlowsList, hogFlowsPartialUpdate, hogFlowsRetrieve } from '../generated/api'
 
 // pinned: MCP tool name from products/workflows/mcp/tools.yaml
 const CREATE_WORKFLOW_TOOL = 'workflows-create'
@@ -34,4 +35,23 @@ export const NEW_WORKFLOW_HANDOFF: AiFirstHandoffLogicProps = {
     eventPrefix: 'workflow ai composer',
     createdEvent: 'workflow ai composer created workflow',
     createdIdProperty: 'workflow_id',
+}
+
+export function workflowHandoffWithTags(tags: string[]): AiFirstHandoffLogicProps {
+    return {
+        ...NEW_WORKFLOW_HANDOFF,
+        ...(tags.length
+            ? {
+                  prepareCreated: async (id: string): Promise<void> => {
+                      const teamId = String(teamLogic.values.currentTeamId)
+                      const workflow = await hogFlowsRetrieve(teamId, id)
+                      await hogFlowsPartialUpdate(teamId, id, {
+                          tags: [...new Set([...(workflow.tags ?? []), ...tags])],
+                      })
+                  },
+                  notOpenedMessage:
+                      'Your workflow was created, but its inherited tags could not be saved or it could not be opened. Find it in the workflows list.',
+              }
+            : {}),
+    }
 }

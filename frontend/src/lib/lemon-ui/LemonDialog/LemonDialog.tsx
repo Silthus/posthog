@@ -194,6 +194,14 @@ export const LemonFormDialog = ({
     const { form, isFormValid, formValidationErrors } = useValues(logic)
     const { setFormValues } = useActions(logic)
     const [isLoading, setIsLoading] = useState(false)
+    const pendingSubmit = useRef<Promise<void> | null>(null)
+
+    const submitOnce = (): Promise<void> => {
+        pendingSubmit.current ??= Promise.resolve(onSubmit(form)).finally(() => {
+            pendingSubmit.current = null
+        })
+        return pendingSubmit.current
+    }
 
     const firstError = useMemo(
         () => Object.values(formValidationErrors).find((error) => Boolean(error)) as string,
@@ -206,7 +214,7 @@ export const LemonFormDialog = ({
         ...primaryButtonProps,
         htmlType: 'submit',
         // eslint-disable-next-line @typescript-eslint/no-misused-promises
-        onClick: props.shouldAwaitSubmit ? async () => await onSubmit(form) : () => void onSubmit(form),
+        onClick: props.shouldAwaitSubmit ? async () => await submitOnce() : () => void onSubmit(form),
         disabledReason: !isFormValid ? firstError : undefined,
     }
 
@@ -234,7 +242,7 @@ export const LemonFormDialog = ({
                     ? async (e: React.KeyboardEvent<HTMLFormElement>): Promise<void> => {
                           if (e.key === 'Enter' && primaryButton?.htmlType === 'submit' && isFormValid) {
                               try {
-                                  await onSubmit(form)
+                                  await submitOnce()
                               } catch (error) {
                                   // Mirror the button path: keep the dialog open on failure so the
                                   // user can correct and retry, and capture instead of leaking an

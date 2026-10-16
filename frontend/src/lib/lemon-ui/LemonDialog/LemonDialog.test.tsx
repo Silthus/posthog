@@ -85,6 +85,20 @@ describe('LemonFormDialog', () => {
         }
     })
 
+    it('sends one submit when enter and the button repeat while it is pending', async () => {
+        let resolveSubmit: () => void = () => {}
+        const onSubmit = jest.fn(() => new Promise<void>((resolve) => (resolveSubmit = resolve)))
+
+        renderDialog(onSubmit)
+        await submitViaEnter()
+        await userEvent.keyboard('{Enter}')
+        await submitViaButton()
+        resolveSubmit()
+
+        await waitForElementToBeRemoved(() => screen.queryByText('Submit'))
+        expect(onSubmit).toHaveBeenCalledTimes(1)
+    })
+
     it('closes the dialog and does not capture when the submit resolves', async () => {
         const onSubmit = jest.fn().mockResolvedValue(undefined)
 

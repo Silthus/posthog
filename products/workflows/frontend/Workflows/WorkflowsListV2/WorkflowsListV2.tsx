@@ -4,6 +4,9 @@ import { LemonButton } from '@posthog/lemon-ui'
 
 import { useOnMountEffect } from 'lib/hooks/useOnMountEffect'
 import { LemonTable } from 'lib/lemon-ui/LemonTable'
+import { toAccessControlLevel, userHasAccess } from 'lib/utils/accessControlUtils'
+
+import { AccessControlLevel, AccessControlResourceType } from '~/types'
 
 import { AutomationEmptyState } from '../../setupGuide/AutomationEmptyState'
 import { AutomationSuggestionBanner } from '../../setupGuide/AutomationSuggestionBanner'
@@ -11,6 +14,7 @@ import { MessagingSetupReminderBanner } from '../../setupGuide/MessagingSetupRem
 import { workflowLogic } from '../workflowLogic'
 import { serializeFacetQuery } from './FacetSearchBar/facetQuery'
 import { FacetSearchBar } from './FacetSearchBar/FacetSearchBar'
+import { WorkflowBulkTagsButton } from './WorkflowBulkTagsButton'
 import { buildWorkflowsListV2Columns } from './workflowsListV2Columns'
 import { workflowsListV2Logic } from './workflowsListV2Logic'
 
@@ -25,6 +29,7 @@ export function WorkflowsListV2(): JSX.Element {
         value,
         listLoaded,
         workflowsLoading,
+        emailTemplatesLoading,
         loadFailed,
         loadErrorDetail,
         shownColumns,
@@ -34,7 +39,7 @@ export function WorkflowsListV2(): JSX.Element {
         hasHealthFilter,
         metricsLoaded,
     } = useValues(workflowsListV2Logic)
-    const { setValue, loadWorkflows, loadMetrics, clearFilters } = useActions(workflowsListV2Logic)
+    const { setValue, loadWorkflows, loadEmailTemplates, loadMetrics, clearFilters } = useActions(workflowsListV2Logic)
 
     useOnMountEffect(() => {
         // Leaving the new-workflow scene keeps its logic mounted, so drop it here as WorkflowsTable does.
@@ -50,8 +55,11 @@ export function WorkflowsListV2(): JSX.Element {
                     <LemonButton
                         type="secondary"
                         size="small"
-                        loading={workflowsLoading}
-                        onClick={loadWorkflows}
+                        loading={workflowsLoading || emailTemplatesLoading}
+                        onClick={() => {
+                            loadWorkflows()
+                            loadEmailTemplates()
+                        }}
                         data-attr="workflows-list-v2-retry"
                     >
                         Retry
@@ -102,7 +110,24 @@ export function WorkflowsListV2(): JSX.Element {
                 dataSource={filteredRows}
                 // Until the server search answers, a match in an email body can still add rows.
                 loading={!listLoaded || searchPending || healthPending}
-                rowKey="id"
+                rowClassName="group"
+                rowKey={(row) => `${row.kind}:${row.id}`}
+                bulkSelection={{
+                    isRowSelectable: (row) =>
+                        userHasAccess(
+                            AccessControlResourceType.Workflow,
+                            AccessControlLevel.Editor,
+                            row.kind === 'workflow' ? toAccessControlLevel(row.workflow.user_access_level) : undefined
+                        ),
+                    rowAriaLabel: (row) => `Select ${row.name}`,
+                    noun: ['item', 'items'],
+                    renderActions: ({ selectedKeys, clearSelection }) => (
+                        <WorkflowBulkTagsButton
+                            rows={filteredRows.filter((row) => selectedKeys.includes(`${row.kind}:${row.id}`))}
+                            onSuccess={clearSelection}
+                        />
+                    ),
+                }}
                 columns={buildWorkflowsListV2Columns(shownColumns, metricsLoading)}
                 // Client-side pages stay out of the URL; `page` there is an old list param.
                 pagination={{ pageSize: PAGE_SIZE, useUrl: false }}

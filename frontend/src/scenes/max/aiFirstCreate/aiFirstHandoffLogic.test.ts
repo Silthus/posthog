@@ -172,6 +172,62 @@ describe('aiFirstHandoffLogic', () => {
         panel.unmount()
     })
 
+    it.each([
+        [false, false],
+        [true, false],
+        [true, true],
+    ])(
+        'opens the current creation while a previous preparation is pending (fails %s, same stream %s)',
+        async (fails, sameStream) => {
+            logic.unmount()
+            let completeFirst: () => void = () => {}
+            let markStarted: () => void = () => {}
+            const started = new Promise<void>((resolve) => {
+                markStarted = resolve
+            })
+            const prepared: string[] = []
+            const toast = jest.spyOn(lemonToast, 'error')
+            logic = aiFirstHandoffLogic({
+                ...handoff(),
+                prepareCreated: async (id) => {
+                    prepared.push(id)
+                    if (id === CREATED_ID) {
+                        await new Promise<void>((resolve, reject) => {
+                            completeFirst = () => (fails ? reject(new Error('Old creation failed')) : resolve())
+                            markStarted()
+                        })
+                    }
+                },
+            })
+            logic.mount()
+            const panel = runnerPanelLogic({ panelId: MAX_SIDE_PANEL_ID })
+            const eventFor = (streamKey: string, id: string): ToolStreamEvent =>
+                createEvent({
+                    streamKey,
+                    toolCallId: id,
+                    invocation: {
+                        ...createEvent({}).invocation,
+                        output: {
+                            content: [],
+                            _meta: { 'com.posthog.mcp/app_data': { id } },
+                        },
+                    },
+                })
+            panel.actions.setActiveCreation({ streamKey: 'draft-1' })
+            toolStreamEventsLogic.actions.emitToolEvent(eventFor('draft-1', CREATED_ID))
+            await started
+            const nextStream = sameStream ? 'draft-1' : 'draft-2'
+            panel.actions.setActiveCreation({ streamKey: nextStream })
+            toolStreamEventsLogic.actions.emitToolEvent(eventFor(nextStream, 'second-created'))
+            completeFirst()
+            await expectLogic(logic).toFinishAllListeners()
+            expect(prepared).toEqual([CREATED_ID, 'second-created'])
+            expect(removeProjectIdIfPresent(router.values.location.pathname)).toBe('/things/second-created')
+            expect(toast).not.toHaveBeenCalled()
+            toast.mockRestore()
+        }
+    )
+
     // The bus is global: a replay, another run's create, or a still-streaming call must not move the user.
     it.each([
         { name: 'a replayed event', overrides: { source: 'replay' as const } },

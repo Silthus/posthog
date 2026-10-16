@@ -24,12 +24,14 @@ export type BulkTaggableResource =
     | 'event_definitions'
     | 'conversations/tickets'
     | 'experiments'
+    | 'hog_flows'
 
 export interface BulkUpdateTagsFormProps {
     resource: BulkTaggableResource
     // Integer PKs for most resources; event definitions and tickets are keyed by UUID strings.
     selectedIds: ReadonlyArray<number | string>
     onSuccess?: (result: BulkUpdateTagsResult) => void
+    onSubmit?: (action: BulkTagAction, tags: string[]) => Promise<BulkUpdateTagsResult>
     /** Closes the host (popover or modal). Called on Cancel and after a successful submit. */
     onClose: () => void
     /** Hosts that supply their own title (e.g. a modal) can hide the built-in header line. */
@@ -41,6 +43,7 @@ export function BulkUpdateTagsForm({
     resource,
     selectedIds,
     onSuccess,
+    onSubmit,
     onClose,
     showHeader = true,
 }: BulkUpdateTagsFormProps): JSX.Element {
@@ -61,11 +64,13 @@ export function BulkUpdateTagsForm({
         setLoading(true)
         try {
             // nosemgrep: prefer-codegen-api -- Legacy raw API call with a hand-written URL and an unchecked response type. No generated function covers this endpoint yet. Find out why the generated client skips it (no schema, no product tag, or excluded from the spec) and fix that first.
-            const response = (await api.create(`api/projects/${currentProjectId}/${resource}/bulk_update_tags/`, {
-                ids: Array.from(selectedIds),
-                action: tagAction,
-                tags: selectedTags,
-            })) as BulkUpdateTagsResult
+            const response = onSubmit
+                ? await onSubmit(tagAction, selectedTags)
+                : ((await api.create(`api/projects/${currentProjectId}/${resource}/bulk_update_tags/`, {
+                      ids: Array.from(selectedIds),
+                      action: tagAction,
+                      tags: selectedTags,
+                  })) as BulkUpdateTagsResult)
             const { updated, skipped } = response
             if (skipped.length === 0) {
                 lemonToast.success(`Updated tags on ${updated.length} item${updated.length !== 1 ? 's' : ''}`)
@@ -80,7 +85,9 @@ export function BulkUpdateTagsForm({
         } catch (error: any) {
             // The server explains rule failures such as a project that requires tags, so show its
             // message rather than a generic one the user cannot act on.
-            lemonToast.error(error?.detail || 'Failed to update tags')
+            lemonToast.error(
+                error?.detail || (error instanceof Error ? error.message : undefined) || 'Failed to update tags'
+            )
         } finally {
             setLoading(false)
         }
