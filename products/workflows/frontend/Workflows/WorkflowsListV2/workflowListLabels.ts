@@ -24,7 +24,7 @@ export const HEALTH_TAGS: Record<WorkflowHealth, { label: string; type: 'danger'
 }
 
 export const OPTIONAL_COLUMN_TITLES = {
-    type: 'Type',
+    type: 'Kind',
     trigger: 'Trigger',
     owner: 'Owner',
     created_by: 'Created by',

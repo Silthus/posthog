@@ -143,6 +143,7 @@ describe('WorkflowsScene', () => {
             ['health', 'tags'],
             ['Name', 'Status', 'Health', 'Updated', '', ''],
         ],
+        ['shows Kind beside the name', ['type', 'owner'], ['Name', 'Kind', 'Status', 'Owner', 'Updated', '', '']],
     ])('%s', async (_, savedColumns, expectedHeaders) => {
         if (savedColumns) {
             localStorage.setItem(
