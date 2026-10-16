@@ -1,9 +1,15 @@
 from django.db import models
+from django.db.models import QuerySet
 
+from posthog.models.file_system.constants import DEFAULT_SURFACE
+from posthog.models.file_system.file_system_mixin import FileSystemSyncMixin
+from posthog.models.file_system.file_system_representation import FileSystemRepresentation
+from posthog.models.team import Team
 from posthog.models.utils import UUIDTModel
 
 
-class MessageTemplate(UUIDTModel):
+# nosemgrep: no-new-uuidt-models -- preserves existing IDs
+class MessageTemplate(FileSystemSyncMixin, UUIDTModel):
     """
     A model for storing message templates used for email and eventually other messaging channels.
     """
@@ -24,3 +30,20 @@ class MessageTemplate(UUIDTModel):
 
     def __str__(self):
         return self.name
+
+    @classmethod
+    def get_file_system_unfiled(cls, team: Team, surface: str = DEFAULT_SURFACE) -> QuerySet["MessageTemplate"]:
+        return cls._filter_unfiled_queryset(
+            cls.objects.filter(team=team, deleted=False), team, type="message_template", ref_field="id", surface=surface
+        )
+
+    def get_file_system_representation(self) -> FileSystemRepresentation:
+        return FileSystemRepresentation(
+            base_folder=self._get_assigned_folder("Unfiled/Email templates"),
+            type="message_template",
+            ref=str(self.id),
+            name=self.name or "Untitled",
+            href=f"/workflows/library/templates/{self.id}",
+            meta={"created_at": str(self.created_at), "created_by": self.created_by_id},
+            should_delete=self.deleted,
+        )

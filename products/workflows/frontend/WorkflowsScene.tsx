@@ -189,7 +189,9 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
         content: listV2 ? <WorkflowsListV2 /> : <WorkflowsTable />,
         link: urls.workflows(),
     }
-    const showsNewWorkflowButton = currentTab === 'workflows' || currentTab === 'templates'
+    const showsNewWorkflowButton =
+        (currentTab === 'workflows' || currentTab === 'templates') &&
+        !(currentTab === 'workflows' && listV2 && featureFlags[FEATURE_FLAGS.WORKFLOWS_PROJECT_FILES])
 
     if (currentTab === 'onboarding') {
         return (
@@ -241,7 +243,9 @@ export function WorkflowsScene(props: WorkflowsSceneProps = {}): JSX.Element {
                                 </LemonButton>
                             </AccessControlAction>
                         )}
-                        {currentTab === 'workflows' && listV2 && <WorkflowsListV2ColumnsMenu />}
+                        {currentTab === 'workflows' &&
+                            listV2 &&
+                            !featureFlags[FEATURE_FLAGS.WORKFLOWS_PROJECT_FILES] && <WorkflowsListV2ColumnsMenu />}
                         {currentTab !== 'workflows' && currentTab !== 'templates' && (
                             <MessagingTabActions tab={currentTab} channelsUrl={urls.workflows('channels')} />
                         )}
