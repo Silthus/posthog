@@ -55,7 +55,7 @@ class WorkflowViewStore:
     @staticmethod
     def _default_state() -> WorkflowViewState:
         return {
-            "filters": [{"facet": "created-by", "value": "me", "negated": False}],
+            "filters": [{"facet": "createdBy", "value": "me", "negated": False}],
             "text": "",
             "columns": ["owner"],
         }

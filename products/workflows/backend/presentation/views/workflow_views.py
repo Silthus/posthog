@@ -40,11 +40,11 @@ from products.workflows.backend.facade.workflow_views import (
 
 class WorkflowViewFacet(TextChoices):
     STATUS = "status"
-    TYPE = "type"
+    KIND = "kind"
     TRIGGER = "trigger"
     OWNER = "owner"
     HEALTH = "health"
-    CREATED_BY = "created-by"
+    CREATED_BY = "createdBy"
 
 
 class WorkflowViewColumn(TextChoices):
@@ -59,7 +59,7 @@ class WorkflowViewColumn(TextChoices):
 class WorkflowViewFilterSerializer(serializers.Serializer):
     facet = serializers.ChoiceField(choices=WorkflowViewFacet.choices, help_text="Supported workflow list facet.")
     value = serializers.CharField(
-        max_length=256, trim_whitespace=False, help_text="Facet value; created-by accepts me for the current viewer."
+        max_length=256, trim_whitespace=False, help_text="Facet value; createdBy accepts me for the current viewer."
     )
     negated = serializers.BooleanField(default=False, help_text="Exclude workflows matching this facet value.")
 

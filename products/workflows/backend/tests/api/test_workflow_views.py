@@ -53,7 +53,10 @@ class TestWorkflowViewAPI(APIBaseTest):
 
     def test_shared_view_can_be_created_selected_and_reloaded(self) -> None:
         saved_state = {
-            "filters": [{"facet": "created-by", "value": "me", "negated": False}],
+            "filters": [
+                {"facet": "createdBy", "value": "me", "negated": False},
+                {"facet": "kind", "value": "messaging", "negated": True},
+            ],
             "text": "welcome",
             "columns": ["created_by", "health", "owner"],
         }
@@ -157,7 +160,7 @@ class TestWorkflowViewAPI(APIBaseTest):
         self.assertEqual(default["name"], "My workflows")
         self.assertEqual(default["default_key"], "my-workflows")
         original_state = {
-            "filters": [{"facet": "created-by", "value": "me", "negated": False}],
+            "filters": [{"facet": "createdBy", "value": "me", "negated": False}],
             "text": "",
             "columns": ["owner"],
         }
@@ -320,6 +323,7 @@ class TestWorkflowViewAPI(APIBaseTest):
     @parameterized.expand(
         [
             ("unsupported_facet", {"filters": [{"facet": "folder", "value": "Finance", "negated": False}]}),
+            ("retired_type_facet", {"filters": [{"facet": "type", "value": "messaging", "negated": False}]}),
             ("unsupported_column", {"columns": ["folder"]}),
             ("invalid_filter", {"filters": [{"facet": "status", "negated": False}]}),
             ("filter_limit", {"filters": [{"facet": "status", "value": "active", "negated": False}] * 101}),
