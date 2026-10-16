@@ -22,6 +22,9 @@ const workflowsCreateEmailTemplate = (): ToolBase<
     handler: async (context: Context, params: z.infer<ReturnType<typeof WorkflowsCreateEmailTemplateSchema>>) => {
         const projectId = await context.stateManager.getProjectId()
         const body: Record<string, unknown> = {}
+        if (params.tags !== undefined) {
+            body['tags'] = params.tags
+        }
         if (params.name !== undefined) {
             body['name'] = params.name
         }
@@ -174,6 +177,9 @@ const workflowsUpdateEmailTemplate = (): ToolBase<
     handler: async (context: Context, params: z.infer<ReturnType<typeof WorkflowsUpdateEmailTemplateSchema>>) => {
         const projectId = await context.stateManager.getProjectId()
         const body: Record<string, unknown> = {}
+        if (params.tags !== undefined) {
+            body['tags'] = params.tags
+        }
         if (params.name !== undefined) {
             body['name'] = params.name
         }
@@ -202,6 +208,38 @@ const workflowsUpdateEmailTemplate = (): ToolBase<
     },
 })
 
+const WorkflowsUpdateEmailTemplateTagsSchema = () => {
+    const MessagingTemplatesBulkUpdateTagsCreateBody = orvalSchemas.MessagingTemplatesBulkUpdateTagsCreateBody()
+    return MessagingTemplatesBulkUpdateTagsCreateBody
+}
+
+const workflowsUpdateEmailTemplateTags = (): ToolBase<
+    ReturnType<typeof WorkflowsUpdateEmailTemplateTagsSchema>,
+    Schemas.BulkUpdateTagsUUIDResponse
+> => ({
+    name: 'workflows-update-email-template-tags',
+    schema: WorkflowsUpdateEmailTemplateTagsSchema(),
+    handler: async (context: Context, params: z.infer<ReturnType<typeof WorkflowsUpdateEmailTemplateTagsSchema>>) => {
+        const projectId = await context.stateManager.getProjectId()
+        const body: Record<string, unknown> = {}
+        if (params.ids !== undefined) {
+            body['ids'] = params.ids
+        }
+        if (params.action !== undefined) {
+            body['action'] = params.action
+        }
+        if (params.tags !== undefined) {
+            body['tags'] = params.tags
+        }
+        const result = await context.api.request<Schemas.BulkUpdateTagsUUIDResponse>({
+            method: 'POST',
+            path: `/api/projects/${encodeURIComponent(String(projectId))}/messaging_templates/bulk_update_tags/`,
+            body,
+        })
+        return result
+    },
+})
+
 export const GENERATED_TOOLS: Record<string, () => ToolBase<ZodObjectAny>> = {
     'workflows-create-email-template': workflowsCreateEmailTemplate,
     'workflows-get-email-template': workflowsGetEmailTemplate,
@@ -209,4 +247,5 @@ export const GENERATED_TOOLS: Record<string, () => ToolBase<ZodObjectAny>> = {
     'workflows-patch-email-template': workflowsPatchEmailTemplate,
     'workflows-show-email-template': workflowsShowEmailTemplate,
     'workflows-update-email-template': workflowsUpdateEmailTemplate,
+    'workflows-update-email-template-tags': workflowsUpdateEmailTemplateTags,
 }

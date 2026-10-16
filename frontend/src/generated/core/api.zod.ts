@@ -1183,6 +1183,18 @@ export const SessionRecordingsSharingRefreshCreateBody = /* @__PURE__ */ zod
     })
     .describe('Mixin for serializers to add user access control fields')
 
+export const tagsRenameCreateBodyNameMax = 255
+
+export const tagsRenameCreateBodyNewNameMax = 255
+
+export const TagsRenameCreateBody = /* @__PURE__ */ zod.object({
+    name: zod.string().max(tagsRenameCreateBodyNameMax).describe('Existing team tag name to rename.'),
+    new_name: zod
+        .string()
+        .max(tagsRenameCreateBodyNewNameMax)
+        .describe('New tag name. Existing names merge their references.'),
+})
+
 /**
  * Guess which filter picker tab a search belongs to, so the picker can suggest or promote it.
  * @summary Classify a filter picker search

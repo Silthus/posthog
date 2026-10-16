@@ -120,6 +120,14 @@
             "maxLength": 400,
             "type": "string"
         },
+        "tags": {
+            "description": "Tags attached to the email template.",
+            "items": {
+                "maxLength": 255,
+                "type": "string"
+            },
+            "type": "array"
+        },
         "type": {
             "description": "Message channel of the template. Currently 'email'.",
             "maxLength": 24,

@@ -38,6 +38,30 @@ describe('messageTemplateLogic', () => {
         logic?.unmount()
     })
 
+    it('preserves tags changed elsewhere when saving template content', async () => {
+        let serverTemplate = { id: 'existing-id', name: 'Welcome email', tags: ['onboarding'] }
+        useMocks({
+            get: { '/api/environments/:team_id/messaging_templates/:id/': () => [200, serverTemplate] },
+            patch: {
+                '/api/environments/:team_id/messaging_templates/:id/': async ({ request }: { request: Request }) => {
+                    const body = await request.json()
+                    serverTemplate = { ...serverTemplate, ...body }
+                    return [200, serverTemplate]
+                },
+            },
+        })
+        logic = messageTemplateLogic({ id: 'existing-id' })
+        logic.mount()
+        await expectLogic(logic).toDispatchActions(['loadTemplateSuccess'])
+        serverTemplate = { ...serverTemplate, tags: ['launch', 'onboarding'] }
+
+        await expectLogic(logic, () => {
+            logic.actions.saveTemplate({ ...logic.values.template, name: 'Updated email' })
+        }).toDispatchActions(['saveTemplateSuccess'])
+
+        expect(serverTemplate).toMatchObject({ name: 'Updated email', tags: ['launch', 'onboarding'] })
+    })
+
     describe('unsaved-changes guard', () => {
         let confirmSpy: jest.SpyInstance
 

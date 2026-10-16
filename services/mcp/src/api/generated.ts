@@ -54933,6 +54933,11 @@ export namespace Schemas {
       name?: string | null;
       /** Optional description. */
       description?: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version: number;
       /** draft (no execution), active (live), archived (disabled).
        *
@@ -55202,6 +55207,11 @@ export namespace Schemas {
       /** @nullable */
       readonly name: string | null;
       readonly description: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version: number;
       readonly status: HogFlowStateEnum;
       readonly origin_product: HogFlowOriginProductEnum | null;
@@ -55529,6 +55539,11 @@ export namespace Schemas {
       name?: string | null;
       /** Optional description. */
       description?: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version: number;
       /** draft (no execution), active (live), archived (disabled).
        *
@@ -66205,6 +66220,11 @@ export namespace Schemas {
     }
 
     export interface MessageTemplate {
+      /**
+         * Tags attached to the email template.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly id: string;
       /**
          * Human-readable template name shown in the library.
@@ -81148,6 +81168,11 @@ export namespace Schemas {
       name?: string | null;
       /** Optional description. */
       description?: string;
+      /**
+         * Tags attached to the workflow.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly version?: number;
       /** draft (no execution), active (live), archived (disabled).
        *
@@ -82101,6 +82126,11 @@ export namespace Schemas {
     }
 
     export interface PatchedMessageTemplate {
+      /**
+         * Tags attached to the email template.
+         * @items.maxLength 255
+         */
+      tags?: string[];
       readonly id?: string;
       /**
          * Human-readable template name shown in the library.
@@ -94626,6 +94656,24 @@ export namespace Schemas {
       identifier: string;
       /** Optional message category key. If omitted, the recipient is opted back in to all marketing messages. */
       category_key?: string;
+    }
+
+    export interface RenameTagRequest {
+      /**
+         * Existing team tag name to rename.
+         * @maxLength 255
+         */
+      name: string;
+      /**
+         * New tag name. Existing names merge their references.
+         * @maxLength 255
+         */
+      new_name: string;
+    }
+
+    export interface RenameTagResponse {
+      /** Normalized name of the renamed or merged tag. */
+      name: string;
     }
 
     export interface ReorderTilesRequest {

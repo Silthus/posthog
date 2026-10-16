@@ -49,6 +49,8 @@ class TaggableModel:
 
 
 TAGGABLE_MODELS: tuple[TaggableModel, ...] = (
+    TaggableModel(model_label="messaging.MessageTemplate", legacy_field="message_template", object_field=OBJECT_UUID),
+    TaggableModel(model_label="workflows.HogFlow", legacy_field="hog_flow", object_field=OBJECT_UUID),
     TaggableModel(model_label="dashboards.Dashboard", legacy_field="dashboard", object_field=OBJECT_ID),
     TaggableModel(model_label="product_analytics.Insight", legacy_field="insight", object_field=OBJECT_ID),
     TaggableModel(
