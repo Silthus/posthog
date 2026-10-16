@@ -9,6 +9,7 @@ interface Item {
     name: string
     status: string
     subjects: string[]
+    tags: string[]
 }
 
 const FACETS: FacetDefinition<Item>[] = [
@@ -49,13 +50,21 @@ const FACETS: FacetDefinition<Item>[] = [
         getValues: () => [],
         emptyLabel: 'Health shows once run metrics load',
     },
+    {
+        key: 'tag',
+        label: 'Tag',
+        description: 'Every tag must match',
+        matchAll: true,
+        order: 5,
+        getValues: (item) => item.tags,
+    },
 ]
 
 const ITEMS: Item[] = [
-    { name: 'Welcome', status: 'active', subjects: ['Start here', 'Status update'] },
-    { name: 'Renewal', status: 'draft', subjects: ['Renew now'] },
-    { name: 'Sync', status: 'draft', subjects: [] },
-    { name: 'Promo', status: 'archived', subjects: ['Deals', 'Deals for you'] },
+    { name: 'Welcome', status: 'active', subjects: ['Start here', 'Status update'], tags: ['billing', 'eu'] },
+    { name: 'Renewal', status: 'draft', subjects: ['Renew now'], tags: ['billing'] },
+    { name: 'Sync', status: 'draft', subjects: [], tags: ['eu', 'ops'] },
+    { name: 'Promo', status: 'archived', subjects: ['Deals', 'Deals for you'], tags: [] },
 ]
 
 const matchesText = (item: Item, text: string): boolean => item.name.toLowerCase().includes(text.toLowerCase())
@@ -125,6 +134,24 @@ describe('facetSearchBarLogic', () => {
 
         logic.actions.setInput('status:arch')
         expect(logic.values.suggestions.map((s) => s.label)).toEqual(['Archived'])
+    })
+
+    it('offers only tags that rows with every tag pill carry, and commits one as another pill', () => {
+        mountWith({ filters: [{ facet: 'tag', value: 'billing', negated: false }], text: '' })
+        logic.actions.setInput('tag:')
+        expect(logic.values.suggestions.map((s) => [s.kind, s.label, s.count])).toEqual([['value', 'eu', 1]])
+
+        logic.actions.setInput('tag:ops')
+        expect(onChange).not.toHaveBeenCalled()
+
+        logic.actions.setInput('tag:eu')
+        expect(onChange).toHaveBeenLastCalledWith({
+            filters: [
+                { facet: 'tag', value: 'billing', negated: false },
+                { facet: 'tag', value: 'eu', negated: false },
+            ],
+            text: '',
+        })
     })
 
     it('offers "Not" values with how many rows they hide for a negated draft', () => {

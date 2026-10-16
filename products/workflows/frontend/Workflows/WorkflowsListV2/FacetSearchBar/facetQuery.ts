@@ -23,6 +23,7 @@ export interface FacetDefinition<TItem> {
     showOnFocus?: boolean
     /** Lower sorts first. */
     order?: number
+    /** An item must have every value the facet's pills name, not one of them: several `tag:` pills. */
     matchAll?: boolean
 }
 
@@ -189,6 +190,7 @@ export function matchesFacetQuery<TItem>(
 /**
  * Returns a counter of each facet's values over the items the other pills and the text let through.
  * A facet's own pills are left out, so picking one value keeps the counts of its OR alternatives.
+ * A `matchAll` facet keeps its own pills, so it offers only values that the rows already shown carry.
  * The text is matched once per item, however many facets get counted.
  */
 export function createFacetCounter<TItem>(
@@ -207,7 +209,7 @@ export function createFacetCounter<TItem>(
         }
         const counts = new Map<string, FacetValueCount>()
         for (const item of textMatches) {
-            if (!passesGroups(item, groups, facet.key)) {
+            if (!passesGroups(item, groups, facet.matchAll ? undefined : facet.key)) {
                 continue
             }
             const itemValues = new Map(facet.getValues(item).map((itemValue) => [itemValue.toLowerCase(), itemValue]))
