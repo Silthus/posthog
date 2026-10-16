@@ -42,7 +42,7 @@ const myWorkflows: WorkflowViewApi = {
     id: '00000000-0000-4000-8000-000000000002',
     name: 'My workflows',
     default_key: 'my-workflows',
-    state: { filters: [{ facet: 'created-by', value: 'me', negated: false }], text: '', columns: ['owner'] },
+    state: { filters: [{ facet: 'createdBy', value: 'me', negated: false }], text: '', columns: ['owner'] },
 }
 
 describe('workflowsSavedViewsLogic', () => {
@@ -98,7 +98,7 @@ describe('workflowsSavedViewsLogic', () => {
     const status = (value: string, negated = false): FacetFilter => ({ facet: 'status', value, negated })
     const eventTrigger: FacetFilter = { facet: 'trigger', value: 'event', negated: false }
     const adaOwns: FacetFilter = { facet: 'owner', value: 'ada', negated: false }
-    const notMe: FacetFilter = { facet: 'created-by', value: MOCK_DEFAULT_USER.uuid, negated: true }
+    const notMe: FacetFilter = { facet: 'createdBy', value: MOCK_DEFAULT_USER.uuid, negated: true }
     const applyViewById = (id: string): void =>
         logic.actions.applyView(logic.values.views.find((view) => view.id === id)!)
 
@@ -626,7 +626,7 @@ describe('workflowsSavedViewsLogic', () => {
             { value: 'ada', count: 2 },
             { value: 'maya', count: 1 },
         ])
-        expect(countForViewer()('created-by')).toEqual([
+        expect(countForViewer()('createdBy')).toEqual([
             { value: FIXTURE_USERS.ada.uuid, count: 3 },
             { value: FIXTURE_USERS.lin.uuid, count: 1 },
         ])
@@ -639,7 +639,7 @@ describe('workflowsSavedViewsLogic', () => {
             {
                 version: 1,
                 state: {
-                    filters: [{ facet: 'created-by', value: 'me', negated: false }],
+                    filters: [{ facet: 'createdBy', value: 'me', negated: false }],
                     text: '',
                     columns: ['trigger'],
                 },

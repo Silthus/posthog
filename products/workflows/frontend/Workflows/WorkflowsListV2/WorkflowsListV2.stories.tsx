@@ -154,7 +154,7 @@ const withSavedViews: Decorator = (Story, context) => {
     const defaultView: WorkflowViewApi = {
         id: '00000000-0000-4000-8000-000000000001',
         name: 'My workflows',
-        state: { filters: [{ facet: 'created-by', value: 'me', negated: false }], text: '', columns: ['owner'] },
+        state: { filters: [{ facet: 'createdBy', value: 'me', negated: false }], text: '', columns: ['owner'] },
         version: 1,
         default_key: 'my-workflows',
         deleted: false,
@@ -170,7 +170,7 @@ const withSavedViews: Decorator = (Story, context) => {
             name: 'Renewal reminders',
             default_key: null,
             state: {
-                filters: [{ facet: 'type', value: 'messaging', negated: false }],
+                filters: [{ facet: 'kind', value: 'messaging', negated: false }],
                 text: 'renewal',
                 columns: ['owner', 'health'],
             },
@@ -181,7 +181,7 @@ const withSavedViews: Decorator = (Story, context) => {
             name: 'Automations',
             default_key: null,
             state: {
-                filters: [{ facet: 'type', value: 'automation', negated: false }],
+                filters: [{ facet: 'kind', value: 'automation', negated: false }],
                 text: '',
                 columns: ['trigger'],
             },
@@ -272,7 +272,7 @@ export const SavedViewsNarrow: Story = {
         featureFlags: [FEATURE_FLAGS.WORKFLOWS_LIST_V2, FEATURE_FLAGS.WORKFLOWS_SAVED_VIEWS],
         pageUrl: workflowsUrl({
             view: '00000000-0000-4000-8000-000000000002',
-            q: 'type:messaging',
+            q: 'kind:messaging',
             text: '',
             columns: 'owner,health',
         }),
