@@ -1,0 +1,14 @@
+focus {"focused":"message-template-change-sentence","caret":33,"length":33}
+clipboard>>>
+In `emails/welcome.html`, change the button color to green.
+
+About this file:
+- It is the PostHog email template with the key `welcome`, in the repository `github.com/example/app`, last uploaded from commit `ccf7544`.
+- The file is the whole email. The subject is the first `<title>`. The inbox preview text is the `content` of `<meta name="preheader">`. Everything in the file is the HTML that PostHog sends.
+- Personalize only with `{{ variables.<name> }}`. The values come from the `data` the app passes to `posthog.emails.send`. This file uses `{{ variables.first_name }}` and `{{ variables.confirm_url }}`.
+- Do not upload the file by hand. If the app sends it with `posthog.emails.templateFile()`, the next send uploads the changed file. If the app sends it by the key `welcome`, upload the file again after the change (PUT /api/projects/@current/messaging_templates/by_key/welcome/ or the PostHog MCP upload tool).
+- The template in PostHog: http://localhost:8010/project/997/workflows/library/templates/01a148c7-7912-0000-f7e3-d9ac5081d0c6
+<<<
+popover open after copy: 0
+sentence after reopen: In `emails/welcome.html`, change the button color to green.
+non-GET API requests: []

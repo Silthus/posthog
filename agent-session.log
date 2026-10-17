@@ -1,0 +1,5 @@
+I changed the button color in `emails/welcome.html` from blue (`#1d4ed8`) to green (`#16a34a`). The white text on the button is unchanged. I didn't open the file in a browser or send a test email.
+
+I haven't uploaded the template to PostHog. If the app sends it with `posthog.emails.templateFile()`, the next send uploads it automatically. If the app sends it by the key `welcome`, the template needs a re-upload. I can do that with a PUT to `/api/projects/@current/messaging_templates/by_key/welcome/`, but I haven't done it. Do you want me to?
+
+I haven't committed anything.

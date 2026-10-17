@@ -1,0 +1,12 @@
+diff --git a/emails/welcome.html b/emails/welcome.html
+index f1d744a..ed807da 100644
+--- a/emails/welcome.html
++++ b/emails/welcome.html
+@@ -7,6 +7,6 @@
+   <body style="font-family: sans-serif; padding: 24px">
+     <h1>Welcome, {{ variables.first_name }}</h1>
+     <p>Your Hedgebox account is ready.</p>
+-    <a href="{{ variables.confirm_url }}" style="background: #1d4ed8; color: #ffffff; padding: 12px 20px; border-radius: 6px">Confirm your address</a>
++    <a href="{{ variables.confirm_url }}" style="background: #16a34a; color: #ffffff; padding: 12px 20px; border-radius: 6px">Confirm your address</a>
+   </body>
+ </html>
