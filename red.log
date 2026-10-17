@@ -1,0 +1,112 @@
+FAIL ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts (5.647 s)
+  messageTemplateLogic
+    unsaved-changes guard
+      ✓ blocks navigation away from an unsaved new template (110 ms)
+      ✓ does not block navigation when there are no unsaved changes (92 ms)
+    submit validation feedback
+      ✓ toasts when the name is missing (81 ms)
+      ✓ toasts when the subject is missing (75 ms)
+    save failure feedback
+      ✓ 404 tells the user the template is gone from this environment (146 ms)
+      ✓ other failures fall back to a generic retry message (102 ms)
+      ✓ a code-managed template shows why the server refused the edit (101 ms)
+    edited elsewhere
+      ✓ reloads a clean form (169 ms)
+      ✓ warns instead of replacing unsaved edits (100 ms)
+      ✓ ignores its own save echo (99 ms)
+      ✓ ignores another template (95 ms)
+      ✓ ignores another resource type (98 ms)
+      ✓ parks events that arrive during a save and drops the own echo once the save lands (96 ms)
+      ✓ parks events that arrive during a save and keeps a newer external edit that the own echo arrived after (101 ms)
+      ✓ shows the banner when the reload of a clean form fails (96 ms)
+      ✓ reload from the banner replaces the unsaved edits with the server copy (96 ms)
+    starting-point picker
+      ✓ opens for a brand-new template (30 ms)
+      ✓ does not open when creating from a sent message (48 ms)
+      ✓ does not open for an existing template (66 ms)
+      ✓ does not open while the AI composer is the page (71 ms)
+      ✓ opens for an AI URL when the variant is off (78 ms)
+      ✓ opens when the URL switches to editor mode on the mounted page (77 ms)
+    code-managed source
+      ✓ a template made in PostHog has no source (115 ms)
+      ✓ a keyed template that PostHog still manages has no source (105 ms)
+      ✓ a known host links the file, the repository and the shortened commit (88 ms)
+      ✓ a branch links to the branch (88 ms)
+      ✓ an unknown host stays plain text (88 ms)
+      ✓ an upload without a source shows none (87 ms)
+    code-managed template
+      ✕ keeps its fields and never saves when they change (175 ms)
+      ✓ duplicates as a copy without its key, ownership, source or hash (99 ms)
+      ✕ becomes editable once released (49 ms)
+    make transactional
+      ✓ keeps edits made while the conversion runs (143 ms)
+
+  ● messageTemplateLogic › code-managed template › keeps its fields and never saves when they change
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 24
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "content": Object {
+    +       "email": Object {
+    +         "design": null,
+    +         "from": "",
+    +         "html": "<p>Hi</p>",
+    +         "subject": "Edited here",
+    +         "text": "Hi",
+    +         "to": "",
+    +       },
+    +       "templating": "liquid",
+    +     },
+    +     "content_hash": "v1:0000000000000000000000000000000000000000000000000000000000000000",
+    +     "description": "Sent after signup",
+    +     "id": "existing-id",
+    +     "key": "welcome",
+    +     "managed_by": "code",
+    +     "name": "Renamed here",
+    +     "source_path": "emails/welcome.html",
+    +     "source_ref": "3f2c1ab9d4e5f60718293a4b5c6d7e8f90a1b2c3",
+    +     "source_repository": "github.com/example/app",
+    +   },
+    + ]
+
+      458 |             await expectLogic(logic).toMatchValues({ templateChanged: false })
+      459 |             expect(logic.values.template.name).toBe('Welcome')
+    > 460 |             expect(patchBodies).toEqual([])
+          |                                 ^
+      461 |         })
+      462 |
+      463 |         it('duplicates as a copy without its key, ownership, source or hash', async () => {
+
+      at Object.<anonymous> (../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:460:33)
+
+  ● messageTemplateLogic › code-managed template › becomes editable once released
+
+    TypeError: logic.actions.releaseTemplate is not a function
+
+      473 |         it('becomes editable once released', async () => {
+      474 |             await expectLogic(logic, () => {
+    > 475 |                 logic.actions.releaseTemplate()
+          |                               ^
+      476 |             })
+      477 |                 .toDispatchActions(['releaseTemplateSuccess'])
+      478 |                 .toFinishAllListeners()
+
+      at ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:475:31
+      at syncInit (../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/src/expect.ts:26:24)
+      at expectLogic (../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/src/expect.ts:34:23)
+      at Object.<anonymous> (../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:474:19)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 30 passed, 32 total
+Snapshots:   0 total
+Time:        5.967 s, estimated 10 s
+Ran all test suites matching /products\/workflows\/frontend\/TemplateLibrary\/messageTemplateLogic.test.ts/i.
+undefined
+/home/coder/.t3/worktrees/posthog/t3-5f510af3/frontend:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: jest products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts
+💥 Command failed: pnpm --filter=@posthog/frontend exec jest products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts
