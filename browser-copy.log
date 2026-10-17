@@ -1,0 +1,12 @@
+[560px sdk] toast: "Copied. Save it as the template's file. PostHog keeps sending the current version until your app sends or uploads the file."
+[560px sdk] clipboard bytes: 324
+[560px sdk] non-GET /api/ requests after the copy click: 0
+[560px rest] toast: "Copied. Save it as the template's file. PostHog keeps sending the current version until your app sends or uploads the file. This file has no plain-text part. The next upload from this file removes the plain-text version."
+[560px rest] clipboard bytes: 234
+[560px rest] non-GET /api/ requests after the copy click: 0
+[1440px sdk] toast: "Copied. Save it as the template's file. PostHog keeps sending the current version until your app sends or uploads the file."
+[1440px sdk] clipboard bytes: 324
+[1440px sdk] non-GET /api/ requests after the copy click: 0
+[1440px rest] toast: "Copied. Save it as the template's file. PostHog keeps sending the current version until your app sends or uploads the file. This file has no plain-text part. The next upload from this file removes the plain-text version."
+[1440px rest] clipboard bytes: 234
+[1440px rest] non-GET /api/ requests after the copy click: 0

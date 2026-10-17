@@ -1,0 +1,2 @@
+  summary {"changed_files": 6271, "triggered": ["shadow-drift", "lockfile", "uv-lock", "ruff-lint", "complexity", "size", "ruff-format", "desktop-biome", "agent-biome", "type-check", "django-template-format", "django-template-lint", "markdown-format", "frontend-format", "feature-flags", "api-ratchet", "workflow-lint", "mprocs", "openapi", "projections", "migrations", "snapshot-baselines", "semgrep-devex"], "failures": 0, "mode": "strict"}
+   62c695af6cb..8a50f6ef11c  HEAD -> spec/template-agent-edit

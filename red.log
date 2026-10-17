@@ -1,0 +1,135 @@
+[90m09:29:45:355[0m [34m[client-request-interceptor][0m constructing the interceptor...
+[90m09:29:45:368[0m [34m[xhr][0m constructing the interceptor...
+[90m09:29:45:368[0m [34m[fetch][0m constructing the interceptor...
+[90m09:29:45:368[0m [34m[websocket][0m constructing the interceptor...
+[90m09:29:45:369[0m [34m[interceptor-source][0m constructing the interceptor...
+[90m09:29:47:244[0m [34m[interceptor-source:apply][0m applying the interceptor...
+[90m09:29:47:245[0m [34m[interceptor-source][0m retrieved global instance: undefined
+[90m09:29:47:245[0m [34m[interceptor-source:apply][0m no running instance found, setting up a new instance...
+[90m09:29:47:245[0m [34m[interceptor-source:setup][0m applying all 4 interceptors...
+[90m09:29:47:245[0m [34m[interceptor-source:setup][0m applying "ClientRequestInterceptor" interceptor...
+[90m09:29:47:245[0m [34m[client-request-interceptor:apply][0m applying the interceptor...
+[90m09:29:47:245[0m [34m[client-request-interceptor][0m retrieved global instance: undefined
+[90m09:29:47:245[0m [34m[client-request-interceptor:apply][0m no running instance found, setting up a new instance...
+[90m09:29:47:246[0m [34m[client-request-interceptor][0m set global instance! client-request-interceptor
+[90m09:29:47:246[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m09:29:47:246[0m [34m[interceptor-source:setup][0m applying "XMLHttpRequestInterceptor" interceptor...
+[90m09:29:47:246[0m [34m[xhr:apply][0m applying the interceptor...
+[90m09:29:47:246[0m [34m[xhr][0m retrieved global instance: undefined
+[90m09:29:47:246[0m [34m[xhr:apply][0m no running instance found, setting up a new instance...
+[90m09:29:47:246[0m [34m[xhr:setup][0m patching "XMLHttpRequest" module...
+[90m09:29:47:246[0m [34m[xhr:setup][0m native "XMLHttpRequest" module patched! XMLHttpRequest
+[90m09:29:47:246[0m [34m[xhr][0m set global instance! xhr
+[90m09:29:47:246[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m09:29:47:246[0m [34m[interceptor-source:setup][0m applying "FetchInterceptor" interceptor...
+[90m09:29:47:246[0m [34m[fetch:apply][0m applying the interceptor...
+[90m09:29:47:246[0m [34m[fetch][0m retrieved global instance: undefined
+[90m09:29:47:246[0m [34m[fetch:apply][0m no running instance found, setting up a new instance...
+[90m09:29:47:246[0m [34m[fetch][0m set global instance! fetch
+[90m09:29:47:246[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m09:29:47:246[0m [34m[interceptor-source:setup][0m applying "WebSocketInterceptor" interceptor...
+[90m09:29:47:247[0m [34m[websocket:apply][0m applying the interceptor...
+[90m09:29:47:247[0m [34m[websocket][0m retrieved global instance: undefined
+[90m09:29:47:247[0m [34m[websocket:apply][0m no running instance found, setting up a new instance...
+[90m09:29:47:247[0m [34m[websocket][0m set global instance! websocket
+[90m09:29:47:247[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m09:29:47:247[0m [34m[interceptor-source][0m set global instance! interceptor-source
+[90m09:29:47:247[0m [34m[client-request-interceptor:on][0m adding "request" event listener: function () { [native code] }
+[90m09:29:47:247[0m [34m[xhr:on][0m adding "request" event listener: function () { [native code] }
+[90m09:29:47:247[0m [34m[fetch:on][0m adding "request" event listener: function () { [native code] }
+[90m09:29:47:247[0m [34m[websocket:on][0m adding "request" event listener: function () { [native code] }
+[90m09:29:47:247[0m [34m[client-request-interceptor:on][0m adding "response" event listener: function () { [native code] }
+[90m09:29:47:247[0m [34m[xhr:on][0m adding "response" event listener: function () { [native code] }
+[90m09:29:47:247[0m [34m[fetch:on][0m adding "response" event listener: function () { [native code] }
+[90m09:29:47:247[0m [34m[websocket:on][0m adding "response" event listener: function () { [native code] }
+[90m09:29:47:247[0m [34m[client-request-interceptor:on][0m adding "connection" event listener: function () { [native code] }
+[90m09:29:47:247[0m [34m[xhr:on][0m adding "connection" event listener: function () { [native code] }
+[90m09:29:47:247[0m [34m[fetch:on][0m adding "connection" event listener: function () { [native code] }
+[90m09:29:47:247[0m [34m[websocket:on][0m adding "connection" event listener: function () { [native code] }
+[90m09:29:47:279[0m [34m[interceptor-source:dispose][0m disposing the interceptor...
+[90m09:29:47:279[0m [34m[interceptor-source][0m retrieved global instance: BatchInterceptor
+[90m09:29:47:279[0m [34m[interceptor-source][0m cleared global instance! interceptor-source
+[90m09:29:47:279[0m [34m[interceptor-source:dispose][0m global symbol deleted: undefined
+[90m09:29:47:279[0m [34m[interceptor-source:dispose][0m disposing of 4 subscriptions...
+[90m09:29:47:279[0m [34m[client-request-interceptor:dispose][0m disposing the interceptor...
+[90m09:29:47:279[0m [34m[client-request-interceptor][0m retrieved global instance: ClientRequestInterceptor
+[90m09:29:47:279[0m [34m[client-request-interceptor][0m cleared global instance! client-request-interceptor
+[90m09:29:47:279[0m [34m[client-request-interceptor:dispose][0m global symbol deleted: undefined
+[90m09:29:47:279[0m [34m[client-request-interceptor:dispose][0m disposing of 1 subscriptions...
+[90m09:29:47:279[0m [34m[client-request-interceptor:dispose][0m disposed of all subscriptions! 0
+[90m09:29:47:279[0m [34m[client-request-interceptor:dispose][0m destroyed the listener!
+[90m09:29:47:279[0m [34m[xhr:dispose][0m disposing the interceptor...
+[90m09:29:47:280[0m [34m[xhr][0m retrieved global instance: XMLHttpRequestInterceptor
+[90m09:29:47:280[0m [34m[xhr][0m cleared global instance! xhr
+[90m09:29:47:280[0m [34m[xhr:dispose][0m global symbol deleted: undefined
+[90m09:29:47:280[0m [34m[xhr:dispose][0m disposing of 1 subscriptions...
+[90m09:29:47:280[0m [34m[xhr:setup][0m native "XMLHttpRequest" module restored! XMLHttpRequest
+[90m09:29:47:280[0m [34m[xhr:dispose][0m disposed of all subscriptions! 0
+[90m09:29:47:280[0m [34m[xhr:dispose][0m destroyed the listener!
+[90m09:29:47:280[0m [34m[fetch:dispose][0m disposing the interceptor...
+[90m09:29:47:280[0m [34m[fetch][0m retrieved global instance: FetchInterceptor
+[90m09:29:47:280[0m [34m[fetch][0m cleared global instance! fetch
+[90m09:29:47:280[0m [34m[fetch:dispose][0m global symbol deleted: undefined
+[90m09:29:47:280[0m [34m[fetch:dispose][0m disposing of 1 subscriptions...
+[90m09:29:47:280[0m [34m[fetch][0m restored native "globalThis.fetch"! 
+[90m09:29:47:280[0m [34m[fetch:dispose][0m disposed of all subscriptions! 0
+[90m09:29:47:280[0m [34m[fetch:dispose][0m destroyed the listener!
+[90m09:29:47:280[0m [34m[websocket:dispose][0m disposing the interceptor...
+[90m09:29:47:280[0m [34m[websocket][0m retrieved global instance: WebSocketInterceptor
+[90m09:29:47:280[0m [34m[websocket][0m cleared global instance! websocket
+[90m09:29:47:280[0m [34m[websocket:dispose][0m global symbol deleted: undefined
+[90m09:29:47:280[0m [34m[websocket:dispose][0m disposing of 1 subscriptions...
+[90m09:29:47:280[0m [34m[websocket:dispose][0m disposed of all subscriptions! 0
+[90m09:29:47:280[0m [34m[websocket:dispose][0m destroyed the listener!
+[90m09:29:47:280[0m [34m[interceptor-source:dispose][0m disposed of all subscriptions! 0
+[90m09:29:47:280[0m [34m[interceptor-source:dispose][0m destroyed the listener!
+FAIL ../products/workflows/frontend/TemplateLibrary/templateHtmlFile.test.ts
+  templateHtmlFile
+    ✓ gives back the file the SDK uploaded byte for byte: entities in the title and preheader, Liquid in the body (3 ms)
+    ✕ gives back the file the SDK uploaded byte for byte: an author's own entities, whitespace and attribute order (13 ms)
+    ✓ gives back the file the SDK uploaded byte for byte: no preheader, and a commented-out title before the real one (2 ms)
+    ✓ writes a file the SDK reads back as the template: a document without a head (2 ms)
+    ✓ writes a file the SDK reads back as the template: a head without a title or preheader (1 ms)
+    ✓ writes a file the SDK reads back as the template: a fragment without a document
+    ✓ writes a file the SDK reads back as the template: a changed subject with characters that need escaping (1 ms)
+    ✓ writes a file the SDK reads back as the template: a changed preheader with characters that need escaping (1 ms)
+    ✓ writes a file the SDK reads back as the template: a blank preheader (1 ms)
+    ✓ writes a file the SDK reads back as the template: Liquid with quotes and comparisons in the subject and preheader (1 ms)
+    ✓ writes a file the SDK reads back as the template: a subject that matches the title once its whitespace collapses
+
+  ● templateHtmlFile › gives back the file the SDK uploaded byte for byte: an author's own entities, whitespace and attribute order
+
+    expect(received).toBe(expected) // Object.is equality
+
+    - Expected  - 4
+    + Received  + 2
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+    -     <title>
+    -       Caf&#233; news
+    -     </title>
+    +     <title>Café news</title>
+    -     <meta content='Fresh &amp; warm' name=preheader>
+    +     <meta name="preheader" content="Fresh &amp; warm">
+        </head>
+        <body><p>{{ variables.first_name }}</p></body>
+      </html>
+      ↵
+
+      137 | describe('templateHtmlFile', () => {
+      138 |     it.each(SDK_UPLOADED_FILES)('gives back the file the SDK uploaded byte for byte: $name', ({ file, sdk }) => {
+    > 139 |         expect(templateHtmlFile({ subject: sdk.subject, preheader: sdk.preheader, html: file })).toBe(file)
+          |                                                                                                  ^
+      140 |     })
+      141 |
+      142 |     it.each(ENCODED_TEMPLATES)('writes a file the SDK reads back as the template: $name', ({ template, file, sdk }) => {
+
+      at ../products/workflows/frontend/TemplateLibrary/templateHtmlFile.test.ts:139:98
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 10 passed, 11 total
+Snapshots:   0 total
+Time:        4.131 s
+Ran all test suites matching /..\/products\/workflows\/frontend\/TemplateLibrary\/templateHtmlFile.test.ts/i.

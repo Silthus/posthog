@@ -1,0 +1,243 @@
+[90m09:24:30:50[0m [34m[client-request-interceptor][0m constructing the interceptor...
+[90m09:24:30:64[0m [34m[xhr][0m constructing the interceptor...
+[90m09:24:30:64[0m [34m[fetch][0m constructing the interceptor...
+[90m09:24:30:64[0m [34m[websocket][0m constructing the interceptor...
+[90m09:24:30:64[0m [34m[interceptor-source][0m constructing the interceptor...
+[90m09:24:33:694[0m [34m[interceptor-source:apply][0m applying the interceptor...
+[90m09:24:33:694[0m [34m[interceptor-source][0m retrieved global instance: undefined
+[90m09:24:33:694[0m [34m[interceptor-source:apply][0m no running instance found, setting up a new instance...
+[90m09:24:33:694[0m [34m[interceptor-source:setup][0m applying all 4 interceptors...
+[90m09:24:33:694[0m [34m[interceptor-source:setup][0m applying "ClientRequestInterceptor" interceptor...
+[90m09:24:33:694[0m [34m[client-request-interceptor:apply][0m applying the interceptor...
+[90m09:24:33:694[0m [34m[client-request-interceptor][0m retrieved global instance: undefined
+[90m09:24:33:694[0m [34m[client-request-interceptor:apply][0m no running instance found, setting up a new instance...
+[90m09:24:33:695[0m [34m[client-request-interceptor][0m set global instance! client-request-interceptor
+[90m09:24:33:695[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m09:24:33:695[0m [34m[interceptor-source:setup][0m applying "XMLHttpRequestInterceptor" interceptor...
+[90m09:24:33:695[0m [34m[xhr:apply][0m applying the interceptor...
+[90m09:24:33:695[0m [34m[xhr][0m retrieved global instance: undefined
+[90m09:24:33:695[0m [34m[xhr:apply][0m no running instance found, setting up a new instance...
+[90m09:24:33:695[0m [34m[xhr:setup][0m patching "XMLHttpRequest" module...
+[90m09:24:33:695[0m [34m[xhr:setup][0m native "XMLHttpRequest" module patched! XMLHttpRequest
+[90m09:24:33:695[0m [34m[xhr][0m set global instance! xhr
+[90m09:24:33:695[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m09:24:33:695[0m [34m[interceptor-source:setup][0m applying "FetchInterceptor" interceptor...
+[90m09:24:33:695[0m [34m[fetch:apply][0m applying the interceptor...
+[90m09:24:33:695[0m [34m[fetch][0m retrieved global instance: undefined
+[90m09:24:33:695[0m [34m[fetch:apply][0m no running instance found, setting up a new instance...
+[90m09:24:33:695[0m [34m[fetch][0m set global instance! fetch
+[90m09:24:33:695[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m09:24:33:695[0m [34m[interceptor-source:setup][0m applying "WebSocketInterceptor" interceptor...
+[90m09:24:33:695[0m [34m[websocket:apply][0m applying the interceptor...
+[90m09:24:33:695[0m [34m[websocket][0m retrieved global instance: undefined
+[90m09:24:33:695[0m [34m[websocket:apply][0m no running instance found, setting up a new instance...
+[90m09:24:33:696[0m [34m[websocket][0m set global instance! websocket
+[90m09:24:33:696[0m [34m[interceptor-source:setup][0m adding interceptor dispose subscription
+[90m09:24:33:696[0m [34m[interceptor-source][0m set global instance! interceptor-source
+[90m09:24:33:696[0m [34m[client-request-interceptor:on][0m adding "request" event listener: function () { [native code] }
+[90m09:24:33:696[0m [34m[xhr:on][0m adding "request" event listener: function () { [native code] }
+[90m09:24:33:696[0m [34m[fetch:on][0m adding "request" event listener: function () { [native code] }
+[90m09:24:33:696[0m [34m[websocket:on][0m adding "request" event listener: function () { [native code] }
+[90m09:24:33:696[0m [34m[client-request-interceptor:on][0m adding "response" event listener: function () { [native code] }
+[90m09:24:33:696[0m [34m[xhr:on][0m adding "response" event listener: function () { [native code] }
+[90m09:24:33:696[0m [34m[fetch:on][0m adding "response" event listener: function () { [native code] }
+[90m09:24:33:696[0m [34m[websocket:on][0m adding "response" event listener: function () { [native code] }
+[90m09:24:33:696[0m [34m[client-request-interceptor:on][0m adding "connection" event listener: function () { [native code] }
+[90m09:24:33:696[0m [34m[xhr:on][0m adding "connection" event listener: function () { [native code] }
+[90m09:24:33:696[0m [34m[fetch:on][0m adding "connection" event listener: function () { [native code] }
+[90m09:24:33:696[0m [34m[websocket:on][0m adding "connection" event listener: function () { [native code] }
+[90m09:24:33:711[0m [34m[fetch][0m [GET] http://localhost/_preflight/
+[90m09:24:33:712[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:712[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:759[0m [34m[fetch][0m [POST] http://localhost/api/projects/997/file_system/log_view/
+[90m09:24:33:759[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:759[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:761[0m [34m[fetch][0m [GET] http://localhost/api/projects/997/conversations/
+[90m09:24:33:761[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:761[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:764[0m [34m[fetch][0m [GET] http://localhost/api/projects/997/messaging_templates/existing-id/
+[90m09:24:33:764[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:764[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:777[0m [34m[fetch][0m received mocked response! {"rawResponse":{}}
+[90m09:24:33:777[0m [34m[fetch][0m emitting the "response" event...
+[90m09:24:33:817[0m [34m[fetch][0m [POST] http://localhost/api/projects/997/file_system/log_view/
+[90m09:24:33:817[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:817[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:818[0m [34m[fetch][0m [GET] http://localhost/api/projects/997/conversations/
+[90m09:24:33:818[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:818[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:820[0m [34m[fetch][0m [GET] http://localhost/api/projects/997/messaging_templates/existing-id/
+[90m09:24:33:820[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:820[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:835[0m [34m[fetch][0m received mocked response! {"rawResponse":{}}
+[90m09:24:33:835[0m [34m[fetch][0m emitting the "response" event...
+[90m09:24:33:889[0m [34m[fetch][0m received mocked response! {"rawResponse":{}}
+[90m09:24:33:889[0m [34m[fetch][0m emitting the "response" event...
+[90m09:24:33:898[0m [34m[fetch][0m [GET] http://localhost/_preflight/
+[90m09:24:33:898[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:898[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:922[0m [34m[fetch][0m [POST] http://localhost/api/projects/997/file_system/log_view/
+[90m09:24:33:922[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:922[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:924[0m [34m[fetch][0m [GET] http://localhost/api/projects/997/conversations/
+[90m09:24:33:924[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:924[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:925[0m [34m[fetch][0m [GET] http://localhost/api/projects/997/messaging_templates/existing-id/
+[90m09:24:33:925[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:925[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:934[0m [34m[fetch][0m received mocked response! {"rawResponse":{}}
+[90m09:24:33:934[0m [34m[fetch][0m emitting the "response" event...
+[90m09:24:33:941[0m [34m[fetch][0m received mocked response! {"rawResponse":{}}
+[90m09:24:33:941[0m [34m[fetch][0m emitting the "response" event...
+[90m09:24:33:961[0m [34m[fetch][0m received mocked response! {"rawResponse":{}}
+[90m09:24:33:961[0m [34m[fetch][0m emitting the "response" event...
+[90m09:24:33:983[0m [34m[fetch][0m [POST] http://localhost/api/projects/997/file_system/log_view/
+[90m09:24:33:983[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:983[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:984[0m [34m[fetch][0m [GET] http://localhost/api/projects/997/conversations/
+[90m09:24:33:985[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:985[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:986[0m [34m[fetch][0m [GET] http://localhost/api/projects/997/messaging_templates/existing-id/
+[90m09:24:33:986[0m [34m[fetch][0m awaiting for the mocked response...
+[90m09:24:33:986[0m [34m[fetch][0m emitting the "request" event for 1 listener(s)...
+[90m09:24:33:997[0m [34m[fetch][0m received mocked response! {"rawResponse":{}}
+[90m09:24:33:997[0m [34m[fetch][0m emitting the "response" event...
+[90m09:24:34:64[0m [34m[fetch][0m received mocked response! {"rawResponse":{}}
+[90m09:24:34:64[0m [34m[fetch][0m emitting the "response" event...
+[90m09:24:34:76[0m [34m[interceptor-source:dispose][0m disposing the interceptor...
+[90m09:24:34:76[0m [34m[interceptor-source][0m retrieved global instance: BatchInterceptor
+[90m09:24:34:76[0m [34m[interceptor-source][0m cleared global instance! interceptor-source
+[90m09:24:34:76[0m [34m[interceptor-source:dispose][0m global symbol deleted: undefined
+[90m09:24:34:76[0m [34m[interceptor-source:dispose][0m disposing of 4 subscriptions...
+[90m09:24:34:76[0m [34m[client-request-interceptor:dispose][0m disposing the interceptor...
+[90m09:24:34:76[0m [34m[client-request-interceptor][0m retrieved global instance: ClientRequestInterceptor
+[90m09:24:34:76[0m [34m[client-request-interceptor][0m cleared global instance! client-request-interceptor
+[90m09:24:34:76[0m [34m[client-request-interceptor:dispose][0m global symbol deleted: undefined
+[90m09:24:34:76[0m [34m[client-request-interceptor:dispose][0m disposing of 1 subscriptions...
+[90m09:24:34:76[0m [34m[client-request-interceptor:dispose][0m disposed of all subscriptions! 0
+[90m09:24:34:76[0m [34m[client-request-interceptor:dispose][0m destroyed the listener!
+[90m09:24:34:76[0m [34m[xhr:dispose][0m disposing the interceptor...
+[90m09:24:34:76[0m [34m[xhr][0m retrieved global instance: XMLHttpRequestInterceptor
+[90m09:24:34:76[0m [34m[xhr][0m cleared global instance! xhr
+[90m09:24:34:76[0m [34m[xhr:dispose][0m global symbol deleted: undefined
+[90m09:24:34:76[0m [34m[xhr:dispose][0m disposing of 1 subscriptions...
+[90m09:24:34:76[0m [34m[xhr:setup][0m native "XMLHttpRequest" module restored! XMLHttpRequest
+[90m09:24:34:76[0m [34m[xhr:dispose][0m disposed of all subscriptions! 0
+[90m09:24:34:76[0m [34m[xhr:dispose][0m destroyed the listener!
+[90m09:24:34:76[0m [34m[fetch:dispose][0m disposing the interceptor...
+[90m09:24:34:76[0m [34m[fetch][0m retrieved global instance: FetchInterceptor
+[90m09:24:34:76[0m [34m[fetch][0m cleared global instance! fetch
+[90m09:24:34:76[0m [34m[fetch:dispose][0m global symbol deleted: undefined
+[90m09:24:34:76[0m [34m[fetch:dispose][0m disposing of 1 subscriptions...
+[90m09:24:34:76[0m [34m[fetch][0m restored native "globalThis.fetch"! 
+[90m09:24:34:76[0m [34m[fetch:dispose][0m disposed of all subscriptions! 0
+[90m09:24:34:76[0m [34m[fetch:dispose][0m destroyed the listener!
+[90m09:24:34:76[0m [34m[websocket:dispose][0m disposing the interceptor...
+[90m09:24:34:76[0m [34m[websocket][0m retrieved global instance: WebSocketInterceptor
+[90m09:24:34:76[0m [34m[websocket][0m cleared global instance! websocket
+[90m09:24:34:76[0m [34m[websocket:dispose][0m global symbol deleted: undefined
+[90m09:24:34:76[0m [34m[websocket:dispose][0m disposing of 1 subscriptions...
+[90m09:24:34:77[0m [34m[websocket:dispose][0m disposed of all subscriptions! 0
+[90m09:24:34:77[0m [34m[websocket:dispose][0m destroyed the listener!
+[90m09:24:34:77[0m [34m[interceptor-source:dispose][0m disposed of all subscriptions! 0
+[90m09:24:34:77[0m [34m[interceptor-source:dispose][0m destroyed the listener!
+[90m09:24:34:85[0m [34m[fetch][0m received mocked response! {"rawResponse":{}}
+[90m09:24:34:146[0m [34m[fetch][0m request has not been handled, passthrough...
+[90m09:24:34:147[0m [34m[fetch][0m original fetch performed {}
+[90m09:24:34:164[0m [34m[fetch][0m request has not been handled, passthrough...
+[90m09:24:34:165[0m [34m[fetch][0m original fetch performed {}
+[90m09:24:34:186[0m [34m[fetch][0m request has not been handled, passthrough...
+[90m09:24:34:187[0m [34m[fetch][0m original fetch performed {}
+[90m09:24:34:193[0m [34m[fetch][0m request has not been handled, passthrough...
+[90m09:24:34:193[0m [34m[fetch][0m request has not been handled, passthrough...
+[90m09:24:34:193[0m [34m[fetch][0m original fetch performed {}
+[90m09:24:34:193[0m [34m[fetch][0m original fetch performed {}
+FAIL ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts
+  messageTemplateLogic
+    unsaved-changes guard
+      ○ skipped blocks navigation away from an unsaved new template
+      ○ skipped does not block navigation when there are no unsaved changes
+    submit validation feedback
+      ○ skipped toasts when the name is missing
+      ○ skipped toasts when the subject is missing
+    save failure feedback
+      ○ skipped 404 tells the user the template is gone from this environment
+      ○ skipped other failures fall back to a generic retry message
+      ○ skipped a code-managed template shows why the server refused the edit
+    edited elsewhere
+      ○ skipped reloads a clean form
+      ○ skipped warns instead of replacing unsaved edits
+      ○ skipped ignores its own save echo
+      ○ skipped ignores another template
+      ○ skipped ignores another resource type
+      ○ skipped parks events that arrive during a save and drops the own echo once the save lands
+      ○ skipped parks events that arrive during a save and keeps a newer external edit that the own echo arrived after
+      ○ skipped shows the banner when the reload of a clean form fails
+      ○ skipped reload from the banner replaces the unsaved edits with the server copy
+    starting-point picker
+      ○ skipped opens for a brand-new template
+      ○ skipped does not open when creating from a sent message
+      ○ skipped does not open for an existing template
+      ○ skipped does not open while the AI composer is the page
+      ○ skipped opens for an AI URL when the variant is off
+      ○ skipped opens when the URL switches to editor mode on the mounted page
+    code-managed source
+      ○ skipped a template made in PostHog has no source
+      ○ skipped a keyed template that PostHog still manages has no source
+      ○ skipped a known host links the file, the repository and the shortened commit
+      ○ skipped a branch links to the branch
+      ○ skipped an unknown host stays plain text
+      ○ skipped an upload without a source shows none
+    code-managed template
+      ✕ copies the published template as its HTML file with a plain-text part, and sends nothing (177 ms)
+      ✕ copies the published template as its HTML file without a plain-text part, and sends nothing (161 ms)
+      ○ skipped keeps its fields and never saves when they change
+      ○ skipped duplicates as a copy without its key, ownership, source or hash
+      ○ skipped becomes editable once released
+      ○ skipped waits for a described change before it copies, given the starter as served
+      ○ skipped waits for a described change before it copies, given the starter without its trailing space
+      ○ skipped waits for a described change before it copies, given a blank sentence
+      ○ skipped starts from the server starter and keeps the sentence while the popover closes and reopens
+      ○ skipped copies the sentence and the server context verbatim, and sends nothing
+    make transactional
+      ○ skipped keeps edits made while the conversion runs
+
+  ● messageTemplateLogic › code-managed template › copies the published template as its HTML file with a plain-text part, and sends nothing
+
+    TypeError: logic.actions.copyHtmlFile is not a function
+
+      607 |
+      608 |             await expectLogic(logic, () => {
+    > 609 |                 logic.actions.copyHtmlFile()
+          |                               ^
+      610 |             }).toFinishAllListeners()
+      611 |
+      612 |             expect(writeText).toHaveBeenCalledWith('<head><title>Welcome</title></head><p>Hi</p>')
+
+      at ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:609:31
+      at syncInit (../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/src/expect.ts:26:24)
+      at expectLogic (../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/src/expect.ts:34:23)
+      at ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:608:19
+
+  ● messageTemplateLogic › code-managed template › copies the published template as its HTML file without a plain-text part, and sends nothing
+
+    TypeError: logic.actions.copyHtmlFile is not a function
+
+      607 |
+      608 |             await expectLogic(logic, () => {
+    > 609 |                 logic.actions.copyHtmlFile()
+          |                               ^
+      610 |             }).toFinishAllListeners()
+      611 |
+      612 |             expect(writeText).toHaveBeenCalledWith('<head><title>Welcome</title></head><p>Hi</p>')
+
+      at ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:609:31
+      at syncInit (../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/src/expect.ts:26:24)
+      at expectLogic (../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/src/expect.ts:34:23)
+      at ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:608:19
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 37 skipped, 39 total
+Snapshots:   0 total
+Time:        4.905 s
+Ran all test suites matching /..\/products\/workflows\/frontend\/TemplateLibrary\/messageTemplateLogic.test.ts/i with tests matching "HTML file".
