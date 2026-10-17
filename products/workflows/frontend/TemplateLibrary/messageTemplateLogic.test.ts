@@ -458,6 +458,7 @@ describe('messageTemplateLogic', () => {
             'About this file:\n' +
             '- It is the PostHog email template with the key `welcome`.\n' +
             '- This file uses `{{ variables.first_name }}` and `{{ variables.confirm_url }}`.',
+        change_prompt_variables: ['first_name', 'confirm_url'],
     }
 
     describe('code-managed source', () => {
@@ -669,6 +670,31 @@ describe('messageTemplateLogic', () => {
             })
         })
 
+        it.each([
+            {
+                description: 'keeps the sentence when a reload serves the same starter',
+                reloaded: CODE_MANAGED,
+                changeSentence: 'In `emails/welcome.html`, change the button to green.',
+            },
+            {
+                description: 'drops the sentence when a reload points the template at another file',
+                reloaded: {
+                    ...CODE_MANAGED,
+                    source_path: 'emails/hello.html',
+                    change_prompt_starter: 'In `emails/hello.html`, change ',
+                },
+                changeSentence: 'In `emails/hello.html`, change ',
+            },
+        ])('$description', async ({ reloaded, changeSentence }) => {
+            logic.actions.setChangeSentence('In `emails/welcome.html`, change the button to green.')
+
+            await expectLogic(logic, () => {
+                logic.actions.loadTemplateSuccess(reloaded as any)
+            }).toFinishAllListeners()
+
+            await expectLogic(logic).toMatchValues({ changeSentence })
+        })
+
         it('copies the sentence and the server context verbatim, and sends nothing', async () => {
             logic.actions.setAgentPromptOpen(true)
             logic.actions.setChangeSentence('In `emails/welcome.html`, change the button to green.')
@@ -726,16 +752,18 @@ describe('messageTemplateLogic', () => {
             {
                 description: 'with a plain-text part',
                 text: 'Hi',
+                droppedTextPart: true,
                 toast: "Copied. Save it as the template's file. PostHog keeps sending the current version until your app sends or uploads the file. This file has no plain-text part. The next upload from this file removes the plain-text version.",
             },
             {
                 description: 'without a plain-text part',
                 text: ' ',
+                droppedTextPart: false,
                 toast: "Copied. Save it as the template's file. PostHog keeps sending the current version until your app sends or uploads the file.",
             },
         ])(
             'copies the published template as its HTML file $description, and sends nothing',
-            async ({ text, toast }) => {
+            async ({ text, toast, droppedTextPart }) => {
                 logic.unmount()
                 useMocks({
                     get: {
@@ -759,7 +787,7 @@ describe('messageTemplateLogic', () => {
                 expect(mockToast.success).toHaveBeenCalledWith(toast)
                 expect(capture).toHaveBeenCalledWith('message template html file copied', {
                     template_id: 'existing-id',
-                    dropped_text_part: text.trim() !== '',
+                    dropped_text_part: droppedTextPart,
                 })
             }
         )
@@ -934,6 +962,7 @@ describe('messageTemplateLogic', () => {
         })
 
         it('duplicates the unsaved edits without its key, ownership, source or hash', async () => {
+            const capture = jest.spyOn(posthog, 'capture').mockImplementation(() => undefined)
             await refuse(claimThenAutosave)
             const { design: _design, ...emailWithoutDesign } = draft.email
 
@@ -949,6 +978,10 @@ describe('messageTemplateLogic', () => {
                 },
             ])
             await expectLogic(logic).toMatchValues({ refusedEdits: null })
+            expect(capture).toHaveBeenCalledWith('message template duplicated', {
+                template_id: 'existing-id',
+                code_managed: true,
+            })
         })
     })
 
