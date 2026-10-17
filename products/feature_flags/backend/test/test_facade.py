@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from posthog.test.base import APIBaseTest
@@ -12,10 +12,12 @@ from rest_framework.exceptions import ValidationError
 from posthog.api.utils import ServiceRequest
 from posthog.constants import AvailableFeature
 from posthog.models.activity_logging.activity_log import ActivityLog
+from posthog.models.user import User
 
 from products.approvals.backend.exceptions import ApprovalRequired
 from products.approvals.backend.models import ApprovalPolicy, ChangeRequest
 from products.feature_flags.backend.encrypted_flag_payloads import REDACTED_PAYLOAD_VALUE, flag_payload_codec
+from products.feature_flags.backend.facade import api as flag_api
 from products.feature_flags.backend.facade.api import (
     _redact_unchanged_encrypted_payloads,
     _roll_out_variant,
@@ -47,6 +49,37 @@ from products.feature_flags.backend.models.feature_flag import FeatureFlag, buil
 
 
 class TestFeatureFlagFacadeGatedWrites(APIBaseTest):
+    def test_requestless_rollout_requires_an_acting_user(self) -> None:
+        flag = self._create_flag()
+
+        with self.assertRaisesMessage(ValueError, "An acting user is required"):
+            flag_api.set_release_condition_rollout(flag, 0, 25, flag.version, team=self.team, user=cast(User, None))
+
+        flag.refresh_from_db()
+        assert flag.version == 1
+        assert flag.filters["groups"][0]["rollout_percentage"] == 100
+
+    def test_requestless_rollout_attributes_the_write_to_its_actor(self) -> None:
+        flag = self._create_flag()
+
+        updated = flag_api.set_release_condition_rollout(flag, 0, 25, flag.version, team=self.team, user=self.user)
+
+        assert updated.filters["groups"][0]["rollout_percentage"] == 25
+        assert updated.version == 2
+        assert updated.last_modified_by == self.user
+
+    def test_requestless_rollout_reports_a_typed_version_conflict(self) -> None:
+        flag = self._create_flag()
+
+        with self.assertRaises(flag_api.FlagRolloutVersionConflict) as raised:
+            flag_api.set_release_condition_rollout(flag, 0, 25, 0, team=self.team, user=self.user)
+
+        assert raised.exception.expected_version == 0
+        assert raised.exception.current_version == 1
+        flag.refresh_from_db()
+        assert flag.version == 1
+        assert flag.filters["groups"][0]["rollout_percentage"] == 100
+
     @parameterized.expand([("user", False), ("system", True)])
     def test_stored_v2_config_can_only_be_disabled_with_its_row_version(self, _name: str, system: bool) -> None:
         filters = {"version": 2, "return_type": "boolean", "default_value": False, "rules": []}

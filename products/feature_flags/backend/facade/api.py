@@ -27,22 +27,40 @@ signal the gate skips on (its policies target human-driven changes, and a reques
 caller cannot surface a 409/change request), so ``ApprovalRequired`` is never raised.
 """
 
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Literal
 
+from django.db import transaction
+
 import structlog
 from rest_framework.exceptions import ValidationError
+from rest_framework.request import Request
 
 from posthog.api.utils import ServiceRequest
+from posthog.exceptions import Conflict
 from posthog.models.team.team import Team
 from posthog.models.user import User
 
 from products.access_control.backend.facade.user_access_control import UserAccessControl
 from products.approvals.backend.policies import PolicyEngine
-from products.feature_flags.backend.api.feature_flag import FeatureFlagSerializer
+from products.feature_flags.backend.api.feature_flag import (
+    FeatureFlagSerializer,
+    _carry_loaded_state,
+    flag_version_conflict_message,
+)
 from products.feature_flags.backend.encrypted_flag_payloads import REDACTED_PAYLOAD_VALUE
 from products.feature_flags.backend.facade.config import detect_config_format
-from products.feature_flags.backend.facade.filters import set_feature_enrollment
+from products.feature_flags.backend.facade.contracts import (
+    FlagRolloutConditionNotFound,
+    FlagRolloutDeletedFlag,
+    FlagRolloutUnsupportedConfig,
+    FlagRolloutVersionConflict,
+)
+from products.feature_flags.backend.facade.filters import (
+    set_feature_enrollment,
+    set_release_condition_rollout as transform_release_condition_rollout,
+)
 from products.feature_flags.backend.models.feature_flag import FeatureFlag
 from products.feature_flags.backend.request_usage import (
     FeatureFlagRequestType as FeatureFlagRequestType,
@@ -51,6 +69,42 @@ from products.feature_flags.backend.request_usage import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+class FlagRolloutWriteRequest(ServiceRequest):
+    strict_version_precondition = True
+    skip_opportunistic_filter_cleanup = True
+
+    def __init__(self, request: Request | None = None, *, version: int, user: User) -> None:
+        self._request = request
+        if request is None:
+            super().__init__(user, method="PATCH")
+        else:
+            self.user = request.user
+            self.is_system = False
+            self.method = "PATCH"
+            self.session = getattr(request, "session", {})
+        self.data = {"version": version}
+
+    def __getattr__(self, name: str) -> Any:
+        if name == "_request":
+            raise AttributeError(name)
+        return getattr(self._request, name)
+
+
+def _rollout_precondition(flag: FeatureFlag, version: int) -> None:
+    current_version = flag.version or 0
+    if version != current_version:
+        raise FlagRolloutVersionConflict(
+            flag_version_conflict_message(version, current_version),
+            expected_version=version,
+            current_version=current_version,
+        )
+
+
+def _reject_deleted_rollout(flag: FeatureFlag, deleted_hint: str) -> None:
+    if flag.deleted:
+        raise FlagRolloutDeletedFlag(f"This feature flag has been deleted. Restore it before {deleted_hint}.")
 
 
 def _serializer_context(team: Team, user: Any, request: Any | None, *, method: str = "POST") -> dict:
@@ -165,6 +219,96 @@ def update_flag(
         # instance cannot persist the placeholder over the stored ciphertext.
         saved.refresh_from_db(fields=["filters"])
     return saved
+
+
+def _rollout_write(
+    flag: FeatureFlag,
+    filters: dict,
+    version: int,
+    *,
+    team: Team,
+    user: User,
+    request: Request | None,
+) -> FeatureFlag:
+    try:
+        return update_flag(
+            flag,
+            {"filters": filters},
+            team=team,
+            user=user,
+            request=FlagRolloutWriteRequest(request, version=version, user=user),
+        )
+    except Conflict as error:
+        raise FlagRolloutVersionConflict(str(error.detail), expected_version=version) from error
+
+
+def _rollout_action(
+    flag: FeatureFlag,
+    version: int | None,
+    *,
+    team: Team,
+    user: User,
+    deleted_hint: str,
+    transform: Callable[[dict], dict],
+    request: Request | None = None,
+) -> FeatureFlag:
+    if user is None:
+        raise ValueError("An acting user is required for a guarded rollout")
+    _reject_deleted_rollout(flag, deleted_hint)
+    if detect_config_format(flag.filters).kind != "v1":
+        raise FlagRolloutUnsupportedConfig(
+            "This flag uses a configuration format that rollout actions cannot modify yet."
+        )
+    version = version or 0
+    _rollout_precondition(flag, version)
+
+    with transaction.atomic():
+        locked_flag = FeatureFlag.objects_including_soft_deleted.select_for_update().get(pk=flag.pk, team_id=team.pk)
+        _carry_loaded_state(flag, locked_flag)
+        _reject_deleted_rollout(locked_flag, deleted_hint)
+        _rollout_precondition(locked_flag, version)
+        current_filters = locked_flag.get_filters()
+        new_filters = transform(current_filters)
+        unchanged = new_filters == current_filters
+
+    if unchanged:
+        return locked_flag
+    return _rollout_write(locked_flag, new_filters, version, team=team, user=user, request=request)
+
+
+def set_release_condition_rollout(
+    flag: FeatureFlag,
+    condition_index: int,
+    rollout_percentage: float,
+    version: int | None,
+    *,
+    team: Team,
+    user: User,
+    request: Request | None = None,
+) -> FeatureFlag:
+    def transform(current_filters: dict) -> dict:
+        try:
+            return transform_release_condition_rollout(current_filters, condition_index, rollout_percentage)
+        except IndexError as error:
+            condition_count = len(current_filters.get("groups") or [])
+            if condition_count:
+                message = (
+                    f"This feature flag has no release condition at index {condition_index}. It has "
+                    f"{condition_count}, so the valid indexes are 0 through {condition_count - 1}."
+                )
+            else:
+                message = "This feature flag has no release conditions, so there is none to set a percentage on."
+            raise FlagRolloutConditionNotFound(message) from error
+
+    return _rollout_action(
+        flag,
+        version,
+        team=team,
+        user=user,
+        request=request,
+        deleted_hint="changing its rollout",
+        transform=transform,
+    )
 
 
 def set_flag_active(

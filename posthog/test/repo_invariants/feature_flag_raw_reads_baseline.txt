@@ -34,7 +34,6 @@ products/feature_flags/backend/api/feature_flag.py::FeatureFlagViewSet._apply_fi
 products/feature_flags/backend/api/feature_flag.py::FeatureFlagViewSet._apply_filters::Q(filters__multivariate__variants__isnull)
 products/feature_flags/backend/api/feature_flag.py::FeatureFlagViewSet._remote_config_response::feature_flag.filters.get('payloads')
 products/feature_flags/backend/api/feature_flag.py::FeatureFlagViewSet._remote_config_response::feature_flag.filters.get('payloads')
-products/feature_flags/backend/api/feature_flag.py::FeatureFlagViewSet._rollout_action::locked_flag.get_filters()
 products/feature_flags/backend/api/feature_flag.py::apply_encrypted_payload_response_form::filters = feature_flag_data.get('filters')
 products/feature_flags/backend/api/feature_flag.py::find_dependent_flags::extra(sql on filters)
 products/feature_flags/backend/api/feature_flag.py::find_dependent_flags_batch::dep_flag.filters.get('groups')
@@ -52,6 +51,7 @@ products/feature_flags/backend/api/organization_feature_flag.py::OrganizationFea
 products/feature_flags/backend/blast_radius_flag_deps.py::_has_unmodeled_evaluation::flag.get_filters()
 products/feature_flags/backend/canary.py::_unresolved_group_aggregated_flags::(flag.get('filters') or {}).get('aggregation_group_type_index')
 products/feature_flags/backend/facade/api.py::_redact_unchanged_encrypted_payloads::(flag.filters or {}).get('payloads')
+products/feature_flags/backend/facade/api.py::_rollout_action::locked_flag.get_filters()
 products/feature_flags/backend/facade/api.py::clear_feature_enrollment::flag.get_filters()
 products/feature_flags/backend/flag_status.py::<module>::sql on posthog_featureflag.filters
 products/feature_flags/backend/flag_status.py::<module>::sql on posthog_featureflag.filters

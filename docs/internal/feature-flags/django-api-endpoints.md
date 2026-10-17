@@ -114,6 +114,14 @@ A flag already in the requested state is returned unchanged with no write at all
 `unarchive` leaves the flag disabled; enabling it is a separate call.
 It is the one action that cannot return a 409: every gated action declines a change that sets none of `active`, `filters` and `bucketing_identifier`, so an `archived`-only write never opens a change request.
 
+### Guarded rollout actions
+
+`set_release_condition_rollout` changes one condition's percentage, while `roll_out_to_everyone` adds an unconditional release condition. Both require the row `version` from the caller's last read and share the guarded rollout path in `products/feature_flags/backend/facade/api.py`.
+
+The facade's `set_release_condition_rollout(flag, condition_index, rollout_percentage, version, team=team, user=user)` also works without an HTTP request. Callers must check editor access before invoking it, as with other facade writes. It raises typed errors from `facade/contracts.py` for a version conflict, unsupported configuration, missing condition or deleted flag. The API maps these to its existing responses; `ApprovalRequired` propagates unchanged.
+
+The version and no-op checks run against the row under `select_for_update`. A no-op writes nothing. A change goes through `update_flag` after leaving the transaction, so a pending approval request survives an `ApprovalRequired` exception. The serializer repeats the strict version check under its own row lock before saving.
+
 ### `create_static_cohort_for_flag`
 
 Creates a static cohort containing all users that match a flag's conditions. This is the **only remaining use** of the legacy Python flag matching code in `posthog/models/feature_flag/flag_matching.py`.

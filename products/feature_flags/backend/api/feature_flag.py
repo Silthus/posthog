@@ -6,7 +6,7 @@ import json
 import math
 import logging
 import functools
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import nullcontext
 from dataclasses import asdict
 from datetime import datetime, timedelta
@@ -138,6 +138,12 @@ from products.feature_flags.backend.facade.config import (
     require_v1_config,
 )
 from products.feature_flags.backend.facade.config_validation import ConfigValidationError, ValidationLimits
+from products.feature_flags.backend.facade.contracts import (
+    FlagRolloutConditionNotFound,
+    FlagRolloutDeletedFlag,
+    FlagRolloutUnsupportedConfig,
+    FlagRolloutVersionConflict,
+)
 from products.feature_flags.backend.facade.references import InvalidIds, references
 from products.feature_flags.backend.filters_validation import collect_cross_field_violations, flatten_structural_errors
 from products.feature_flags.backend.flag_analytics import increment_request_count
@@ -176,6 +182,8 @@ from products.surveys.backend.models import Survey
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
+
+    from posthog.models.user import User
 
 logger = logging.getLogger(__name__)
 # Dedicated logger name (not `__name__`) so the underlying stdlib logger is created
@@ -3898,22 +3906,6 @@ class FlagLifecycleWriteRequest(ServiceRequest):
         return getattr(self._request, name)
 
 
-class FlagRolloutWriteRequest(FlagLifecycleWriteRequest):
-    """The request a flag rollout action hands to the flag facade.
-
-    ``strict_version_precondition`` makes ``FeatureFlagSerializer`` refuse the write when the
-    caller's version is not the current one, under the row lock it already takes. ``version`` is
-    the only thing in the body, because the serializer reads it from there and the action has
-    already validated it through its own typed request serializer.
-    """
-
-    strict_version_precondition = True
-
-    def __init__(self, request: request.Request, *, version: int) -> None:
-        super().__init__(request)
-        self.data = {"version": version}
-
-
 # ClickHouse cost attribution: this viewset currently has no direct ClickHouse calls —
 # all ClickHouse work is delegated to helpers (user_blast_radius.py, flag_analytics.py)
 # that already tag their queries. If you add a new ClickHouse query reachable from an
@@ -4234,7 +4226,6 @@ class FeatureFlagViewSet(
 
         The lifecycle actions use this because evaluation reads through a manager that excludes
         deleted rows, so reporting a state change on one would be a success for a flag that serves nobody.
-        The rollout actions use it because a filters write on a deleted flag takes effect when it is restored.
         """
         if not feature_flag.deleted:
             return None
@@ -4417,89 +4408,6 @@ class FeatureFlagViewSet(
         )
         return self._lifecycle_response(updated)
 
-    # Rollout actions. Unlike the state actions above, these carry a value, so they close the
-    # lost-update window rather than only shrinking it: FeatureFlagSerializer compares the
-    # caller's `version` under the row lock it already takes, so no edit can land between the
-    # check and the save. A transform that leaves `filters` unchanged writes nothing.
-
-    def _rollout_precondition(self, feature_flag: FeatureFlag, version: int) -> None:
-        # Repeated by the serializer under its row lock, which is the check that closes the
-        # window. This one runs first so a stale caller never reaches the approval gate, which
-        # sits ahead of the lock and would leave a change request for a write it then refuses.
-        current_version = feature_flag.version or 0
-        if version != current_version:
-            raise Conflict(flag_version_conflict_message(version, current_version))
-
-    def _rollout_action(
-        self, request: ValidatedRequest, *, deleted_hint: str, transform: Callable[[dict], dict]
-    ) -> Response:
-        """Apply one rollout transform to the flag this request names.
-
-        Both actions run this sequence, so their concurrency guarantees cannot drift apart. A
-        change made to one copy of it would leave the other endpoint weaker while both still
-        passed their own tests.
-        """
-        feature_flag: FeatureFlag = self.get_object()
-        rejection = self._deleted_flag_rejection(feature_flag, deleted_hint)
-        if rejection is not None:
-            return rejection
-        # A format change bumps `version`, so the locked precondition refuses one landing after this.
-        if detect_config_format(feature_flag.filters).kind != "v1":
-            raise exceptions.ValidationError(
-                "This flag uses a configuration format that rollout actions cannot modify yet.",
-                code="unsupported_config_version",
-            )
-
-        # A flag written before versioning reads as null; the precondition normalises the stored
-        # side the same way, so a caller can send back exactly what the read returned.
-        version = request.validated_data["version"] or 0
-        self._rollout_precondition(feature_flag, version)
-
-        with transaction.atomic():
-            # The checks above ran against the instance loaded before the lock, which is a fast
-            # path only. The decision below has to be made against this row: a write that lands
-            # between the two reads leaves the earlier copy stale, and a transform computed from
-            # it can compare equal to filters that no longer exist, which would answer 200 for a
-            # change that was never applied.
-            locked_flag = FeatureFlag.objects_including_soft_deleted.select_for_update().get(pk=feature_flag.pk)
-            # Both answers below serialize this row, and a bare `get()` carries none of the
-            # prefetches, annotations and select_related caches the request already loaded.
-            _carry_loaded_state(feature_flag, locked_flag)
-            # A bulk delete leaves `version` untouched, so the precondition cannot see one that
-            # landed since the read. Without this check the write rewrites a deleted flag's
-            # filters, and the change takes effect the moment anyone restores it.
-            rejection = self._deleted_flag_rejection(locked_flag, deleted_hint)
-            if rejection is not None:
-                return rejection
-            self._rollout_precondition(locked_flag, version)
-
-            current_filters = locked_flag.get_filters()
-            new_filters = transform(current_filters)
-            unchanged = new_filters == current_filters
-
-        # Both answers leave the transaction first. The response serializer runs about a dozen
-        # queries, so answering inside it would hold the row lock while they ran and make every
-        # other writer of this flag wait. The write needs to be outside for a second reason: the
-        # approval gate creates a change request and then raises, and a transaction held across
-        # it would roll that record back. The write takes the row lock again and repeats the
-        # version check, so a change landing in between is refused there rather than applied over.
-        if unchanged:
-            return self._lifecycle_response(locked_flag)
-        return self._lifecycle_response(self._rollout_write(request, locked_flag, new_filters, version))
-
-    def _rollout_write(
-        self, request: request.Request, feature_flag: FeatureFlag, filters: dict, version: int
-    ) -> FeatureFlag:
-        from products.feature_flags.backend.facade.api import update_flag
-
-        return update_flag(
-            feature_flag,
-            {"filters": filters},
-            team=self.team,
-            user=request.user,
-            request=FlagRolloutWriteRequest(request, version=version),
-        )
-
     @validated_request(
         FeatureFlagSetReleaseConditionRolloutRequestSerializer,
         responses=flag_lifecycle_responses(
@@ -4523,25 +4431,28 @@ class FeatureFlagViewSet(
         On a multivariate flag this sets how many of the matching users get a variant at all. It
         does not change how the variants are split between them.
         """
+        from products.feature_flags.backend.facade.api import set_release_condition_rollout
+
         data = request.validated_data
-
-        def transform(current_filters: dict) -> dict:
-            try:
-                return flag_filters.set_release_condition_rollout(
-                    current_filters, data["condition_index"], data["rollout_percentage"]
-                )
-            except IndexError:
-                condition_count = len(current_filters.get("groups") or [])
-                if condition_count:
-                    message = (
-                        f"This feature flag has no release condition at index {data['condition_index']}. It has "
-                        f"{condition_count}, so the valid indexes are 0 through {condition_count - 1}."
-                    )
-                else:
-                    message = "This feature flag has no release conditions, so there is none to set a percentage on."
-                raise exceptions.ValidationError(message)
-
-        return self._rollout_action(request, deleted_hint="changing its rollout", transform=transform)
+        try:
+            updated = set_release_condition_rollout(
+                self.get_object(),
+                data["condition_index"],
+                data["rollout_percentage"],
+                data["version"],
+                team=self.team,
+                user=cast("User", request.user),
+                request=request,
+            )
+        except FlagRolloutDeletedFlag as error:
+            return Response({"success": False, "error": str(error)}, status=400)
+        except FlagRolloutVersionConflict as error:
+            raise Conflict(str(error)) from error
+        except FlagRolloutUnsupportedConfig as error:
+            raise exceptions.ValidationError(str(error), code="unsupported_config_version") from error
+        except FlagRolloutConditionNotFound as error:
+            raise exceptions.ValidationError(str(error)) from error
+        return self._lifecycle_response(updated)
 
     @validated_request(
         FeatureFlagRollOutToEveryoneRequestSerializer,
@@ -4585,7 +4496,25 @@ class FeatureFlagViewSet(
             variant_key = self._validated_variant_key(current_filters, data.get("variant_key"))
             return flag_filters.roll_out_to_everyone(current_filters, variant_key=variant_key)
 
-        return self._rollout_action(request, deleted_hint="rolling it out to everyone", transform=transform)
+        from products.feature_flags.backend.facade.api import _rollout_action
+
+        try:
+            updated = _rollout_action(
+                self.get_object(),
+                data["version"],
+                team=self.team,
+                user=cast("User", request.user),
+                request=request,
+                deleted_hint="rolling it out to everyone",
+                transform=transform,
+            )
+        except FlagRolloutDeletedFlag as error:
+            return Response({"success": False, "error": str(error)}, status=400)
+        except FlagRolloutVersionConflict as error:
+            raise Conflict(str(error)) from error
+        except FlagRolloutUnsupportedConfig as error:
+            raise exceptions.ValidationError(str(error), code="unsupported_config_version") from error
+        return self._lifecycle_response(updated)
 
     @staticmethod
     def _reject_enrollment_gated_rollout(current_filters: dict) -> None:
