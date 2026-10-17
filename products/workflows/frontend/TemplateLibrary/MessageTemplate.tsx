@@ -1,5 +1,6 @@
 import { BindLogic, useActions, useValues } from 'kea'
 import { Form } from 'kea-forms'
+import { useMemo } from 'react'
 
 import { IconLock, IconTrash } from '@posthog/icons'
 import {
@@ -52,7 +53,7 @@ import { ReadOnlyTemplatePreview } from './ReadOnlyTemplatePreview'
 import { DUPLICATE_REFUSED_EDITS_REASON, RefusedEditsBanner } from './RefusedEditsBanner'
 import { openReleaseTemplateDialog } from './releaseTemplateDialog'
 import { SendTestEmailModal } from './SendTestEmailModal'
-import { NEW_TEMPLATE_AGENT_HEADLINES } from './templateAgentContext'
+import { NEW_TEMPLATE_AGENT_HEADLINES, buildCodeManagedTemplateContext } from './templateAgentContext'
 import { TransactionalEmailApiExample } from './TransactionalEmailApiExample'
 
 export const scene: SceneExport<MessageTemplateSceneLogicProps> = {
@@ -123,12 +124,13 @@ export function MessageTemplate(props: MessageTemplateSceneLogicProps): JSX.Elem
     const { aiComposerAvailable, agentContextItems } = useValues(newTemplateAgentLogic)
     // A template started from a sent message, and the escape hatch, land in the editor instead (see `aiComposerAvailable`).
     const showAiComposer = props.id === 'new' && aiComposerAvailable
+    const codeManagedAgentContext = useMemo(() => buildCodeManagedTemplateContext(originalTemplate), [originalTemplate])
     useSceneAgentPanel({
         sceneKey: 'email-template',
-        contextItems: showAiComposer ? agentContextItems : null,
-        headlines: NEW_TEMPLATE_AGENT_HEADLINES,
-        composer: AI_FIRST_COMPOSER_OVERRIDE,
-        active: showAiComposer,
+        contextItems: showAiComposer ? agentContextItems : codeManagedAgentContext,
+        headlines: showAiComposer ? NEW_TEMPLATE_AGENT_HEADLINES : undefined,
+        composer: showAiComposer ? AI_FIRST_COMPOSER_OVERRIDE : undefined,
+        active: showAiComposer || !!codeManagedAgentContext,
         // The composer is the page while drafting; the panel opens itself once the template exists.
         autoOpen: false,
     })
