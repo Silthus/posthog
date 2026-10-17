@@ -1,0 +1,58 @@
+
+  ci:preflight — 6286 changed file(s) vs origin/master
+
+   ✓ [staleness] branch freshness vs master
+       even with master
+   ✓ [shadow-drift] depot shadow drift (.depot mirrors of backend CI)
+       depot mirrors in sync
+   ✓ [lockfile] broken pnpm-lock.yaml (blocks ALL CI)
+       20 file(s) · root: ok · products/desktop: needs node (no install)
+   ✓ [uv-lock] uv.lock out of sync with pyproject.toml (blocks Python CI)
+       2 file(s) · ok
+   ✓ [ruff-lint] Python lint (ruff check)
+       3146 file(s) · ok
+   ⚠ [complexity] cyclomatic complexity (warn >10, >15 in tests)
+       4952 file(s) · ee/api/agentic_provisioning/views/authorize.py:74:5: warning: `agentic_authorize` has cyclomatic complexity 12 (warn >10) · ee/api/agentic_provisioning/views/authorize.py:199:9: warning: `post` has cyclomatic complexity 13 (warn >10) · ee/api/agentic_provisioning/views/oauth_token.py:159:9: warning: `_exchange_authorization_code` has cyclomatic complexity 15 (warn >10)
+   ⚠ [size] file size (warn >1000 lines)
+       4952 file(s) · frontend/src/scenes/billing/paymentEntryLogic.test.ts:1:1: warning: now 1235 lines (up from 140), past 1000 (~14k tokens to read). Consider splitting it: /splitting-oversized-modules · frontend/src/scenes/sceneLogic.test.tsx:1:1: warning: now 1002 lines (up from 965), past 1000 (~12k tokens to read). Consider splitting it: /splitting-oversized-modules · posthog/api/test/test_resource_transfer.py:1:1: warning: now 1008 lines (up from 935), past 1000 (~12k tokens to read). Consider splitting it: /splitting-oversized-modules
+   ✓ [ruff-format] Python format (ruff format)
+       3146 file(s) · ok
+   · [desktop-biome] desktop lint/format (Biome, what desktop-quality CI runs)
+       103 file(s) · needs desktop-node
+   · [agent-biome] agent workspace lint/format (Biome, what desktop-quality CI runs)
+       17 file(s) · needs agent-node
+   → [type-check] Python type checking (mypy)
+       3146 file(s) · a type error costs a full CI re-run — consider `uv run mypy --cache-fine-grained .` (what CI runs)
+   ✓ [django-template-format] Django template formatting (djlint)
+       8 file(s) · ok
+   ✓ [django-template-lint] Django template lint (djlint)
+       1 file(s) · ok
+   ✓ [markdown-format] markdown formatting (oxfmt)
+       223 file(s) · ok
+   ✓ [frontend-format] frontend formatting (oxfmt)
+       1930 file(s) · ok
+   ✓ [feature-flags] FEATURE_FLAGS not alphabetically sorted
+       1 file(s) · ok
+   ✓ [api-ratchet] new lib/api.ts path method duplicating a generated client
+       19 file(s) · ok
+   ✓ [workflow-lint] workflow-convention failure in .github/workflows
+       35 file(s) · ok
+   ✓ [mprocs] bin/mprocs*.yaml docker-compose shell out of sync with generator.py
+       1 file(s) · ok
+   → [openapi] OpenAPI sources changed (generated types may need a regen)
+       210 file(s) · if you have not run `hogli build:openapi` since changing them, run it and commit
+   ✓ [projections] generated projections out of sync with their Python sources
+       14 file(s) · ok
+   ✓ [migrations] migration conflict / orphaned migration
+       49 file(s) · ok
+   ✓ [snapshot-baselines] visual baselines dropped from snapshots.yml (fails the merge queue batch)
+       1 file(s) · the Storybook config changed in this diff, so removed entries are expected
+   · [semgrep-devex] new semgrep findings (devex rules)
+       5639 file(s) · semgrep exceeded the 15s check budget; CI will run the check
+
+  summary {"changed_files": 6286, "triggered": ["shadow-drift", "lockfile", "uv-lock", "ruff-lint", "complexity", "size", "ruff-format", "desktop-biome", "agent-biome", "type-check", "django-template-format", "django-template-lint", "markdown-format", "frontend-format", "feature-flags", "api-ratchet", "workflow-lint", "mprocs", "openapi", "projections", "migrations", "snapshot-baselines", "semgrep-devex"], "failures": 0, "mode": "strict"}
+
+remote: This repository moved. Please use the new location:        
+remote:   git@github.com:Silthus/posthog.git        
+To github.com:silthus/posthog.git
+   60fb98f06a5..df551ee9fb6  HEAD -> spec/template-request-change

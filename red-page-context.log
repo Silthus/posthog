@@ -1,0 +1,172 @@
+13:22:37:744 [client-request-interceptor] constructing the interceptor...
+13:22:37:757 [xhr] constructing the interceptor...
+13:22:37:757 [fetch] constructing the interceptor...
+13:22:37:757 [websocket] constructing the interceptor...
+13:22:37:758 [interceptor-source] constructing the interceptor...
+13:22:38:498 [interceptor-source:apply] applying the interceptor...
+13:22:38:498 [interceptor-source] retrieved global instance: undefined
+13:22:38:498 [interceptor-source:apply] no running instance found, setting up a new instance...
+13:22:38:498 [interceptor-source:setup] applying all 4 interceptors...
+13:22:38:499 [interceptor-source:setup] applying "ClientRequestInterceptor" interceptor...
+13:22:38:499 [client-request-interceptor:apply] applying the interceptor...
+13:22:38:499 [client-request-interceptor] retrieved global instance: undefined
+13:22:38:499 [client-request-interceptor:apply] no running instance found, setting up a new instance...
+13:22:38:499 [client-request-interceptor] set global instance! client-request-interceptor
+13:22:38:499 [interceptor-source:setup] adding interceptor dispose subscription
+13:22:38:499 [interceptor-source:setup] applying "XMLHttpRequestInterceptor" interceptor...
+13:22:38:499 [xhr:apply] applying the interceptor...
+13:22:38:499 [xhr] retrieved global instance: undefined
+13:22:38:499 [xhr:apply] no running instance found, setting up a new instance...
+13:22:38:499 [xhr:setup] patching "XMLHttpRequest" module...
+13:22:38:499 [xhr:setup] native "XMLHttpRequest" module patched! XMLHttpRequest
+13:22:38:499 [xhr] set global instance! xhr
+13:22:38:499 [interceptor-source:setup] adding interceptor dispose subscription
+13:22:38:499 [interceptor-source:setup] applying "FetchInterceptor" interceptor...
+13:22:38:499 [fetch:apply] applying the interceptor...
+13:22:38:499 [fetch] retrieved global instance: undefined
+13:22:38:500 [fetch:apply] no running instance found, setting up a new instance...
+13:22:38:500 [fetch] set global instance! fetch
+13:22:38:500 [interceptor-source:setup] adding interceptor dispose subscription
+13:22:38:500 [interceptor-source:setup] applying "WebSocketInterceptor" interceptor...
+13:22:38:500 [websocket:apply] applying the interceptor...
+13:22:38:500 [websocket] retrieved global instance: undefined
+13:22:38:500 [websocket:apply] no running instance found, setting up a new instance...
+13:22:38:500 [websocket] set global instance! websocket
+13:22:38:500 [interceptor-source:setup] adding interceptor dispose subscription
+13:22:38:500 [interceptor-source] set global instance! interceptor-source
+13:22:38:500 [client-request-interceptor:on] adding "request" event listener: function () { [native code] }
+13:22:38:500 [xhr:on] adding "request" event listener: function () { [native code] }
+13:22:38:500 [fetch:on] adding "request" event listener: function () { [native code] }
+13:22:38:500 [websocket:on] adding "request" event listener: function () { [native code] }
+13:22:38:500 [client-request-interceptor:on] adding "response" event listener: function () { [native code] }
+13:22:38:500 [xhr:on] adding "response" event listener: function () { [native code] }
+13:22:38:500 [fetch:on] adding "response" event listener: function () { [native code] }
+13:22:38:500 [websocket:on] adding "response" event listener: function () { [native code] }
+13:22:38:500 [client-request-interceptor:on] adding "connection" event listener: function () { [native code] }
+13:22:38:500 [xhr:on] adding "connection" event listener: function () { [native code] }
+13:22:38:500 [fetch:on] adding "connection" event listener: function () { [native code] }
+13:22:38:500 [websocket:on] adding "connection" event listener: function () { [native code] }
+13:22:38:510 [interceptor-source:dispose] disposing the interceptor...
+13:22:38:510 [interceptor-source] retrieved global instance: BatchInterceptor
+13:22:38:510 [interceptor-source] cleared global instance! interceptor-source
+13:22:38:510 [interceptor-source:dispose] global symbol deleted: undefined
+13:22:38:510 [interceptor-source:dispose] disposing of 4 subscriptions...
+13:22:38:510 [client-request-interceptor:dispose] disposing the interceptor...
+13:22:38:510 [client-request-interceptor] retrieved global instance: ClientRequestInterceptor
+13:22:38:510 [client-request-interceptor] cleared global instance! client-request-interceptor
+13:22:38:510 [client-request-interceptor:dispose] global symbol deleted: undefined
+13:22:38:510 [client-request-interceptor:dispose] disposing of 1 subscriptions...
+13:22:38:510 [client-request-interceptor:dispose] disposed of all subscriptions! 0
+13:22:38:510 [client-request-interceptor:dispose] destroyed the listener!
+13:22:38:510 [xhr:dispose] disposing the interceptor...
+13:22:38:510 [xhr] retrieved global instance: XMLHttpRequestInterceptor
+13:22:38:510 [xhr] cleared global instance! xhr
+13:22:38:510 [xhr:dispose] global symbol deleted: undefined
+13:22:38:510 [xhr:dispose] disposing of 1 subscriptions...
+13:22:38:510 [xhr:setup] native "XMLHttpRequest" module restored! XMLHttpRequest
+13:22:38:510 [xhr:dispose] disposed of all subscriptions! 0
+13:22:38:510 [xhr:dispose] destroyed the listener!
+13:22:38:510 [fetch:dispose] disposing the interceptor...
+13:22:38:511 [fetch] retrieved global instance: FetchInterceptor
+13:22:38:511 [fetch] cleared global instance! fetch
+13:22:38:511 [fetch:dispose] global symbol deleted: undefined
+13:22:38:511 [fetch:dispose] disposing of 1 subscriptions...
+13:22:38:511 [fetch] restored native "globalThis.fetch"! 
+13:22:38:511 [fetch:dispose] disposed of all subscriptions! 0
+13:22:38:511 [fetch:dispose] destroyed the listener!
+13:22:38:511 [websocket:dispose] disposing the interceptor...
+13:22:38:511 [websocket] retrieved global instance: WebSocketInterceptor
+13:22:38:511 [websocket] cleared global instance! websocket
+13:22:38:511 [websocket:dispose] global symbol deleted: undefined
+13:22:38:511 [websocket:dispose] disposing of 1 subscriptions...
+13:22:38:511 [websocket:dispose] disposed of all subscriptions! 0
+13:22:38:511 [websocket:dispose] destroyed the listener!
+13:22:38:511 [interceptor-source:dispose] disposed of all subscriptions! 0
+13:22:38:511 [interceptor-source:dispose] destroyed the listener!
+FAIL ../products/workflows/frontend/TemplateLibrary/templateAgentContext.test.ts
+  templateAgentContext
+    buildNewTemplateComposerContext
+      ✓ attaches a picked template as an untrusted ref with its html for the thumbnail only (2 ms)
+      ✓ keeps the skill and instructions out of the picked template dismiss group (1 ms)
+    buildCodeManagedTemplateContext
+      ✕ sends the agent that the open template is managed by code, with its key and file (1 ms)
+      ✕ keeps the uploaded key and source out of the trusted instructions
+      ✕ omits source fields the template does not record
+      ✕ attaches nothing for a template made in PostHog (1 ms)
+      ✕ attaches nothing for a template released from code
+
+  ● templateAgentContext › buildCodeManagedTemplateContext › sends the agent that the open template is managed by code, with its key and file
+
+    TypeError: Cannot read properties of undefined (reading 'call')
+
+      68 |         // The agent must know before its first tool call, or it tries the update tool and meets the lock.
+      69 |         it('sends the agent that the open template is managed by code, with its key and file', () => {
+    > 70 |             const { trusted, untrusted } = sentContext(buildCodeManagedTemplateContext(CODE_MANAGED))
+         |                                                        ^
+      71 |
+      72 |             expect(untrusted).toContain('email_template tpl-2 ("Welcome")')
+      73 |             expect(untrusted).toContain(
+
+      at Object.<anonymous> (../products/workflows/frontend/TemplateLibrary/templateAgentContext.test.ts:70:56)
+
+  ● templateAgentContext › buildCodeManagedTemplateContext › keeps the uploaded key and source out of the trusted instructions
+
+    TypeError: Cannot read properties of undefined (reading 'call')
+
+      81 |         it('keeps the uploaded key and source out of the trusted instructions', () => {
+      82 |             const { trusted } = sentContext(
+    > 83 |                 buildCodeManagedTemplateContext({
+         |                 ^
+      84 |                     ...CODE_MANAGED,
+      85 |                     key: 'injected-key',
+      86 |                     source_repository: 'github.com/injected/repository',
+
+      at Object.<anonymous> (../products/workflows/frontend/TemplateLibrary/templateAgentContext.test.ts:83:17)
+
+  ● templateAgentContext › buildCodeManagedTemplateContext › omits source fields the template does not record
+
+    TypeError: Cannot read properties of undefined (reading 'call')
+
+      94 |         it('omits source fields the template does not record', () => {
+      95 |             const { untrusted } = sentContext(
+    > 96 |                 buildCodeManagedTemplateContext({ ...CODE_MANAGED, source_repository: null, source_ref: null })
+         |                 ^
+      97 |             )
+      98 |
+      99 |             expect(untrusted).toContain('"managed_by: code; key: welcome; source_path: emails/welcome.html"')
+
+      at Object.<anonymous> (../products/workflows/frontend/TemplateLibrary/templateAgentContext.test.ts:96:17)
+
+  ● templateAgentContext › buildCodeManagedTemplateContext › attaches nothing for a template made in PostHog
+
+    TypeError: Cannot read properties of undefined (reading 'call')
+
+      104 |             ['released from code', { ...CODE_MANAGED, managed_by: 'gui' as const }],
+      105 |         ])('attaches nothing for a template %s', (_, template) => {
+    > 106 |             expect(buildCodeManagedTemplateContext(template)).toBeNull()
+          |                    ^
+      107 |         })
+      108 |     })
+      109 | })
+
+      at ../products/workflows/frontend/TemplateLibrary/templateAgentContext.test.ts:106:20
+
+  ● templateAgentContext › buildCodeManagedTemplateContext › attaches nothing for a template released from code
+
+    TypeError: Cannot read properties of undefined (reading 'call')
+
+      104 |             ['released from code', { ...CODE_MANAGED, managed_by: 'gui' as const }],
+      105 |         ])('attaches nothing for a template %s', (_, template) => {
+    > 106 |             expect(buildCodeManagedTemplateContext(template)).toBeNull()
+          |                    ^
+      107 |         })
+      108 |     })
+      109 | })
+
+      at ../products/workflows/frontend/TemplateLibrary/templateAgentContext.test.ts:106:20
+
+Test Suites: 1 failed, 1 total
+Tests:       5 failed, 2 passed, 7 total
+Snapshots:   0 total
+Time:        1.558 s, estimated 12 s
+Ran all test suites matching /..\/products\/workflows\/frontend\/TemplateLibrary\/templateAgentContext.test.ts/i.

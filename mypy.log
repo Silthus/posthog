@@ -1,0 +1,29 @@
+! You are not logged in to FloxHub. Run 'flox auth login' to log in.
+! This environment requires Flox v1.18.2 or later, you have v1.16.0.
+
+PostHog dev ── spec/template-request-change/515
+
+  ... Python packages  ✓ Python packages
+  ✓ Build phrocs                                 1s
+  ✓ Node packages                                7s
+  ✓ CodeRabbit CLI (cached)
+  ✓ System hosts
+  ✓ Environment vars
+  ✓ Rust toolchain (rustc 1.91.1)
+
+Ready in 7s
+WARNING:root:initialized clickhouse users: DEFAULT
+ERROR:posthog.exceptions_capture:{'event': GeoIP2Exception('Path must be a valid database or directory containing databases.'), 'timestamp': '2026-10-17T13:37:53.710085Z', 'logger': 'posthog.exceptions_capture', 'level': 'error', 'pid': 2274874, 'tid': 252940871454752, 'exception': 'Traceback (most recent call last):\n  File "/home/coder/.t3/worktrees/posthog/t3-fdceca58/posthog/geoip.py", line 15, in <module>\n    geoip: Optional[GeoIP2] = GeoIP2(cache=8)\n                              ~~~~~~^^^^^^^^^\n  File "/home/coder/.t3/worktrees/posthog/t3-fdceca58/.flox/cache/venv/lib/python3.14/site-packages/django/contrib/gis/geoip2.py", line 116, in __init__\n    raise GeoIP2Exception(\n        "Path must be a valid database or directory containing databases."\n    )\ndjango.contrib.gis.geoip2.GeoIP2Exception: Path must be a valid database or directory containing databases.'}
+Traceback (most recent call last):
+  File "/home/coder/.t3/worktrees/posthog/t3-fdceca58/posthog/geoip.py", line 15, in <module>
+    geoip: Optional[GeoIP2] = GeoIP2(cache=8)
+                              ~~~~~~^^^^^^^^^
+  File "/home/coder/.t3/worktrees/posthog/t3-fdceca58/.flox/cache/venv/lib/python3.14/site-packages/django/contrib/gis/geoip2.py", line 116, in __init__
+    raise GeoIP2Exception(
+        "Path must be a valid database or directory containing databases."
+    )
+django.contrib.gis.geoip2.GeoIP2Exception: Path must be a valid database or directory containing databases.
+WARNING:posthog.apps:{'event': 'Skipping async migrations setup. This is unsafe in production!', 'timestamp': '2026-10-17T13:37:53.717281Z', 'logger': 'posthog.apps', 'level': 'warning', 'pid': 2274874, 'tid': 252940871454752}
+Running in test mode. Setting DEBUG and TEST environment variables.
+Success: no issues found in 24130 source files
+mypy exit=0

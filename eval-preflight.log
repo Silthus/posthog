@@ -1,0 +1,29 @@
+! You are not logged in to FloxHub. Run 'flox auth login' to log in.
+! This environment requires Flox v1.18.2 or later, you have v1.16.0.
+
+PostHog dev ── spec/template-request-change/515
+
+  ... Python packages  ✓ Python packages
+  ✓ Build phrocs                                 1s
+  ✓ Node packages                                7s
+  ✓ CodeRabbit CLI (cached)
+  ✓ System hosts
+  ✓ Environment vars
+  ✓ Rust toolchain (rustc 1.91.1)
+
+Ready in 7s
+Agent: claude / claude-opus-5
+Sandbox concurrency: 1
+Trials per case: 1
+Case timeout: 900s
+Execution completion does not include scoring. The experiment ends when results are ready.
+Use --verbose for detailed console logs. The transcript always keeps detailed logs.
+
+SETUP START  check configuration
+error: Missing required environment variables:
+  - BRAINTRUST_API_KEY: records experiments and scores to Braintrust
+  - LLM_GATEWAY_ANTHROPIC_API_KEY: Anthropic API key the LLM gateway proxies the agent's model calls with
+Export them in your shell, add them to /home/coder/.t3/worktrees/posthog/t3-fdceca58/.env (loaded automatically), or keep them in .env.local and run via `hogli evals:sandboxed`.
+Full run transcript (stdout and stderr):
+/home/coder/.t3/worktrees/posthog/t3-fdceca58/products/posthog_ai/eval_harness/logs/harness/20261017-133602_ae8779ed.log
+💥 Command failed: python -m products.posthog_ai.eval_harness.harness eval_code_managed_templates --eval sidebar_on_code_managed_page --max-sandboxes 1

@@ -1,0 +1,36 @@
+! You are not logged in to FloxHub. Run 'flox auth login' to log in.
+! This environment requires Flox v1.18.2 or later, you have v1.16.0.
+
+PostHog dev ── spec/template-request-change/515
+
+  ... Python packages  ✓ Python packages
+  ✓ Build phrocs                                 1s
+  ✓ Node packages                                8s
+  ✓ CodeRabbit CLI (cached)
+  ✓ System hosts
+  ✓ Environment vars
+  ✓ Rust toolchain (rustc 1.91.1)
+
+Ready in 8s
+============================= test session starts ==============================
+platform linux -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0 -- /home/coder/.t3/worktrees/posthog/t3-fdceca58/.flox/cache/venv/bin/python
+django: version: 5.2.18, settings: posthog.settings (from ini)
+hypothesis profile 'default'
+rootdir: /home/coder/.t3/worktrees/posthog/t3-fdceca58
+configfile: pytest.ini
+plugins: xdist-3.8.0, env-1.7.1, icdiff-0.9, split-0.11.0, django-4.14.0, hypothesis-6.151.9, timeout-2.4.0, requests-mock-1.12.1, rerunfailures-16.6, syrupy-6.1.1, mock-3.15.1, aiohttp-1.1.1, anyio-4.9.0, asyncio-1.4.0, durations-1.9.0, cov-7.1.0, time-machine-3.5.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=module, asyncio_default_test_loop_scope=module
+collecting ... collected 81 items / 71 deselected / 10 selected
+
+products/posthog_ai/eval_harness/test/test_workflows_code_managed_template_evals.py::TestCodeManagedTemplateSeeder::test_seeds_one_template_per_owner_that_the_cases_can_reach PASSED [ 10%]
+products/posthog_ai/eval_harness/test/test_sandboxed_harness_output.py::test_a_prompt_built_from_the_seed_reaches_the_agent_and_the_scorers PASSED [ 20%]
+products/posthog_ai/eval_harness/test/test_sandboxed_harness_output.py::test_case_setup_retries_use_fresh_data_and_report_one_outcome[seed_recovers] PASSED [ 30%]
+products/posthog_ai/eval_harness/test/test_workflows_code_managed_template_evals.py::test_code_managed_template_scorers[scorer0-calls0-0.0] PASSED [ 40%]
+products/posthog_ai/eval_harness/test/test_workflows_code_managed_template_evals.py::test_code_managed_template_scorers[scorer1-calls1-1.0] PASSED [ 50%]
+products/posthog_ai/eval_harness/test/test_workflows_code_managed_template_evals.py::test_code_managed_template_scorers[scorer2-calls2-1.0] PASSED [ 60%]
+products/posthog_ai/eval_harness/test/test_workflows_code_managed_template_evals.py::test_code_managed_template_scorers[scorer3-calls3-0.0] PASSED [ 70%]
+products/posthog_ai/eval_harness/test/test_workflows_code_managed_template_evals.py::test_code_managed_template_scorers[scorer4-calls4-1.0] PASSED [ 80%]
+products/posthog_ai/eval_harness/test/test_workflows_code_managed_template_evals.py::test_code_managed_template_scorers[scorer5-calls5-0.0] PASSED [ 90%]
+products/posthog_ai/eval_harness/test/test_workflows_code_managed_template_evals.py::test_code_managed_template_scorers[scorer6-calls6-1.0] PASSED [100%]
+
+====================== 10 passed, 71 deselected in 14.09s ======================
