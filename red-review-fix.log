@@ -1,0 +1,8 @@
+# Red for the final-read finding 1, test added before the fix (HEAD a863ed0e911 + new test)
+$ pnpm exec jest ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts -t 'claimed back'
+      ✓ turns read-only and offers to duplicate the unsaved edits when the reload succeeds (300 ms)
+      ✕ turns read-only and offers to duplicate the unsaved edits when the reload fails (140 ms)
+      ✓ duplicates the unsaved edits without its key, ownership, source or hash (151 ms)
+    Expected: true
+    Received: false
+Tests:       1 failed, 31 skipped, 2 passed, 34 total

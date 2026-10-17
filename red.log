@@ -1,0 +1,26 @@
+has_nm
+
+      at ../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/src/functions/toDispatchActions.ts:28:19
+
+  ● messageTemplateLogic › claimed back by an upload while editing › duplicates the unsaved edits without its key, ownership, source or hash
+
+    thrown: "Exceeded timeout of 5000 ms for a hook.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      500 |         let createBodies: Record<string, unknown>[]
+      501 |
+    > 502 |         beforeEach(async () => {
+          |         ^
+      503 |             serverTemplate = { ...CODE_MANAGED, managed_by: 'gui' }
+      504 |             createBodies = []
+      505 |             useMocks({
+
+      at ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:502:9
+      at ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:498:5
+      at Object.<anonymous> (../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:24:1)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 31 skipped, 33 total
+Snapshots:   0 total
+Time:        19.465 s
+Ran all test suites matching /..\/products\/workflows\/frontend\/TemplateLibrary\/messageTemplateLogic.test.ts/i with tests matching "claimed back".
