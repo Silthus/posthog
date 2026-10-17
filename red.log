@@ -1,0 +1,39 @@
+  ● GitMetadataParser › getFileLink › links the file for a GitHub remote without a scheme
+
+    TypeError: _gitMetadataParser.GitMetadataParser.getFileLink is not a function
+
+      101 |             { description: 'an unknown host', remote_url: 'git.example.com/example/app', expected: undefined },
+      102 |         ])('links the file for $description', ({ remote_url, expected }) => {
+    > 103 |             expect(GitMetadataParser.getFileLink(remote_url, 'main', './emails/welcome.html')).toBe(expected)
+          |                                      ^
+      104 |         })
+--
+  ● messageTemplateLogic › save failure feedback › a code-managed template shows why the server refused the edit
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: "nope"
+    Received: "Failed to save template. Please try again."
+
+    Number of calls: 1
+
+--
+  ● messageTemplateLogic › code-managed source › a known host links the file, the repository and the shortened commit
+
+    Count not find value with key "isCodeManaged" in logic "products.workflows.frontend.messageTemplateLogic.existing-id"
+
+      at common (../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/src/functions/toMatchValues.ts:14:15)
+      at ../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/src/expect.ts:46:15
+      at step (../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/lib/expect.js:33:23)
+      at Object.next (../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/lib/expect.js:14:53)
+      at fulfilled (../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/lib/expect.js:5:58)
+--
+  ● messageTemplateLogic › code-managed source › a known host links the file, the repository and the shortened commit
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      405 |                 templateSource: null,
+      406 |             },
+    > 407 |         ])('$description', async ({ served, isCodeManaged, templateSource }) => {
+          |           ^
