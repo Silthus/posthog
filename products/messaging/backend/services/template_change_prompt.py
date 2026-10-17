@@ -12,7 +12,7 @@ LIQUID_DELIMITERS: Final = (("{{", "}}"), ("{%", "%}"))
 VARIABLE: Final = re.compile(r"(?<![\w.])variables\.([A-Za-z_][\w-]*)")
 COMMIT_SHA: Final = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
 SOURCE_REPOSITORY: Final = re.compile(r"[\w.-]+(?:/[\w.-]+)+")
-SOURCE_PATH: Final = re.compile(r"[\w.@+~,=()\[\]-]+(?:/[\w.@+~,=()\[\]-]+)*")
+SOURCE_PATH: Final = re.compile(r"(?!\.\.(?:/|$))[\w.@+~,=()\[\]-]+(?:/(?!\.\.(?:/|$))[\w.@+~,=()\[\]-]+)*")
 SOURCE_REF: Final = re.compile(r"[\w./-]+")
 SHORT_SHA_LENGTH: Final = 7
 
@@ -58,10 +58,18 @@ class PromptSource:
     @classmethod
     def of(cls, template: PromptedTemplate) -> "PromptSource":
         return cls(
-            repository=_unless_it_could_instruct_the_agent(template.source_repository, SOURCE_REPOSITORY),
-            path=_unless_it_could_instruct_the_agent(template.source_path, SOURCE_PATH),
+            repository=shaped_repository(template.source_repository),
+            path=shaped_path(template.source_path),
             ref=_unless_it_could_instruct_the_agent(template.source_ref, SOURCE_REF),
         )
+
+
+def shaped_repository(repository: str | None) -> str | None:
+    return _unless_it_could_instruct_the_agent(repository, SOURCE_REPOSITORY)
+
+
+def shaped_path(path: str | None) -> str | None:
+    return _unless_it_could_instruct_the_agent(path, SOURCE_PATH)
 
 
 def change_prompt(team_id: int, template: PromptedTemplate) -> TemplateChangePrompt | None:
