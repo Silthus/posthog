@@ -118,6 +118,7 @@ const workflowsListEmailTemplates = (): ToolBase<
                     'draft_content',
                     'change_prompt_starter',
                     'change_prompt_context',
+                    'change_prompt_variables',
                 ])
             ),
         } as typeof result
