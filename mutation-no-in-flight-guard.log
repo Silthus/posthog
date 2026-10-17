@@ -1,0 +1,212 @@
+10:04:39:406 [client-request-interceptor] constructing the interceptor...
+10:04:39:419 [xhr] constructing the interceptor...
+10:04:39:419 [fetch] constructing the interceptor...
+10:04:39:419 [websocket] constructing the interceptor...
+10:04:39:420 [interceptor-source] constructing the interceptor...
+10:04:41:552 [interceptor-source:apply] applying the interceptor...
+10:04:41:552 [interceptor-source] retrieved global instance: undefined
+10:04:41:552 [interceptor-source:apply] no running instance found, setting up a new instance...
+10:04:41:552 [interceptor-source:setup] applying all 4 interceptors...
+10:04:41:552 [interceptor-source:setup] applying "ClientRequestInterceptor" interceptor...
+10:04:41:552 [client-request-interceptor:apply] applying the interceptor...
+10:04:41:552 [client-request-interceptor] retrieved global instance: undefined
+10:04:41:552 [client-request-interceptor:apply] no running instance found, setting up a new instance...
+10:04:41:553 [client-request-interceptor] set global instance! client-request-interceptor
+10:04:41:553 [interceptor-source:setup] adding interceptor dispose subscription
+10:04:41:553 [interceptor-source:setup] applying "XMLHttpRequestInterceptor" interceptor...
+10:04:41:553 [xhr:apply] applying the interceptor...
+10:04:41:553 [xhr] retrieved global instance: undefined
+10:04:41:553 [xhr:apply] no running instance found, setting up a new instance...
+10:04:41:553 [xhr:setup] patching "XMLHttpRequest" module...
+10:04:41:553 [xhr:setup] native "XMLHttpRequest" module patched! XMLHttpRequest
+10:04:41:553 [xhr] set global instance! xhr
+10:04:41:553 [interceptor-source:setup] adding interceptor dispose subscription
+10:04:41:553 [interceptor-source:setup] applying "FetchInterceptor" interceptor...
+10:04:41:553 [fetch:apply] applying the interceptor...
+10:04:41:553 [fetch] retrieved global instance: undefined
+10:04:41:553 [fetch:apply] no running instance found, setting up a new instance...
+10:04:41:553 [fetch] set global instance! fetch
+10:04:41:553 [interceptor-source:setup] adding interceptor dispose subscription
+10:04:41:553 [interceptor-source:setup] applying "WebSocketInterceptor" interceptor...
+10:04:41:553 [websocket:apply] applying the interceptor...
+10:04:41:553 [websocket] retrieved global instance: undefined
+10:04:41:553 [websocket:apply] no running instance found, setting up a new instance...
+10:04:41:553 [websocket] set global instance! websocket
+10:04:41:553 [interceptor-source:setup] adding interceptor dispose subscription
+10:04:41:553 [interceptor-source] set global instance! interceptor-source
+10:04:41:553 [client-request-interceptor:on] adding "request" event listener: function () { [native code] }
+10:04:41:554 [xhr:on] adding "request" event listener: function () { [native code] }
+10:04:41:554 [fetch:on] adding "request" event listener: function () { [native code] }
+10:04:41:554 [websocket:on] adding "request" event listener: function () { [native code] }
+10:04:41:554 [client-request-interceptor:on] adding "response" event listener: function () { [native code] }
+10:04:41:554 [xhr:on] adding "response" event listener: function () { [native code] }
+10:04:41:554 [fetch:on] adding "response" event listener: function () { [native code] }
+10:04:41:554 [websocket:on] adding "response" event listener: function () { [native code] }
+10:04:41:554 [client-request-interceptor:on] adding "connection" event listener: function () { [native code] }
+10:04:41:554 [xhr:on] adding "connection" event listener: function () { [native code] }
+10:04:41:554 [fetch:on] adding "connection" event listener: function () { [native code] }
+10:04:41:554 [websocket:on] adding "connection" event listener: function () { [native code] }
+10:04:41:570 [fetch] [GET] http://localhost/_preflight/
+10:04:41:570 [fetch] awaiting for the mocked response...
+10:04:41:570 [fetch] emitting the "request" event for 1 listener(s)...
+10:04:41:627 [fetch] [POST] http://localhost/api/projects/997/file_system/log_view/
+10:04:41:627 [fetch] awaiting for the mocked response...
+10:04:41:627 [fetch] emitting the "request" event for 1 listener(s)...
+10:04:41:630 [fetch] [GET] http://localhost/api/projects/997/conversations/
+10:04:41:630 [fetch] awaiting for the mocked response...
+10:04:41:630 [fetch] emitting the "request" event for 1 listener(s)...
+10:04:41:633 [fetch] [GET] http://localhost/api/projects/997/integrations/?limit=100&offset=0
+10:04:41:634 [fetch] awaiting for the mocked response...
+10:04:41:634 [fetch] emitting the "request" event for 1 listener(s)...
+10:04:41:636 [fetch] [GET] http://localhost/api/projects/997/messaging_templates/existing-id/
+10:04:41:636 [fetch] awaiting for the mocked response...
+10:04:41:636 [fetch] emitting the "request" event for 1 listener(s)...
+10:04:41:652 [fetch] received mocked response! {"rawResponse":{}}
+10:04:41:652 [fetch] emitting the "response" event...
+10:04:41:656 [fetch] received mocked response! {"rawResponse":{}}
+10:04:41:656 [fetch] emitting the "response" event...
+10:04:41:669 [fetch] [GET] http://localhost/api/projects/997/desktop/access/
+10:04:41:670 [fetch] awaiting for the mocked response...
+10:04:41:670 [fetch] emitting the "request" event for 1 listener(s)...
+10:04:41:681 [fetch] received mocked response! {"rawResponse":{}}
+10:04:41:681 [fetch] emitting the "response" event...
+10:04:41:724 [fetch] received mocked response! {"rawResponse":{}}
+10:04:41:725 [fetch] emitting the "response" event...
+10:04:41:730 [fetch] received mocked response! {"rawResponse":{}}
+10:04:41:731 [fetch] emitting the "response" event...
+10:04:41:762 [fetch] received mocked response! {"rawResponse":{}}
+10:04:41:762 [fetch] emitting the "response" event...
+10:04:41:766 [fetch] [POST] http://localhost/api/projects/997/messaging_templates/existing-id/request_change/
+10:04:41:766 [fetch] awaiting for the mocked response...
+10:04:41:766 [fetch] emitting the "request" event for 1 listener(s)...
+10:04:41:767 [fetch] [POST] http://localhost/api/projects/997/messaging_templates/existing-id/request_change/
+10:04:41:767 [fetch] awaiting for the mocked response...
+10:04:41:767 [fetch] emitting the "request" event for 1 listener(s)...
+10:04:41:772 [fetch] received mocked response! {"rawResponse":{}}
+10:04:41:772 [fetch] emitting the "response" event...
+10:04:41:772 [fetch] received mocked response! {"rawResponse":{}}
+10:04:41:772 [fetch] emitting the "response" event...
+10:04:41:779 [interceptor-source:dispose] disposing the interceptor...
+10:04:41:779 [interceptor-source] retrieved global instance: BatchInterceptor
+10:04:41:779 [interceptor-source] cleared global instance! interceptor-source
+10:04:41:779 [interceptor-source:dispose] global symbol deleted: undefined
+10:04:41:779 [interceptor-source:dispose] disposing of 4 subscriptions...
+10:04:41:779 [client-request-interceptor:dispose] disposing the interceptor...
+10:04:41:779 [client-request-interceptor] retrieved global instance: ClientRequestInterceptor
+10:04:41:779 [client-request-interceptor] cleared global instance! client-request-interceptor
+10:04:41:779 [client-request-interceptor:dispose] global symbol deleted: undefined
+10:04:41:779 [client-request-interceptor:dispose] disposing of 1 subscriptions...
+10:04:41:779 [client-request-interceptor:dispose] disposed of all subscriptions! 0
+10:04:41:779 [client-request-interceptor:dispose] destroyed the listener!
+10:04:41:779 [xhr:dispose] disposing the interceptor...
+10:04:41:779 [xhr] retrieved global instance: XMLHttpRequestInterceptor
+10:04:41:779 [xhr] cleared global instance! xhr
+10:04:41:779 [xhr:dispose] global symbol deleted: undefined
+10:04:41:779 [xhr:dispose] disposing of 1 subscriptions...
+10:04:41:779 [xhr:setup] native "XMLHttpRequest" module restored! XMLHttpRequest
+10:04:41:780 [xhr:dispose] disposed of all subscriptions! 0
+10:04:41:780 [xhr:dispose] destroyed the listener!
+10:04:41:780 [fetch:dispose] disposing the interceptor...
+10:04:41:780 [fetch] retrieved global instance: FetchInterceptor
+10:04:41:780 [fetch] cleared global instance! fetch
+10:04:41:780 [fetch:dispose] global symbol deleted: undefined
+10:04:41:780 [fetch:dispose] disposing of 1 subscriptions...
+10:04:41:780 [fetch] restored native "globalThis.fetch"! 
+10:04:41:780 [fetch:dispose] disposed of all subscriptions! 0
+10:04:41:780 [fetch:dispose] destroyed the listener!
+10:04:41:780 [websocket:dispose] disposing the interceptor...
+10:04:41:780 [websocket] retrieved global instance: WebSocketInterceptor
+10:04:41:780 [websocket] cleared global instance! websocket
+10:04:41:780 [websocket:dispose] global symbol deleted: undefined
+10:04:41:780 [websocket:dispose] disposing of 1 subscriptions...
+10:04:41:780 [websocket:dispose] disposed of all subscriptions! 0
+10:04:41:780 [websocket:dispose] destroyed the listener!
+10:04:41:780 [interceptor-source:dispose] disposed of all subscriptions! 0
+10:04:41:780 [interceptor-source:dispose] destroyed the listener!
+FAIL ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts
+  messageTemplateLogic
+    unsaved-changes guard
+      ○ skipped blocks navigation away from an unsaved new template
+      ○ skipped does not block navigation when there are no unsaved changes
+    submit validation feedback
+      ○ skipped toasts when the name is missing
+      ○ skipped toasts when the subject is missing
+    save failure feedback
+      ○ skipped 404 tells the user the template is gone from this environment
+      ○ skipped other failures fall back to a generic retry message
+      ○ skipped a code-managed template shows why the server refused the edit
+    edited elsewhere
+      ○ skipped reloads a clean form
+      ○ skipped warns instead of replacing unsaved edits
+      ○ skipped ignores its own save echo
+      ○ skipped ignores another template
+      ○ skipped ignores another resource type
+      ○ skipped parks events that arrive during a save and drops the own echo once the save lands
+      ○ skipped parks events that arrive during a save and keeps a newer external edit that the own echo arrived after
+      ○ skipped shows the banner when the reload of a clean form fails
+      ○ skipped reload from the banner replaces the unsaved edits with the server copy
+    starting-point picker
+      ○ skipped opens for a brand-new template
+      ○ skipped does not open when creating from a sent message
+      ○ skipped does not open for an existing template
+      ○ skipped does not open while the AI composer is the page
+      ○ skipped opens for an AI URL when the variant is off
+      ○ skipped opens when the URL switches to editor mode on the mounted page
+    code-managed source
+      ○ skipped a template made in PostHog has no source
+      ○ skipped a keyed template that PostHog still manages has no source
+      ○ skipped a known host links the file, the repository and the shortened commit
+      ○ skipped a branch links to the branch
+      ○ skipped an unknown host stays plain text
+      ○ skipped an upload without a source shows none
+    code-managed template
+      ○ skipped keeps its fields and never saves when they change
+      ○ skipped duplicates as a copy without its key, ownership, source or hash
+      ○ skipped becomes editable once released
+      ○ skipped waits for a described change before it copies, given the starter as served
+      ○ skipped waits for a described change before it copies, given the starter without its trailing space
+      ○ skipped waits for a described change before it copies, given a blank sentence
+      ○ skipped starts from the server starter and keeps the sentence while the popover closes and reopens
+      ○ skipped copies the sentence and the server context verbatim, and sends nothing
+    run with PostHog Code
+      ✕ starts one task when the button is clicked twice (223 ms)
+      ○ skipped sends the sentence exactly as typed
+      ○ skipped links the task and clears the sentence once PostHog Code starts
+      ○ skipped keeps the sentence when the server explains the refusal
+      ○ skipped keeps the sentence when the server gives no reason
+      ○ skipped offers the button only when the organization can use PostHog Code
+      ○ skipped offers the button only when the organization cannot use PostHog Code
+      ○ skipped offers the button only when PostHog cannot check access
+      ○ skipped sends nothing when the change is not described
+      ○ skipped sends nothing when the template has no repository
+      ○ skipped sends nothing when the repository is not on GitHub
+      ○ skipped sends nothing when the project has no GitHub integration
+    make transactional
+      ○ skipped keeps edits made while the conversion runs
+
+  ● messageTemplateLogic › run with PostHog Code › starts one task when the button is clicked twice
+
+    expect(received).toHaveLength(expected)
+
+    Expected length: 1
+    Received length: 2
+    Received array:  [{"instruction": "In `emails/welcome.html`, change the button to green. "}, {"instruction": "In `emails/welcome.html`, change the button to green. "}]
+
+      657 |             }).toFinishAllListeners()
+      658 |
+    > 659 |             expect(changeRequests).toHaveLength(1)
+          |                                    ^
+      660 |         })
+      661 |
+      662 |         it('links the task and clears the sentence once PostHog Code starts', async () => {
+
+      at Object.<anonymous> (../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:659:36)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 48 skipped, 49 total
+Snapshots:   0 total
+Time:        3.174 s, estimated 11 s
+Ran all test suites matching /..\/products\/workflows\/frontend\/TemplateLibrary\/messageTemplateLogic.test.ts/i with tests matching "clicked twice".
+undefined
+/home/coder/.t3/worktrees/posthog/t3-cda36e50/frontend:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: jest ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts -t clicked twice

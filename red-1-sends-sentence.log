@@ -1,0 +1,183 @@
+Detected: Jest test (via @posthog/frontend)
+🚀 pnpm --filter=@posthog/frontend exec jest products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts -t run with PostHog Code
+09:34:11:609 [client-request-interceptor] constructing the interceptor...
+09:34:11:623 [xhr] constructing the interceptor...
+09:34:11:623 [fetch] constructing the interceptor...
+09:34:11:623 [websocket] constructing the interceptor...
+09:34:11:623 [interceptor-source] constructing the interceptor...
+09:34:13:560 [interceptor-source:apply] applying the interceptor...
+09:34:13:560 [interceptor-source] retrieved global instance: undefined
+09:34:13:560 [interceptor-source:apply] no running instance found, setting up a new instance...
+09:34:13:560 [interceptor-source:setup] applying all 4 interceptors...
+09:34:13:560 [interceptor-source:setup] applying "ClientRequestInterceptor" interceptor...
+09:34:13:560 [client-request-interceptor:apply] applying the interceptor...
+09:34:13:560 [client-request-interceptor] retrieved global instance: undefined
+09:34:13:560 [client-request-interceptor:apply] no running instance found, setting up a new instance...
+09:34:13:560 [client-request-interceptor] set global instance! client-request-interceptor
+09:34:13:560 [interceptor-source:setup] adding interceptor dispose subscription
+09:34:13:560 [interceptor-source:setup] applying "XMLHttpRequestInterceptor" interceptor...
+09:34:13:560 [xhr:apply] applying the interceptor...
+09:34:13:561 [xhr] retrieved global instance: undefined
+09:34:13:561 [xhr:apply] no running instance found, setting up a new instance...
+09:34:13:561 [xhr:setup] patching "XMLHttpRequest" module...
+09:34:13:561 [xhr:setup] native "XMLHttpRequest" module patched! XMLHttpRequest
+09:34:13:561 [xhr] set global instance! xhr
+09:34:13:561 [interceptor-source:setup] adding interceptor dispose subscription
+09:34:13:561 [interceptor-source:setup] applying "FetchInterceptor" interceptor...
+09:34:13:561 [fetch:apply] applying the interceptor...
+09:34:13:561 [fetch] retrieved global instance: undefined
+09:34:13:561 [fetch:apply] no running instance found, setting up a new instance...
+09:34:13:561 [fetch] set global instance! fetch
+09:34:13:561 [interceptor-source:setup] adding interceptor dispose subscription
+09:34:13:561 [interceptor-source:setup] applying "WebSocketInterceptor" interceptor...
+09:34:13:561 [websocket:apply] applying the interceptor...
+09:34:13:561 [websocket] retrieved global instance: undefined
+09:34:13:561 [websocket:apply] no running instance found, setting up a new instance...
+09:34:13:561 [websocket] set global instance! websocket
+09:34:13:561 [interceptor-source:setup] adding interceptor dispose subscription
+09:34:13:561 [interceptor-source] set global instance! interceptor-source
+09:34:13:561 [client-request-interceptor:on] adding "request" event listener: function () { [native code] }
+09:34:13:561 [xhr:on] adding "request" event listener: function () { [native code] }
+09:34:13:561 [fetch:on] adding "request" event listener: function () { [native code] }
+09:34:13:561 [websocket:on] adding "request" event listener: function () { [native code] }
+09:34:13:561 [client-request-interceptor:on] adding "response" event listener: function () { [native code] }
+09:34:13:562 [xhr:on] adding "response" event listener: function () { [native code] }
+09:34:13:562 [fetch:on] adding "response" event listener: function () { [native code] }
+09:34:13:562 [websocket:on] adding "response" event listener: function () { [native code] }
+09:34:13:562 [client-request-interceptor:on] adding "connection" event listener: function () { [native code] }
+09:34:13:562 [xhr:on] adding "connection" event listener: function () { [native code] }
+09:34:13:562 [fetch:on] adding "connection" event listener: function () { [native code] }
+09:34:13:562 [websocket:on] adding "connection" event listener: function () { [native code] }
+09:34:13:576 [fetch] [GET] http://localhost/_preflight/
+09:34:13:576 [fetch] awaiting for the mocked response...
+09:34:13:576 [fetch] emitting the "request" event for 1 listener(s)...
+09:34:13:629 [fetch] [POST] http://localhost/api/projects/997/file_system/log_view/
+09:34:13:630 [fetch] awaiting for the mocked response...
+09:34:13:630 [fetch] emitting the "request" event for 1 listener(s)...
+09:34:13:632 [fetch] [GET] http://localhost/api/projects/997/conversations/
+09:34:13:632 [fetch] awaiting for the mocked response...
+09:34:13:632 [fetch] emitting the "request" event for 1 listener(s)...
+09:34:13:634 [fetch] [GET] http://localhost/api/projects/997/messaging_templates/existing-id/
+09:34:13:634 [fetch] awaiting for the mocked response...
+09:34:13:634 [fetch] emitting the "request" event for 1 listener(s)...
+09:34:13:645 [fetch] received mocked response! {"rawResponse":{}}
+09:34:13:645 [fetch] emitting the "response" event...
+09:34:13:702 [fetch] received mocked response! {"rawResponse":{}}
+09:34:13:702 [fetch] emitting the "response" event...
+09:34:13:707 [fetch] received mocked response! {"rawResponse":{}}
+09:34:13:707 [fetch] emitting the "response" event...
+09:34:13:745 [fetch] received mocked response! {"rawResponse":{}}
+09:34:13:745 [fetch] emitting the "response" event...
+09:34:13:750 [interceptor-source:dispose] disposing the interceptor...
+09:34:13:750 [interceptor-source] retrieved global instance: BatchInterceptor
+09:34:13:750 [interceptor-source] cleared global instance! interceptor-source
+09:34:13:750 [interceptor-source:dispose] global symbol deleted: undefined
+09:34:13:750 [interceptor-source:dispose] disposing of 4 subscriptions...
+09:34:13:750 [client-request-interceptor:dispose] disposing the interceptor...
+09:34:13:750 [client-request-interceptor] retrieved global instance: ClientRequestInterceptor
+09:34:13:750 [client-request-interceptor] cleared global instance! client-request-interceptor
+09:34:13:750 [client-request-interceptor:dispose] global symbol deleted: undefined
+09:34:13:750 [client-request-interceptor:dispose] disposing of 1 subscriptions...
+09:34:13:750 [client-request-interceptor:dispose] disposed of all subscriptions! 0
+09:34:13:750 [client-request-interceptor:dispose] destroyed the listener!
+09:34:13:750 [xhr:dispose] disposing the interceptor...
+09:34:13:750 [xhr] retrieved global instance: XMLHttpRequestInterceptor
+09:34:13:750 [xhr] cleared global instance! xhr
+09:34:13:750 [xhr:dispose] global symbol deleted: undefined
+09:34:13:750 [xhr:dispose] disposing of 1 subscriptions...
+09:34:13:750 [xhr:setup] native "XMLHttpRequest" module restored! XMLHttpRequest
+09:34:13:750 [xhr:dispose] disposed of all subscriptions! 0
+09:34:13:750 [xhr:dispose] destroyed the listener!
+09:34:13:750 [fetch:dispose] disposing the interceptor...
+09:34:13:750 [fetch] retrieved global instance: FetchInterceptor
+09:34:13:751 [fetch] cleared global instance! fetch
+09:34:13:751 [fetch:dispose] global symbol deleted: undefined
+09:34:13:751 [fetch:dispose] disposing of 1 subscriptions...
+09:34:13:751 [fetch] restored native "globalThis.fetch"! 
+09:34:13:751 [fetch:dispose] disposed of all subscriptions! 0
+09:34:13:751 [fetch:dispose] destroyed the listener!
+09:34:13:751 [websocket:dispose] disposing the interceptor...
+09:34:13:751 [websocket] retrieved global instance: WebSocketInterceptor
+09:34:13:751 [websocket] cleared global instance! websocket
+09:34:13:751 [websocket:dispose] global symbol deleted: undefined
+09:34:13:751 [websocket:dispose] disposing of 1 subscriptions...
+09:34:13:751 [websocket:dispose] disposed of all subscriptions! 0
+09:34:13:751 [websocket:dispose] destroyed the listener!
+09:34:13:751 [interceptor-source:dispose] disposed of all subscriptions! 0
+09:34:13:751 [interceptor-source:dispose] destroyed the listener!
+FAIL ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts
+  messageTemplateLogic
+    unsaved-changes guard
+      ○ skipped blocks navigation away from an unsaved new template
+      ○ skipped does not block navigation when there are no unsaved changes
+    submit validation feedback
+      ○ skipped toasts when the name is missing
+      ○ skipped toasts when the subject is missing
+    save failure feedback
+      ○ skipped 404 tells the user the template is gone from this environment
+      ○ skipped other failures fall back to a generic retry message
+      ○ skipped a code-managed template shows why the server refused the edit
+    edited elsewhere
+      ○ skipped reloads a clean form
+      ○ skipped warns instead of replacing unsaved edits
+      ○ skipped ignores its own save echo
+      ○ skipped ignores another template
+      ○ skipped ignores another resource type
+      ○ skipped parks events that arrive during a save and drops the own echo once the save lands
+      ○ skipped parks events that arrive during a save and keeps a newer external edit that the own echo arrived after
+      ○ skipped shows the banner when the reload of a clean form fails
+      ○ skipped reload from the banner replaces the unsaved edits with the server copy
+    starting-point picker
+      ○ skipped opens for a brand-new template
+      ○ skipped does not open when creating from a sent message
+      ○ skipped does not open for an existing template
+      ○ skipped does not open while the AI composer is the page
+      ○ skipped opens for an AI URL when the variant is off
+      ○ skipped opens when the URL switches to editor mode on the mounted page
+    code-managed source
+      ○ skipped a template made in PostHog has no source
+      ○ skipped a keyed template that PostHog still manages has no source
+      ○ skipped a known host links the file, the repository and the shortened commit
+      ○ skipped a branch links to the branch
+      ○ skipped an unknown host stays plain text
+      ○ skipped an upload without a source shows none
+    code-managed template
+      ○ skipped keeps its fields and never saves when they change
+      ○ skipped duplicates as a copy without its key, ownership, source or hash
+      ○ skipped becomes editable once released
+      ○ skipped waits for a described change before it copies, given the starter as served
+      ○ skipped waits for a described change before it copies, given the starter without its trailing space
+      ○ skipped waits for a described change before it copies, given a blank sentence
+      ○ skipped starts from the server starter and keeps the sentence while the popover closes and reopens
+      ○ skipped copies the sentence and the server context verbatim, and sends nothing
+    run with PostHog Code
+      ✕ sends the sentence exactly as typed and leaves the template unchanged (185 ms)
+    make transactional
+      ○ skipped keeps edits made while the conversion runs
+
+  ● messageTemplateLogic › run with PostHog Code › sends the sentence exactly as typed and leaves the template unchanged
+
+    TypeError: logic.actions.runWithPostHogCode is not a function
+
+      631 |
+      632 |             await expectLogic(logic, () => {
+    > 633 |                 logic.actions.runWithPostHogCode()
+          |                               ^
+      634 |             }).toFinishAllListeners()
+      635 |
+      636 |             expect(changeRequests).toEqual([{ instruction: DESCRIBED }])
+
+      at ../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:633:31
+      at syncInit (../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/src/expect.ts:26:24)
+      at expectLogic (../node_modules/.pnpm/kea-test-utils@0.2.4_kea@4.0.0-pre.6_patch_hash=139b8d1f1304f9d9da452a9a1244c94ea679dbc_8628292fb6d19acc6ce51c1f6a3ae82d/node_modules/kea-test-utils/src/expect.ts:34:23)
+      at Object.<anonymous> (../products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts:632:19)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 37 skipped, 38 total
+Snapshots:   0 total
+Time:        2.893 s, estimated 5 s
+Ran all test suites matching /products\/workflows\/frontend\/TemplateLibrary\/messageTemplateLogic.test.ts/i with tests matching "run with PostHog Code".
+undefined
+/home/coder/.t3/worktrees/posthog/t3-cda36e50/frontend:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: jest products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts -t run with PostHog Code
+💥 Command failed: pnpm --filter=@posthog/frontend exec jest products/workflows/frontend/TemplateLibrary/messageTemplateLogic.test.ts -t run with PostHog Code
