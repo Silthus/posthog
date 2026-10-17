@@ -51,6 +51,7 @@ from products.messaging.backend.facade.api import (
 from products.messaging.backend.facade.contracts import (
     TEMPLATE_KEY_MAX_LENGTH,
     ContentHashState,
+    TemplateChangeRefused,
     TemplateKeyRefused,
     TemplateManagedBy,
     TemplateReleasedTo,
@@ -1110,9 +1111,8 @@ INSTRUCTION_MAX_LENGTH = 2000
 class RequestTemplateChangeSerializer(serializers.Serializer):
     instruction = serializers.CharField(
         max_length=INSTRUCTION_MAX_LENGTH,
-        help_text="The change to make, in the person's words, such as ``In `emails/welcome.html`, change the button "
-        "color to green.`` Start it with the template's `change_prompt_starter` when you can. At most 2,000 "
-        "characters.",
+        help_text="The change to make, in the person's words, such as `Make the button green.` At most "
+        f"{INSTRUCTION_MAX_LENGTH:,} characters.",
     )
 
 
@@ -1580,7 +1580,7 @@ class MessageTemplatesViewSet(
         ),
         parameters=[TEMPLATE_ID_PARAMETER],
     )
-    @action(detail=True, methods=["POST"], pagination_class=None, required_scopes=["task:write"])
+    @action(detail=True, methods=["POST"], pagination_class=None, required_scopes=["hog_flow:read", "task:write"])
     def request_change(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         require_email_from_code(self.team)
         template = self.get_object()
@@ -1591,13 +1591,20 @@ class MessageTemplatesViewSet(
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        requested = request_template_change(
-            self.team,
-            cast(User, request.user),
-            template,
-            body.validated_data["instruction"],
-            from_sandbox=is_sandbox_origin_request(request),
-        )
+        try:
+            requested = request_template_change(
+                self.team,
+                cast(User, request.user),
+                template,
+                body.validated_data["instruction"],
+                from_sandbox=is_sandbox_origin_request(request),
+            )
+        except TemplateChangeRefused as refused:
+            self._report_user_action(
+                "message template change refused",
+                {"template_id": str(template.id), "surface": get_event_source(request), "code": refused.code},
+            )
+            raise
         self._report_user_action(
             "message template change requested",
             {"template_id": str(template.id), "surface": get_event_source(request)},
@@ -1609,7 +1616,9 @@ class MessageTemplatesViewSet(
         missing = any(error.code in ("required", "blank", "null") for error in errors.get("instruction", []))
         if not missing:
             return invalid_request(
-                errors, why="The instruction is text of at most 2,000 characters.", retry="request the change again"
+                errors,
+                why=f"The instruction is text of at most {INSTRUCTION_MAX_LENGTH:,} characters.",
+                retry="request the change again",
             )
         return TemplateRefusal(
             code="instruction_missing",
