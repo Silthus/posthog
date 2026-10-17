@@ -236,8 +236,11 @@ tools:
             person's request as instruction. PostHog Code then starts a task that changes the file and opens a pull
             request in the template's GitHub repository. PostHog doesn't change the template: the next upload of the
             changed file publishes it. Share the returned task_url with the person. Each call starts another task, so
-            never repeat a call that succeeded. A 404 with code not_found means sending email from code is not enabled
-            for this project, or the project does not exist: stop and tell the user.
+            never repeat a call that succeeded. The tool refuses calls from inside PostHog Code, where
+            PostHog AI and the Slack bot run. There, share the template's link instead: on its page, the
+            person clicks Edit with your agent, then Run with PostHog Code. A 404 with code not_found means
+            sending email from code is not enabled for this project, or the project does not exist: stop and
+            tell the user.
     workflows-update-email-template:
         operation: messaging_templates_partial_update
         enabled: true
