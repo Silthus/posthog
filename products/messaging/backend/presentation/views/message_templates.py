@@ -1583,15 +1583,13 @@ class MessageTemplatesViewSet(
     @action(detail=True, methods=["POST"], pagination_class=None, required_scopes=["hog_flow:read", "task:write"])
     def request_change(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         require_email_from_code(self.team)
-        template = self.get_object()
-        body = RequestTemplateChangeSerializer(data=request.data)
-        if not body.is_valid():
-            return Response(
-                TemplateErrorSerializer(self._instruction_refusal(body.errors)).data,
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         try:
+            template = self.get_object()
+            body = RequestTemplateChangeSerializer(data=request.data)
+            if not body.is_valid():
+                refusal = self._instruction_refusal(body.errors)
+                self._report_change_refused(refusal.code)
+                return Response(TemplateErrorSerializer(refusal).data, status=status.HTTP_400_BAD_REQUEST)
             requested = request_template_change(
                 self.team,
                 cast(User, request.user),
@@ -1600,16 +1598,19 @@ class MessageTemplatesViewSet(
                 from_sandbox=is_sandbox_origin_request(request),
             )
         except TemplateChangeRefused as refused:
-            self._report_user_action(
-                "message template change refused",
-                {"template_id": str(template.id), "surface": get_event_source(request), "code": refused.code},
-            )
+            self._report_change_refused(refused.code)
             raise
         self._report_user_action(
             "message template change requested",
             {"template_id": str(template.id), "surface": get_event_source(request)},
         )
         return Response(TemplateChangeRequestedSerializer(requested).data, status=status.HTTP_201_CREATED)
+
+    def _report_change_refused(self, code: str) -> None:
+        self._report_user_action(
+            "message template change refused",
+            {"template_id": self.kwargs["pk"], "surface": get_event_source(self.request), "code": code},
+        )
 
     @staticmethod
     def _instruction_refusal(errors: Any) -> TemplateRefusal:
