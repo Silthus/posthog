@@ -4,7 +4,7 @@ import { LemonBanner, Link } from '@posthog/lemon-ui'
 
 import { urls } from 'scenes/urls'
 
-import { MessageTemplateLogicProps, messageTemplateLogic } from './messageTemplateLogic'
+import { CHANGE_RUN_STARTED, MessageTemplateLogicProps, messageTemplateLogic } from './messageTemplateLogic'
 
 interface CodeManagedNoticeProps extends MessageTemplateLogicProps {
     editWithAgentAvailable: boolean
@@ -37,7 +37,7 @@ export function CodeManagedNotice({ editWithAgentAvailable, ...props }: CodeMana
             </p>
             {changeRun && (
                 <p className="m-0 mt-1" data-attr="message-template-change-run-notice">
-                    PostHog Code is working on it. It opens a pull request when it's done.{' '}
+                    {CHANGE_RUN_STARTED}{' '}
                     <Link to={urls.taskDetail(changeRun.task_id)} data-attr="message-template-change-run-task">
                         Open task
                     </Link>

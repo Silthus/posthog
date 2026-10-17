@@ -50,8 +50,8 @@ export function EditWithAgentPrompt({ containerRef, ...props }: EditWithAgentPro
             />
             {changeRunError && (
                 <LemonBanner type="error" className="shrink-0">
-                    <p className="m-0">{changeRunError.detail}</p>
-                    {changeRunError.fix && <p className="m-0 mt-1">{changeRunError.fix}</p>}
+                    <p className="m-0 break-words">{changeRunError.detail}</p>
+                    {changeRunError.fix && <p className="m-0 mt-1 break-words">{changeRunError.fix}</p>}
                 </LemonBanner>
             )}
             <div className="flex flex-wrap justify-end gap-2">
