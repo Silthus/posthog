@@ -337,6 +337,7 @@ def start_mcp_server(
             {
                 "revamped-py-notebooks": True,
                 "dashboard-widgets": True,
+                "workflows-email-from-code": True,
                 MCP_EXEC_SKILLS_FEATURE_FLAG: exec_skills_enabled,
             }
         ),

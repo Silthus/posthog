@@ -551,7 +551,7 @@ async def test_sandboxed_eval_skill_delivery_sets_the_agent_origin(
     monkeypatch.setattr(base, "run_eval_case", launch)
     monkeypatch.setattr(base, "reclaim_kernels", AsyncMock())
 
-    _, seed = await run._run_sandbox_window(case, case if has_original else None)
+    seed = (await run._run_sandbox_window(case, case if has_original else None)).seed
 
     launched_context = launch.call_args.args[1]
     assert launched_context.interaction_origin == expected_origin
@@ -565,6 +565,41 @@ async def test_sandboxed_eval_skill_delivery_sets_the_agent_origin(
         assert seed == {"seeded": True}
     else:
         assert seed == {}
+
+
+@pytest.mark.asyncio
+async def test_a_prompt_built_from_the_seed_reaches_the_agent_and_the_scorers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(base, "build_case_dir", MagicMock(return_value=tmp_path))
+    ctx = MagicMock(
+        posthog_client=None,
+        case_filter=None,
+        skill_delivery="bundled",
+        sandbox_slots=asyncio.Semaphore(1),
+        team_setup_slots=asyncio.Semaphore(1),
+        per_case_timeout_seconds=30,
+    )
+    ctx.demo_data.make_context.return_value = CustomPromptSandboxContext(team_id=1, user_id=2)
+    ctx.provider_strategy.keeps_sandboxes.return_value = False
+    case = SandboxedEvalCase(
+        name="seeded-prompt",
+        prompt="Change the seeded template",
+        setup=MagicMock(return_value={"template_id": "tpl-7"}),
+        prompt_from_seed=lambda seed: f"Change the template {seed['template_id']}",
+    )
+    run = base._SandboxedEvalRun(
+        experiment_name="seeded-prompt-test", cases=[case], scorers=[], ctx=ctx, send_to_posthog=False
+    )
+    launch = AsyncMock(return_value=base.EvalCaseResult(artifacts=AgentArtifacts(exit_code=0)))
+    monkeypatch.setattr(base, "run_eval_case", launch)
+    monkeypatch.setattr(base, "reclaim_kernels", AsyncMock())
+
+    output = await run._execute_case({"name": case.name, "prompt": case.prompt}, NullCaseHooks())
+
+    assert launch.call_args.args[0].prompt == "Change the template tpl-7"
+    assert output["prompt"] == "Change the template tpl-7"
+    assert output["turn_prompts"] == ["Change the template tpl-7"]
 
 
 @pytest.mark.asyncio
@@ -805,7 +840,7 @@ async def test_kernel_cleanup_preserves_case_outcome_when_progress_fails(
     monkeypatch.setattr(base, "reclaim_kernels", cleanup)
 
     if agent_error is None:
-        actual, _ = await run._run_sandbox_window(case, case, hooks)
+        actual = (await run._run_sandbox_window(case, case, hooks)).result
         assert actual is result
     else:
         with pytest.raises(type(agent_error)) as raised:
