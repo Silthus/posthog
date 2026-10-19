@@ -13,6 +13,8 @@ const sender = new SandboxEmailSender(
         tenantName: 'sandbox-tenant',
         configurationSetName: 'sandbox-email',
         fromAddress: 'fixed-sandbox@example.com',
+        dailyTeamCap: '25',
+        dailyRecipientCap: '5',
     },
     {
         getTeam: jest.fn().mockResolvedValue({ organization_id: '00000000-0000-0000-0000-000000000001' }),
