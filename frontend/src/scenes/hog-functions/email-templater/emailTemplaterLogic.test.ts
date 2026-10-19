@@ -1,7 +1,10 @@
 import { router } from 'kea-router'
 import { expectLogic } from 'kea-test-utils'
 
+import { LemonDialog } from '@posthog/lemon-ui'
+
 import { FEATURE_FLAGS } from 'lib/constants'
+import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { preflightLogic } from 'scenes/PreflightCheck/preflightLogic'
 
@@ -56,7 +59,286 @@ describe('emailTemplaterLogic', () => {
 
     afterEach(() => {
         logic?.unmount()
+        jest.restoreAllMocks()
         jest.useRealTimers()
+    })
+
+    describe('sender picker', () => {
+        const OWN_SENDER = { id: 5, kind: 'email', display_name: 'Acme <hello@acme.example.com>', config: {} }
+        const SANDBOX_SENDER = {
+            id: 7,
+            kind: 'email',
+            display_name: 'Acme via PostHog <sandbox@example.com>',
+            config: { provider: 'sandbox', verified: true },
+        }
+
+        afterEach(() => {
+            featureFlagLogic.actions.setFeatureFlags([], {})
+        })
+
+        it.each([
+            { surface: 'a workflow email step', sandboxSenderAllowed: true, flag: true, expectedIds: [5, 7] },
+            {
+                surface: 'a workflow email step with the flag off',
+                sandboxSenderAllowed: true,
+                flag: false,
+                expectedIds: [5],
+            },
+            { surface: 'a broadcast or destination', sandboxSenderAllowed: false, flag: true, expectedIds: [5] },
+        ])('lists the sandbox sender last only on $surface', async ({ sandboxSenderAllowed, flag, expectedIds }) => {
+            if (flag) {
+                featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER], {
+                    [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,
+                })
+            }
+            useMocks({ get: { '/api/projects/:team_id/integrations/': { results: [SANDBOX_SENDER, OWN_SENDER] } } })
+            logic = emailTemplaterLogic(makeProps({ sandboxSenderAllowed }))
+            logic.mount()
+
+            await expectLogic(integrationsLogic).toDispatchActions(['loadIntegrationsSuccess'])
+            expect(logic.values.senderIntegrations.map((integration) => integration.id)).toEqual(expectedIds)
+        })
+
+        it('creates a missing sandbox sender once on mount and lists it after the reload', async () => {
+            featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER], {
+                [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,
+            })
+            let integrationsPayload: Record<string, any>[] = [OWN_SENDER]
+            let ensureCalls = 0
+            useMocks({
+                get: { '/api/projects/:team_id/integrations/': () => [200, { results: integrationsPayload }] },
+                post: {
+                    '/api/projects/:team_id/integrations/email_sandbox_sender/': () => {
+                        ensureCalls += 1
+                        integrationsPayload = [...integrationsPayload, SANDBOX_SENDER]
+                        return [200, SANDBOX_SENDER]
+                    },
+                },
+            })
+            logic = emailTemplaterLogic(makeProps({ sandboxSenderAllowed: true }))
+            logic.mount()
+
+            await expectLogic(integrationsLogic).toDispatchActions([
+                'loadIntegrationsSuccess',
+                'provisionSandboxEmailSender',
+                'loadIntegrationsSuccess',
+            ])
+
+            expect(ensureCalls).toBe(1)
+            expect(logic.values.senderIntegrations.map((integration) => integration.id)).toEqual([5, 7])
+        })
+
+        it.each([{ ownSenders: [] }, { ownSenders: [OWN_SENDER] }])(
+            'keeps the saved sandbox restrictions after flag rollback with own senders $ownSenders',
+            async ({ ownSenders }) => {
+                useMocks({
+                    get: { '/api/projects/:team_id/integrations/': { results: [SANDBOX_SENDER, ...ownSenders] } },
+                })
+                const onChange = jest.fn()
+                logic = emailTemplaterLogic(
+                    makeProps({
+                        sandboxSenderAllowed: true,
+                        liveChanges: true,
+                        onChange,
+                        value: { ...DEFAULT_EMAIL_TEMPLATE, from: { integrationId: 7 } },
+                    })
+                )
+                logic.mount()
+                await expectLogic(integrationsLogic).toDispatchActions(['loadIntegrationsSuccess'])
+
+                expect(logic.values.senderIntegrations).toContainEqual(expect.objectContaining({ id: 7 }))
+                expect(logic.values.isSandboxSenderSelected).toBe(true)
+                expect(logic.values.hiddenAdvancedFields.map((field) => field.key)).not.toContain('replyTo')
+                if (ownSenders.length) {
+                    logic.actions.chooseSenders([7, 5])
+                    expect(onChange).toHaveBeenLastCalledWith(
+                        expect.objectContaining({ from: { integrationId: 5, integrationIds: undefined } })
+                    )
+                    expect(logic.values.senderIntegrations).not.toContainEqual(expect.objectContaining({ id: 7 }))
+                }
+            }
+        )
+
+        it.each([
+            {
+                surface: 'a workflow email step with no own sender yet',
+                sandboxSenderAllowed: true,
+                ownSenders: [],
+                expectedLoading: true,
+            },
+            {
+                surface: 'a workflow email step that already lists an own sender',
+                sandboxSenderAllowed: true,
+                ownSenders: [OWN_SENDER],
+                expectedLoading: false,
+            },
+            {
+                surface: 'a broadcast or destination',
+                sandboxSenderAllowed: false,
+                ownSenders: [],
+                expectedLoading: false,
+            },
+        ])(
+            'waits for sandbox provisioning only on $surface',
+            async ({ sandboxSenderAllowed, ownSenders, expectedLoading }) => {
+                featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER], {
+                    [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,
+                })
+                let releaseEnsure: () => void = () => {}
+                const ensureGate = new Promise<void>((resolve) => (releaseEnsure = resolve))
+                useMocks({
+                    get: { '/api/projects/:team_id/integrations/': { results: ownSenders } },
+                    post: {
+                        '/api/projects/:team_id/integrations/email_sandbox_sender/': async () => {
+                            await ensureGate
+                            return [200, SANDBOX_SENDER]
+                        },
+                    },
+                })
+                logic = emailTemplaterLogic(makeProps({ sandboxSenderAllowed }))
+                logic.mount()
+                await expectLogic(integrationsLogic, () => {
+                    integrationsLogic.actions.ensureSandboxEmailSender()
+                }).toDispatchActions(['loadIntegrationsSuccess', 'provisionSandboxEmailSender'])
+
+                expect(logic.values.senderIntegrationsLoading).toBe(expectedLoading)
+                releaseEnsure()
+                await expectLogic(integrationsLogic).toDispatchActions(['provisionSandboxEmailSenderSuccess'])
+            }
+        )
+
+        it.each([
+            {
+                field: 'custom from address',
+                from: { integrationId: 5, email: 'hello@example.com' },
+                replyTo: '',
+                confirm: true,
+            },
+            { field: 'sender name', from: { integrationId: 5, name: 'Custom' }, replyTo: '', confirm: true },
+            { field: 'Reply-To', from: { integrationId: 5 }, replyTo: 'replies@example.com', confirm: true },
+            { field: 'no custom values', from: { integrationId: 5 }, replyTo: '', confirm: false },
+            {
+                field: 'a rotation selection',
+                from: { integrationId: 5, integrationIds: [5, 6] },
+                replyTo: '',
+                confirm: true,
+            },
+        ])('switches with $field after any required confirmation', async ({ from, replyTo, confirm }) => {
+            featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER], {
+                [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,
+            })
+            useMocks({
+                get: {
+                    '/api/projects/:team_id/integrations/': {
+                        results: [
+                            SANDBOX_SENDER,
+                            OWN_SENDER,
+                            { ...OWN_SENDER, id: 6, display_name: 'Second <second@example.com>' },
+                        ],
+                    },
+                },
+            })
+            const onChange = jest.fn()
+            const dialog = jest.spyOn(LemonDialog, 'open').mockImplementation(jest.fn())
+            logic = emailTemplaterLogic(
+                makeProps({
+                    sandboxSenderAllowed: true,
+                    liveChanges: true,
+                    onChange,
+                    value: { ...DEFAULT_EMAIL_TEMPLATE, from, replyTo },
+                })
+            )
+            logic.mount()
+            await expectLogic(integrationsLogic).toDispatchActions(['loadIntegrationsSuccess'])
+            onChange.mockClear()
+            logic.actions.chooseSenders([7])
+            expect(dialog).toHaveBeenCalledTimes(confirm ? 1 : 0)
+            if (confirm) {
+                expect(onChange).not.toHaveBeenCalled()
+                if (from.integrationIds) {
+                    expect(dialog.mock.calls[0][0].description).toContain('Acme <hello@acme.example.com>')
+                    expect(dialog.mock.calls[0][0].description).toContain('Second <second@example.com>')
+                }
+                emailTemplaterLogic(
+                    makeProps({
+                        sandboxSenderAllowed: true,
+                        liveChanges: true,
+                        onChange,
+                        value: { ...DEFAULT_EMAIL_TEMPLATE, from, replyTo, subject: 'Changed during confirmation' },
+                    })
+                )
+                const confirmSwitch = dialog.mock.calls[0][0].primaryButton?.onClick as (() => void) | undefined
+                confirmSwitch?.()
+            }
+            expect(onChange).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    from: { integrationId: 7, integrationIds: undefined, email: undefined, name: undefined },
+                    replyTo: '',
+                    subject: confirm ? 'Changed during confirmation' : DEFAULT_EMAIL_TEMPLATE.subject,
+                })
+            )
+            expect(logic.values.isSandboxSenderSelected).toBe(true)
+            expect(logic.values.visibleFields.map((field) => field.key)).not.toContain('replyTo')
+        })
+
+        it('exposes a load error to the picker instead of treating the null list as empty', async () => {
+            useMocks({
+                get: {
+                    '/api/projects/:team_id/integrations/': () => [
+                        500,
+                        { detail: 'Could not load senders. Try again.' },
+                    ],
+                },
+            })
+            logic = emailTemplaterLogic(makeProps())
+            logic.mount()
+            await expectLogic(integrationsLogic).toDispatchActions(['loadIntegrationsFailure'])
+            expect(logic.values.senderIntegrationsError).toBe('Could not load senders. Try again.')
+            expect(logic.values.senderIntegrationsLoading).toBe(false)
+        })
+
+        it.each([404, 500])('exposes a sandbox setup failure (%s) beside available own senders', async (status) => {
+            featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER], {
+                [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,
+            })
+            useMocks({
+                get: { '/api/projects/:team_id/integrations/': { results: [OWN_SENDER] } },
+                post: {
+                    '/api/projects/:team_id/integrations/email_sandbox_sender/': () => [
+                        status,
+                        { detail: 'Sandbox setup is unavailable. Try again.' },
+                    ],
+                },
+            })
+            logic = emailTemplaterLogic(makeProps({ sandboxSenderAllowed: true }))
+            logic.mount()
+            await expectLogic(integrationsLogic).toFinishAllListeners()
+            expect(logic.values.senderIntegrationsError).toBe('Sandbox setup is unavailable. Try again.')
+            expect(logic.values.senderIntegrations.map((sender) => sender.id)).toEqual([5])
+        })
+
+        it('offers no Reply-To while the sandbox sender is selected, since the sandbox sender does not support it', async () => {
+            featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER], {
+                [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,
+            })
+            useMocks({ get: { '/api/projects/:team_id/integrations/': { results: [SANDBOX_SENDER, OWN_SENDER] } } })
+            logic = emailTemplaterLogic(
+                makeProps({
+                    sandboxSenderAllowed: true,
+                    value: { ...DEFAULT_EMAIL_TEMPLATE, from: { integrationId: 7 }, replyTo: 'replies@example.com' },
+                })
+            )
+            logic.mount()
+            await expectLogic(integrationsLogic).toDispatchActions(['loadIntegrationsSuccess'])
+
+            await expectLogic(logic).toMatchValues({ isSandboxSenderSelected: true })
+            expect(logic.values.visibleFields.map((field) => field.key)).not.toContain('replyTo')
+            expect(logic.values.hiddenAdvancedFields.map((field) => field.key)).not.toContain('replyTo')
+
+            logic.actions.setEmailTemplateValue('from', { integrationId: 8 })
+            await expectLogic(logic).toMatchValues({ isSandboxSenderSelected: false })
+            expect(logic.values.visibleFields.map((field) => field.key)).toContain('replyTo')
+        })
     })
 
     describe('advanced fields', () => {
