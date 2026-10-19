@@ -8,6 +8,7 @@ import { captureTeamEvent } from '~/common/utils/posthog'
 import { TeamManager } from '~/common/utils/team-manager'
 
 import { TeamOrganizationSnapshot } from '../managers/organization-members.service'
+import { SandboxSenderStateService } from '../managers/sandbox-sender-state.service'
 import { ClaimRequest, RateLimiterService } from '../rate-limiter/rate-limiter.service'
 import { maybeAddPreheaderToEmail } from './helpers/preheader'
 
@@ -52,7 +53,13 @@ type SandboxEmailOutcome =
     | { type: 'sent'; recipientCount: number }
     | {
           type: 'blocked'
-          reason: 'switch_off' | 'recipient_not_member' | 'recipient_unverified' | 'check_failed' | 'cap_reached'
+          reason:
+              | 'switch_off'
+              | 'recipient_not_member'
+              | 'recipient_unverified'
+              | 'check_failed'
+              | 'cap_reached'
+              | 'paused'
           blockedRecipientCount: number
       }
 
@@ -173,8 +180,9 @@ export class SandboxEmailSender {
     constructor(
         public readonly config: SandboxEmailSenderConfig,
         private teamManager: TeamManager,
-        private dailyCapLimiter: RateLimiterService | null = null,
-        private blockedEventRedis: Pick<RedisV2, 'useClient'> | null = null
+        private dailyCapLimiter: RateLimiterService | null,
+        private blockedEventRedis: Pick<RedisV2, 'useClient'> | null,
+        private senderState: Pick<SandboxSenderStateService, 'isPaused'>
     ) {
         this.config = {
             ...config,
@@ -189,6 +197,15 @@ export class SandboxEmailSender {
             })
         }
         this.canSend = config.enabled && !emptySettings.length
+    }
+
+    public async pauseGate(): Promise<'open' | 'paused' | 'check_failed'> {
+        try {
+            return (await this.senderState.isPaused(this.config.tenantName)) ? 'paused' : 'open'
+        } catch (error) {
+            logger.warn('Could not check the sandbox sender pause state', { error })
+            return 'check_failed'
+        }
     }
 
     public async claimDailyCaps(

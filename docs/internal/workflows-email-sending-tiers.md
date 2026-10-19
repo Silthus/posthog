@@ -20,7 +20,7 @@ Only workflows that send email are subject to the tiers; SMS, push, and webhook 
 
 The `workflows-sandbox-sender` flag enables a PostHog-managed email integration per project through `POST /api/projects/:project_id/integrations/email_sandbox_sender/`.
 The endpoint requires `integration:write` and project membership. Repeated requests keep the same integration and refresh its display name from the organization name.
-Set `WORKFLOWS_SANDBOX_SENDER_DOMAIN` and `SES_SANDBOX_FROM_ADDRESS` in Django; either empty value leaves the endpoint unavailable.
+Set `WORKFLOWS_SANDBOX_SENDER_DOMAIN`, `SES_SANDBOX_FROM_ADDRESS`, and `SES_SANDBOX_TENANT_NAME` in Django; any empty value leaves the endpoint unavailable.
 The worker sends from the same `SES_SANDBOX_FROM_ADDRESS`, so set it once for Django and the worker. The address the UI shows is then the address the worker sends from.
 Users cannot edit, verify, or remove the managed integration, or register their own integration on the shared domain.
 The managed integration is excluded from project SES tenant migration, identity cleanup, and the reputation page's domain breakdown.
@@ -75,6 +75,10 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
   A reached cap skips the send instead of delaying it. A limiter error or an empty or invalid cap value skips every sandbox send.
   Cap keys and the final membership check share one organization snapshot, valid for at most one minute. A stalled claim or member lookup that outlives that snapshot skips the send and returns the claim.
   SES throttle responses return the sandbox claim before the existing delivery retry. Returns are deduplicated, and Valkey ignores a return command that arrives more than five minutes after it was issued.
+  The SES tenant-state webhook and daily reconciliation mirror `SES_SANDBOX_TENANT_NAME` into `SandboxSenderTenantState` without emailing project admins.
+  Every sandbox send, including test sends, skips when that tenant's mirrored sending status is `DISABLED` or the pause lookup fails. A missing row allows sending, with SES enforcing its own state.
+  The worker rechecks pauses after the daily-cap claim and returns the claim when that recheck blocks delivery.
+  A committed state change reaches the workers through the `reload-sandbox-sender-state` message. Own-sender sends do not read this state.
   Test sends run inline in the CDP API, so the API reads the same `SES_RATE_LIMITER_VALKEY_*` settings as the email worker. Without them, every sandbox test send is skipped.
   CDP API opens the SES Valkey pool only when sandbox delivery is enabled; otherwise its MX validation uses the existing local cache and DNS.
   Deploy membership checks, daily caps, and the shared pause gate first. Configure the SES identity and Valkey pool, enable `WORKFLOWS_SANDBOX_SENDER_ENABLED`, then enable the UI flag.
@@ -90,7 +94,7 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
 
 ### Sandbox delivery
 
-Sandbox email uses a fixed SES tenant, configuration set, and From address. Set `SES_SANDBOX_TENANT_NAME`, `SES_SANDBOX_CONFIGURATION_SET`, and `SES_SANDBOX_FROM_ADDRESS` on the worker. Django reads the same `SES_SANDBOX_FROM_ADDRESS` for the address it stores and shows. The address must belong to the shared SES identity.
+Sandbox email uses a fixed SES tenant, configuration set, and From address. Set `SES_SANDBOX_TENANT_NAME`, `SES_SANDBOX_CONFIGURATION_SET`, and `SES_SANDBOX_FROM_ADDRESS` on the worker. Set the same `SES_SANDBOX_TENANT_NAME` and `SES_SANDBOX_FROM_ADDRESS` on Django web and Celery so webhooks and reconciliation mirror the shared tenant; while either is empty, the provisioning endpoint stays unavailable. Django stores and shows that From address, and it must belong to the shared SES identity.
 Sandbox sends disable click tracking and unsubscribe headers because the complete stack restricts them to verified organization members for internal testing. Marketing delivery to external audiences requires a verified sender.
 Every To, CC, and BCC address must belong to an active organization member with a verified email address. Membership snapshots expire within one minute, and the worker checks recipients again immediately before delivery. A failed or stale membership check skips the send and explains the blocked addresses in the run log.
 HTML is parsed and normalized before the identification footer is appended. Root clipping and visibility styles are overridden while template typography is preserved; malformed markup may render differently from an own-domain send. Preview text is parsed separately so escaped template values remain readable.

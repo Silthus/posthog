@@ -453,7 +453,9 @@ describe('RateLimiterService', () => {
                 dailyRecipientCap: '1',
             },
             manager,
-            limiter
+            limiter,
+            null,
+            { isPaused: jest.fn().mockResolvedValue(false) }
         )
 
         try {
