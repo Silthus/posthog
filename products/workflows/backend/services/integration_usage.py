@@ -1,4 +1,7 @@
 from typing import Any
+from uuid import UUID
+
+from posthog.models.integration import Integration
 
 from products.cdp.backend.models.hog_function_template import HogFunctionTemplate
 from products.workflows.backend.models import HogFlow
@@ -60,13 +63,65 @@ def _action_references_integration(action: dict, integration_id: int, template_c
     return _function_action_references_integration(action, integration_id, template_cache)
 
 
-def get_active_hog_flows_using_integration(team_id: int, integration_id: int) -> list[HogFlow]:
-    """Active workflows whose live config references the given integration."""
+def enabled_flows_using(*, team_id: int, integration_id: int) -> list[HogFlow]:
+    """Active and waiting workflows whose live config references the given integration."""
     template_cache: _TemplateCache = {}
     return [
         flow
-        for flow in HogFlow.objects.filter(team_id=team_id, status=HogFlow.State.ACTIVE)
+        for flow in HogFlow.objects.filter(
+            team_id=team_id, status__in=[HogFlow.State.ACTIVE, HogFlow.State.WAITING_FOR_DOMAIN]
+        )
         if any(
             _action_references_integration(action, integration_id, template_cache) for action in (flow.actions or [])
         )
     ]
+
+
+def _email_sender_id(action: dict) -> int | None:
+    sender = ((((action.get("config") or {}).get("inputs") or {}).get("email") or {}).get("value") or {}).get("from")
+    sender_id = sender.get("integrationId") if isinstance(sender, dict) else None
+    try:
+        return int(sender_id) if sender_id is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def email_senders_of(flow: HogFlow) -> frozenset[int]:
+    """The email integrations the workflow's live email steps send from."""
+    return frozenset(
+        sender_id
+        for action in flow.actions or []
+        if isinstance(action, dict)
+        and action.get("type") == "function_email"
+        and (sender_id := _email_sender_id(action)) is not None
+    )
+
+
+def unverified_senders(*, team_id: int, sender_ids: frozenset[int]) -> frozenset[int]:
+    """The senders among ``sender_ids`` that exist and are not verified yet. A sender that no longer exists
+    can never verify, so it does not hold a workflow back."""
+    return frozenset(unverified_sender_domains(team_id=team_id, sender_ids=sender_ids))
+
+
+def unverified_sender_domains(*, team_id: int, sender_ids: frozenset[int]) -> dict[int, str]:
+    """The domain of each sender that ``unverified_senders`` returns, keyed by sender id."""
+    if not sender_ids:
+        return {}
+    senders = Integration.objects.filter(team_id=team_id, kind="email", id__in=sender_ids).only("id", "config")
+    return {
+        sender.id: _sender_domain(sender.config or {})
+        for sender in senders
+        if not (sender.config or {}).get("verified")
+    }
+
+
+def _sender_domain(config: dict) -> str:
+    return config.get("domain") or str(config.get("email") or "").rpartition("@")[2]
+
+
+def waiting_flows_using(*, team_id: int, sender_ids: frozenset[int]) -> list[UUID]:
+    """The waiting workflows of the team that send email from any of ``sender_ids``."""
+    if not sender_ids:
+        return []
+    waiting = HogFlow.objects.filter(team_id=team_id, status=HogFlow.State.WAITING_FOR_DOMAIN).only("id", "actions")
+    return [flow.id for flow in waiting if email_senders_of(flow) & sender_ids]

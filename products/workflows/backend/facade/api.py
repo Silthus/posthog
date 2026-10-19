@@ -2,6 +2,7 @@ from collections.abc import Collection, Iterable
 from typing import Any
 from uuid import UUID
 
+from django.db import transaction
 from django.db.models import F
 
 from posthog.helpers.full_text_search import build_rank
@@ -41,7 +42,7 @@ from products.workflows.backend.services.email_sending_controls import (
 from products.workflows.backend.services.existing_email_tools import (
     lookup_existing_email_tools as _lookup_existing_email_tools,
 )
-from products.workflows.backend.services.integration_usage import get_active_hog_flows_using_integration
+from products.workflows.backend.services.integration_usage import enabled_flows_using
 from products.workflows.backend.services.owned_workflow_health import list_owned_workflow_health
 from products.workflows.backend.services.template_input_usage import (
     filter_hog_flow_references_by_access_level,
@@ -238,11 +239,20 @@ def get_workflow_activity_summary(*, team_id: int, recent_limit: int) -> Workflo
     )
 
 
-def get_active_workflows_using_integration(*, team_id: int, integration_id: int) -> list[WorkflowSummary]:
+def get_enabled_workflows_using_integration(*, team_id: int, integration_id: int) -> list[WorkflowSummary]:
     return [
         WorkflowSummary(id=str(flow.id), name=flow.name or "", status=flow.status)
-        for flow in get_active_hog_flows_using_integration(team_id=team_id, integration_id=integration_id)
+        for flow in enabled_flows_using(team_id=team_id, integration_id=integration_id)
     ]
+
+
+def enable_waiting_workflows(*, team_id: int, sender_ids: Iterable[int]) -> None:
+    # Deferred because the tasks package imports core tasks that import this facade.
+    from products.workflows.backend.tasks.waiting_workflows import enable_waiting_workflows_task  # noqa: PLC0415
+
+    ids = sorted(set(sender_ids))
+    if ids:
+        transaction.on_commit(lambda: enable_waiting_workflows_task.delay(team_id=team_id, sender_ids=ids))
 
 
 def get_active_workflows_using_realtime_cohort(
