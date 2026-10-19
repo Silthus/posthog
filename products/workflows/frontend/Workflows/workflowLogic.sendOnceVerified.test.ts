@@ -91,7 +91,7 @@ describe('workflowLogic send once verified', () => {
         await mountWith(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }))
 
         await expectLogic(logic, () => {
-            logic.actions.saveWorkflowPartial({ status: 'active' })
+            logic.actions.enableWorkflow()
         })
             .toDispatchActions(['openEnablePrompt'])
             .toNotHaveDispatchedActions(['saveWorkflow'])
@@ -101,7 +101,7 @@ describe('workflowLogic send once verified', () => {
 
     it('saves the usual active status once the person confirms, and shows the waiting status', async () => {
         await mountWith(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }))
-        logic.actions.saveWorkflowPartial({ status: 'active' })
+        logic.actions.enableWorkflow()
 
         await expectLogic(logic, () => {
             logic.actions.confirmEnablePrompt()
@@ -112,9 +112,42 @@ describe('workflowLogic send once verified', () => {
         expect(logic.values.originalWorkflow?.status).toEqual('waiting_for_domain')
     })
 
+    it.each([
+        ['succeeds', 200, 'saveWorkflowSuccess'],
+        ['fails', 500, 'saveWorkflowFailure'],
+    ])('keeps the prompt open and loading until the enable save %s', async (_name, responseCode, settledAction) => {
+        await mountWith(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }))
+        let releaseSave!: () => void
+        const saveReleased = new Promise<void>((resolve) => {
+            releaseSave = resolve
+        })
+        useMocks({
+            patch: {
+                '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => {
+                    patchBodies.push((await request.json()) as Record<string, any>)
+                    await saveReleased
+                    return [responseCode, { ...storedWorkflow, status: 'waiting_for_domain' }]
+                },
+            },
+        })
+        logic.actions.enableWorkflow()
+
+        await expectLogic(logic, () => {
+            logic.actions.confirmEnablePrompt()
+        })
+            .toDispatchActions(['saveWorkflow'])
+            .toMatchValues({ enablePromptDomains: ['example.com'], workflowLoading: true })
+
+        releaseSave()
+        await expectLogic(logic)
+            .toDispatchActions([settledAction])
+            .toMatchValues({ enablePromptDomains: null, workflowLoading: false })
+        expect(patchBodies.map((body) => body.status)).toEqual(['active'])
+    })
+
     it('leaves the workflow off when the person cancels', async () => {
         await mountWith(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }))
-        logic.actions.saveWorkflowPartial({ status: 'active' })
+        logic.actions.enableWorkflow()
 
         await expectLogic(logic, () => {
             logic.actions.cancelEnablePrompt()
@@ -132,7 +165,7 @@ describe('workflowLogic send once verified', () => {
         await mountWith(makeWorkflow({ unverified_email_senders: senders }), { flagOn })
 
         await expectLogic(logic, () => {
-            logic.actions.saveWorkflowPartial({ status: 'active' })
+            logic.actions.enableWorkflow()
         })
             .toDispatchActions(['saveWorkflowSuccess'])
             .toMatchValues({ enablePromptDomains: null })

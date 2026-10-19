@@ -1,4 +1,5 @@
 from collections.abc import Callable, Mapping
+from copy import copy
 from datetime import datetime
 from typing import Any, Literal, Optional
 from uuid import UUID
@@ -6,6 +7,8 @@ from uuid import UUID
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+
+from structlog import get_logger
 
 from posthog.models import Team, User
 from posthog.ph_client import feature_enabled_or_false
@@ -31,7 +34,7 @@ from products.workflows.backend.services.hog_flow_secrets import (
 )
 from products.workflows.backend.services.integration_usage import (
     email_senders_of,
-    unverified_senders,
+    lock_unverified_senders,
     waiting_flows_using,
 )
 from products.workflows.backend.services.timing_reschedule import (
@@ -43,6 +46,8 @@ from products.workflows.backend.services.workflow_proposals import (
     unstage_workflow_proposals,
 )
 from products.workflows.backend.tasks.hog_flows import reschedule_hog_flow_timing
+
+logger = get_logger(__name__)
 
 EMAIL_DOMAIN_WIZARD_FLAG = "workflows-email-domain-wizard"
 
@@ -72,18 +77,21 @@ def _sender_check_rolled_out(team_id: int, user_id: Optional[int]) -> bool:
 
 
 def _unverified_senders_of(flow: HogFlow, user_id: Optional[int]) -> frozenset[int]:
+    # Transactional email workflows refuse an unverified sender on their own, so they never wait for one.
+    if flow.origin_product == HogFlowOriginProduct.TRANSACTIONAL_EMAILS:
+        return frozenset()
     senders = email_senders_of(flow)
     if not senders or not _sender_check_rolled_out(flow.team_id, user_id):
         return frozenset()
-    return unverified_senders(team_id=flow.team_id, sender_ids=senders)
+    return lock_unverified_senders(team_id=flow.team_id, sender_ids=senders)
 
 
 def _seconds_waiting(flow: HogFlow, now: datetime) -> int:
     return int((now - flow.enable_requested_at).total_seconds()) if flow.enable_requested_at else 0
 
 
-def _request_enable(flow: HogFlow, *, user_id: Optional[int], previous: HogFlowState) -> StatusChange:
-    """Apply a person's Enable to the locked or unsaved row. The caller saves it."""
+def _request_enable(flow: HogFlow, *, user_id: Optional[int]) -> tuple[WorkflowEvent, ...]:
+    """Apply a person's Enable to the locked or unsaved row and return its events. The caller saves it."""
     now = timezone.now()
     unverified = _unverified_senders_of(flow, user_id)
     current = HogFlowState.WAITING_FOR_DOMAIN if unverified else HogFlowState.ACTIVE
@@ -102,7 +110,19 @@ def _request_enable(flow: HogFlow, *, user_id: Optional[int], previous: HogFlowS
     ]
     if current == HogFlowState.ACTIVE:
         events.append(_activated_event(flow, activated_by="user", now=now))
-    return StatusChange(workflow_id=flow.id, previous=previous, current=current, events=tuple(events))
+    return tuple(events)
+
+
+def _apply_enable(
+    target: HogFlow, locked: HogFlow, data: dict, user_id: Optional[int]
+) -> tuple[dict, tuple[WorkflowEvent, ...]]:
+    """Apply a person's Enable to ``target``, the row ``locked`` holds. Returns the fields left to save and the
+    events. An active or archived workflow keeps its status and gets no events."""
+    if locked.status in (HogFlowState.ACTIVE, HogFlowState.ARCHIVED):
+        return _without_status(data), ()
+    if "actions" in data:
+        target.actions = data["actions"]
+    return _without_status(data), _request_enable(target, user_id=user_id)
 
 
 def _activated_event(flow: HogFlow, *, activated_by: ActivatedBy, now: datetime) -> WorkflowEvent:
@@ -123,7 +143,7 @@ def _activated_event(flow: HogFlow, *, activated_by: ActivatedBy, now: datetime)
 def _go_live_once_senders_verified(flow: HogFlow, *, activated_by: ActivatedBy) -> Optional[StatusChange]:
     """Take a waiting workflow live when none of its email senders is unverified. Ignores the flag, because
     the sender check already ran when the person enabled it. The caller saves the row."""
-    if unverified_senders(team_id=flow.team_id, sender_ids=email_senders_of(flow)):
+    if lock_unverified_senders(team_id=flow.team_id, sender_ids=email_senders_of(flow)):
         return None
     now = timezone.now()
     flow.status = HogFlowState.ACTIVE
@@ -150,14 +170,6 @@ def _events_on_leaving(flow: HogFlow) -> tuple[WorkflowEvent, ...]:
     )
 
 
-def _requests_enable(validated_data: dict, origin_product: Optional[str]) -> bool:
-    # Transactional email workflows refuse an unverified sender on their own, so they never wait.
-    return (
-        validated_data.get("status") == HogFlowState.ACTIVE
-        and origin_product != HogFlowOriginProduct.TRANSACTIONAL_EMAILS
-    )
-
-
 def _without_status(validated_data: dict) -> dict:
     return {key: value for key, value in validated_data.items() if key != "status"}
 
@@ -169,8 +181,8 @@ def create_workflow(*, team_id: int, user_id: Optional[int], validated_data: dic
             data["encrypted_inputs"] = strip_secrets_from_content(data, template_cache={})
         instance = HogFlow(team_id=team_id, created_by_id=user_id, **data)
         events: tuple[WorkflowEvent, ...] = ()
-        if _requests_enable(data, instance.origin_product):
-            events = _request_enable(instance, user_id=user_id, previous=HogFlowState.DRAFT).events
+        if instance.status == HogFlowState.ACTIVE:
+            events = _request_enable(instance, user_id=user_id)
         instance.save(force_insert=True)
         HogFlowRevision.objects.create(
             team_id=team_id,
@@ -196,19 +208,16 @@ def enable(*, team_id: int, hog_flow_id: UUID, user_id: int, validated_data: Map
     with transaction.atomic():
         locked = HogFlow.objects.select_for_update().get(team_id=team_id, pk=hog_flow_id)
         previous = HogFlowState(locked.status)
-        if previous in (HogFlowState.ACTIVE, HogFlowState.ARCHIVED):
-            return StatusChange(workflow_id=locked.id, previous=previous, current=previous, events=())
-        data = _without_status(dict(validated_data))
-        if "actions" in data:
-            locked.actions = data["actions"]
-        change = _request_enable(locked, user_id=user_id, previous=previous)
-        _save_live(locked, data)
-    return change
+        data, events = _apply_enable(locked, locked, dict(validated_data), user_id)
+        if events:
+            _save_live(locked, data)
+    return StatusChange(workflow_id=locked.id, previous=previous, current=HogFlowState(locked.status), events=events)
 
 
 def enable_waiting(*, team_id: int, sender_ids: frozenset[int]) -> tuple[StatusChange, ...]:
     """Take live each waiting workflow that sends from ``sender_ids`` and has no unverified sender left."""
     changes = []
+    went_live: list[tuple[HogFlow, HogFlow]] = []
     for hog_flow_id in waiting_flows_using(team_id=team_id, sender_ids=sender_ids):
         with transaction.atomic():
             locked = (
@@ -218,11 +227,19 @@ def enable_waiting(*, team_id: int, sender_ids: frozenset[int]) -> tuple[StatusC
             )
             if locked is None:
                 continue
+            before = copy(locked)
             change = _go_live_once_senders_verified(locked, activated_by="domain_verified")
             if change is None:
                 continue
             locked.save()
         changes.append(change)
+        went_live.append((before, locked))
+    # The workflows are live already, so a sweep that cannot be queued must not lose their events.
+    for before, after in went_live:
+        try:
+            _reschedule_timing_edits(team_id, before, after)
+        except Exception:
+            logger.exception("workflows.enable_waiting.sweep_failed", team_id=team_id, hog_flow_id=str(after.id))
     return tuple(changes)
 
 
@@ -466,36 +483,29 @@ def _apply_status_request(
     instance: HogFlow, locked: HogFlow, validated_data: dict, user_id: Optional[int]
 ) -> tuple[dict, tuple[WorkflowEvent, ...]]:
     """Route a requested status through the enable rule. Returns the fields left to save and the events."""
-    requested = validated_data.get("status")
-    if requested is None or requested == locked.status:
-        return validated_data, ()
+    requested = validated_data.get("status", locked.status)
+    if requested == locked.status:
+        return _go_live_after_waiting_edit(instance, locked, validated_data)
     if requested == HogFlowState.WAITING_FOR_DOMAIN:
         # Only the enable rule sets it. A client that sends it back read it before a change landed.
         raise WorkflowStale()
     if requested == HogFlowState.ACTIVE:
-        if locked.status == HogFlowState.ARCHIVED:
-            return _without_status(validated_data), ()
-        if not _requests_enable(validated_data, locked.origin_product):
-            return validated_data, ()
-        if "actions" in validated_data:
-            instance.actions = validated_data["actions"]
-        change = _request_enable(instance, user_id=user_id, previous=HogFlowState(locked.status))
-        return _without_status(validated_data), change.events
+        return _apply_enable(instance, locked, validated_data, user_id)
     return validated_data, _events_on_leaving(locked)
 
 
 def _go_live_after_waiting_edit(
-    instance: HogFlow, locked: HogFlow, validated_data: dict, events: tuple[WorkflowEvent, ...]
+    instance: HogFlow, locked: HogFlow, validated_data: dict
 ) -> tuple[dict, tuple[WorkflowEvent, ...]]:
     """An edit can drop or switch a waiting workflow's unverified sender, so check its senders again."""
-    if locked.status != HogFlowState.WAITING_FOR_DOMAIN or validated_data.get("status", locked.status) != locked.status:
-        return validated_data, events
+    if locked.status != HogFlowState.WAITING_FOR_DOMAIN:
+        return validated_data, ()
     if "actions" in validated_data:
         instance.actions = validated_data["actions"]
     change = _go_live_once_senders_verified(instance, activated_by="user")
     if change is None:
-        return validated_data, events
-    return _without_status(validated_data), (*events, *change.events)
+        return validated_data, ()
+    return _without_status(validated_data), change.events
 
 
 def update_workflow(
@@ -572,7 +582,6 @@ def update_workflow(
         else:
             validated_data = _derive_from_locked_graph(before_update, validated_data)
             validated_data, events = _apply_status_request(instance, before_update, validated_data, user_id)
-            validated_data, events = _go_live_after_waiting_edit(instance, before_update, validated_data, events)
             _refresh_action_redirects(instance, before_update, validated_data.get("actions"))
             bump = _stage_revision_bump(instance, before_update, validated_data)
             if clears_staged_draft:
@@ -634,9 +643,11 @@ def edit_workflow_content(
         validated_data = edit(to_edit_state(locked), base_actions, base_edges)
 
         before_update = HogFlow.objects.get(pk=hog_flow_id, team_id=team_id)
+        events: tuple[WorkflowEvent, ...] = ()
         if route_to_draft:
             _write_draft(locked, locked, validated_data)
         else:
+            validated_data, events = _go_live_after_waiting_edit(locked, before_update, validated_data)
             # An email edit can't delete steps or change timing config, so only graph edits refresh redirects.
             if changes_graph:
                 _refresh_action_redirects(locked, before_update, validated_data.get("actions"))
@@ -646,7 +657,8 @@ def edit_workflow_content(
                 _append_revisions(team_id, user_id, locked, before_update)
 
     paused = 0
-    if changes_graph and not route_to_draft:
+    went_live = locked.status != before_update.status
+    if (changes_graph or went_live) and not route_to_draft:
         _reschedule_timing_edits(team_id, before_update, locked)
         paused = _pause_schedules_on_audience_change(before_update, locked)
     return WorkflowWriteResult(
@@ -654,6 +666,7 @@ def edit_workflow_content(
         current=field_values(locked),
         routed_to_draft=route_to_draft,
         schedules_paused=paused,
+        events=events,
     )
 
 
@@ -678,6 +691,7 @@ def publish_draft(
         # The draft goes back through the normal serializer so publish revalidates strictly and
         # recompiles bytecode - a stored blob is never trusted to be execution-ready.
         validated_data = validate(to_edit_state(locked), dict(locked.draft))
+        validated_data, events = _go_live_after_waiting_edit(locked, before_update, validated_data)
         _refresh_action_redirects(locked, before_update, validated_data.get("actions"))
         bump = _stage_revision_bump(locked, before_update, validated_data)
         # Validation recovered the draft's secrets (from the merged live+draft encrypted maps), and
@@ -695,7 +709,7 @@ def publish_draft(
     _reschedule_timing_edits(team_id, before_update, locked)
     paused = _pause_schedules_on_audience_change(before_update, locked)
     return WorkflowWriteResult(
-        previous=field_values(before_update), current=field_values(locked), schedules_paused=paused
+        previous=field_values(before_update), current=field_values(locked), schedules_paused=paused, events=events
     )
 
 
