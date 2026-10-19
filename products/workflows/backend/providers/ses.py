@@ -369,24 +369,6 @@ class _SESIdentityState:
     mail_from_status: str
     mail_from_domain: str | None
 
-    @classmethod
-    def from_status(
-        cls,
-        status: SESIdentityStatus,
-        *,
-        mail_from_domain: str,
-        verification_token: str | None,
-        dkim_tokens: Sequence[str],
-    ) -> "_SESIdentityState":
-        return cls(
-            verification_status=status.verification,
-            verification_token=verification_token,
-            dkim_status=status.dkim,
-            dkim_tokens=tuple(dkim_tokens),
-            mail_from_status=status.mail_from_status_for(mail_from_domain),
-            mail_from_domain=status.mail_from_domain,
-        )
-
     # SES keeps one MAIL FROM domain per identity, and senders on the same domain can ask for
     # different ones. The status SES reports belongs to whichever was set last.
     def for_mail_from_domain(self, mail_from_domain: str) -> "_SESIdentityState":
@@ -763,16 +745,11 @@ class SESProvider:
             )
         ]
 
+        mail_from_domain = f"{mail_from_subdomain}.{domain}"
         status = identity_status or self.get_identity_statuses([domain])[domain]
-        identity = _SESIdentityState.from_status(
-            status,
-            mail_from_domain=f"{mail_from_subdomain}.{domain}",
-            verification_token=verification_token,
-            dkim_tokens=dkim_tokens,
-        )
-        verification_status = identity.verification_status
-        dkim_status = identity.dkim_status
-        mail_from_status = identity.mail_from_status
+        verification_status = status.verification
+        dkim_status = status.dkim
+        mail_from_status = status.mail_from_status_for(mail_from_domain)
 
         # DMARC: check via direct DNS lookup since AWS SES doesn't track it
         dmarc_status = "Pending"
@@ -794,9 +771,9 @@ class SESProvider:
 
         # Normalize overall status
         overall: EmailDomainVerificationStatus
-        if identity.is_ready(dmarc_published=dmarc_status == "Success"):
+        if status.is_ready_for(mail_from_domain) and dmarc_status == "Success":
             overall = "success"
-        elif "Failed" in identity.statuses:
+        elif "Failed" in (verification_status, dkim_status, mail_from_status):
             overall = "failed"
         else:
             overall = "pending"
