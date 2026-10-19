@@ -930,7 +930,7 @@ export class CdpApi {
             const result = await this.hogFlowExecutor.executeCurrentAction(invocation, { hogExecutorOptions: options })
 
             res.json({
-                nextActionId: result.skipped ? null : result.invocation.state.currentAction?.id,
+                nextActionId: result.skipped && result.finished ? null : result.invocation.state.currentAction?.id,
                 status: result.error ? 'error' : result.skipped ? 'skipped' : 'success',
                 errors: result.error ? [result.error] : [],
                 logs: [...result.logs, ...logs],

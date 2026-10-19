@@ -1,27 +1,72 @@
 import { useActions, useValues } from 'kea'
 
 import { IconExternal } from '@posthog/icons'
-import { LemonBanner, LemonButton, LemonInput, LemonLabel, LemonSelect, Spinner } from '@posthog/lemon-ui'
+import {
+    LemonBanner,
+    LemonButton,
+    LemonInput,
+    LemonInputSelect,
+    LemonLabel,
+    LemonSelect,
+    LemonTag,
+    Spinner,
+} from '@posthog/lemon-ui'
 
+import { SANDBOX_EMAIL_SENDER_NOTE } from 'lib/integrations/utils'
 import { LemonModal } from 'lib/lemon-ui/LemonModal'
 import { urls } from 'scenes/urls'
 
+import { IntegrationType } from '~/types'
+
 import { MessageTemplateLogicProps } from './messageTemplateLogic'
 import { messageTemplateTestSendLogic } from './messageTemplateTestSendLogic'
+
+function senderOption(
+    integration: IntegrationType,
+    sandboxEmailSender: IntegrationType | null
+): {
+    label: string
+    value: number
+    labelInMenu?: JSX.Element
+} {
+    const option = { label: integration.display_name, value: integration.id }
+    if (integration.id !== sandboxEmailSender?.id) {
+        return option
+    }
+    return {
+        ...option,
+        labelInMenu: (
+            <span className="flex items-center gap-2">
+                <span translate="no">{integration.display_name}</span>
+                <LemonTag type="highlight">Sandbox</LemonTag>
+            </span>
+        ),
+    }
+}
 
 export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: boolean }): JSX.Element {
     const { isOpen, ...logicProps } = props
     const logic = messageTemplateTestSendLogic(logicProps)
     const {
         recipientEmail,
+        recipientSuggestions,
+        recipientIsUnverifiedSelf,
+        sandboxEmailSenderEnabled,
+        recipientNotSuggested,
         senderIntegrationId,
+        sandboxEmailSender,
+        isSandboxSenderSelected,
         emailIntegrations,
-        integrationsLoading,
+        emailIntegrationsLoading,
+        emailSendersError,
         sendDisabledReason,
         testSendResult,
         testSendResultLoading,
+        testSendSkipMessage,
+        membersLoading,
     } = useValues(logic)
-    const { setModalOpen, setRecipientEmail, setSenderIntegrationId, sendTestEmail } = useActions(logic)
+    const { setModalOpen, setRecipientEmail, setSenderIntegrationId, sendTestEmail, retryEmailSenders } =
+        useActions(logic)
 
     return (
         <LemonModal
@@ -48,32 +93,86 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
             <div className="flex flex-col gap-4 min-w-100">
                 <div className="flex flex-col gap-1">
                     <LemonLabel>Send to</LemonLabel>
-                    <LemonInput
-                        type="email"
-                        value={recipientEmail}
-                        onChange={setRecipientEmail}
-                        placeholder="you@example.com"
-                        data-attr="send-test-email-recipient"
-                    />
+                    {sandboxEmailSenderEnabled ? (
+                        <LemonInputSelect
+                            mode="single"
+                            allowCustomValues
+                            disabled={testSendResultLoading}
+                            value={recipientEmail ? [recipientEmail] : []}
+                            onChange={(values) => setRecipientEmail(values[0] ?? '')}
+                            options={recipientSuggestions.map((email) => ({ key: email, label: email }))}
+                            loading={membersLoading}
+                            placeholder="you@example.com"
+                            emptyStateComponent="Type an email address and press Enter"
+                            data-attr="send-test-email-recipient"
+                        />
+                    ) : (
+                        <LemonInput
+                            type="email"
+                            disabled={testSendResultLoading}
+                            value={recipientEmail}
+                            onChange={setRecipientEmail}
+                            placeholder="you@example.com"
+                            data-attr="send-test-email-recipient"
+                        />
+                    )}
+                    {recipientIsUnverifiedSelf ? (
+                        <LemonBanner type="warning">
+                            Verify your email address to send test emails to yourself.
+                        </LemonBanner>
+                    ) : recipientNotSuggested ? (
+                        <LemonBanner
+                            type="warning"
+                            action={{
+                                children: 'Add your own sender',
+                                to: urls.workflows('channels'),
+                                targetBlank: true,
+                            }}
+                        >
+                            <span translate="no" className="break-all">
+                                {recipientEmail}
+                            </span>{' '}
+                            isn't among the verified members you can see. The sandbox sender may not deliver to it. Add
+                            your own sender to email anyone.
+                        </LemonBanner>
+                    ) : null}
                 </div>
                 <div className="flex flex-col gap-1">
                     <LemonLabel>From</LemonLabel>
-                    {integrationsLoading && emailIntegrations.length === 0 ? (
+                    {emailSendersError && (
+                        <LemonBanner
+                            type="error"
+                            action={{
+                                children: 'Try again',
+                                onClick: retryEmailSenders,
+                                loading: emailIntegrationsLoading,
+                                disabledReason: testSendResultLoading ? 'Wait for the test send to finish' : undefined,
+                            }}
+                        >
+                            {emailSendersError}
+                        </LemonBanner>
+                    )}
+                    {emailIntegrationsLoading && emailIntegrations.length === 0 ? (
                         <Spinner />
                     ) : emailIntegrations.length > 0 ? (
-                        <LemonSelect
-                            value={senderIntegrationId}
-                            onChange={(id) => setSenderIntegrationId(id)}
-                            options={emailIntegrations.map((integration) => ({
-                                label: integration.display_name,
-                                value: integration.id,
-                            }))}
-                            data-attr="send-test-email-sender"
-                            fullWidth
-                        />
+                        <>
+                            <LemonSelect
+                                disabled={testSendResultLoading}
+                                value={senderIntegrationId}
+                                onChange={(id) => setSenderIntegrationId(id)}
+                                options={emailIntegrations.map((integration) =>
+                                    senderOption(integration, sandboxEmailSender)
+                                )}
+                                data-attr="send-test-email-sender"
+                                fullWidth
+                            />
+                            {isSandboxSenderSelected && (
+                                <span className="text-xs text-secondary">{SANDBOX_EMAIL_SENDER_NOTE}</span>
+                            )}
+                        </>
                     ) : (
-                        <div className="flex gap-2 items-center">
-                            <span className="text-muted">No email senders configured yet</span>
+                        <div className="flex flex-wrap gap-2 items-center">
+                            {!emailSendersError && <span className="text-muted">No email senders configured yet</span>}
                             <LemonButton
                                 size="small"
                                 type="secondary"
@@ -86,10 +185,10 @@ export function SendTestEmailModal(props: MessageTemplateLogicProps & { isOpen: 
                         </div>
                     )}
                 </div>
-                {testSendResult && testSendResult.status === 'skipped' ? (
+                {testSendSkipMessage ? (
                     <LemonBanner type="warning">
-                        {testSendResult.logs?.map((log) => log.message).join(' ') ||
-                            'The send was skipped for this recipient.'}
+                        <div className="font-semibold">This test email was not sent</div>
+                        <div className="break-words">{testSendSkipMessage}</div>
                     </LemonBanner>
                 ) : testSendResult && testSendResult.status === 'error' ? (
                     <LemonBanner type="error">

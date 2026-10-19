@@ -241,6 +241,10 @@ export class HogFunctionHandler implements ActionHandler {
             )
         }
 
+        if (hogExecutorOptions?.isTest && functionResult.skipped) {
+            result.skipped = true
+        }
+
         // Add billable_invocation metric only if the function actually executed (not skipped)
         if (!functionResult.skipped) {
             // A step that does not send leaves this undefined and bills as before.
