@@ -168,24 +168,8 @@ class EmailIntegration:
 
     def apply_verification(self, verification_result: "EmailDomainVerification") -> "EmailDomainVerification":
         if verification_result.get("status") == "success":
-            verified_ids = self._mark_matching_senders_verified()
-            if verified_ids:
-                reload_integrations_on_workers(self.integration.team_id, verified_ids)
+            self._mark_domain_verified(on_domain_verified=None)
         return verification_result
-
-    def _mark_matching_senders_verified(self) -> list[int]:
-        with transaction.atomic():
-            verified_ids = list(self._matching_senders().select_for_update().values_list("id", flat=True))
-            model.Integration.objects.filter(id__in=verified_ids).update(config=_with_config_key("verified", True))
-            from products.workflows.backend.facade.api import (  # noqa: PLC0415 — keeps the workflows facade off the model import path
-                enable_waiting_workflows,
-                set_default_email_sender_if_unset,
-            )
-
-            if self.integration.id in verified_ids:
-                set_default_email_sender_if_unset(self.integration.team_id, self.integration.id)
-            enable_waiting_workflows(team_id=self.integration.team_id, sender_ids=verified_ids)
-        return verified_ids
 
     def _matching_senders(self) -> "models.QuerySet[model.Integration]":
         mail_from_subdomain = self.integration.config.get("mail_from_subdomain", "feedback")
@@ -272,31 +256,36 @@ class EmailIntegration:
         raise ValueError(f"Invalid provider: {provider}")
 
     def _mark_domain_verified(self, on_domain_verified: Callable[[], None] | None) -> None:
-        with transaction.atomic():
-            senders = list(self._matching_senders().select_for_update().order_by("id"))
-            unverified_senders = [sender for sender in senders if not sender.config.get("verified")]
-            for sender in unverified_senders:
-                sender.config["verified"] = True
-                sender.save()
-
-        self.integration.config["verified"] = True
-
-        from products.workflows.backend.facade.api import (
-            set_default_email_sender_if_unset,  # noqa: PLC0415 — keeps the workflows facade off the model import path
+        from products.workflows.backend.facade.api import (  # noqa: PLC0415 — keeps the workflows facade off the model import path
+            enable_waiting_workflows,
+            set_default_email_sender_if_unset,
         )
 
-        set_default_email_sender_if_unset(self.integration.team_id, self.integration.id)
+        with transaction.atomic():
+            senders = list(self._matching_senders().select_for_update().order_by("id"))
+            sender_ids = [sender.id for sender in senders]
+            unverified_ids = [sender.id for sender in senders if not sender.config.get("verified")]
+            model.Integration.objects.filter(id__in=unverified_ids).update(config=_with_config_key("verified", True))
+            # A concurrent edit can move this sender off the checked MAIL FROM subdomain, so it may not be among them.
+            verifies_this_sender = self.integration.id in sender_ids
+            if verifies_this_sender:
+                set_default_email_sender_if_unset(self.integration.team_id, self.integration.id)
+            enable_waiting_workflows(team_id=self.integration.team_id, sender_ids=sender_ids)
 
+        if sender_ids:
+            self._reload_senders_on_workers(sender_ids)
+        if not verifies_this_sender:
+            return
+        self.integration.config["verified"] = True
         # A sender added to a domain that is already verified joins it, so only the first verification counts.
-        if on_domain_verified and len(unverified_senders) == len(senders):
+        if on_domain_verified and len(unverified_ids) == len(senders):
             on_domain_verified()
-        self._reload_senders_on_workers(senders)
 
     # Workers also refresh integrations on their own schedule, so a failed reload only delays sending.
     # Failing the request instead would hide a verification that is already saved.
-    def _reload_senders_on_workers(self, senders: list[model.Integration]) -> None:
+    def _reload_senders_on_workers(self, sender_ids: list[int]) -> None:
         try:
-            reload_integrations_on_workers(self.integration.team_id, [sender.id for sender in senders])
+            reload_integrations_on_workers(self.integration.team_id, sender_ids)
         except Exception as error:
             capture_exception(error, {"team_id": self.integration.team_id})
 
