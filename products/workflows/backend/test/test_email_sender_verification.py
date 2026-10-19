@@ -471,6 +471,25 @@ class TestVerifiedSenderTakesWaitingWorkflowsLive(APIBaseTest):
         assert datetime.fromisoformat(properties["enable_requested_at"]) == enabled_at
         assert "source" not in properties
 
+    @parameterized.expand([("sweep",), ("wizard_verify",), ("wizard_status_poll",)])
+    def test_a_go_live_that_cannot_be_queued_keeps_the_verification(self, write: str) -> None:
+        sender = self._sender("example.com")
+        flow_id = self._waiting_flow(sender)
+        failures_before = REGISTRY.get_sample_value("workflows_enable_waiting_failed_total") or 0
+
+        with (
+            patch.object(enable_waiting_workflows_task, "delay", side_effect=OSError("broker unreachable")),
+            capture_logs() as logs,
+        ):
+            for callback in self._verify(sender, write):
+                callback()
+
+        sender.refresh_from_db()
+        assert sender.config["verified"] is True
+        assert [log["event"] for log in logs if log["log_level"] == "error"] == ["workflows.enable_waiting.failed"]
+        assert REGISTRY.get_sample_value("workflows_enable_waiting_failed_total") == failures_before + 1
+        assert self._workflow(flow_id)["status"] == "waiting_for_domain"
+
     def test_task_logs_and_counts_a_go_live_that_fails_after_its_last_retry(self) -> None:
         sender = self._sender("example.com", verified=True)
         flow_id = self._waiting_flow(sender)
