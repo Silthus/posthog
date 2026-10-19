@@ -1,0 +1,15 @@
+sequenceDiagram
+  actor U as User
+  participant T as enable_waiting task
+  participant W as HogFlow writes
+  T->>W: enable(flow)
+  alt database error
+    W--xT: error
+    T->>T: retry with backoff
+    Note over T,W: after the last retry: error log and metric, the flow stays waiting
+    U->>W: Enable again
+    W->>W: all senders verified, so save active
+  else user turned the flow off meanwhile
+    W->>W: lock row, status is draft
+    W-->>T: skipped, no event
+  end

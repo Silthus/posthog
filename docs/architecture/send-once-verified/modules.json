@@ -1,0 +1,347 @@
+{
+    "rows": [
+        {
+            "modules": [
+                {
+                    "id": "agent",
+                    "name": "MCP agent, API client",
+                    "note": "workflows-enable, PATCH status",
+                    "external": true,
+                    "seam": []
+                },
+                {
+                    "id": "builder",
+                    "name": "Workflow builder",
+                    "note": "list toggle, header Enable",
+                    "external": true,
+                    "seam": []
+                },
+                {
+                    "id": "ses",
+                    "name": "SES + DNS",
+                    "note": "domain ready",
+                    "external": true,
+                    "seam": [],
+                    "flex": 0.7
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "api",
+                    "name": "Workflow API",
+                    "note": "views/hog_flow.py",
+                    "change": "changed",
+                    "flex": 1.3,
+                    "seam": ["set_workflow_enabled", "perform_update", "perform_create"],
+                    "chips": [
+                        {
+                            "text": "serializer validation"
+                        },
+                        {
+                            "text": "status \u2192 enable()",
+                            "change": "added"
+                        },
+                        {
+                            "text": "send returned events",
+                            "change": "added"
+                        },
+                        {
+                            "text": "hog_flow_activated",
+                            "change": "removed"
+                        },
+                        {
+                            "text": "scout sync"
+                        }
+                    ]
+                },
+                {
+                    "id": "fe",
+                    "name": "Workflows frontend",
+                    "change": "changed",
+                    "seam": ["saveWorkflowPartial", "toggleWorkflowStatus"],
+                    "chips": [
+                        {
+                            "text": "Waiting badge",
+                            "change": "added"
+                        },
+                        {
+                            "text": "started notice",
+                            "change": "added"
+                        }
+                    ]
+                },
+                {
+                    "id": "intapi",
+                    "name": "Integration API",
+                    "seam": ["email_verify", "perform_destroy"]
+                },
+                {
+                    "id": "sweep",
+                    "name": "Sender sweep",
+                    "note": "#113091 base",
+                    "seam": ["refresh_pending"],
+                    "flex": 0.75
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "writes",
+                    "name": "HogFlow writes",
+                    "note": "the workflow module",
+                    "change": "changed",
+                    "flex": 1.6,
+                    "seam": [
+                        "create",
+                        "update_workflow",
+                        "publish_draft",
+                        {
+                            "name": "enable",
+                            "change": "added"
+                        },
+                        {
+                            "name": "disable",
+                            "change": "added"
+                        },
+                        {
+                            "name": "enable_waiting",
+                            "change": "added"
+                        }
+                    ],
+                    "chips": [
+                        {
+                            "text": "enable rule: active | waiting",
+                            "change": "added"
+                        },
+                        {
+                            "text": "row lock, status re-check",
+                            "change": "added"
+                        },
+                        {
+                            "text": "enable request fields",
+                            "change": "added"
+                        },
+                        {
+                            "text": "returns StatusChange + events",
+                            "change": "added"
+                        },
+                        {
+                            "text": "draft routing: active only"
+                        },
+                        {
+                            "text": "revisions, schedules"
+                        }
+                    ]
+                },
+                {
+                    "id": "facade",
+                    "name": "Workflows facade",
+                    "note": "a door",
+                    "used": 49,
+                    "change": "changed",
+                    "seam": [
+                        "HogFlowState",
+                        "get_enabled_workflows_\u2026",
+                        {
+                            "name": "enable_waiting_workflows",
+                            "change": "added"
+                        }
+                    ],
+                    "chips": [
+                        {
+                            "text": "on_commit \u2192 retried task",
+                            "change": "added"
+                        },
+                        {
+                            "text": "task: ph_scoped_capture",
+                            "change": "added"
+                        }
+                    ]
+                },
+                {
+                    "id": "email",
+                    "name": "Email integration",
+                    "used": 3,
+                    "change": "changed",
+                    "flex": 0.95,
+                    "seam": ["verify", "apply_verification"],
+                    "chips": [
+                        {
+                            "text": "on_commit \u2192 facade",
+                            "change": "added"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "model",
+                    "name": "HogFlow model",
+                    "used": 0,
+                    "change": "changed",
+                    "seam": ["status", "post_save \u2192 reload"],
+                    "chips": [
+                        {
+                            "text": "+ waiting_for_domain",
+                            "change": "added"
+                        },
+                        {
+                            "text": "+ enable_requested_at/by",
+                            "change": "added"
+                        },
+                        {
+                            "text": "+ went_live_at",
+                            "change": "added"
+                        }
+                    ]
+                },
+                {
+                    "id": "usage",
+                    "name": "Integration usage",
+                    "change": "changed",
+                    "flex": 1.2,
+                    "seam": [
+                        {
+                            "name": "email_senders_of",
+                            "change": "added"
+                        },
+                        {
+                            "name": "unverified_senders",
+                            "change": "added"
+                        },
+                        {
+                            "name": "waiting_flows_using",
+                            "change": "added"
+                        },
+                        {
+                            "name": "enabled_flows_using",
+                            "change": "changed"
+                        }
+                    ],
+                    "chips": [
+                        {
+                            "text": "one sender parser",
+                            "change": "changed"
+                        }
+                    ]
+                },
+                {
+                    "id": "node",
+                    "name": "Node flow loader",
+                    "note": "status='active' only",
+                    "external": true,
+                    "seam": ["getHogFlowsForTeams"],
+                    "flex": 0.8
+                }
+            ]
+        }
+    ],
+    "wires": [
+        {
+            "from": "agent",
+            "to": "api-seam"
+        },
+        {
+            "from": "builder",
+            "to": "fe-seam"
+        },
+        {
+            "from": "builder",
+            "to": "intapi-seam",
+            "label": "verify",
+            "labelAt": 0.6
+        },
+        {
+            "from": "fe",
+            "to": "api",
+            "fromSide": "left",
+            "toSide": "right",
+            "fromAt": 0.3,
+            "toAt": 0.3
+        },
+        {
+            "from": "sweep",
+            "to": "ses",
+            "fromSide": "top",
+            "toSide": "bottom",
+            "label": "reads"
+        },
+        {
+            "from": "api",
+            "to": "writes-seam",
+            "fromAt": 0.4,
+            "toAt": 0.35,
+            "label": "enable, edits"
+        },
+        {
+            "from": "intapi",
+            "to": "email-seam",
+            "fromAt": 0.75,
+            "toAt": 0.25
+        },
+        {
+            "from": "intapi",
+            "to": "facade-seam",
+            "fromAt": 0.3,
+            "toAt": 0.6,
+            "label": "delete guard"
+        },
+        {
+            "from": "sweep",
+            "to": "email-seam",
+            "fromAt": 0.5,
+            "toAt": 0.8
+        },
+        {
+            "from": "email",
+            "to": "facade",
+            "fromSide": "left",
+            "toSide": "right",
+            "change": "added",
+            "fromAt": 0.3,
+            "toAt": 0.3
+        },
+        {
+            "from": "facade",
+            "to": "writes",
+            "fromSide": "left",
+            "toSide": "right",
+            "change": "added",
+            "fromAt": 0.3,
+            "toAt": 0.3
+        },
+        {
+            "from": "writes",
+            "to": "usage-seam",
+            "fromAt": 0.7,
+            "toAt": 0.3,
+            "change": "added",
+            "label": "senders verified?"
+        },
+        {
+            "from": "facade",
+            "to": "usage-seam",
+            "fromAt": 0.5,
+            "toAt": 0.8
+        },
+        {
+            "from": "writes",
+            "to": "model-seam",
+            "fromAt": 0.2,
+            "toAt": 0.5
+        },
+        {
+            "from": "model",
+            "to": "node",
+            "fromSide": "bottom",
+            "toSide": "bottom",
+            "label": "reload",
+            "bend": 30
+        }
+    ]
+}

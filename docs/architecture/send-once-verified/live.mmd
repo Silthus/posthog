@@ -1,0 +1,23 @@
+sequenceDiagram
+  participant EM as Email integration
+  participant T as enable_waiting task
+  participant W as HogFlow writes
+  participant IU as Integration usage
+  participant PH as Analytics
+  Note over EM: verify button or sweep
+  EM->>EM: write verified = true
+  EM->>T: on commit: dispatch(team, sender_ids)
+  T->>IU: waiting_flows_for(sender_ids)
+  IU-->>T: waiting flows
+  loop each waiting flow
+    T->>W: enable(flow, actor = enable_requested_by)
+    W->>W: lock row, still waiting?
+    W->>IU: senders_of(flow)
+    alt all verified now
+      W->>W: save active, went_live_at = now
+      W->>PH: hog_flow_activated {activated_by: domain_verified, seconds_waiting}
+      Note over W: post_save reloads Node, which runs the flow
+    else another sender still unverified
+      W->>W: stays waiting, no event
+    end
+  end

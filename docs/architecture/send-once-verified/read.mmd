@@ -1,0 +1,15 @@
+sequenceDiagram
+  actor U as User
+  participant FE as Workflows frontend
+  participant API as Workflow API
+  U->>FE: open list or workflow
+  FE->>API: GET workflow
+  API-->>FE: waiting_for_domain, enable_requested_at
+  FE-->>U: badge "Waiting for domain"
+  Note over U,API: the sender verifies, and the flow goes live
+  U->>FE: open the workflow again
+  FE->>API: GET workflow
+  API-->>FE: active, went_live_at later than enable_requested_at
+  FE-->>U: "Started sending" notice, once
+  U->>FE: dismiss
+  FE->>FE: store dismissal by workflow id and went_live_at

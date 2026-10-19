@@ -1,0 +1,23 @@
+sequenceDiagram
+  actor U as User
+  participant API as Workflow API
+  participant W as HogFlow writes
+  participant IU as Integration usage
+  participant PH as Analytics
+  U->>API: Enable (asks for active)
+  API->>API: serializer validates
+  API->>W: enable(flow, validated_data, actor)
+  W->>W: lock row
+  W->>IU: senders_of(flow)
+  alt every sender verified
+    IU-->>W: all verified
+    W->>W: save active, enable_requested_at = went_live_at = now
+    W->>PH: hog_flow_enable_requested {outcome: active}
+    W->>PH: hog_flow_activated {activated_by: user, seconds_waiting: 0}
+  else a sender is unverified
+    IU-->>W: 1 of 1 unverified
+    W->>W: save waiting_for_domain, enable_requested_at/by
+    W->>PH: hog_flow_enable_requested {outcome: waiting_for_domain}
+  end
+  W-->>API: saved status
+  API-->>U: saved status, badge
