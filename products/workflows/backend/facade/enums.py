@@ -118,6 +118,11 @@ class EmailDraftFallbackReason(LabeledStrEnum):
     INVALID_OUTPUT = "invalid_output", "The model returned an unusable draft"
 
 
+class EmailDomainSetupMethod(LabeledStrEnum):
+    AUTO = "auto", "Domain Connect"
+    MANUAL = "manual", "Manual DNS records"
+
+
 class EmailDomainSetupStatus(LabeledStrEnum):
     NOT_STARTED = "not_started", "Not started"
     PENDING = "pending", "Waiting for DNS records"
