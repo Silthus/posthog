@@ -22,7 +22,6 @@ import { objectsEqual } from 'lib/utils/objects'
 import { sanitizeInputs } from 'scenes/hog-functions/configuration/hogFunctionConfigurationLogic'
 import type { EmailFieldErrors } from 'scenes/hog-functions/email-templater/types'
 import { projectLogic } from 'scenes/projectLogic'
-import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
 import { userLogic } from 'scenes/userLogic'
 
@@ -41,7 +40,8 @@ import {
 } from '../Broadcasts/broadcastLifecycle'
 import { canEditInWizard, isBroadcastShaped } from '../Broadcasts/broadcastsLogic'
 import { loadEntrySource, saveEntrySource } from '../Broadcasts/broadcastUsage'
-import { resolveDefaultEmailSender } from '../Channels/defaultEmailSender'
+import { firstRunSenderLogic } from '../firstRun/firstRunSenderLogic'
+import { acceptsSandboxSender, needsFirstRunSender, withFirstRunSender } from '../firstRun/withFirstRunSender'
 import {
     AiEmailDraftResult,
     aiEmailDraftFailureMessage,
@@ -76,7 +76,7 @@ import {
 import { openPublishConfirmDialog } from './PublishImpactDialog'
 import { ResourceSaveQueue } from './resourceSaveQueue'
 import { prepareWorkflowDuplicate } from './workflowDuplication'
-import { prefilledEmailContent, prefilledWorkflow, withEmailSender, withPrefilledEmail } from './workflowEmailPrefill'
+import { prefilledEmailContent, prefilledWorkflow, withPrefilledEmail } from './workflowEmailPrefill'
 import { workflowSceneLogic } from './workflowSceneLogic'
 import { workflowsLogic } from './workflowsLogic'
 import { parseWorkflowTriggerPrefill } from './workflowTriggerPrefill'
@@ -92,6 +92,7 @@ export interface WorkflowLogicProps {
 }
 
 export const TRIGGER_NODE_ID = 'trigger_node'
+export const EMAIL_INSERTION_PENDING_REASON = 'An email step is still being added. Try again in a moment.'
 export const EXIT_NODE_ID = 'exit_node'
 
 export type TriggerAction = Extract<HogFlowAction, { type: 'trigger' }>
@@ -149,25 +150,30 @@ export const PERSON_DEPENDENT_ACTION_TYPES = new Set(['wait_until_condition', 'r
 // the backend's ROW_SCOPED_TRIGGER_TYPES, which is the authoritative check.
 export const ROW_SCOPED_TRIGGER_TYPES = new Set(['data-warehouse-table', 'data-warehouse-view', 'internal-event'])
 
-async function withDefaultEmailSender(workflow: HogFlow): Promise<HogFlow> {
+async function withFirstRunEmailSender<T extends Pick<HogFlow, 'actions'>>(workflow: T): Promise<T> {
+    if (!workflow.actions.some(needsFirstRunSender)) {
+        return workflow
+    }
+    const senderLogic = firstRunSenderLogic({ allowSandbox: workflow.actions.some(acceptsSandboxSender) })
+    const unmount = senderLogic.mount()
     try {
-        const team = teamLogic.findMounted()?.values.currentTeam
-        const sender = resolveDefaultEmailSender(
-            (await api.integrations.list()).results,
-            team && 'workflows_config' in team ? team.workflows_config?.default_email_integration_id : null
-        )
+        await senderLogic.asyncActions.resolveFirstRunSender()
+        const sender = senderLogic.values.resolvedFirstRunSender
         if (!sender) {
             return workflow
         }
-        const result = withEmailSender(workflow, sender.integrationId)
-        if (result.filled) {
-            // pinned: analytics event name
-            posthog.capture('email sender preselected', { surface: 'workflow', reason: sender.reason })
+        const actions = withFirstRunSender(workflow.actions, sender)
+        if (actions.every((action, index) => action === workflow.actions[index])) {
+            return workflow
         }
-        return result.workflow
+        // pinned: analytics event name
+        posthog.capture('email sender preselected', { surface: 'workflow', reason: sender.reason })
+        return { ...workflow, actions }
     } catch {
         // The sender is a convenience. The person can still pick one, so a failed lookup doesn't block the editor.
         return workflow
+    } finally {
+        unmount()
     }
 }
 
@@ -287,6 +293,7 @@ export interface workflowLogicValues {
     discardDisabledReason: string | undefined
     draftActionPending: 'discard' | 'publish' | null
     edgesByActionId: Record<string, HogFlowEdge[]>
+    emailInsertionPending: boolean
     emailSendingPauseRequiresSupport: boolean
     emailSendingPaused: boolean
     emailSendingPausedByStaff: boolean
@@ -319,6 +326,7 @@ export interface workflowLogicValues {
     resumeEmailSendingPending: boolean
     saveAttemptedActionIds: string[] | null
     saveBaseUpdatedAt: string | null
+    saveBlockedReason: string | null
     scheduleConfigSources: {
         natural_language: boolean
         picker: boolean
@@ -2561,6 +2569,9 @@ export interface workflowLogicActions {
     setDraftActionPending: (pending: 'discard' | 'publish' | null) => {
         pending: 'discard' | 'publish' | null
     }
+    setEmailInsertionPending: (pending: boolean) => {
+        pending: boolean
+    }
     setExternallyEdited: (externallyEdited: boolean) => {
         externallyEdited: boolean
     }
@@ -3000,6 +3011,7 @@ export interface workflowLogicActions {
 export interface workflowLogicMeta {
     key: string
     __keaTypeGenInternalSelectorTypes: {
+        saveBlockedReason: (emailInsertionPending: any) => string | null
         aiEmailDraftStatus: (
             aiEmailDraftLoading: boolean,
             aiEmailDraftApplied: boolean,
@@ -3262,6 +3274,7 @@ export const workflowLogic = kea<workflowLogicType>([
         actions: [workflowsLogic, ['archiveWorkflow'], resourceEditedLogic, ['resourceEdited']],
     })),
     actions({
+        setEmailInsertionPending: (pending: boolean) => ({ pending }),
         partialSetWorkflowActionConfig: (actionId: string, config: Partial<HogFlowAction['config']>) => ({
             actionId,
             config,
@@ -3350,11 +3363,11 @@ export const workflowLogic = kea<workflowLogicType>([
                             delete (newWorkflow as any).updated_at
                             delete (newWorkflow as any).created_by
 
-                            return (await withDefaultEmailSender(newWorkflow as HogFlow)) as typeof newWorkflow
+                            return await withFirstRunEmailSender(newWorkflow)
                         }
                         const triggerConfig = parseWorkflowTriggerPrefill(props.triggerPrefill)
                         if (triggerConfig) {
-                            return await withDefaultEmailSender(
+                            return await withFirstRunEmailSender(
                                 prefilledWorkflow(
                                     NEW_WORKFLOW,
                                     triggerConfig,
@@ -3595,6 +3608,11 @@ export const workflowLogic = kea<workflowLogicType>([
                 if (!workflow) {
                     return
                 }
+                // Saving a new workflow replaces the route, which drops an email step whose sender is still resolving.
+                if (values.saveBlockedReason) {
+                    lemonToast.info(values.saveBlockedReason)
+                    return
+                }
 
                 // A new workflow that only sends one email to a batch is a broadcast. Offer to create it
                 // as one, so it opens in the broadcast editor and lists under broadcasts.
@@ -3629,6 +3647,7 @@ export const workflowLogic = kea<workflowLogicType>([
         },
     })),
     reducers({
+        emailInsertionPending: [false, { setEmailInsertionPending: (_, { pending }) => pending }],
         aiEmailDraftApplied: [
             false,
             {
@@ -3798,6 +3817,11 @@ export const workflowLogic = kea<workflowLogicType>([
         ],
     }),
     selectors({
+        saveBlockedReason: [
+            (s) => [s.emailInsertionPending],
+            (emailInsertionPending: boolean): string | null =>
+                emailInsertionPending ? EMAIL_INSERTION_PENDING_REASON : null,
+        ],
         aiEmailDraftStatus: [
             (s) => [s.aiEmailDraftLoading, s.aiEmailDraftApplied, s.aiEmailDraft],
             (loading: boolean, applied: boolean, result: AiEmailDraftResult | null): AiEmailDraftStatusProps | null => {
