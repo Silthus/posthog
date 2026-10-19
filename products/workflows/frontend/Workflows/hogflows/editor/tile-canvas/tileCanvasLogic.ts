@@ -17,6 +17,8 @@ import { subscriptions } from 'kea-subscriptions'
 import posthog from 'posthog-js'
 import type { DragEvent } from 'react'
 
+import { lemonToast } from '@posthog/lemon-ui'
+
 import { loadAppMetricsTotals } from 'lib/components/AppMetrics/appMetricsLogic'
 import { FeatureFlagsSet, featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { objectsEqual } from 'lib/utils/objects'
@@ -25,7 +27,7 @@ import { teamLogic } from 'scenes/teamLogic'
 import { sceneLayoutLogic } from '~/layout/scenes/sceneLayoutLogic'
 import { HogFunctionTemplateType, TeamPublicType, TeamType } from '~/types'
 
-import { WorkflowLogicProps, workflowLogic } from '../../../workflowLogic'
+import { EMAIL_INSERTION_PENDING_REASON, WorkflowLogicProps, workflowLogic } from '../../../workflowLogic'
 import { getEdgeId } from '../../edgeId'
 import {
     actionMetricsFromTotals,
@@ -155,6 +157,7 @@ function isTypedOnCanvas(event: KeyboardEvent): boolean {
 export interface tileCanvasLogicValues {
     featureFlags: FeatureFlagsSet // featureFlagLogic
     dropzoneNodes: DropzoneNode[] // hogFlowEditorLogic
+    emailInsertionPending: boolean // hogFlowEditorLogic
     isCopyingNode: boolean // hogFlowEditorLogic
     isMovingNode: boolean // hogFlowEditorLogic
     mode: HogFlowEditorMode // hogFlowEditorLogic
@@ -446,6 +449,7 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 'selectedNodeCanBeDeleted',
                 'selectedNodeCanBeCopiedOrMoved',
                 'mode',
+                'emailInsertionPending',
             ],
             featureFlagLogic,
             ['featureFlags'],
@@ -722,6 +726,12 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
                 actions.copyNodeToHighlightedDropzone()
             }
         }
+        const emailInsertionBlocks = (): boolean => {
+            if (values.emailInsertionPending) {
+                lemonToast.info(EMAIL_INSERTION_PENDING_REASON)
+            }
+            return values.emailInsertionPending
+        }
         const placeNewStep = (edge: HogFlowEdge, step: CreateActionType | HogFlowActionNode): void => {
             actions.onDrop(undefined, edge)
             captureStepAdded(values.placingSource, 'data' in step ? step.data.type : step.type)
@@ -781,16 +791,25 @@ export const tileCanvasLogic = kea<tileCanvasLogicType>([
             },
             revealStep: ({ actionId }) => revealContainingPaths(actionId),
             startPlacing: ({ step }) => {
+                if (emailInsertionBlocks()) {
+                    return
+                }
                 dropPendingMoveOrCopy()
                 actions.setNodeToBeAdded(step)
             },
             addStepAt: ({ step, edge }) => {
+                if (emailInsertionBlocks()) {
+                    return
+                }
                 dropPendingMoveOrCopy()
                 actions.setNodeToBeAdded(step)
                 actions.onDrop(undefined, edge)
                 captureStepAdded('quick add', step.type)
             },
             placeAt: ({ edge }) => {
+                if (emailInsertionBlocks()) {
+                    return
+                }
                 if (values.isMovingNode || values.isCopyingNode) {
                     placeExistingStep(edge)
                 } else if (values.nodeToBeAdded) {

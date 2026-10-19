@@ -289,7 +289,7 @@ describe('hogFlowEditorLogic', () => {
                 },
             } as HogFlowAction,
         },
-    ])('duplicates $case below itself', ({ step }) => {
+    ])('duplicates $case below itself', async ({ step }) => {
         teamLogic.actions.loadCurrentTeamSuccess({
             ...MOCK_DEFAULT_TEAM,
             workflows_config: {
@@ -303,7 +303,7 @@ describe('hogFlowEditorLogic', () => {
             edges: [edge(TRIGGER_NODE_ID, step.id, 'continue'), edge(step.id, EXIT_NODE_ID, 'continue')],
         })
 
-        logic.actions.duplicateNodeBelow(step.id)
+        await expectLogic(logic, () => logic.actions.duplicateNodeBelow(step.id)).toFinishAllListeners()
 
         const duplicatedAction = logic.values.workflow.actions.find(
             (action) => action.id !== step.id && action.type === step.type

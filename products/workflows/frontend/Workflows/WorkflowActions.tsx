@@ -32,6 +32,7 @@ export function WorkflowActions(props: WorkflowSceneLogicProps): JSX.Element {
         discardDisabledReason,
         showDraftActions,
         statusToggleDisabledReason,
+        saveBlockedReason,
     } = useValues(workflowLogic)
     const { saveWorkflowPartial, submitWorkflow, discardChanges, publishDraft, discardDraft } =
         useActions(workflowLogic)
@@ -44,6 +45,13 @@ export function WorkflowActions(props: WorkflowSceneLogicProps): JSX.Element {
     const isCreatedFromTemplate = props.id === 'new' && !!templateId
     const isCreatedFromLink = props.id === 'new' && !!parseWorkflowTriggerPrefill(searchParams[TRIGGER_PREFILL_PARAM])
     const isManualWorkflow = ['manual', 'batch'].includes(workflow?.trigger?.type || '')
+    const saveDisabledReason = saveBlockedReason
+        ? saveBlockedReason
+        : workflowHasErrors
+          ? 'Some fields still need work'
+          : isCreatedFromTemplate || isCreatedFromLink || hasUnsavedChanges
+            ? undefined
+            : 'No changes to save'
     const todayRailNav = useFeatureFlag('TODAY_RAIL_NAV')
     const [displayStatus, setDisplayStatus] = useState(workflow?.status)
     const [isTransitioning, setIsTransitioning] = useState(false)
@@ -135,15 +143,7 @@ export function WorkflowActions(props: WorkflowSceneLogicProps): JSX.Element {
                     editTemplateId={editTemplateId}
                     isWorkflowSubmitting={isWorkflowSubmitting}
                     draftActionPending={draftActionPending}
-                    saveDisabledReason={
-                        workflowHasErrors
-                            ? 'Some fields still need work'
-                            : isCreatedFromTemplate || isCreatedFromLink
-                              ? undefined
-                              : hasUnsavedChanges
-                                ? undefined
-                                : 'No changes to save'
-                    }
+                    saveDisabledReason={saveDisabledReason}
                     publishDisabledReason={publishDisabledReason}
                     discardDisabledReason={discardDisabledReason}
                     saveLabel={
@@ -199,15 +199,7 @@ export function WorkflowActions(props: WorkflowSceneLogicProps): JSX.Element {
                                     form="workflow"
                                     onClick={submitWorkflow}
                                     loading={isWorkflowSubmitting}
-                                    disabledReason={
-                                        workflowHasErrors
-                                            ? 'Some fields still need work'
-                                            : isCreatedFromTemplate || isCreatedFromLink
-                                              ? undefined
-                                              : hasUnsavedChanges
-                                                ? undefined
-                                                : 'No changes to save'
-                                    }
+                                    disabledReason={saveDisabledReason}
                                 >
                                     {props.id === 'new'
                                         ? 'Create as draft'
