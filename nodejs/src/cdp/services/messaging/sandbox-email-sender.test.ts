@@ -18,7 +18,10 @@ const sender = new SandboxEmailSender(
     },
     {
         getTeam: jest.fn().mockResolvedValue({ organization_id: '00000000-0000-0000-0000-000000000001' }),
-    } as unknown as TeamManager
+    } as unknown as TeamManager,
+    null,
+    null,
+    { isPaused: jest.fn().mockResolvedValue(false) }
 )
 const params = (html: string, text?: string, preheader?: string): CyclotronInvocationQueueParametersEmailType => ({
     type: 'email',
@@ -68,7 +71,10 @@ describe('sandbox email content', () => {
             },
             {
                 getTeam: jest.fn().mockResolvedValue({ organization_id: '00000000-0000-0000-0000-000000000001' }),
-            } as unknown as TeamManager
+            } as unknown as TeamManager,
+            null,
+            null,
+            { isPaused: jest.fn().mockResolvedValue(false) }
         )
         const result = await paddedSender.withIdentificationFooter(
             params('<p>Hello</p>'),

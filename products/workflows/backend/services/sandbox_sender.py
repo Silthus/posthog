@@ -34,7 +34,11 @@ def _sandbox_sender_config(organization_name: str) -> dict[str, str | bool]:
 
 
 def _sandbox_sender_configured() -> bool:
-    return bool(settings.WORKFLOWS_SANDBOX_SENDER_DOMAIN and settings.SES_SANDBOX_FROM_ADDRESS)
+    return bool(
+        settings.WORKFLOWS_SANDBOX_SENDER_DOMAIN
+        and settings.SES_SANDBOX_FROM_ADDRESS
+        and settings.SES_SANDBOX_TENANT_NAME
+    )
 
 
 def _sandbox_sender_enabled(team: Team) -> bool:
