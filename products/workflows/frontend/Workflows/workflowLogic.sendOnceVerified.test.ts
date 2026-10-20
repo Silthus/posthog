@@ -391,4 +391,29 @@ describe('workflowLogic send once verified', () => {
             integrationId: 7,
         })
     })
+
+    it('shows a domain that verified while the setup was open once it closes, and keeps unsaved edits', async () => {
+        const waiting = withEmailStep(
+            makeWorkflow({ status: 'waiting_for_domain', unverified_email_senders: [UNVERIFIED_SENDER] }),
+            { integrationId: 7 }
+        )
+        await mountWith(waiting)
+        expect(logic.values.senderDomainNotice).toEqual({
+            stage: 'waiting',
+            domains: ['example.com'],
+            integrationId: 7,
+        })
+        logic.actions.openSenderDomainSetup(7)
+        logic.actions.setWorkflowValue('name', 'Welcome, renamed')
+
+        storedWorkflow = { ...waiting, status: 'active', unverified_email_senders: [], went_live_at: '2026-05-03' }
+        projectSenders = [{ ...PENDING_PROJECT_SENDER, verified: true }]
+        await expectLogic(logic, () => {
+            logic.actions.closeSenderDomainSetup()
+        }).toDispatchActions(['refreshWorkflowStateSuccess'])
+
+        expect(logic.values.originalWorkflow?.status).toEqual('active')
+        expect(logic.values.senderDomainNotice).toBeNull()
+        expect(logic.values.workflow.name).toEqual('Welcome, renamed')
+    })
 })

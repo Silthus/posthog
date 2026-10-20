@@ -16,6 +16,7 @@ import { dayjs } from 'lib/dayjs'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { lemonToast } from 'lib/lemon-ui/LemonToast'
 import { type FeatureFlagsSet, featureFlagLogic } from 'lib/logic/featureFlagLogic'
+import { accessLevelSatisfied } from 'lib/utils/accessControlUtils'
 import { publicWebhooksHostOrigin } from 'lib/utils/apiHost'
 import { LiquidRenderer } from 'lib/utils/liquid'
 import { objectsEqual } from 'lib/utils/objects'
@@ -26,7 +27,7 @@ import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
 import { userLogic } from 'scenes/userLogic'
 
-import { AccessControlLevel, HogFunctionTemplateType, IntegrationType } from '~/types'
+import { AccessControlLevel, AccessControlResourceType, HogFunctionTemplateType, IntegrationType } from '~/types'
 
 import { resourceEditedLogic } from 'products/notifications/frontend/resourceEditedLogic'
 import { hogFlowsResumeEmailSending } from 'products/workflows/frontend/generated/api'
@@ -228,6 +229,12 @@ const WORKFLOW_CONTENT_FIELDS = [
 // re-applied from these after the response rebaselines the form, so the round-trip can't drop them.
 const WORKFLOW_EDITABLE_FIELDS = [...WORKFLOW_CONTENT_FIELDS, 'name', 'description'] as const
 
+// What the server changes without an edit: a waiting workflow goes live once its email domain verifies.
+function serverStateOf(workflow: HogFlow): Partial<HogFlow> {
+    const { status, unverified_email_senders, enable_requested_at, went_live_at } = workflow
+    return { status, unverified_email_senders, enable_requested_at, went_live_at }
+}
+
 function pickWorkflowEdits(workflow: HogFlow): Partial<HogFlow> {
     const result: Record<string, unknown> = {}
     for (const field of WORKFLOW_EDITABLE_FIELDS) {
@@ -361,6 +368,27 @@ export interface workflowLogicActions {
     } // integrationsLogic
     openSenderDomainSetup: (integrationId: number | null) => {
         integrationId: number | null
+    }
+    refreshWorkflowState: () => {
+        value: true
+    }
+    refreshWorkflowStateFailure: (
+        error: string,
+        errorObject?: any
+    ) => {
+        error: string
+        errorObject?: any
+    }
+    refreshWorkflowStateSuccess: (
+        originalWorkflow: HogFlow | null,
+        payload?: {
+            value: true
+        }
+    ) => {
+        originalWorkflow: HogFlow | null
+        payload?: {
+            value: true
+        }
     }
     clearAutoSavePending: () => {
         value: true
@@ -3026,7 +3054,8 @@ export interface workflowLogicMeta {
             workflow: HogFlow,
             integrations: IntegrationType[] | null,
             workflowHasActionErrors: boolean,
-            hasUnsavedChanges: boolean
+            hasUnsavedChanges: boolean,
+            workflowUserAccessLevel: AccessControlLevel | null
         ) => string | null
         startedSendingNoticeKey: (originalWorkflow: HogFlow | null) => string | null
         showStartedSendingNotice: (
@@ -3407,6 +3436,15 @@ export const workflowLogic = kea<workflowLogicType>([
                     }
 
                     return api.hogFlows.getHogFlow(props.id)
+                },
+                refreshWorkflowState: async () => {
+                    const saved = values.originalWorkflow
+                    if (!saved?.id) {
+                        return saved
+                    }
+                    const latest = await api.hogFlows.getHogFlow(saved.id)
+                    // Only the fields the server changes on its own, so the edit baseline stays as it was.
+                    return { ...saved, ...serverStateOf(latest) }
                 },
                 saveWorkflow: async (updates: HogFlow) => {
                     // `isAutoSave` is one shared reducer, not a per-request value. A manual save
@@ -3829,13 +3867,30 @@ export const workflowLogic = kea<workflowLogicType>([
             },
         ],
         enableFromSenderDomainSetupDisabledReason: [
-            (s) => [s.workflow, s.integrations, s.workflowHasActionErrors, s.hasUnsavedChanges],
+            (s) => [
+                s.workflow,
+                s.integrations,
+                s.workflowHasActionErrors,
+                s.hasUnsavedChanges,
+                s.workflowUserAccessLevel,
+            ],
             (
                 workflow: HogFlow,
                 integrations: IntegrationType[] | null,
                 workflowHasActionErrors: boolean,
-                hasUnsavedChanges: boolean
+                hasUnsavedChanges: boolean,
+                workflowUserAccessLevel: AccessControlLevel | null
             ): string | null => {
+                if (
+                    workflowUserAccessLevel &&
+                    !accessLevelSatisfied(
+                        AccessControlResourceType.Workflow,
+                        workflowUserAccessLevel,
+                        AccessControlLevel.Editor
+                    )
+                ) {
+                    return 'You need editor access to enable this workflow.'
+                }
                 const emailSenders = integrations?.filter(({ kind }) => kind === 'email')
                 if (emailSenders && hasEmailStepWithoutSender(workflow, emailSenders)) {
                     return "Choose a sender in the workflow's email step first."
@@ -4500,6 +4555,7 @@ export const workflowLogic = kea<workflowLogicType>([
         },
         closeSenderDomainSetup: () => {
             actions.loadIntegrations()
+            actions.refreshWorkflowState()
         },
         dismissStartedSendingNotice: () => {
             if (values.startedSendingNoticeKey) {
