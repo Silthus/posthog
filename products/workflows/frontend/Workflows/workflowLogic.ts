@@ -229,12 +229,6 @@ const WORKFLOW_CONTENT_FIELDS = [
 // re-applied from these after the response rebaselines the form, so the round-trip can't drop them.
 const WORKFLOW_EDITABLE_FIELDS = [...WORKFLOW_CONTENT_FIELDS, 'name', 'description'] as const
 
-// What the server changes without an edit: a waiting workflow goes live once its email domain verifies.
-function serverStateOf(workflow: HogFlow): Partial<HogFlow> {
-    const { status, unverified_email_senders, enable_requested_at, went_live_at } = workflow
-    return { status, unverified_email_senders, enable_requested_at, went_live_at }
-}
-
 function pickWorkflowEdits(workflow: HogFlow): Partial<HogFlow> {
     const result: Record<string, unknown> = {}
     for (const field of WORKFLOW_EDITABLE_FIELDS) {
@@ -368,27 +362,6 @@ export interface workflowLogicActions {
     } // integrationsLogic
     openSenderDomainSetup: (integrationId: number | null) => {
         integrationId: number | null
-    }
-    refreshWorkflowState: () => {
-        value: true
-    }
-    refreshWorkflowStateFailure: (
-        error: string,
-        errorObject?: any
-    ) => {
-        error: string
-        errorObject?: any
-    }
-    refreshWorkflowStateSuccess: (
-        originalWorkflow: HogFlow | null,
-        payload?: {
-            value: true
-        }
-    ) => {
-        originalWorkflow: HogFlow | null
-        payload?: {
-            value: true
-        }
     }
     clearAutoSavePending: () => {
         value: true
@@ -3437,15 +3410,6 @@ export const workflowLogic = kea<workflowLogicType>([
 
                     return api.hogFlows.getHogFlow(props.id)
                 },
-                refreshWorkflowState: async () => {
-                    const saved = values.originalWorkflow
-                    if (!saved?.id) {
-                        return saved
-                    }
-                    const latest = await api.hogFlows.getHogFlow(saved.id)
-                    // Only the fields the server changes on its own, so the edit baseline stays as it was.
-                    return { ...saved, ...serverStateOf(latest) }
-                },
                 saveWorkflow: async (updates: HogFlow) => {
                     // `isAutoSave` is one shared reducer, not a per-request value. A manual save
                     // dispatched while an auto-save is still in flight sets it to false, so the
@@ -4555,7 +4519,10 @@ export const workflowLogic = kea<workflowLogicType>([
         },
         closeSenderDomainSetup: () => {
             actions.loadIntegrations()
-            actions.refreshWorkflowState()
+            // A domain verified while the setup was open may have taken the workflow live. A reload would drop unsaved edits.
+            if (props.id && props.id !== 'new' && !values.hasUnsavedChanges) {
+                actions.loadWorkflow()
+            }
         },
         dismissStartedSendingNotice: () => {
             if (values.startedSendingNoticeKey) {
