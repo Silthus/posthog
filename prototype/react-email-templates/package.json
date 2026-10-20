@@ -6,7 +6,8 @@
         "start": "bun src/serve.tsx",
         "build": "bun src/build.tsx",
         "compare": "bun src/compare.tsx",
-        "optional-prop": "bun src/optional-prop-sequence.tsx"
+        "optional-prop": "bun src/optional-prop-sequence.tsx",
+        "own-render": "bun src/own-render-check.tsx"
     },
     "dependencies": {
         "entities": "^6.0.0",
@@ -17,6 +18,7 @@
     },
     "devDependencies": {
         "@types/react": "^19.2.0",
+        "@types/react-dom": "^19.2.0",
         "bun-types": "^1.3.0"
     }
 }

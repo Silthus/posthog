@@ -1,5 +1,31 @@
 // PROTOTYPE, throwaway. The findings, written after running the comparison below them.
 export const findings = `
+<h3>What we tested</h3>
+<ul>
+  <li>Six templates: five React Email demo templates (MIT) and one probe with a conditional and an optional prop.</li>
+  <li>Each template is sent once per path with the props a real app passes. The "Resend reference" is the same component rendered with those props, which is what Resend's SDK sends.</li>
+  <li>For each path we compare the HTML the recipient gets with the reference, the bytes each send posts, the hash across renders, and what PostHog stores in the template library.</li>
+  <li>PostHog is faked in memory, with PostHog's real Liquid settings and posthog-node's real content hash. No email leaves the machine, and no Resend package or API is used.</li>
+</ul>
+<h3>No dependency on Resend</h3>
+<ul>
+  <li>No path needs the <code>resend</code> SDK. A Resend user's templates import <code>react-email</code> components (MIT). They keep those imports, because the components are their own code.</li>
+  <li>posthog-node needs only one thing: turn a React element into HTML. <code>src/own-render.tsx</code> does that in about 30 lines on <code>react-dom/server</code>. Its output is byte for byte the same as React Email's <code>render</code> for all six templates (<code>bun run own-render</code>).</li>
+  <li>The options for posthog-node: (1) own the renderer and take <code>react-dom</code> as an optional peer dependency; (2) take <code>@react-email/render</code> (MIT) as an optional peer dependency, as Resend's SDK does; (3) accept <code>html</code> only and let the developer call render. Option 1 has no Resend package at all. The plain-text part needs an HTML-to-text step, from <code>html-to-text</code> (MIT, not Resend) or from PostHog's side.</li>
+</ul>
+<h3>The hybrid in plain words</h3>
+<ul>
+  <li>On each send, the SDK renders the email with the recipient's real props and sends that HTML, as Resend does. The recipient gets exactly what the component renders.</li>
+  <li>The send also names the template: <code>template: 'welcome'</code>. Once per template version, the SDK renders the component with its sample props (<code>PreviewProps</code>) and uploads that as a "Managed by code" template, with its source path.</li>
+  <li>In PostHog you see the template in the library, a preview with sample data, a link to <code>emails/welcome.tsx</code>, and every send linked back to it. A workflow can't send it, because it is a fixed sample render with no Liquid.</li>
+</ul>
+<h3>Is B a two-way door?</h3>
+<ul>
+  <li>The send route that takes inline HTML, and <code>react</code> in posthog-node, are the same in B and C. They are public API, so they are the one-way part, and both paths need them.</li>
+  <li>Adding the library entry later is additive: the route and the SDK get an optional field. Old sends keep working.</li>
+  <li>The catch: sends that shipped without a key stay hidden until each call site adds <code>template</code>. The SDK can't name them later, because a minifier renames components.</li>
+  <li>So make the key required for React sends from the first PR. PR 1 sends inline and records the key on each send. PR 2 uploads the preview and adds the "Managed by code" link. Then PR 2 needs no change at the call sites, and nothing is ever hidden.</li>
+</ul>
 <h3>What the comparison shows</h3>
 <p><strong>A. Render once with Liquid placeholders</strong></p>
 <ul>

@@ -9,6 +9,7 @@ const staticDir = new URL('../emails/static/', import.meta.url);
 
 Bun.serve({
   port,
+  hostname: '127.0.0.1',
   fetch(request) {
     const { pathname } = new URL(request.url);
     if (pathname.startsWith('/static/')) {
