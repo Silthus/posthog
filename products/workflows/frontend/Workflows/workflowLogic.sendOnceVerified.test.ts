@@ -30,7 +30,20 @@ const emailStep = (from: Record<string, unknown>): HogFlow['actions'][number] =>
         description: '',
         created_at: 0,
         updated_at: 0,
-        config: { template_id: 'template-email', inputs: { email: { value: { from, to: {}, subject: 'Hi' } } } },
+        config: {
+            template_id: 'template-email',
+            inputs: {
+                email: {
+                    value: {
+                        from,
+                        to: { email: '{{ person.properties.email }}' },
+                        subject: 'Hi',
+                        html: '<p>Hi</p>',
+                        text: 'Hi',
+                    },
+                },
+            },
+        },
     }) as HogFlow['actions'][number]
 
 const withEmailStep = (workflow: HogFlow, from: Record<string, unknown>): HogFlow => ({
@@ -104,7 +117,17 @@ describe('workflowLogic send once verified', () => {
         useMocks({
             get: {
                 '/api/environments/:team_id/hog_flows/:id/': () => [200, storedWorkflow],
-                '/api/projects/:team_id/hog_function_templates/': { results: [], count: 0 },
+                '/api/projects/:team_id/hog_function_templates/': {
+                    results: [
+                        {
+                            id: 'template-email',
+                            name: 'Email',
+                            type: 'destination',
+                            inputs_schema: [{ type: 'native_email', key: 'email', label: 'Email', required: true }],
+                        },
+                    ],
+                    count: 1,
+                },
                 '/api/projects/:team_id/integrations/': () => [
                     200,
                     {
@@ -276,7 +299,7 @@ describe('workflowLogic send once verified', () => {
             from: {},
             unverified: [],
             senders: [],
-            notice: { stage: 'no_domain', url: '/workflows/channels/email/new' },
+            notice: { stage: 'no_domain' },
         },
         {
             name: 'a step has no sender and the project only has a pending domain',
@@ -284,7 +307,7 @@ describe('workflowLogic send once verified', () => {
             from: {},
             unverified: [],
             senders: [PENDING_PROJECT_SENDER],
-            notice: { stage: 'unverified', domains: ['example.com'], url: '/workflows/channels/email/7' },
+            notice: { stage: 'unverified', domains: ['example.com'], integrationId: 7 },
         },
         {
             name: 'the sender of a step was deleted and the project has no other sender',
@@ -292,7 +315,7 @@ describe('workflowLogic send once verified', () => {
             from: { integrationId: 99 },
             unverified: [],
             senders: [],
-            notice: { stage: 'no_domain', url: '/workflows/channels/email/new' },
+            notice: { stage: 'no_domain' },
         },
         {
             name: 'a draft sends from an unverified domain',
@@ -300,7 +323,7 @@ describe('workflowLogic send once verified', () => {
             from: { integrationId: 7 },
             unverified: [UNVERIFIED_SENDER],
             senders: [PENDING_PROJECT_SENDER, VERIFIED_PROJECT_SENDER],
-            notice: { stage: 'unverified', domains: ['example.com'], url: '/workflows/channels/email/7' },
+            notice: { stage: 'unverified', domains: ['example.com'], integrationId: 7 },
         },
         {
             name: 'an enabled workflow waits for its domain',
@@ -308,7 +331,7 @@ describe('workflowLogic send once verified', () => {
             from: { integrationId: 7 },
             unverified: [UNVERIFIED_SENDER],
             senders: [PENDING_PROJECT_SENDER],
-            notice: { stage: 'waiting', domains: ['example.com'], url: '/workflows/channels/email/7' },
+            notice: { stage: 'waiting', domains: ['example.com'], integrationId: 7 },
         },
         {
             name: 'an enabled workflow waits for several domains',
@@ -316,7 +339,7 @@ describe('workflowLogic send once verified', () => {
             from: { integrationIds: [7, 8] },
             unverified: [UNVERIFIED_SENDER, { id: 8, domain: 'mail.example.org' }],
             senders: [PENDING_PROJECT_SENDER],
-            notice: { stage: 'waiting', domains: ['example.com', 'mail.example.org'], url: '/workflows/channels' },
+            notice: { stage: 'waiting', domains: ['example.com', 'mail.example.org'], integrationId: null },
         },
         {
             name: 'every sender is verified',
@@ -348,5 +371,52 @@ describe('workflowLogic send once verified', () => {
         await mountWith(makeWorkflow())
 
         expect(logic.values.senderDomainNotice).toBeNull()
+    })
+
+    it('opens the domain setup over the workflow and refreshes the notice once it closes', async () => {
+        await mountWith(withEmailStep(makeWorkflow(), {}), { senders: [] })
+        expect(logic.values.senderDomainNotice).toEqual({ stage: 'no_domain' })
+
+        logic.actions.openSenderDomainSetup(null)
+        expect(logic.values.senderDomainSetup).toEqual({ integrationId: null })
+
+        projectSenders = [PENDING_PROJECT_SENDER]
+        await expectLogic(integrationsLogic, () => {
+            logic.actions.closeSenderDomainSetup()
+        }).toDispatchActions(['loadIntegrations', 'loadIntegrationsSuccess'])
+        expect(logic.values.senderDomainSetup).toBeNull()
+        expect(logic.values.senderDomainNotice).toEqual({
+            stage: 'unverified',
+            domains: ['example.com'],
+            integrationId: 7,
+        })
+    })
+
+    it('enables the workflow from the domain setup without asking again, and closes the setup', async () => {
+        await mountWith(
+            withEmailStep(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }), { integrationId: 7 })
+        )
+        logic.actions.openSenderDomainSetup(7)
+
+        await expectLogic(logic, () => {
+            logic.actions.enableFromSenderDomainSetup()
+        })
+            .toDispatchActions(['saveWorkflowSuccess'])
+            .toMatchValues({ senderDomainSetup: null, enablePromptDomains: null })
+        expect(patchBodies.map((body) => body.status)).toEqual(['active'])
+        expect(logic.values.originalWorkflow?.status).toEqual('waiting_for_domain')
+    })
+
+    it.each<{ name: string; from: Record<string, unknown>; reason: string | null }>([
+        { name: 'its email step has a sender', from: { integrationId: 7 }, reason: null },
+        {
+            name: 'its email step has no sender',
+            from: {},
+            reason: "Choose a sender in the workflow's email step first.",
+        },
+    ])('says why the workflow cannot be enabled from the domain setup when $name', async ({ from, reason }) => {
+        await mountWith(withEmailStep(makeWorkflow(), from))
+
+        expect(logic.values.enableFromSenderDomainSetupDisabledReason).toEqual(reason)
     })
 })

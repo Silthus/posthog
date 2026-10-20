@@ -68,7 +68,7 @@ import {
 } from './hogflows/types'
 import { openPublishConfirmDialog } from './PublishImpactDialog'
 import { ResourceSaveQueue } from './resourceSaveQueue'
-import { SenderDomainNotice, senderDomainNotice } from './senderDomainNotice'
+import { SenderDomainNotice, hasEmailStepWithoutSender, senderDomainNotice } from './senderDomainNotice'
 import { unverifiedSenderDomains } from './unverifiedSenderDomains'
 import { prepareWorkflowDuplicate } from './workflowDuplication'
 import { prefilledEmailContent, prefilledWorkflow, withEmailSender, withPrefilledEmail } from './workflowEmailPrefill'
@@ -267,6 +267,8 @@ export interface workflowLogicValues {
     enablePromptDomains: string[] | null
     enablePromptOpen: boolean
     senderDomainNotice: SenderDomainNotice | null
+    senderDomainSetup: { integrationId: number | null } | null
+    enableFromSenderDomainSetupDisabledReason: string | null
     showStartedSendingNotice: boolean
     startedSendingNoticeKey: string | null
     unverifiedSenderDomains: string[]
@@ -347,6 +349,18 @@ export interface workflowLogicActions {
     }
     cancelEnablePrompt: () => {
         value: true
+    }
+    closeSenderDomainSetup: () => {
+        value: true
+    }
+    enableFromSenderDomainSetup: () => {
+        value: true
+    }
+    loadIntegrations: () => {
+        value: true
+    } // integrationsLogic
+    openSenderDomainSetup: (integrationId: number | null) => {
+        integrationId: number | null
     }
     clearAutoSavePending: () => {
         value: true
@@ -3008,6 +3022,12 @@ export interface workflowLogicMeta {
             integrations: IntegrationType[] | null,
             featureFlags: FeatureFlagsSet
         ) => SenderDomainNotice | null
+        enableFromSenderDomainSetupDisabledReason: (
+            workflow: HogFlow,
+            integrations: IntegrationType[] | null,
+            workflowHasActionErrors: boolean,
+            hasUnsavedChanges: boolean
+        ) => string | null
         startedSendingNoticeKey: (originalWorkflow: HogFlow | null) => string | null
         showStartedSendingNotice: (
             startedSendingNoticeKey: string | null,
@@ -3265,7 +3285,14 @@ export const workflowLogic = kea<workflowLogicType>([
             integrationsLogic,
             ['integrations'],
         ],
-        actions: [workflowsLogic, ['archiveWorkflow'], resourceEditedLogic, ['resourceEdited']],
+        actions: [
+            workflowsLogic,
+            ['archiveWorkflow'],
+            resourceEditedLogic,
+            ['resourceEdited'],
+            integrationsLogic,
+            ['loadIntegrations'],
+        ],
     })),
     actions({
         partialSetWorkflowActionConfig: (actionId: string, config: Partial<HogFlowAction['config']>) => ({
@@ -3291,6 +3318,9 @@ export const workflowLogic = kea<workflowLogicType>([
         openEnablePrompt: true,
         confirmEnablePrompt: true,
         cancelEnablePrompt: true,
+        openSenderDomainSetup: (integrationId: number | null) => ({ integrationId }),
+        closeSenderDomainSetup: true,
+        enableFromSenderDomainSetup: true,
         dismissStartedSendingNotice: true,
         setStartedSendingNoticeDismissed: (noticeKey: string) => ({ noticeKey }),
         markSaveAttempted: (actionIds: string[]) => ({ actionIds }),
@@ -3744,6 +3774,13 @@ export const workflowLogic = kea<workflowLogicType>([
                 setResumeEmailSendingPending: (_, { pending }) => pending,
             },
         ],
+        senderDomainSetup: [
+            null as { integrationId: number | null } | null,
+            {
+                openSenderDomainSetup: (_, { integrationId }) => ({ integrationId }),
+                closeSenderDomainSetup: () => null,
+            },
+        ],
         enablePromptOpen: [
             false,
             {
@@ -3789,6 +3826,24 @@ export const workflowLogic = kea<workflowLogicType>([
                 }
                 const emailSenders = integrations?.filter(({ kind }) => kind === 'email') ?? null
                 return senderDomainNotice(workflow, originalWorkflow, emailSenders)
+            },
+        ],
+        enableFromSenderDomainSetupDisabledReason: [
+            (s) => [s.workflow, s.integrations, s.workflowHasActionErrors, s.hasUnsavedChanges],
+            (
+                workflow: HogFlow,
+                integrations: IntegrationType[] | null,
+                workflowHasActionErrors: boolean,
+                hasUnsavedChanges: boolean
+            ): string | null => {
+                const emailSenders = integrations?.filter(({ kind }) => kind === 'email')
+                if (emailSenders && hasEmailStepWithoutSender(workflow, emailSenders)) {
+                    return "Choose a sender in the workflow's email step first."
+                }
+                if (workflowHasActionErrors) {
+                    return "Fix the errors in the workflow's steps first."
+                }
+                return hasUnsavedChanges ? 'Save the workflow first.' : null
             },
         ],
         startedSendingNoticeKey: [
@@ -4438,6 +4493,13 @@ export const workflowLogic = kea<workflowLogicType>([
         },
         confirmEnablePrompt: () => {
             actions.saveWorkflowPartial({ status: 'active' })
+        },
+        enableFromSenderDomainSetup: () => {
+            actions.closeSenderDomainSetup()
+            actions.saveWorkflowPartial({ status: 'active' })
+        },
+        closeSenderDomainSetup: () => {
+            actions.loadIntegrations()
         },
         dismissStartedSendingNotice: () => {
             if (values.startedSendingNoticeKey) {

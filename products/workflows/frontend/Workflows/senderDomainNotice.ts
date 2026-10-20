@@ -1,20 +1,20 @@
 import type { EmailTemplateFrom } from 'scenes/hog-functions/email-templater/types'
-import { urls } from 'scenes/urls'
 
 import type { IntegrationType } from '~/types'
 
 import { isEmailAction } from './hogflows/steps/types'
 import type { HogFlow } from './hogflows/types'
 
+/** `integrationId` names the one domain whose setup to open, or is null when several domains wait. */
 export type SenderDomainNotice =
-    | { stage: 'no_domain'; url: string }
-    | { stage: 'unverified' | 'waiting'; domains: string[]; url: string }
+    | { stage: 'no_domain' }
+    | { stage: 'unverified' | 'waiting'; domains: string[]; integrationId: number | null }
 
 function chosenSenderIds(sender: EmailTemplateFrom | undefined): number[] {
     return sender?.integrationIds?.length ? sender.integrationIds : sender?.integrationId ? [sender.integrationId] : []
 }
 
-function hasEmailStepWithoutSender(workflow: HogFlow, emailSenders: IntegrationType[]): boolean {
+export function hasEmailStepWithoutSender(workflow: HogFlow, emailSenders: IntegrationType[]): boolean {
     const existingSenderIds = new Set(emailSenders.map(({ id }) => id))
     return workflow.actions.filter(isEmailAction).some((action) => {
         const senderIds = chosenSenderIds(action.config.inputs.email?.value?.from)
@@ -22,10 +22,9 @@ function hasEmailStepWithoutSender(workflow: HogFlow, emailSenders: IntegrationT
     })
 }
 
-function domainStatus(senders: { id: number; domain: string }[]): { domains: string[]; url: string } {
+function domainStatus(senders: { id: number; domain: string }[]): { domains: string[]; integrationId: number | null } {
     const domains = [...new Set(senders.map(({ domain }) => domain))]
-    const url = domains.length === 1 ? urls.workflowsEmailDomain(senders[0].id) : urls.workflows('channels')
-    return { domains, url }
+    return { domains, integrationId: domains.length === 1 ? senders[0].id : null }
 }
 
 function projectDomainNotice(workflow: HogFlow, emailSenders: IntegrationType[]): SenderDomainNotice | null {
@@ -34,9 +33,7 @@ function projectDomainNotice(workflow: HogFlow, emailSenders: IntegrationType[])
         return null
     }
     const pendingSenders = emailSenders.map(({ id, config }) => ({ id, domain: config.domain as string }))
-    return pendingSenders.length > 0
-        ? { stage: 'unverified', ...domainStatus(pendingSenders) }
-        : { stage: 'no_domain', url: urls.workflowsEmailDomain('new') }
+    return pendingSenders.length > 0 ? { stage: 'unverified', ...domainStatus(pendingSenders) } : { stage: 'no_domain' }
 }
 
 export function senderDomainNotice(

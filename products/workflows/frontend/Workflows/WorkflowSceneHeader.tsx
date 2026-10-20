@@ -32,6 +32,7 @@ import { SaveAsTemplateModal } from './templates/SaveAsTemplateModal'
 import { workflowTemplateLogic } from './templates/workflowTemplateLogic'
 import { workflowLogic } from './workflowLogic'
 import { WorkflowSceneLogicProps } from './workflowSceneLogic'
+import { WorkflowSenderDomainSetupModal } from './WorkflowSenderDomainSetupModal'
 import { parseWorkflowTriggerPrefill, TRIGGER_PREFILL_PARAM } from './workflowTriggerPrefill'
 
 export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.Element => {
@@ -98,6 +99,7 @@ export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.El
     return (
         <>
             <SaveAsTemplateModal {...props} editTemplateId={editTemplateId} />
+            <WorkflowSenderDomainSetupModal />
             <EnableWorkflowPrompt
                 domains={enablePromptDomains}
                 onConfirm={confirmEnablePrompt}
