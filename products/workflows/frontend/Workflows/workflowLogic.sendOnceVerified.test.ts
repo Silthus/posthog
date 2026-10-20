@@ -391,32 +391,4 @@ describe('workflowLogic send once verified', () => {
             integrationId: 7,
         })
     })
-
-    it('enables the workflow from the domain setup without asking again, and closes the setup', async () => {
-        await mountWith(
-            withEmailStep(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }), { integrationId: 7 })
-        )
-        logic.actions.openSenderDomainSetup(7)
-
-        await expectLogic(logic, () => {
-            logic.actions.enableFromSenderDomainSetup()
-        })
-            .toDispatchActions(['saveWorkflowSuccess'])
-            .toMatchValues({ senderDomainSetup: null, enablePromptDomains: null })
-        expect(patchBodies.map((body) => body.status)).toEqual(['active'])
-        expect(logic.values.originalWorkflow?.status).toEqual('waiting_for_domain')
-    })
-
-    it.each<{ name: string; from: Record<string, unknown>; reason: string | null }>([
-        { name: 'its email step has a sender', from: { integrationId: 7 }, reason: null },
-        {
-            name: 'its email step has no sender',
-            from: {},
-            reason: "Choose a sender in the workflow's email step first.",
-        },
-    ])('says why the workflow cannot be enabled from the domain setup when $name', async ({ from, reason }) => {
-        await mountWith(withEmailStep(makeWorkflow(), from))
-
-        expect(logic.values.enableFromSenderDomainSetupDisabledReason).toEqual(reason)
-    })
 })

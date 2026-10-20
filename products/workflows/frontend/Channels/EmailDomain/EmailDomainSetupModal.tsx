@@ -1,6 +1,6 @@
 import { useValues } from 'kea'
 import posthog from 'posthog-js'
-import { useEffect, useState } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 
 import { IconExternal } from '@posthog/icons'
 import { LemonButton, LemonModal, LemonSkeleton } from '@posthog/lemon-ui'
@@ -9,7 +9,6 @@ import { urls } from 'scenes/urls'
 
 import { BindEmailDomainLogics } from './BindEmailDomainLogics'
 import { AgentHandoffModal } from './components/AgentHandoffModal'
-import { SourceWorkflow, SourceWorkflowCard } from './components/SourceWorkflowCard'
 import { emailDomainLogic } from './emailDomainLogic'
 import { DomainStep } from './steps/DomainStep'
 import { ReadyStep } from './steps/ReadyStep'
@@ -21,13 +20,14 @@ export interface EmailDomainSetupModalProps {
     /** The sender to verify. Without it the setup starts at the domain step. */
     integrationId?: number | null
     entry: 'channels' | 'broadcast' | 'configure' | 'workflow'
-    /** The workflow the setup was opened from. Its own actions replace the workflow suggestions. */
-    workflow?: SourceWorkflow
+    description?: ReactNode
+    /** Shown after the wait for DNS and in place of the workflow suggestions on the last step. */
+    next?: ReactNode
     onComplete: (integrationId?: number) => void
     onClose: (savedIntegrationId?: number) => void
 }
 
-function ModalStep({ workflow }: { workflow?: SourceWorkflow }): JSX.Element {
+function ModalStep({ next }: { next?: ReactNode }): JSX.Element {
     const { phase } = useValues(emailDomainLogic)
     switch (phase) {
         case 'unavailable':
@@ -38,11 +38,11 @@ function ModalStep({ workflow }: { workflow?: SourceWorkflow }): JSX.Element {
             return (
                 <>
                     <VerifyingStep />
-                    {workflow && <SourceWorkflowCard workflow={workflow} stage="verifying" />}
+                    {next}
                 </>
             )
         case 'ready':
-            return <ReadyStep next={workflow && <SourceWorkflowCard workflow={workflow} stage="ready" />} />
+            return <ReadyStep next={next} />
         default:
             return <LemonSkeleton className="h-40" />
     }
@@ -50,17 +50,17 @@ function ModalStep({ workflow }: { workflow?: SourceWorkflow }): JSX.Element {
 
 function ModalSettings({
     integrationId,
-    workflow,
+    next,
     onLeave,
 }: {
     integrationId: number
-    workflow?: SourceWorkflow
+    next?: ReactNode
     onLeave: () => void
 }): JSX.Element {
     return (
         <BindEmailDomainLogics id={String(integrationId)}>
             <div className="@container flex flex-col gap-6">
-                <ModalStep workflow={workflow} />
+                <ModalStep next={next} />
                 <LemonButton
                     type="tertiary"
                     className="self-center"
@@ -79,7 +79,8 @@ function ModalSettings({
 export function EmailDomainSetupModal({
     integrationId: initialIntegrationId,
     entry,
-    workflow,
+    description,
+    next,
     onComplete,
     onClose,
 }: EmailDomainSetupModalProps): JSX.Element {
@@ -93,16 +94,12 @@ export function EmailDomainSetupModal({
     return (
         <LemonModal
             title={integrationId ? 'Verify your sending domain' : 'Set up a sending domain'}
-            description={workflow ? `For the workflow ${workflow.name}` : undefined}
+            description={description}
             width={720}
             onClose={() => (integrationId ? onComplete(integrationId) : onClose())}
         >
             {integrationId ? (
-                <ModalSettings
-                    integrationId={integrationId}
-                    workflow={workflow}
-                    onLeave={() => onComplete(integrationId)}
-                />
+                <ModalSettings integrationId={integrationId} next={next} onLeave={() => onComplete(integrationId)} />
             ) : (
                 <div className="@container">
                     <DomainStep logicKey="modal" onCreated={(created) => setIntegrationId(created.id)} />
