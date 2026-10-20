@@ -1,9 +1,6 @@
 import { useValues } from 'kea'
 
-import { IconCheck, IconWarning } from '@posthog/icons'
-import { LemonCollapse } from '@posthog/lemon-ui'
-
-import { DnsRecordRows } from '../components/DnsRecordRows'
+import { DnsRecordsSummary } from '../components/DnsRecordsSummary'
 import { FirstSenderCard } from '../components/FirstSenderCard'
 import { NextWorkflowCard } from '../components/NextWorkflowCard'
 import { StepHeading } from '../components/StepHeading'
@@ -35,34 +32,9 @@ export function ReadyStep(): JSX.Element {
                 />
             </div>
             <FirstSenderCard />
-            <LemonCollapse
-                defaultActiveKey={allRecordsFound ? undefined : 'records'}
-                panels={[
-                    {
-                        key: 'records',
-                        header: (
-                            <span className="flex items-center gap-2">
-                                {allRecordsFound ? (
-                                    <IconCheck className="text-success" />
-                                ) : (
-                                    <IconWarning className="text-warning" />
-                                )}
-                                <span>
-                                    {allRecordsFound
-                                        ? `${records.length} settings in place at ${host}`
-                                        : `${foundCount} of ${records.length} settings in place at ${host}`}
-                                </span>
-                            </span>
-                        ),
-                        content: (
-                            <DnsRecordRows
-                                records={records}
-                                missing={records.filter((record) => record.status === 'pending')}
-                                showStatus
-                            />
-                        ),
-                    },
-                ]}
+            <DnsRecordsSummary
+                missing={records.filter((record) => record.status === 'pending')}
+                needsAttention={!allRecordsFound}
             />
             <NextWorkflowCard />
         </div>
