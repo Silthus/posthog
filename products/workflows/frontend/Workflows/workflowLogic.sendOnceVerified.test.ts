@@ -226,14 +226,21 @@ describe('workflowLogic send once verified', () => {
     })
 
     it.each([
-        ['an email step has no sender', 'draft', {}, [], true, { stage: 'no_domain', url: '/workflows/channels' }],
+        [
+            'an email step has no sender',
+            'draft',
+            {},
+            [],
+            true,
+            { stage: 'no_domain', url: '/workflows/channels/email/new' },
+        ],
         [
             'a draft sends from an unverified domain',
             'draft',
             { integrationId: 7 },
             [UNVERIFIED_SENDER],
             true,
-            { stage: 'unverified', domains: ['example.com'], url: '/workflows/channels' },
+            { stage: 'unverified', domains: ['example.com'], url: '/workflows/channels/email/7' },
         ],
         [
             'an enabled workflow waits for its domain',
@@ -241,7 +248,15 @@ describe('workflowLogic send once verified', () => {
             { integrationId: 7 },
             [UNVERIFIED_SENDER],
             true,
-            { stage: 'waiting', domains: ['example.com'], url: '/workflows/channels' },
+            { stage: 'waiting', domains: ['example.com'], url: '/workflows/channels/email/7' },
+        ],
+        [
+            'an enabled workflow waits for several domains',
+            'waiting_for_domain',
+            { integrationIds: [7, 8] },
+            [UNVERIFIED_SENDER, { id: 8, domain: 'mail.example.org' }],
+            true,
+            { stage: 'waiting', domains: ['example.com', 'mail.example.org'], url: '/workflows/channels' },
         ],
         ['every sender is verified', 'active', { integrationId: 7 }, [], true, null],
         ['the flag is off', 'draft', {}, [], false, null],

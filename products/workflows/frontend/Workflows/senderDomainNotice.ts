@@ -18,12 +18,14 @@ function hasEmailStepWithoutSender(workflow: HogFlow): boolean {
 
 export function senderDomainNotice(workflow: HogFlow, savedWorkflow: HogFlow): SenderDomainNotice | null {
     if (hasEmailStepWithoutSender(workflow)) {
-        return { stage: 'no_domain', url: urls.workflows('channels') }
+        return { stage: 'no_domain', url: urls.workflowsEmailDomain('new') }
     }
     const domains = unverifiedSenderDomains(savedWorkflow)
     if (domains.length === 0) {
         return null
     }
     const stage = savedWorkflow.status === 'waiting_for_domain' ? 'waiting' : 'unverified'
-    return { stage, domains, url: urls.workflows('channels') }
+    const [firstSender] = savedWorkflow.unverified_email_senders ?? []
+    const url = domains.length === 1 ? urls.workflowsEmailDomain(firstSender.id) : urls.workflows('channels')
+    return { stage, domains, url }
 }
