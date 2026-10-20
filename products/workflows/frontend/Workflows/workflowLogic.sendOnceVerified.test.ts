@@ -406,7 +406,8 @@ describe('workflowLogic send once verified', () => {
                 ...waiting(),
                 status: 'active',
                 unverified_email_senders: [],
-                went_live_at: '2026-05-03',
+                went_live_at: '2026-05-03T00:00:00.000Z',
+                updated_at: '2026-05-03T00:00:00.000Z',
             }
             projectSenders = [{ ...PENDING_PROJECT_SENDER, verified: true }]
         }
@@ -416,23 +417,40 @@ describe('workflowLogic send once verified', () => {
 
             await expectLogic(logic, () => {
                 logic.actions.closeSenderDomainSetup()
-            }).toDispatchActions(['loadWorkflowSuccess'])
+            })
+                .toDispatchActions(['setSyncingExternalEdit', 'loadWorkflowSuccess'])
+                .toMatchValues({ externallyEdited: false })
 
-            expect(logic.values.originalWorkflow?.status).toEqual('active')
             expect(logic.values.workflow.status).toEqual('active')
             expect(logic.values.senderDomainNotice).toBeNull()
         })
 
-        it('keeps unsaved edits rather than reload the workflow', async () => {
+        it('asks before it reloads over edits that auto-save cannot flush', async () => {
             await verifyWhileOpen()
             logic.actions.setAutoSaveEnabled(false)
             logic.actions.setWorkflowValue('name', 'Welcome, renamed')
 
             await expectLogic(logic, () => {
                 logic.actions.closeSenderDomainSetup()
-            }).toNotHaveDispatchedActions(['loadWorkflow'])
+            })
+                .toDispatchActions(['setExternallyEdited'])
+                .toNotHaveDispatchedActions(['loadWorkflow'])
+                .toMatchValues({ externallyEdited: true })
 
             expect(logic.values.workflow.name).toEqual('Welcome, renamed')
+        })
+
+        it('leaves the workflow alone when nothing changed on the server', async () => {
+            await mountWith(waiting())
+            logic.actions.openSenderDomainSetup(7)
+
+            await expectLogic(logic, () => {
+                logic.actions.closeSenderDomainSetup()
+            })
+                .toFinishAllListeners()
+                .toNotHaveDispatchedActions(['loadWorkflow', 'setExternallyEdited'])
+
+            expect(logic.values.originalWorkflow?.status).toEqual('waiting_for_domain')
         })
     })
 })

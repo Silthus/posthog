@@ -363,6 +363,9 @@ export interface workflowLogicActions {
     openSenderDomainSetup: (integrationId: number | null) => {
         integrationId: number | null
     }
+    reconcileExternalEdit: () => {
+        value: true
+    }
     clearAutoSavePending: () => {
         value: true
     }
@@ -3322,6 +3325,7 @@ export const workflowLogic = kea<workflowLogicType>([
         cancelEnablePrompt: true,
         openSenderDomainSetup: (integrationId: number | null) => ({ integrationId }),
         closeSenderDomainSetup: true,
+        reconcileExternalEdit: true,
         enableFromSenderDomainSetup: true,
         dismissStartedSendingNotice: true,
         setStartedSendingNoticeDismissed: (noticeKey: string) => ({ noticeKey }),
@@ -3781,6 +3785,7 @@ export const workflowLogic = kea<workflowLogicType>([
             {
                 openSenderDomainSetup: (_, { integrationId }) => ({ integrationId }),
                 closeSenderDomainSetup: () => null,
+                enableFromSenderDomainSetup: () => null,
             },
         ],
         enablePromptOpen: [
@@ -4314,6 +4319,9 @@ export const workflowLogic = kea<workflowLogicType>([
             if (getSaveQueue(cache, values, props).classify(event) !== 'external') {
                 return
             }
+            actions.reconcileExternalEdit()
+        },
+        reconcileExternalEdit: () => {
             // Server wins while auto-save can flush the local buffer: unsaved edits are then at most
             // a few seconds old, so reconcile silently instead of interrupting with a conflict
             // banner. When auto-save can't flush (toggled off, no name to save under, or a pending
@@ -4514,14 +4522,19 @@ export const workflowLogic = kea<workflowLogicType>([
             actions.saveWorkflowPartial({ status: 'active' })
         },
         enableFromSenderDomainSetup: () => {
-            actions.closeSenderDomainSetup()
+            actions.loadIntegrations()
             actions.saveWorkflowPartial({ status: 'active' })
         },
-        closeSenderDomainSetup: () => {
+        closeSenderDomainSetup: async () => {
             actions.loadIntegrations()
-            // A domain verified while the setup was open may have taken the workflow live. A reload would drop unsaved edits.
-            if (props.id && props.id !== 'new' && !values.hasUnsavedChanges) {
-                actions.loadWorkflow()
+            const saved = values.originalWorkflow
+            if (!props.id || props.id === 'new' || !saved) {
+                return
+            }
+            // A domain verified while the setup was open can take the workflow live on the server.
+            const latest = await api.hogFlows.getHogFlow(props.id)
+            if (latest.updated_at !== saved.updated_at) {
+                actions.reconcileExternalEdit()
             }
         },
         dismissStartedSendingNotice: () => {
