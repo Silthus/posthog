@@ -4,18 +4,25 @@ import posthog from 'posthog-js'
 
 import api, { ApiError } from 'lib/api'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
+import { organizationLogic } from 'scenes/organizationLogic'
 import { Scene } from 'scenes/sceneTypes'
 import { teamLogic } from 'scenes/teamLogic'
 import { userLogic } from 'scenes/userLogic'
 
 import { ProductKey } from '~/queries/schema/schema-general'
 import { hogql } from '~/queries/utils'
-import { IntegrationType, TeamPublicType, TeamType, UserType } from '~/types'
+import { IntegrationType, OrganizationType, TeamPublicType, TeamType, UserType } from '~/types'
 
 import { integrationsCreate } from 'products/integrations/frontend/generated/api'
 import type { IntegrationConfigApi } from 'products/integrations/frontend/generated/api.schemas'
 
-import { DomainProblem, asSubdomainLabel, domainProblemOf, nameFromDomain, normalizeDomainInput } from './domainInput'
+import {
+    DomainProblem,
+    asSubdomainLabel,
+    defaultSenderName,
+    domainProblemOf,
+    normalizeDomainInput,
+} from './domainInput'
 import { EventHost, InferredDomain, inferDomains } from './inferDomains'
 
 export interface EmailDomainWizardLogicProps {
@@ -51,6 +58,7 @@ export interface emailDomainWizardLogicValues {
     currentTeam: TeamPublicType | TeamType | null // teamLogic
     currentTeamId: number | null // teamLogic
     user: UserType | null // userLogic
+    currentOrganization: OrganizationType | null // organizationLogic
     advancedOpen: boolean
     bouncePrefix: string
     createdSender: IntegrationConfigApi | null
@@ -162,13 +170,22 @@ export type emailDomainWizardLogicType = MakeLogicType<
     emailDomainWizardLogicMeta
 >
 
-/** The domain step: picks or types the domain, shapes the first sender address and creates the sender. */
+/** The domain step: picks or types the domain, shapes the sender address and creates the sender. */
 export const emailDomainWizardLogic = kea<emailDomainWizardLogicType>([
     path((key) => ['products', 'workflows', 'frontend', 'Channels', 'EmailDomain', 'emailDomainWizardLogic', key]),
     props({} as EmailDomainWizardLogicProps),
     key(({ logicKey }) => logicKey),
     connect(() => ({
-        values: [teamLogic, ['currentTeam', 'currentTeamId'], userLogic, ['user'], integrationsLogic, ['integrations']],
+        values: [
+            teamLogic,
+            ['currentTeam', 'currentTeamId'],
+            userLogic,
+            ['user'],
+            organizationLogic,
+            ['currentOrganization'],
+            integrationsLogic,
+            ['integrations'],
+        ],
         actions: [integrationsLogic, ['loadIntegrations']],
     })),
     actions({
@@ -208,8 +225,15 @@ export const emailDomainWizardLogic = kea<emailDomainWizardLogicType>([
             null as IntegrationConfigApi | null,
             {
                 createSender: async (): Promise<IntegrationConfigApi | null> => {
-                    const { selectedDomain, sendingDomain, currentTeamId, localPart, bouncePrefix, domainSender } =
-                        values
+                    const {
+                        selectedDomain,
+                        sendingDomain,
+                        currentTeamId,
+                        currentOrganization,
+                        localPart,
+                        bouncePrefix,
+                        domainSender,
+                    } = values
                     if (!selectedDomain || !sendingDomain || !currentTeamId) {
                         return null
                     }
@@ -219,7 +243,7 @@ export const emailDomainWizardLogic = kea<emailDomainWizardLogicType>([
                             kind: 'email',
                             config: {
                                 email: `${localPart || DEFAULT_LOCAL_PART}@${sendingDomain}`,
-                                name: nameFromDomain(selectedDomain),
+                                name: defaultSenderName(currentOrganization?.name, selectedDomain),
                                 provider: 'ses',
                                 // The provider keeps one bounce subdomain per domain, so a new address reuses the existing one.
                                 mail_from_subdomain:

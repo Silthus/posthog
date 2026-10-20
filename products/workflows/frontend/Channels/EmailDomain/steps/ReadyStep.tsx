@@ -2,8 +2,8 @@ import { useValues } from 'kea'
 import { ReactNode } from 'react'
 
 import { DnsRecordsSummary } from '../components/DnsRecordsSummary'
-import { FirstSenderCard } from '../components/FirstSenderCard'
 import { NextWorkflowCard } from '../components/NextWorkflowCard'
+import { SenderCard } from '../components/SenderCard'
 import { StepHeading } from '../components/StepHeading'
 import { emailDomainAutoConfigureLogic } from '../emailDomainAutoConfigureLogic'
 import { emailDomainSenderLogic } from '../emailDomainSenderLogic'
@@ -33,7 +33,7 @@ export function ReadyStep({ next = <NextWorkflowCard /> }: { next?: ReactNode })
                     }
                 />
             </div>
-            <FirstSenderCard />
+            <SenderCard />
             <DnsRecordsSummary
                 missing={records.filter((record) => record.status === 'pending')}
                 needsAttention={!allRecordsFound}
