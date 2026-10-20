@@ -1,4 +1,6 @@
+import { FEATURE_FLAGS } from 'lib/constants'
 import { lemonToast } from 'lib/lemon-ui/LemonToast'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 
 import { resumeKeaLoadersErrors, silenceKeaLoadersErrors } from '~/initKea'
 import { useMocks } from '~/mocks/jest'
@@ -31,6 +33,11 @@ describe('emailDomainLogic', () => {
         jest.useRealTimers()
     })
 
+    const turnOnSuggestions = (on: boolean): void => {
+        featureFlagLogic.mount()
+        featureFlagLogic.actions.setFeatureFlags([], { [FEATURE_FLAGS.WORKFLOWS_DATA_SUGGESTIONS]: on })
+    }
+
     const mountAndLoad = async (id = '42'): Promise<void> => {
         logic = emailDomainLogic({ id })
         logic.mount()
@@ -38,10 +45,12 @@ describe('emailDomainLogic', () => {
     }
 
     it('shows the domain step for a new sender', async () => {
+        turnOnSuggestions(true)
         await mountAndLoad('new')
         expect(logic.values.phase).toBe('domain')
         expect(backend.requestsTo('integration_get')).toHaveLength(0)
         expect(backend.requestsTo('email_status')).toHaveLength(0)
+        expect(backend.requestsTo('data_suggestions_generate')).toHaveLength(0)
     })
 
     it.each<[string, EmailDomainSetupRecordKindEnumApi[], string]>([
@@ -72,6 +81,24 @@ describe('emailDomainLogic', () => {
         await mountAndLoad()
         await jest.advanceTimersByTimeAsync(31 * 60_000)
         expect(logic.values.verificationSteps.map((step) => step.state)).toEqual(states)
+    })
+
+    it.each<[string, boolean, number]>([
+        ['suggestions on', true, 1],
+        ['suggestions off', false, 0],
+    ])('preloads workflow suggestions once a domain is picked, with %s, and loads them once', async (_, on, loads) => {
+        turnOnSuggestions(on)
+        await mountAndLoad()
+        expect(logic.values.phase).toBe('settings')
+        expect(backend.requestsTo('data_suggestions_generate')).toHaveLength(loads)
+
+        backend.publishRecords(DOMAIN)
+        await jest.advanceTimersByTimeAsync(10_000)
+        expect(logic.values.phase).toBe('verifying')
+        backend.verifyDomain(DOMAIN)
+        await jest.advanceTimersByTimeAsync(10_000)
+        expect(logic.values.phase).toBe('ready')
+        expect(backend.requestsTo('data_suggestions_generate')).toHaveLength(loads)
     })
 
     it('reloads only what failed when the person tries again', async () => {
