@@ -247,6 +247,7 @@ interface SaveContext {
     initiatedByAutoSave: boolean
     pendingSchedule: { rrule: string; starts_at: string; timezone?: string } | null | false
     enablesWorkflow: boolean
+    editVersion: number
 }
 
 function omitWorkflowContent(workflow: HogFlow): Partial<HogFlow> {
@@ -3450,6 +3451,7 @@ export const workflowLogic = kea<workflowLogicType>([
                     const saveContexts = (cache.saveContexts ??= []) as SaveContext[]
                     saveContexts.push({
                         initiatedByAutoSave,
+                        editVersion: values.workflowEditVersion,
                         pendingSchedule: values.pendingSchedule,
                         enablesWorkflow:
                             isStatusSave && updates.status === 'active' && values.originalWorkflow?.status !== 'active',
@@ -4572,9 +4574,6 @@ export const workflowLogic = kea<workflowLogicType>([
                 actions.setStartedSendingNoticeDismissed(values.startedSendingNoticeKey)
             }
         },
-        saveWorkflow: () => {
-            cache.saveEditVersion = values.workflowEditVersion
-        },
         saveWorkflowFailure: () => {
             // Keep the queue aligned with the saves still in flight.
             ;(cache.saveContexts as SaveContext[] | undefined)?.shift()
@@ -4701,8 +4700,7 @@ export const workflowLogic = kea<workflowLogicType>([
 
             // A staged save's response carries the live config plus the new draft blob: rebaseline the
             // form on the merged view, or the reset would wipe the just-saved edits off the canvas.
-            const editedDuringSave =
-                cache.saveEditVersion !== undefined && values.workflowEditVersion !== cache.saveEditVersion
+            const editedDuringSave = !!saveContext && values.workflowEditVersion !== saveContext.editVersion
             const editsDuringSave = editedDuringSave ? pickWorkflowEdits(values.workflow) : null
             actions.resetWorkflow(withStagedDraft(originalWorkflow))
             actions.markAutoSave(false)

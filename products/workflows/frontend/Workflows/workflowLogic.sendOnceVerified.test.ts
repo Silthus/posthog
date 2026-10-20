@@ -442,8 +442,50 @@ describe('workflowLogic send once verified', () => {
             })
         })
 
-        it('leaves a workflow whose steps all have a sender alone', async () => {
-            await mountWith(withEmailSteps({ integrationId: 8 }), { senders: [VERIFIED_PROJECT_SENDER] })
+        it('keeps the fill when it saves behind an earlier save and its own save fails', async () => {
+            await mountWith(withEmailSteps({}), { senders: [VERIFIED_PROJECT_SENDER] })
+            logic.actions.openSenderDomainSetup(null)
+            let releaseFirstSave!: () => void
+            const firstSaveHeld = new Promise<void>((resolve) => {
+                releaseFirstSave = resolve
+            })
+            useMocks({
+                patch: {
+                    '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => {
+                        const body = (await request.json()) as Partial<HogFlow>
+                        patchBodies.push(body)
+                        if (patchBodies.length === 1) {
+                            await firstSaveHeld
+                        }
+                        if (patchBodies.length === 2) {
+                            return [500, { detail: 'Server error' }]
+                        }
+                        storedWorkflow = {
+                            ...storedWorkflow,
+                            ...body,
+                            updated_at: `2026-05-0${patchBodies.length + 3}`,
+                        }
+                        return [200, storedWorkflow]
+                    },
+                },
+            })
+            logic.actions.setWorkflowValue('name', 'Welcome, renamed')
+            logic.actions.flushAutoSave()
+            await expectLogic(logic).toDispatchActions(['saveWorkflow'])
+
+            logic.actions.fillEmptySendersFromDomainSetup(CREATED_SENDER_ID)
+            releaseFirstSave()
+            await expectLogic(logic).toDispatchActions(['saveWorkflowSuccess', 'saveWorkflowFailure'])
+
+            expect(senderOf(logic.values.workflow, 'email_0')).toEqual({ integrationId: CREATED_SENDER_ID })
+            expect(logic.values.hasUnsavedChanges).toBe(true)
+        })
+
+        it.each([
+            ['one sender', { integrationId: 8 }],
+            ['a sender rotation', { integrationIds: [8, 7] }],
+        ])('leaves a workflow whose steps all have %s alone', async (_name, from) => {
+            await mountWith(withEmailSteps(from), { senders: [VERIFIED_PROJECT_SENDER] })
             logic.actions.openSenderDomainSetup(null)
 
             await expectLogic(logic, () => {
