@@ -363,9 +363,6 @@ export interface workflowLogicActions {
     openSenderDomainSetup: (integrationId: number | null) => {
         integrationId: number | null
     }
-    reconcileExternalEdit: () => {
-        value: true
-    }
     clearAutoSavePending: () => {
         value: true
     }
@@ -3248,6 +3245,13 @@ export type workflowLogicType = MakeLogicType<
     workflowLogicMeta
 >
 
+function newestStamp(workflow: HogFlow | null | undefined): string | undefined {
+    const { updated_at, draft_updated_at } = workflow ?? {}
+    return draft_updated_at && updated_at && dayjs(draft_updated_at).isAfter(dayjs(updated_at))
+        ? draft_updated_at
+        : updated_at
+}
+
 function getSaveQueue(
     cache: Record<string, any>,
     values: workflowLogicType['values'],
@@ -3258,12 +3262,7 @@ function getSaveQueue(
         getResourceId: () => props.id,
         // Draft writes don't bump the live updated_at, and the event carries the newer of the two
         // stamps, so compare against the newer one we loaded.
-        getLoadedStamp: () => {
-            const { updated_at, draft_updated_at } = values.originalWorkflow ?? {}
-            return draft_updated_at && updated_at && dayjs(draft_updated_at).isAfter(dayjs(updated_at))
-                ? draft_updated_at
-                : updated_at
-        },
+        getLoadedStamp: () => newestStamp(values.originalWorkflow),
         // The loader flag clears when the first of a queued pair lands, so count unfinished saves too.
         isBusy: () =>
             values.originalWorkflowLoading ||
@@ -3325,7 +3324,6 @@ export const workflowLogic = kea<workflowLogicType>([
         cancelEnablePrompt: true,
         openSenderDomainSetup: (integrationId: number | null) => ({ integrationId }),
         closeSenderDomainSetup: true,
-        reconcileExternalEdit: true,
         enableFromSenderDomainSetup: true,
         dismissStartedSendingNotice: true,
         setStartedSendingNoticeDismissed: (noticeKey: string) => ({ noticeKey }),
@@ -4319,9 +4317,6 @@ export const workflowLogic = kea<workflowLogicType>([
             if (getSaveQueue(cache, values, props).classify(event) !== 'external') {
                 return
             }
-            actions.reconcileExternalEdit()
-        },
-        reconcileExternalEdit: () => {
             // Server wins while auto-save can flush the local buffer: unsaved edits are then at most
             // a few seconds old, so reconcile silently instead of interrupting with a conflict
             // banner. When auto-save can't flush (toggled off, no name to save under, or a pending
@@ -4527,16 +4522,20 @@ export const workflowLogic = kea<workflowLogicType>([
         },
         closeSenderDomainSetup: async () => {
             actions.loadIntegrations()
-            if (!props.id || props.id === 'new' || !values.originalWorkflow) {
+            if (!props.id || props.id === 'new') {
                 return
             }
-            // A domain verified while the setup was open can take the workflow live on the server.
+            // A domain verified while the setup was open can take the workflow live on the server. Its copy
+            // goes through the edit events' path, which tells our own saves apart and holds it while one runs.
             const latest = await api.hogFlows.getHogFlow(props.id)
-            // Read the baseline after the request: a save of this editor may have landed meanwhile.
-            const baseline = (cache.lastSavedWorkflow as HogFlow | undefined) ?? values.originalWorkflow
-            if (baseline && dayjs(latest.updated_at).isAfter(baseline.updated_at)) {
-                actions.reconcileExternalEdit()
-            }
+            actions.resourceEdited({
+                notification_type: 'resource_edited',
+                team_id: latest.team_id,
+                resource_type: 'HogFlow',
+                resource_id: props.id,
+                updated_at: newestStamp(latest) ?? latest.updated_at,
+                actor_user_id: null,
+            })
         },
         dismissStartedSendingNotice: () => {
             if (values.startedSendingNoticeKey) {

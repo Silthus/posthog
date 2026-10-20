@@ -440,44 +440,62 @@ describe('workflowLogic send once verified', () => {
             expect(logic.values.workflow.name).toEqual('Welcome, renamed')
         })
 
-        it('does not mistake its own save during the check for a server change', async () => {
-            await mountWith(waiting())
-            logic.actions.openSenderDomainSetup(7)
-            let releaseCheck!: () => void
-            const checkHeld = new Promise<void>((resolve) => {
-                releaseCheck = resolve
-            })
-            const beforeTheSave = storedWorkflow
-            let afterTheSave = beforeTheSave
-            useMocks({
-                get: {
-                    '/api/environments/:team_id/hog_flows/:id/': async () => {
-                        await checkHeld
-                        return [200, afterTheSave]
+        it.each([
+            ['after the save response lands', 'check'],
+            ['before the save response lands', 'save'],
+        ] as const)(
+            'does not mistake its own save for a server change when the check returns %s',
+            async (_name, held) => {
+                await mountWith(waiting())
+                logic.actions.openSenderDomainSetup(7)
+                let release!: () => void
+                const holding = new Promise<void>((resolve) => {
+                    release = resolve
+                })
+                const beforeTheSave = storedWorkflow
+                let afterTheSave = beforeTheSave
+                useMocks({
+                    get: {
+                        '/api/environments/:team_id/hog_flows/:id/': async () => {
+                            if (held === 'check') {
+                                await holding
+                            }
+                            return [200, afterTheSave]
+                        },
                     },
-                },
-                patch: {
-                    '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => {
-                        afterTheSave = {
-                            ...beforeTheSave,
-                            ...((await request.json()) as Partial<HogFlow>),
-                            updated_at: '2026-05-05T00:00:00.000Z',
-                        }
-                        return [200, afterTheSave]
+                    patch: {
+                        '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => {
+                            afterTheSave = {
+                                ...beforeTheSave,
+                                ...((await request.json()) as Partial<HogFlow>),
+                                updated_at: '2026-05-05T00:00:00.000Z',
+                            }
+                            if (held === 'save') {
+                                await holding
+                            }
+                            return [200, afterTheSave]
+                        },
                     },
-                },
-            })
+                })
 
-            logic.actions.closeSenderDomainSetup()
-            await expectLogic(logic, () => {
                 logic.actions.saveWorkflowPartial({ name: 'Saved during the check' })
-            }).toDispatchActions(['saveWorkflowSuccess'])
-            releaseCheck()
+                if (held === 'check') {
+                    logic.actions.closeSenderDomainSetup()
+                    await expectLogic(logic).toDispatchActions(['saveWorkflowSuccess'])
+                    release()
+                } else {
+                    await expectLogic(logic, () => {
+                        logic.actions.closeSenderDomainSetup()
+                    }).toDispatchActions(['resourceEdited'])
+                    release()
+                    await expectLogic(logic).toDispatchActions(['saveWorkflowSuccess'])
+                }
 
-            await expectLogic(logic)
-                .toFinishAllListeners()
-                .toNotHaveDispatchedActions(['loadWorkflow', 'setExternallyEdited'])
-        })
+                await expectLogic(logic)
+                    .toFinishAllListeners()
+                    .toNotHaveDispatchedActions(['loadWorkflow', 'setExternallyEdited'])
+            }
+        )
 
         it('leaves the workflow alone when nothing changed on the server', async () => {
             await mountWith(waiting())
