@@ -4527,13 +4527,14 @@ export const workflowLogic = kea<workflowLogicType>([
         },
         closeSenderDomainSetup: async () => {
             actions.loadIntegrations()
-            const saved = values.originalWorkflow
-            if (!props.id || props.id === 'new' || !saved) {
+            if (!props.id || props.id === 'new' || !values.originalWorkflow) {
                 return
             }
             // A domain verified while the setup was open can take the workflow live on the server.
             const latest = await api.hogFlows.getHogFlow(props.id)
-            if (latest.updated_at !== saved.updated_at) {
+            // Read the baseline after the request: a save of this editor may have landed meanwhile.
+            const baseline = (cache.lastSavedWorkflow as HogFlow | undefined) ?? values.originalWorkflow
+            if (baseline && dayjs(latest.updated_at).isAfter(baseline.updated_at)) {
                 actions.reconcileExternalEdit()
             }
         },

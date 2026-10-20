@@ -440,6 +440,45 @@ describe('workflowLogic send once verified', () => {
             expect(logic.values.workflow.name).toEqual('Welcome, renamed')
         })
 
+        it('does not mistake its own save during the check for a server change', async () => {
+            await mountWith(waiting())
+            logic.actions.openSenderDomainSetup(7)
+            let releaseCheck!: () => void
+            const checkHeld = new Promise<void>((resolve) => {
+                releaseCheck = resolve
+            })
+            const beforeTheSave = storedWorkflow
+            let afterTheSave = beforeTheSave
+            useMocks({
+                get: {
+                    '/api/environments/:team_id/hog_flows/:id/': async () => {
+                        await checkHeld
+                        return [200, afterTheSave]
+                    },
+                },
+                patch: {
+                    '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => {
+                        afterTheSave = {
+                            ...beforeTheSave,
+                            ...((await request.json()) as Partial<HogFlow>),
+                            updated_at: '2026-05-05T00:00:00.000Z',
+                        }
+                        return [200, afterTheSave]
+                    },
+                },
+            })
+
+            logic.actions.closeSenderDomainSetup()
+            await expectLogic(logic, () => {
+                logic.actions.saveWorkflowPartial({ name: 'Saved during the check' })
+            }).toDispatchActions(['saveWorkflowSuccess'])
+            releaseCheck()
+
+            await expectLogic(logic)
+                .toFinishAllListeners()
+                .toNotHaveDispatchedActions(['loadWorkflow', 'setExternallyEdited'])
+        })
+
         it('leaves the workflow alone when nothing changed on the server', async () => {
             await mountWith(waiting())
             logic.actions.openSenderDomainSetup(7)
