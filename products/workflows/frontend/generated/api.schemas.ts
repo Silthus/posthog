@@ -316,6 +316,7 @@ export interface PatchedHogFlowTemplateApi {
 /**
  * * `draft` - Draft
  * * `active` - Active
+ * * `waiting_for_domain` - Waiting For Domain
  * * `archived` - Archived
  */
 export type HogFlowStateEnumApi = (typeof HogFlowStateEnumApi)[keyof typeof HogFlowStateEnumApi]
@@ -323,6 +324,7 @@ export type HogFlowStateEnumApi = (typeof HogFlowStateEnumApi)[keyof typeof HogF
 export const HogFlowStateEnumApi = {
     Draft: 'draft',
     Active: 'active',
+    WaitingForDomain: 'waiting_for_domain',
     Archived: 'archived',
 } as const
 
@@ -655,6 +657,13 @@ export interface HogFlowScheduleApi {
     readonly updated_at: string
 }
 
+export interface HogFlowUnverifiedEmailSenderApi {
+    /** The email sender's integration id. */
+    readonly id: number
+    /** The sender's domain, which is not verified yet. */
+    readonly domain: string
+}
+
 /**
  * Mixin for serializers to add user access control fields
  */
@@ -669,10 +678,11 @@ export interface HogFlowApi {
     /** Optional description. */
     description?: string
     readonly version: number
-    /** draft (no execution), active (live), archived (disabled).
+    /** draft (no execution), active (live), archived (disabled). Send active to enable: the response carries waiting_for_domain instead when an email sender's domain is not verified yet, and the workflow goes live once it is. waiting_for_domain is never accepted as input.
      *
      * * `draft` - Draft
      * * `active` - Active
+     * * `waiting_for_domain` - Waiting For Domain
      * * `archived` - Archived */
     status?: HogFlowStateEnumApi
     /** Product surface that owns this workflow (e.g. `loops` for Desktop loops). Set only when creating a workflow. Filter the list with `?origin_product=`.
@@ -742,6 +752,18 @@ export interface HogFlowApi {
      * @nullable
      */
     readonly email_sending_resumed_at: string | null
+    /**
+     * When someone last enabled the workflow. Null if it was never enabled.
+     * @nullable
+     */
+    readonly enable_requested_at: string | null
+    /**
+     * When the workflow last went live. Earlier than enable_requested_at, or null, while the workflow waits for its email sender's domain.
+     * @nullable
+     */
+    readonly went_live_at: string | null
+    /** The email senders of this workflow whose domain is not verified yet. Enabling the workflow while this list is not empty makes it wait for those domains. Not returned by the list endpoint. */
+    readonly unverified_email_senders: readonly HogFlowUnverifiedEmailSenderApi[]
     /** Newest task this loop workflow created, as its last run. Null when the workflow is not a loop or has not run. */
     readonly last_run: HogFlowLastRunApi | null
 }
@@ -771,10 +793,11 @@ export interface HogFlowUpdateApi {
     /** Optional description. */
     description?: string
     readonly version: number
-    /** draft (no execution), active (live), archived (disabled).
+    /** draft (no execution), active (live), archived (disabled). Send active to enable: the response carries waiting_for_domain instead when an email sender's domain is not verified yet, and the workflow goes live once it is. waiting_for_domain is never accepted as input.
      *
      * * `draft` - Draft
      * * `active` - Active
+     * * `waiting_for_domain` - Waiting For Domain
      * * `archived` - Archived */
     status?: HogFlowStateEnumApi
     /** Product surface that owns this workflow. This value cannot change after creation.
@@ -844,6 +867,18 @@ export interface HogFlowUpdateApi {
      * @nullable
      */
     readonly email_sending_resumed_at: string | null
+    /**
+     * When someone last enabled the workflow. Null if it was never enabled.
+     * @nullable
+     */
+    readonly enable_requested_at: string | null
+    /**
+     * When the workflow last went live. Earlier than enable_requested_at, or null, while the workflow waits for its email sender's domain.
+     * @nullable
+     */
+    readonly went_live_at: string | null
+    /** The email senders of this workflow whose domain is not verified yet. Enabling the workflow while this list is not empty makes it wait for those domains. Not returned by the list endpoint. */
+    readonly unverified_email_senders: readonly HogFlowUnverifiedEmailSenderApi[]
     /** Newest task this loop workflow created, as its last run. Null when the workflow is not a loop or has not run. */
     readonly last_run: HogFlowLastRunApi | null
 }
@@ -873,10 +908,11 @@ export interface PatchedHogFlowUpdateApi {
     /** Optional description. */
     description?: string
     readonly version?: number
-    /** draft (no execution), active (live), archived (disabled).
+    /** draft (no execution), active (live), archived (disabled). Send active to enable: the response carries waiting_for_domain instead when an email sender's domain is not verified yet, and the workflow goes live once it is. waiting_for_domain is never accepted as input.
      *
      * * `draft` - Draft
      * * `active` - Active
+     * * `waiting_for_domain` - Waiting For Domain
      * * `archived` - Archived */
     status?: HogFlowStateEnumApi
     /** Product surface that owns this workflow. This value cannot change after creation.
@@ -946,6 +982,18 @@ export interface PatchedHogFlowUpdateApi {
      * @nullable
      */
     readonly email_sending_resumed_at?: string | null
+    /**
+     * When someone last enabled the workflow. Null if it was never enabled.
+     * @nullable
+     */
+    readonly enable_requested_at?: string | null
+    /**
+     * When the workflow last went live. Earlier than enable_requested_at, or null, while the workflow waits for its email sender's domain.
+     * @nullable
+     */
+    readonly went_live_at?: string | null
+    /** The email senders of this workflow whose domain is not verified yet. Enabling the workflow while this list is not empty makes it wait for those domains. Not returned by the list endpoint. */
+    readonly unverified_email_senders?: readonly HogFlowUnverifiedEmailSenderApi[]
     /** Newest task this loop workflow created, as its last run. Null when the workflow is not a loop or has not run. */
     readonly last_run?: HogFlowLastRunApi | null
 }
@@ -2470,6 +2518,7 @@ export type HogFlowsListParams = {
     /**
      * * `draft` - Draft
      * * `active` - Active
+     * * `waiting_for_domain` - Waiting For Domain
      * * `archived` - Archived
      */
     status?: HogFlowsListStatus
@@ -2498,6 +2547,7 @@ export const HogFlowsListStatus = {
     Active: 'active',
     Archived: 'archived',
     Draft: 'draft',
+    WaitingForDomain: 'waiting_for_domain',
 } as const
 
 export type HogFlowsAssetsRetrieveParams = {
