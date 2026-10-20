@@ -238,6 +238,11 @@ function pickWorkflowEdits(workflow: HogFlow): Partial<HogFlow> {
 }
 
 /** What a save was dispatched with, kept per save because a later save moves the shared state. */
+interface SenderDomainSetup {
+    integrationId: number | null
+    filledEmptySenders: boolean
+}
+
 interface SaveContext {
     initiatedByAutoSave: boolean
     pendingSchedule: { rrule: string; starts_at: string; timezone?: string } | null | false
@@ -268,8 +273,7 @@ export interface workflowLogicValues {
     enablePromptDomains: string[] | null
     enablePromptOpen: boolean
     senderDomainNotice: SenderDomainNotice | null
-    senderDomainSetup: { integrationId: number | null } | null
-    senderFilledFromDomainSetup: boolean
+    senderDomainSetup: SenderDomainSetup | null
     enableFromSenderDomainSetupDisabledReason: string | null
     showStartedSendingNotice: boolean
     startedSendingNoticeKey: string | null
@@ -3792,20 +3796,12 @@ export const workflowLogic = kea<workflowLogicType>([
             },
         ],
         senderDomainSetup: [
-            null as { integrationId: number | null } | null,
+            null as SenderDomainSetup | null,
             {
-                openSenderDomainSetup: (_, { integrationId }) => ({ integrationId }),
+                openSenderDomainSetup: (_, { integrationId }) => ({ integrationId, filledEmptySenders: false }),
+                emptySendersFilledFromDomainSetup: (setup) => setup && { ...setup, filledEmptySenders: true },
                 closeSenderDomainSetup: () => null,
                 enableFromSenderDomainSetup: () => null,
-            },
-        ],
-        senderFilledFromDomainSetup: [
-            false,
-            {
-                emptySendersFilledFromDomainSetup: () => true,
-                openSenderDomainSetup: () => false,
-                closeSenderDomainSetup: () => false,
-                enableFromSenderDomainSetup: () => false,
             },
         ],
         enablePromptOpen: [

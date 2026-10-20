@@ -382,7 +382,7 @@ describe('workflowLogic send once verified', () => {
         expect(logic.values.senderDomainNotice).toEqual({ stage: 'no_domain' })
 
         logic.actions.openSenderDomainSetup(null)
-        expect(logic.values.senderDomainSetup).toEqual({ integrationId: null })
+        expect(logic.values.senderDomainSetup).toEqual({ integrationId: null, filledEmptySenders: false })
 
         projectSenders = [PENDING_PROJECT_SENDER]
         await expectLogic(integrationsLogic, () => {
@@ -410,16 +410,28 @@ describe('workflowLogic send once verified', () => {
             logic.actions.openSenderDomainSetup(null)
             logic.actions.setWorkflowValue('name', 'Welcome, renamed')
             const capture = jest.spyOn(posthog, 'capture')
+            useMocks({
+                patch: {
+                    '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => {
+                        const body = (await request.json()) as Partial<HogFlow>
+                        patchBodies.push(body)
+                        storedWorkflow = { ...storedWorkflow, ...body, updated_at: '2026-05-04T00:00:00.000Z' }
+                        return [200, storedWorkflow]
+                    },
+                },
+            })
 
             await expectLogic(logic, () => {
                 logic.actions.fillEmptySendersFromDomainSetup(CREATED_SENDER_ID)
             })
                 .toDispatchActions(['saveWorkflowSuccess'])
-                .toMatchValues({ senderFilledFromDomainSetup: true })
+                .toFinishAllListeners()
 
             expect(patchBodies).toHaveLength(1)
-            expect(patchBodies[0].name).toEqual('Welcome, renamed')
-            expect(['email_0', 'email_1', 'email_2'].map((id) => senderOf(patchBodies[0], id))).toEqual([
+            expect(logic.values.senderDomainSetup?.filledEmptySenders).toBe(true)
+            expect(logic.values.hasUnsavedChanges).toBe(false)
+            expect(logic.values.workflow.name).toEqual('Welcome, renamed')
+            expect(['email_0', 'email_1', 'email_2'].map((id) => senderOf(logic.values.workflow, id))).toEqual([
                 { integrationId: CREATED_SENDER_ID },
                 { integrationId: 8 },
                 { integrationId: CREATED_SENDER_ID },
@@ -439,8 +451,9 @@ describe('workflowLogic send once verified', () => {
             })
                 .toFinishAllListeners()
                 .toNotHaveDispatchedActions(['saveWorkflow'])
-                .toMatchValues({ senderFilledFromDomainSetup: false, hasUnsavedChanges: false })
+                .toMatchValues({ hasUnsavedChanges: false })
             expect(patchBodies).toEqual([])
+            expect(logic.values.senderDomainSetup?.filledEmptySenders).toBe(false)
         })
     })
 
