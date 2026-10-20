@@ -23,7 +23,7 @@ export function ReadyStep({ next = <NextWorkflowCard /> }: { next?: ReactNode })
                     Hoggie={HedgehogRocket}
                     title={
                         <>
-                            You can send from <span className="font-mono break-all">{domain}</span>
+                            You can send from <span className="inline-block max-w-full wrap-anywhere">{domain}</span>
                         </>
                     }
                     lead={
