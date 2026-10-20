@@ -25,6 +25,7 @@ export interface EmailDomainSetupModalProps {
     next?: ReactNode
     onComplete: (integrationId?: number) => void
     onClose: (savedIntegrationId?: number) => void
+    onSenderCreated?: (integrationId: number) => void
 }
 
 function ModalStep({ next }: { next?: ReactNode }): JSX.Element {
@@ -83,6 +84,7 @@ export function EmailDomainSetupModal({
     next,
     onComplete,
     onClose,
+    onSenderCreated,
 }: EmailDomainSetupModalProps): JSX.Element {
     const [integrationId, setIntegrationId] = useState<number | null>(initialIntegrationId ?? null)
 
@@ -102,7 +104,13 @@ export function EmailDomainSetupModal({
                 <ModalSettings integrationId={integrationId} next={next} onLeave={() => onComplete(integrationId)} />
             ) : (
                 <div className="@container">
-                    <DomainStep logicKey="modal" onCreated={(created) => setIntegrationId(created.id)} />
+                    <DomainStep
+                        logicKey="modal"
+                        onCreated={(created) => {
+                            setIntegrationId(created.id)
+                            onSenderCreated?.(created.id)
+                        }}
+                    />
                 </div>
             )}
         </LemonModal>

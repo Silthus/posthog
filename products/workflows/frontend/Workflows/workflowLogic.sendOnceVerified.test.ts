@@ -1,4 +1,5 @@
 import { expectLogic } from 'kea-test-utils'
+import posthog from 'posthog-js'
 
 import { FEATURE_FLAGS } from 'lib/constants'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
@@ -45,6 +46,9 @@ const emailStep = (from: Record<string, unknown>): HogFlow['actions'][number] =>
             },
         },
     }) as HogFlow['actions'][number]
+
+const senderOf = (workflow: Partial<HogFlow>, stepId: string): unknown =>
+    (workflow.actions?.find(({ id }) => id === stepId)?.config as any)?.inputs?.email?.value?.from
 
 const withEmailStep = (workflow: HogFlow, from: Record<string, unknown>): HogFlow => ({
     ...workflow,
@@ -389,6 +393,54 @@ describe('workflowLogic send once verified', () => {
             stage: 'unverified',
             domains: ['example.com'],
             integrationId: 7,
+        })
+    })
+
+    describe('a sender created in the domain setup', () => {
+        const CREATED_SENDER_ID = 9
+
+        const withEmailSteps = (...senders: Record<string, unknown>[]): HogFlow => {
+            const workflow = makeWorkflow()
+            const steps = senders.map((from, index) => ({ ...emailStep(from), id: `email_${index}` }))
+            return { ...workflow, actions: [workflow.actions[0], ...steps, workflow.actions[1]] }
+        }
+
+        it('fills only the steps without a sender, and saves them with the unsaved edits', async () => {
+            await mountWith(withEmailSteps({}, { integrationId: 8 }, {}), { senders: [VERIFIED_PROJECT_SENDER] })
+            logic.actions.openSenderDomainSetup(null)
+            logic.actions.setWorkflowValue('name', 'Welcome, renamed')
+            const capture = jest.spyOn(posthog, 'capture')
+
+            await expectLogic(logic, () => {
+                logic.actions.fillEmptySendersFromDomainSetup(CREATED_SENDER_ID)
+            })
+                .toDispatchActions(['saveWorkflowSuccess'])
+                .toMatchValues({ senderFilledFromDomainSetup: true })
+
+            expect(patchBodies).toHaveLength(1)
+            expect(patchBodies[0].name).toEqual('Welcome, renamed')
+            expect(['email_0', 'email_1', 'email_2'].map((id) => senderOf(patchBodies[0], id))).toEqual([
+                { integrationId: CREATED_SENDER_ID },
+                { integrationId: 8 },
+                { integrationId: CREATED_SENDER_ID },
+            ])
+            expect(capture).toHaveBeenCalledWith('email sender preselected', {
+                surface: 'workflow',
+                reason: 'created_in_domain_setup',
+            })
+        })
+
+        it('leaves a workflow whose steps all have a sender alone', async () => {
+            await mountWith(withEmailSteps({ integrationId: 8 }), { senders: [VERIFIED_PROJECT_SENDER] })
+            logic.actions.openSenderDomainSetup(null)
+
+            await expectLogic(logic, () => {
+                logic.actions.fillEmptySendersFromDomainSetup(CREATED_SENDER_ID)
+            })
+                .toFinishAllListeners()
+                .toNotHaveDispatchedActions(['saveWorkflow'])
+                .toMatchValues({ senderFilledFromDomainSetup: false, hasUnsavedChanges: false })
+            expect(patchBodies).toEqual([])
         })
     })
 

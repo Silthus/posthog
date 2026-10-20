@@ -269,6 +269,7 @@ export interface workflowLogicValues {
     enablePromptOpen: boolean
     senderDomainNotice: SenderDomainNotice | null
     senderDomainSetup: { integrationId: number | null } | null
+    senderFilledFromDomainSetup: boolean
     enableFromSenderDomainSetupDisabledReason: string | null
     showStartedSendingNotice: boolean
     startedSendingNoticeKey: string | null
@@ -355,6 +356,15 @@ export interface workflowLogicActions {
         value: true
     }
     enableFromSenderDomainSetup: () => {
+        value: true
+    }
+    fillEmptySendersFromDomainSetup: (integrationId: number) => {
+        integrationId: number
+    }
+    emptySendersFilledFromDomainSetup: () => {
+        value: true
+    }
+    flushAutoSave: () => {
         value: true
     }
     loadIntegrations: () => {
@@ -3325,6 +3335,9 @@ export const workflowLogic = kea<workflowLogicType>([
         openSenderDomainSetup: (integrationId: number | null) => ({ integrationId }),
         closeSenderDomainSetup: true,
         enableFromSenderDomainSetup: true,
+        fillEmptySendersFromDomainSetup: (integrationId: number) => ({ integrationId }),
+        emptySendersFilledFromDomainSetup: true,
+        flushAutoSave: true,
         dismissStartedSendingNotice: true,
         setStartedSendingNoticeDismissed: (noticeKey: string) => ({ noticeKey }),
         markSaveAttempted: (actionIds: string[]) => ({ actionIds }),
@@ -3784,6 +3797,15 @@ export const workflowLogic = kea<workflowLogicType>([
                 openSenderDomainSetup: (_, { integrationId }) => ({ integrationId }),
                 closeSenderDomainSetup: () => null,
                 enableFromSenderDomainSetup: () => null,
+            },
+        ],
+        senderFilledFromDomainSetup: [
+            false,
+            {
+                emptySendersFilledFromDomainSetup: () => true,
+                openSenderDomainSetup: () => false,
+                closeSenderDomainSetup: () => false,
+                enableFromSenderDomainSetup: () => false,
             },
         ],
         enablePromptOpen: [
@@ -4520,6 +4542,18 @@ export const workflowLogic = kea<workflowLogicType>([
             actions.loadIntegrations()
             actions.saveWorkflowPartial({ status: 'active' })
         },
+        fillEmptySendersFromDomainSetup: ({ integrationId }) => {
+            const { workflow, filled } = withEmailSender(values.workflow, integrationId)
+            if (!filled) {
+                return
+            }
+            actions.setWorkflowValues({ actions: workflow.actions })
+            actions.emptySendersFilledFromDomainSetup()
+            // pinned: analytics event name
+            posthog.capture('email sender preselected', { surface: 'workflow', reason: 'created_in_domain_setup' })
+            // Saved now rather than after the auto-save pause, so the setup can offer to enable the workflow.
+            actions.flushAutoSave()
+        },
         closeSenderDomainSetup: async () => {
             actions.loadIntegrations()
             if (!props.id || props.id === 'new') {
@@ -4785,7 +4819,9 @@ export const workflowLogic = kea<workflowLogicType>([
         },
         autoSaveWorkflow: async (_, breakpoint) => {
             await breakpoint(3000)
-
+            actions.flushAutoSave()
+        },
+        flushAutoSave: () => {
             // Active workflows auto-save too: their content edits route into the staged draft
             // (stage_draft in the saveWorkflow loader), so nothing deploys without an explicit publish.
             const shouldSkip =
