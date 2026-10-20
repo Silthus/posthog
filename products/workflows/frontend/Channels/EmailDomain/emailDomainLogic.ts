@@ -1,5 +1,7 @@
-import { MakeLogicType, actions, connect, kea, key, listeners, path, props, selectors } from 'kea'
+import { MakeLogicType, actions, afterMount, connect, kea, key, listeners, path, props, selectors } from 'kea'
 
+import { FEATURE_FLAGS } from 'lib/constants'
+import { FeatureFlagsSet, featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { Scene } from 'scenes/sceneTypes'
 import { urls } from 'scenes/urls'
 
@@ -11,6 +13,7 @@ import type {
     IntegrationConfigApi,
 } from 'products/integrations/frontend/generated/api.schemas'
 
+import { workflowDataSuggestionsLogic } from '../../setupGuide/suggestions/workflowDataSuggestionsLogic'
 import { emailDomainAutoConfigureLogic } from './emailDomainAutoConfigureLogic'
 import { EmailDomainLogicProps } from './emailDomainLogicProps'
 import { emailDomainManualSetupLogic } from './emailDomainManualSetupLogic'
@@ -141,8 +144,11 @@ export interface emailDomainLogicValues {
     status: EmailDomainStatusApi | null // emailDomainStatusLogic
     statusLoading: boolean // emailDomainStatusLogic
     statusUnavailable: boolean // emailDomainStatusLogic
+    featureFlags: FeatureFlagsSet // featureFlagLogic
     breadcrumbs: Breadcrumb[]
+    offersDataSuggestions: boolean
     phase: EmailDomainPhase
+    preloadsDataSuggestions: boolean
     verificationSteps: VerificationStep[]
 }
 
@@ -152,6 +158,16 @@ export interface emailDomainLogicActions {
     recheck: () => {
         value: true
     } // emailDomainStatusLogic
+    setFeatureFlags: (
+        flags: string[],
+        variants: Record<string, boolean | string>
+    ) => {
+        flags: string[]
+        variants: Record<string, boolean | string>
+    } // featureFlagLogic
+    preloadDataSuggestions: () => {
+        value: true
+    }
     retry: () => {
         value: true
     }
@@ -181,6 +197,8 @@ export interface emailDomainLogicMeta {
             pollingStopped: boolean
         ) => VerificationStep[]
         breadcrumbs: (domain: string | null, integrationId: any) => Breadcrumb[]
+        offersDataSuggestions: (featureFlags: FeatureFlagsSet) => boolean
+        preloadsDataSuggestions: (offersDataSuggestions: boolean, integrationId: number | null) => boolean
     }
 }
 
@@ -215,11 +233,21 @@ export const emailDomainLogic = kea<emailDomainLogicType>([
             ['recordsAdded'],
             emailDomainAutoConfigureLogic(props),
             ['returnedFromAutoConfigure'],
+            featureFlagLogic,
+            ['featureFlags'],
         ],
-        actions: [emailDomainSenderLogic(props), ['loadSender'], emailDomainStatusLogic(props), ['recheck']],
+        actions: [
+            emailDomainSenderLogic(props),
+            ['loadSender'],
+            emailDomainStatusLogic(props),
+            ['recheck'],
+            featureFlagLogic,
+            ['setFeatureFlags'],
+        ],
     })),
     actions({
         retry: true,
+        preloadDataSuggestions: true,
     }),
     selectors({
         phase: [
@@ -267,6 +295,16 @@ export const emailDomainLogic = kea<emailDomainLogicType>([
             ): VerificationStep[] =>
                 verificationStepsOf({ status, phase, domain, records, foundCount, allRecordsFound, pollingStopped }),
         ],
+        offersDataSuggestions: [
+            (s) => [s.featureFlags],
+            (featureFlags: FeatureFlagsSet): boolean => !!featureFlags[FEATURE_FLAGS.WORKFLOWS_DATA_SUGGESTIONS],
+        ],
+        // Suggestions take up to a minute to write, so they start once the domain is picked and are ready by the last step.
+        preloadsDataSuggestions: [
+            (s) => [s.offersDataSuggestions, s.integrationId],
+            (offersDataSuggestions: boolean, integrationId: number | null): boolean =>
+                offersDataSuggestions && integrationId !== null,
+        ],
         breadcrumbs: [
             (s) => [s.domain, s.integrationId],
             (domain: string | null, integrationId: number | null): Breadcrumb[] => [
@@ -280,7 +318,20 @@ export const emailDomainLogic = kea<emailDomainLogicType>([
             ],
         ],
     }),
-    listeners(({ actions, values }) => ({
+    listeners(({ actions, values, cache }) => ({
+        setFeatureFlags: () => actions.preloadDataSuggestions(),
+        preloadDataSuggestions: () => {
+            if (!values.preloadsDataSuggestions || cache.dataSuggestionsPreloaded) {
+                return
+            }
+            cache.dataSuggestionsPreloaded = true
+            // The person often leaves the tab to edit DNS, and a remount on return would start the run again.
+            cache.disposables.add(
+                () => workflowDataSuggestionsLogic({ surface: 'email_domain_wizard' }).mount(),
+                'dataSuggestions',
+                { pauseOnPageHidden: false }
+            )
+        },
         retry: () => {
             if (values.senderFailed) {
                 actions.loadSender()
@@ -290,4 +341,7 @@ export const emailDomainLogic = kea<emailDomainLogicType>([
             }
         },
     })),
+    afterMount(({ actions }) => {
+        actions.preloadDataSuggestions()
+    }),
 ])
