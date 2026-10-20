@@ -7,8 +7,6 @@ import { LemonButton, LemonModal, LemonSkeleton } from '@posthog/lemon-ui'
 
 import { urls } from 'scenes/urls'
 
-import { IntegrationType } from '~/types'
-
 import { BindEmailDomainLogics } from './BindEmailDomainLogics'
 import { AgentHandoffModal } from './components/AgentHandoffModal'
 import { SourceWorkflow, SourceWorkflowCard } from './components/SourceWorkflowCard'
@@ -20,7 +18,8 @@ import { UnavailableStep } from './steps/UnavailableStep'
 import { VerifyingStep } from './steps/VerifyingStep'
 
 export interface EmailDomainSetupModalProps {
-    integration?: IntegrationType | null
+    /** The sender to verify. Without it the setup starts at the domain step. */
+    integrationId?: number | null
     entry: 'channels' | 'broadcast' | 'configure' | 'workflow'
     /** The workflow the setup was opened from. Its own actions replace the workflow suggestions. */
     workflow?: SourceWorkflow
@@ -78,13 +77,13 @@ function ModalSettings({
 }
 
 export function EmailDomainSetupModal({
-    integration,
+    integrationId: initialIntegrationId,
     entry,
     workflow,
     onComplete,
     onClose,
 }: EmailDomainSetupModalProps): JSX.Element {
-    const [integrationId, setIntegrationId] = useState<number | null>(integration?.id ?? null)
+    const [integrationId, setIntegrationId] = useState<number | null>(initialIntegrationId ?? null)
 
     useEffect(() => {
         // pinned: analytics event name
