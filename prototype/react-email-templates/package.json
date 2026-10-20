@@ -1,0 +1,22 @@
+{
+    "name": "prototype-react-email-templates",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "start": "bun src/serve.tsx",
+        "build": "bun src/build.tsx",
+        "compare": "bun src/compare.tsx",
+        "optional-prop": "bun src/optional-prop-sequence.tsx"
+    },
+    "dependencies": {
+        "entities": "^6.0.0",
+        "liquidjs": "^10.19.0",
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
+        "react-email": "6.11.3"
+    },
+    "devDependencies": {
+        "@types/react": "^19.2.0",
+        "bun-types": "^1.3.0"
+    }
+}
