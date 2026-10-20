@@ -220,6 +220,19 @@ export const ReadyWithSuggestions: Story = {
     },
 }
 
+export const VerifyingWithSuggestions: Story = {
+    args: {
+        host: 'cloudflare',
+        seed: (backend) => {
+            backend.publishRecords(DOMAIN, halfPublished)
+            backend.suggestWorkflows(SUGGESTED_WORKFLOWS)
+        },
+    },
+    parameters: {
+        featureFlags: [FEATURE_FLAGS.WORKFLOWS_EMAIL_DOMAIN_WIZARD, FEATURE_FLAGS.WORKFLOWS_DATA_SUGGESTIONS],
+    },
+}
+
 export const Unavailable: Story = { render: () => <UnavailableDomainPage /> }
 
 export const AgentHandoff: Story = {

@@ -23,6 +23,7 @@ import { SceneTitleSection } from '~/layout/scenes/components/SceneTitleSection'
 import { ScenePanel, ScenePanelActionsSection, ScenePanelDivider } from '~/layout/scenes/SceneLayout'
 import { AccessControlLevel, AccessControlResourceType } from '~/types'
 
+import { EnableWorkflowPrompt } from './EnableWorkflowPrompt'
 import { HogFlowManualTriggerButton } from './hogflows/HogFlowManualTriggerButton'
 import { workflowSuggestionsAvailabilityLogic } from './suggestions/workflowSuggestionsAvailabilityLogic'
 import { WorkflowSuggestionsMenuItem } from './suggestions/WorkflowSuggestionsMenuItem'
@@ -31,6 +32,7 @@ import { SaveAsTemplateModal } from './templates/SaveAsTemplateModal'
 import { workflowTemplateLogic } from './templates/workflowTemplateLogic'
 import { workflowLogic } from './workflowLogic'
 import { WorkflowSceneLogicProps } from './workflowSceneLogic'
+import { WorkflowSenderDomainSetupModal } from './WorkflowSenderDomainSetupModal'
 import { parseWorkflowTriggerPrefill, TRIGGER_PREFILL_PARAM } from './workflowTriggerPrefill'
 
 export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.Element => {
@@ -46,6 +48,7 @@ export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.El
         publishDisabledReason,
         discardDisabledReason,
         showDraftActions,
+        enablePromptDomains,
     } = useValues(workflowLogic)
     const {
         saveWorkflowPartial,
@@ -56,6 +59,9 @@ export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.El
         discardChanges,
         publishDraft,
         discardDraft,
+        enableWorkflow,
+        confirmEnablePrompt,
+        cancelEnablePrompt,
     } = useActions(workflowLogic)
     const { searchParams } = useValues(router)
     const editTemplateId = searchParams.editTemplateId as string | undefined
@@ -93,6 +99,13 @@ export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.El
     return (
         <>
             <SaveAsTemplateModal {...props} editTemplateId={editTemplateId} />
+            <WorkflowSenderDomainSetupModal />
+            <EnableWorkflowPrompt
+                domains={enablePromptDomains}
+                onConfirm={confirmEnablePrompt}
+                onCancel={cancelEnablePrompt}
+                loading={workflowLoading}
+            />
             {sceneMenuBarEnabled && isSavedWorkflow && (
                 <SceneMenuBar>
                     <SceneMenuBarMenu label="File" dataAttr="workflow-menubar-file">
@@ -230,9 +243,9 @@ export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.El
                                         // reveals the per-field messages, and saveWorkflowPartial
                                         // guards the actual enable with a toast.
                                         onClick={() =>
-                                            saveWorkflowPartial({
-                                                status: workflow?.status === 'draft' ? 'active' : 'draft',
-                                            })
+                                            workflow?.status === 'draft'
+                                                ? enableWorkflow()
+                                                : saveWorkflowPartial({ status: 'draft' })
                                         }
                                         size="small"
                                         disabledReason={hasUnsavedChanges ? 'Save changes first' : undefined}

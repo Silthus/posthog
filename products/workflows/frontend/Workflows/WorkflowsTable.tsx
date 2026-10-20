@@ -1,4 +1,4 @@
-import { useActions, useValues } from 'kea'
+import { useActions, useMountedLogic, useValues } from 'kea'
 import { useMemo } from 'react'
 
 import {
@@ -32,6 +32,7 @@ import { AccessControlLevel, AccessControlResourceType } from '~/types'
 import { AutomationEmptyState } from '../setupGuide/AutomationEmptyState'
 import { AutomationSuggestionBanner } from '../setupGuide/AutomationSuggestionBanner'
 import { MessagingSetupReminderBanner } from '../setupGuide/MessagingSetupReminderBanner'
+import { EnableWorkflowPrompt } from './EnableWorkflowPrompt'
 import { getHogFlowStep } from './hogflows/steps/HogFlowSteps'
 import { HogFlow } from './hogflows/types'
 import { workflowSuggestionsAvailabilityLogic } from './suggestions/workflowSuggestionsAvailabilityLogic'
@@ -45,11 +46,13 @@ import {
     workflowsLogic,
 } from './workflowsLogic'
 import { WorkflowStepMatches } from './WorkflowStepMatches'
+import { workflowsWaitingRefreshLogic } from './workflowsWaitingRefreshLogic'
 import { hasMessagingAction } from './workflowTypeFilters'
 
-const STATUS_CONFIG: Record<string, { label: string; type: 'success' | 'default' | 'muted' }> = {
+const STATUS_CONFIG: Record<HogFlow['status'], { label: string; type: 'success' | 'default' | 'warning' | 'muted' }> = {
     active: { label: 'Active', type: 'success' },
     draft: { label: 'Draft', type: 'default' },
+    waiting_for_domain: { label: 'Waiting for domain', type: 'warning' },
     archived: { label: 'Archived', type: 'muted' },
 }
 
@@ -121,6 +124,7 @@ export function WorkflowsTable(): JSX.Element {
     const overviewTabEnabled = !!featureFlags[FEATURE_FLAGS.WORKFLOWS_OVERVIEW_TAB]
     const { suggestionsAvailable } = useValues(workflowSuggestionsAvailabilityLogic)
     const logic = workflowsLogic()
+    useMountedLogic(workflowsWaitingRefreshLogic)
     const {
         workflowsLoading,
         workflows,
@@ -129,6 +133,7 @@ export function WorkflowsTable(): JSX.Element {
         selectedArchivedWorkflowIds,
         allArchivedSelected,
         selectedArchivedCount,
+        enablePrompt,
     } = useValues(logic)
     // Only an unfiltered Automations tab is truly empty. With a search or filter, the plain message fits.
     const showAutomationEmptyState =
@@ -150,6 +155,8 @@ export function WorkflowsTable(): JSX.Element {
         toggleArchivedWorkflowSelection,
         selectAllArchivedWorkflows,
         clearArchivedWorkflowSelection,
+        confirmEnablePrompt,
+        cancelEnablePrompt,
     } = useActions(logic)
 
     useOnMountEffect(() => {
@@ -444,6 +451,7 @@ export function WorkflowsTable(): JSX.Element {
                             options={[
                                 { label: 'All', value: 'all' },
                                 { label: 'Active', value: 'active' },
+                                { label: 'Waiting for domain', value: 'waiting_for_domain' },
                                 { label: 'Draft', value: 'draft' },
                                 { label: 'Archived', value: 'archived' },
                             ]}
@@ -491,6 +499,12 @@ export function WorkflowsTable(): JSX.Element {
                     emptyState={showAutomationEmptyState ? <AutomationEmptyState /> : 'No workflows matching filters'}
                 />
                 <AutomationSuggestionBanner />
+                <EnableWorkflowPrompt
+                    domains={enablePrompt?.domains ?? null}
+                    onConfirm={confirmEnablePrompt}
+                    onCancel={cancelEnablePrompt}
+                    loading={workflowsLoading}
+                />
             </>
         </div>
     )
