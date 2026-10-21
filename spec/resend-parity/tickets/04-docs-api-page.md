@@ -39,7 +39,7 @@ The page `/docs/workflows/transactional-email-api` teaches a send from code firs
 ## Blocked by
 
 - Native: ticket 03 (posthog-node PR 1).
-- Named: Harley's code-content route (S4), for the server's error texts.
+- Named: Harley's code-content route (S4), and checks before queueing (S6), because the page promises that a refused send never gets a `202`.
 
 ## How to build (map #461)
 

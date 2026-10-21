@@ -9,7 +9,7 @@ Base: ticket 07's branch, or `main` once it merges
 ## What to build
 
 - At the end of a `migrate` run, the Wizard reads the skill's summary block and captures `wizard: migration summary` with `from`, `sites_found`, `sites_rewritten`, `sites_left`, `templates_uploaded` and `dns_ready`. A missing or broken block captures the event with the fields it has and never fails the run.
-- A deterministic Resend detector: `resend` or `@react-email/*` in `package.json`.
+- A deterministic Resend detector: `resend` in `package.json`. `@react-email/*` alone is not Resend. A REST-only app gets no offer; the skill still handles it when run.
 - An install run that finds Resend offers `migrate resend` in its outro. A run without Resend shows nothing new.
 
 ## Test seams

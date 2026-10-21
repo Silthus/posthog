@@ -11,9 +11,9 @@ Base: ticket 02's branch, or `main` once it merges
 The `migrate-email` / `resend` skill moves every supported Resend call site, v0's own `fetch` calls included, to posthog-node:
 
 - Client setup: add `posthog-node` at the release that carries the new `emails`, with `secretKey` and `migratedFrom: 'resend'` once on the client.
-- `html:` sites become `content: html(subject, html, text?)`, `text:` sites `content: text(subject, text)`, React sites `content: react(subject, element)` (if ticket 05 is charted), hosted templates `content: libraryTemplate(templateKey, data)`. Every site gets a `key` named for its kind of email; a v0 library site keeps the `key` it already sends.
+- `html:` sites become `content: html(subject, html, text?)`, `text:` sites `content: text(subject, text)`, React sites `content: html(subject, await render(element))` with `render` from `@react-email/render`, added if the app lacks it (or `react(subject, element)` if Open decision 1 charts ticket 05), hosted templates `content: libraryTemplate(templateKey, data)`. Every site gets a `key` named for its kind of email; a v0 library site keeps the `key` it already sends.
 - `from`, `replyTo` and `idempotencyKey` move as they are. `distinctId` comes from the app's existing identify call.
-- `if (error.name === ...)` branches keep working; branches on Resend's `last_event` are rewritten to `emails.get(id).status` once ticket 12 ships, otherwise reported. Error names follow the #120921 table, so a branch on a Resend name with no PostHog counterpart is reported, not guessed.
+- `if (error.name === ...)` branches keep working; a site that branches on Resend's `last_event` stays on Resend with a report row, because `status` is not `last_event` (ADR 0005). Error names follow the #120921 table, so a branch on a Resend name with no PostHog counterpart is reported, not guessed.
 - Sites with Resend-only fields stay on Resend with report rows, as in v0.
 - The skill proves the chain on one person: a send, an engagement event, and a product event on the same distinct ID (#532).
 
@@ -36,8 +36,8 @@ The `migrate-email` / `resend` skill moves every supported Resend call site, v0'
 
 ## Blocked by
 
-- Native: tickets 02, 03, 04, and 05 if charted. Ticket 12 is not a blocker; without it, `last_event` branches are reported.
-- Named: Harley's code-content route (S4) and idempotency wiring (S5).
+- Native: tickets 02, 03, 04, and 05 if charted.
+- Named: Harley's code-content route (S4), idempotency wiring (S5), and checks before queueing (S6), so a refused send gets its policy error, not a `202`.
 
 ## How to build (map #461)
 

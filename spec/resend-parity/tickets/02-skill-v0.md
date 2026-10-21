@@ -10,23 +10,23 @@ Base: `feat/send-transactional-email-skill` (PostHog/context-mill#433), or `main
 
 A coding agent, or the Wizard's `wizard skill <id>`, runs a new `migrate-email` skill group with a `resend` variant on an app that uses Resend, and gets a local diff plus a report.
 
-- **Detect and stop early.** No `resend` or `@react-email/*` in the package files and no `from 'resend'` or `new Resend(` in source: stop before any edit.
+- **Detect and stop early.** No `resend` package, no `from 'resend'` or `new Resend(` in source, and no call to `api.resend.com`: stop before any edit. `@react-email/*` alone is a renderer, not Resend; it only classifies content.
 - **Preflight.** Check that the transactional email API and the upload and send tools are on for the project. If a flag is off, stop and name it.
 - **Inventory and classify** every send call site (#522's steps): moved now, or left on Resend with a reason. Left on Resend in v0: React Email sites, attachments, idempotency keys (until the SDK and Harley's idempotency land), and every Resend-only field (`cc`, `bcc`, `tags`, `headers`, `scheduledAt`, `topicId`, `batch.send`, more than one `to`). Never drop a field.
 - **Move** hosted-template and simple HTML sends: upload each template by key with `source` (repository, path, ref), rewrite `{{{NAME}}}` to `{{ variables.name }}`, and rewrite the call site to `fetch` the send route `POST /api/projects/@current/messaging/send/email/` with a top-level `key` equal to the uploaded template's key, `template: { key }`, `message_data`, `identifiers.distinct_id` from the app's existing identify call when it has one, and the header `X-PostHog-Migrated-From: resend`.
 - **Sender and DNS.** List the `from` addresses, create and verify senders through the MCP sender tools when they are on, otherwise send the person to the UI. Keep Resend's records; pick a MAIL FROM label that is not Resend's. Hand the DNS records or the Domain Connect link to the person.
 - **Key.** Ask the person for a project secret key with `hog_flow:write` and store it as `POSTHOG_PROJECT_SECRET_API_KEY`. List every other place `RESEND_API_KEY` appears.
 - **Tier.** Check the project's sending tier before cutover and say so in the report.
-- **Report** `posthog-migrate-resend-report.md`, ending with a machine-readable summary block: `from`, `sites_found`, `sites_rewritten`, `sites_left`, `templates_uploaded`, `dns_ready`.
+- **Report** `posthog-migrate-email-resend-report.md`, the name the Wizard's generic skill runner expects (`posthog-${skillId}-report.md`), ending with a machine-readable summary block: `from`, `sites_found`, `sites_rewritten`, `sites_left`, `templates_uploaded`, `dns_ready`.
 - **Gates.** Never remove `resend` while a site uses it. Never touch DNS or the Resend account. Never commit.
-- Sender setup, upload and error handling link to `send-transactional-email`'s reference files; they are not copied.
+- Sender setup, upload and error handling come from the same sources as `send-transactional-email`, through context-mill's `shared_docs` and `{{> partial}}` includes, so there is one authored source and the bundle works without the send skill installed.
 - Wizard-only conventions sit in one optional section ("Inside the PostHog Wizard").
 
 ## Test seams
 
-- The bundle build test (as #433 added): the skill builds, its reference files are present, its links resolve.
+- The bundle build test (as #433 added): the skill builds, its reference files are present, its links resolve, and it resolves with no other skill installed.
 - The MCP `SkillCatalog` ranking for "migrate from Resend", "replace resend with posthog", "switch email provider", before and after.
-- Agent runs with `wizard skill <id>` on the happy fixture (PostHog/wizard-workbench#2221) and a negative fixture, judged by the diff.
+- Agent runs with `wizard skill <id>` on the happy fixture (PostHog/wizard-workbench#2221), a REST-only fixture, and a negative fixture with React Email but no Resend, judged by the diff.
 
 ## Proof
 
