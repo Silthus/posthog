@@ -1,0 +1,31 @@
+sequenceDiagram
+  autonumber
+  participant Q as Cyclotron queue
+  participant W as Email worker
+  participant Pol as Email send policy
+  participant SES
+  participant St as EmailStatus
+  participant T as Email tracking
+  Q->>W: job with state.send
+  Note over W: fixed slot reads state.send,<br/>no second render<br/>tracking policy from state.send
+  W->>Pol: check(send, delivery)
+  alt skip: policy changed after the 202
+    Pol-->>W: skip reason
+    W->>St: record(skipped), wait for Kafka
+    W->>Q: ack
+  else passes
+    W->>SES: SendEmail
+    alt SES throttles
+      SES-->>W: throttled
+      W->>St: record(waiting), wait for Kafka
+      W->>Q: reschedule
+    else accepted
+      SES-->>W: MessageId
+      W->>St: record(sent, MessageId), wait for Kafka<br/>$email_message_id on sent event
+      W->>Q: ack
+    end
+  end
+  SES-)T: SNS: delivered, bounced, complained
+  Note over T: verify signature, message_id<br/>from signed tracking header<br/>capture policy from the header
+  T->>St: record(feedback), wait for Kafka
+  T-->>SES: 200, or 5xx so SNS retries

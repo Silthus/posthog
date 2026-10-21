@@ -1,0 +1,31 @@
+sequenceDiagram
+  autonumber
+  participant SDK as posthog-node
+  participant Dj as Django send route
+  participant CDP as cdp-api send route
+  participant Idem as Idempotency store
+  participant Pol as Email send policy
+  participant Q as Cyclotron queue
+  participant St as EmailStatus
+  SDK->>Dj: POST send/email, distinctId?, Idempotency-Key
+  Note over Dj: key auth, hog_flow:write, sender limits,<br/>SendSource, EmailSendCommand<br/>distinct_id, or the address as fallback
+  Dj->>CDP: command + JWT
+  CDP->>Idem: reserve(key, fingerprint)
+  alt key already used
+    Idem-->>CDP: stored response
+    CDP-->>Dj: 202, same message_id
+  else new key
+    CDP->>Pol: check(send, admission)
+    alt rejected
+      Pol-->>CDP: reason
+      CDP->>Idem: release
+      CDP-->>Dj: 4xx with reason
+    else passes
+      CDP->>CDP: quota check
+      CDP->>Q: queueInvocations, state.send
+      CDP->>Idem: markQueued(message_id)
+      CDP-)St: record(queued), no wait
+      CDP-->>Dj: 202, message_id
+    end
+  end
+  Dj-->>SDK: 200 { id } or error

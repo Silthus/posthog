@@ -1,0 +1,22 @@
+sequenceDiagram
+  autonumber
+  participant Q as Cyclotron queue
+  participant J as Janitor
+  participant W as Email worker
+  participant SES
+  participant St as EmailStatus
+  Q->>W: job with state.send
+  W->>SES: SendEmail
+  SES-->>W: MessageId, email is out
+  alt status write fails
+    W->>St: record(sent)
+    St-->>W: Kafka error after retries
+    W->>Q: ack anyway, count the lost write
+    Note over St: status stays queued
+  else worker dies before ack
+    Note over W: process gone, row stays running
+    J->>Q: stale after 30 s, make available
+    J->>St: record(unknown)
+    Q->>W: same job again
+    W->>SES: SendEmail, a second copy
+  end

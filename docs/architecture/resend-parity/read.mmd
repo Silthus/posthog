@@ -1,0 +1,18 @@
+sequenceDiagram
+  autonumber
+  participant SDK as posthog-node
+  participant Dj as Django send route
+  participant R as Email status read
+  participant CH as Status table
+  SDK->>Dj: GET emails/{id}
+  Note over Dj: key auth, hog_flow:read,<br/>TRANSACTIONAL_EMAIL_THROTTLES
+  Dj->>R: get(team_id, message_id)
+  R->>CH: argMax by (team_id, message_id),<br/>day from the UUIDT
+  CH-->>R: latest row or nothing
+  alt no row yet, or another team's id
+    R-->>Dj: None
+    Dj-->>SDK: 404 not_found
+  else row found
+    R-->>Dj: EmailStatus
+    Dj-->>SDK: 200 { id, status, ... }
+  end
