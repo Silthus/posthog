@@ -13,7 +13,6 @@ Base: `master`, once slice 04 merges
 - A narrow ClickHouse table on the AUX cluster: `ReplicatedReplacingMergeTree(version)`, `ORDER BY (team_id, message_id)`, 30-day TTL, fed from Kafka. `version` is the status rank times 2^48 plus the time in ms, so a status only moves forward.
 - `EmailStatusWriter` in cdp-api, the worker, tracking and the janitor: `queued` without waiting; every later status waits for Kafka. The janitor writes `unknown`, and `failed` with `gave_up`.
 - `GET /api/projects/@current/messaging/emails/{message_id}/` (spec pin): `{ id, status, created_at, status_at, reason? }`, `hog_flow:read`, the send's throttles, `404 not_found` for an unknown id or another team's.
-- SES `MessageId` on the `sent` row.
 
 ## Test seams
 

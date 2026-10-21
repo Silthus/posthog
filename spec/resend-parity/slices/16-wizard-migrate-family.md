@@ -3,7 +3,7 @@ Slice: 16
 Strand: wizard
 Map: [Map: send code-managed email templates with one PostHog call](https://github.com/Silthus/posthog/issues/461)
 Spec: [SPEC.md](../SPEC.md), section "Wizard"
-Repository: PostHog/wizard, plus one companion change in PostHog/context-mill
+Repository: PostHog/wizard
 Base: `main` in each repo
 
 ## What to build
@@ -12,7 +12,7 @@ Base: `main` in each repo
 
 - Replace the flat `migrate` command with a family command that runs the generic agent-skill program with the skill id.
 - Give the `migrate` family its extra scopes (`integration:read` and `integration:write`, for sender setup), per family, not for every skill run. The skill uploads nothing, so it needs no template scope.
-- Companion context-mill change: the `migrate` group and the `migrate-email` group declare `parentCommand: migrate` with `statsig` and `resend`, in the same release window.
+- The context-mill entries that declare `parentCommand: migrate` come from slice 14. Release this after them.
 - Release note and README: bare `wizard migrate` now opens a picker in a terminal and fails in CI with "requires a subcommand".
 - A token without the extra scopes is not an error: the skill falls back to the UI path.
 

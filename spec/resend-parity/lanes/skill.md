@@ -1,11 +1,12 @@
 Lane prompt: strand skill (the Resend migration skill)
 
-Cast: Opus 5.5, `high`. Worktree: a new worktree of PostHog/context-mill from `feat/send-transactional-email-skill` (PostHog/context-mill#433). Wall-time cap: 6 h of building; time spent waiting on another strand does not count.
+Cast: Opus 5.5, `high`. Worktree: a new worktree of PostHog/context-mill from `feat/send-transactional-email-skill` (PostHog/context-mill#433). Wall-time cap: 7 h of building; time spent waiting on another strand does not count.
 
 You build the strand **skill** of map [#461](https://github.com/Silthus/posthog/issues/461) alone, slice by slice, in this order:
 
-1. Slice 14: `slices/14-skill-v0.md`. PR shape: a draft PR stacked on PostHog/context-mill#433.
-2. Slice 15: `slices/15-skill-v1.md`. PR shape: a draft PR stacked on 14.
+1. Slice 20: `slices/20-send-skill-flat-contract.md`. PR shape: commits on PostHog/context-mill#433, which is unreleased. #433 merges only after the posthog-node release with slice 10.
+2. Slice 14: `slices/14-skill-v0.md`. PR shape: a draft PR stacked on PostHog/context-mill#433, carrying the Wizard's `parentCommand: migrate` entries.
+3. Slice 15: `slices/15-skill-v1.md`. PR shape: a draft PR stacked on 14.
 
 Read first:
 

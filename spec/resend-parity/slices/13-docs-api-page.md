@@ -17,7 +17,7 @@ The page `/docs/workflows/transactional-email-api` covers what both SDKs send:
 - Always pass `distinct_id`, and why: otherwise engagement events land on a person keyed by the address.
 - Client setup: `secret_key`, `app_host` for any host that is not PostHog Cloud, `max_retries`.
 - What `202` means: queued for delivery, not delivered.
-- Idempotency: the key on every call, the replay, `422`, the in-flight `409`, what the SDKs retry, and `max_retries=0` with a key derived from the email's purpose for job runners.
+- Idempotency: the key on every call, the replay, `422`, the in-flight `409`, what the SDKs retry, and `max_retries=0` with a key derived from the email's purpose for job runners. A rare crash inside PostHog between accepting and queuing a send can still queue it twice, so the page promises one send per key on retries, not exactly-once delivery.
 - Engagement capture: on by default for code sends, `capture_engagement: false` per send, and the events count as analytics events.
 - The error shape with `name`, and one anchored section per `code` in the contract's table, quoting the server's `why` and `fix`.
 

@@ -4,7 +4,7 @@ Answers: [Spec Resend parity and slice it into PRs](https://github.com/Silthus/p
 Built on: the product decisions of [Grill Resend parity](https://github.com/Silthus/posthog/issues/525), the structure of [Shape the architecture of Resend parity](https://github.com/Silthus/posthog/issues/526) ([architecture doc](https://github.com/Silthus/posthog/blob/0f0bc0f5f32d7835f434dba7c1d6e43cb182f3ec/docs/architecture/resend-parity.md), five ADRs), and the shared SDK contract [PostHog/posthog#120921](https://github.com/PostHog/posthog/issues/120921).
 Folds in: research #522, #523, #524, #527, #529, #532, #533, #534, and [Send attribution](https://github.com/Silthus/posthog/issues/530) (draft PostHog/posthog#120628).
 
-Status: draft on branch `spec/resend-parity`, before Michael's approval. Revision 4: the flat send shape of #120921, Michael's answers to the open decisions (2026-10-21), and the builders-per-strand method.
+Status: draft on branch `spec/resend-parity`, before Michael's approval. Revision 4: the flat send shape of #120921, Michael's answers to the open decisions (2026-10-21), and the builders-per-strand method, and the r3 spec pass.
 
 ## Problem Statement
 
@@ -144,6 +144,8 @@ Built in #526's order: the refactors first as mechanical PRs, the features stack
 - **R1** `EmailSendPolicy.check(send, phase)` (slice 02). **R2** `EmailSendCommand` and the typed CDP outcome (slice 03). **R3** `idempotentEnqueue` over Harley's store (slice 05).
 - The code form on `messaging/send/email/`, `AcceptedSend` and the fixed slot, tracking header v3 (slice 04).
 - Idempotency for both forms (slice 06): scope `transactional-email`, the fingerprint of #120921, replay before checks, `422`, in-flight `409`, `503`.
+- 🤖 Harley's store accepts one known duplicate: a crash between the reservation and the queue write, or a failed completion write followed by a retry after the 60 s pending window, can queue a second send. The send API inherits that limit and the docs say so; making the store stronger is the store owner's call, with #523.
+- 🤖 Local templates on #118924's routes: a key PostHog does not know answers `409 template_outdated`, not `404`, so the first send uploads it. The SDK's upload carries `if_code_managed`, and under the row lock it refuses a template edited in PostHog with `409` instead of adopting it (slice 04).
 - Checks before the `202`, the two `429` codes, and pinned content for template sends (slice 07).
 - The status record and the read (slice 08).
 - 🤖 `AcceptedSend` is part of the queued job format: the worker deploys first, and slice 04 owes a cross-version proof (ADR 0002).
@@ -167,6 +169,8 @@ Builds on PostHog/posthog-js#5312, an unreleased draft, so its public `template`
 - 👍 **One text for every host** Wizard-only conventions sit in one optional section (#529).
 - 👤 **v0 rewrites no call site** It detects, inventories, sets up the sender and DNS, hands over the key, checks the tier, and reports. The agent never creates a template.
 - 👤 **v1 is the one cutover** Hosted templates become local templates in the app's code; `html:`, `text:` and React sites send rendered content; the skill proves send, engagement and product event on one person (#532).
+- 🤖 **Hosted-template subset** Variable names stay as they are, and a Resend fallback becomes Liquid's `default`. PostHog's Liquid escapes HTML in output, so an HTML-valued variable, or any syntax beyond variables and fallbacks, keeps the site on Resend with a report row (slice 15).
+- 🤖 **The send skill first** #433's `send-transactional-email` still teaches #5312's `templateFile()` and "sends are not idempotent". It moves to the flat contract (slice 20) before the migration skill reuses it, and merges after the posthog-node release.
 - 👍 **Machine-readable summary** The report `posthog-migrate-email-resend-report.md` ends with `from`, `sites_found`, `sites_rewritten`, `sites_left`, `dns_ready`. The Wizard reads it.
 
 ### Wizard (ours, PostHog/wizard)
@@ -215,8 +219,9 @@ A good test drives the public surface a user touches and asserts what they obser
   - Error names follow Resend's vocabulary in the SDKs only, so migrated `error.name` branches keep working while the server keeps one `code` (#525, #120921).
   - The Wizard family breaks bare `wizard migrate` for scripts; Michael chose the family over `wizard skill` only (#525).
   - The two refactors and `idempotentEnqueue` land before the features, because #526 put every feature on those seams.
+  - The Wizard's install offer and summary event (slice 18) stay: #525 decided them, and the summary event is how story 42 sees where migrations stall. It is the Wizard strand's last slice, so nothing waits on it.
 - **Measurement.** After #530 merges, the Code-sending orgs and Switched orgs insight goes on its own dashboard, never on a shared team dashboard. It is not a PR.
-- **Merge order.** posthog.com#21306 publishes before slice 13. Skill v1 merges after posthog-node's code form releases and slice 13 publishes (as for #433). Merge #118924 before the send-API stack grows deep.
+- **Merge order.** posthog.com#21306 publishes before slice 13. #433 (with slice 20) and skill v1 merge after posthog-node's code form releases; skill v1 also after slice 13 publishes. Merge #118924 before the send-API stack grows deep.
 - **Public repo.** No usage numbers, customer data or internal metrics in any issue, branch or PR.
 
 ## Slicing: builders per strand
@@ -230,21 +235,23 @@ A good test drives the public surface a user touches and asserts what they obser
 - **Per strand:** one GPT-6.1 Sol `high` review of the strand's whole diff, fixes in the same lane, then reviewed draft PRs, nothing marked ready.
 - **Measure:** each lane reports to the conductor, not on a public issue: wall time, active time, slices, PRs and lines, merge conflicts, review rounds and findings (cross-slice or other), compactions, and anything redone or left unfinished.
 
-| Strand         | Slices, in order               | Repo                                  | Blocked by (strand)                                              | Waits on (Harley)                     | Cap (📌) |
-| -------------- | ------------------------------ | ------------------------------------- | ---------------------------------------------------------------- | ------------------------------------- | -------- |
-| send-api       | 01, 02, 03, 04, 07, 05, 06, 08 | PostHog/posthog                       | —                                                                | #120446, #120392, #120510 (before 05) | 12 h     |
-| posthog-node   | 09, 10, 11                     | PostHog/posthog-js                    | send-api (10 needs 04, 11 needs 08; 09 starts at once)           | —                                     | 6 h      |
-| posthog-python | 12                             | PostHog/posthog-python                | send-api, posthog-node                                           | his template-send PR merged           | 3 h      |
-| docs-api       | 13                             | PostHog/posthog.com                   | send-api, posthog-node                                           | —                                     | 3 h      |
-| skill          | 14, 15                         | PostHog/context-mill                  | send-api, posthog-node, docs-api (all for 15; 14 starts at once) | —                                     | 6 h      |
-| wizard         | 16, 18                         | PostHog/wizard (+ context-mill entry) | skill (needs 14)                                                 | —                                     | 4 h      |
-| docs-migrate   | 19                             | PostHog/posthog.com                   | skill, wizard                                                    | —                                     | 2 h      |
-| task           | 17                             | none (Django admin, HITL)             | —                                                                | —                                     | —        |
+| Strand         | Slices, in order               | Repo                      | Blocked by (strand)                                                    | Waits on (Harley)                     | Cap (📌) |
+| -------------- | ------------------------------ | ------------------------- | ---------------------------------------------------------------------- | ------------------------------------- | -------- |
+| send-api       | 01, 02, 03, 04, 07, 05, 06, 08 | PostHog/posthog           | —                                                                      | #120446, #120392, #120510 (before 05) | 12 h     |
+| posthog-node   | 09, 10, 11                     | PostHog/posthog-js        | send-api (10 needs 04, 11 needs 08; 09 starts at once)                 | —                                     | 6 h      |
+| posthog-python | 12                             | PostHog/posthog-python    | send-api, posthog-node                                                 | his template-send PR merged           | 3 h      |
+| docs-api       | 13                             | PostHog/posthog.com       | send-api, posthog-node                                                 | —                                     | 3 h      |
+| skill          | 20, 14, 15                     | PostHog/context-mill      | send-api, posthog-node, docs-api (all for 15; 20 and 14 start at once) | —                                     | 7 h      |
+| wizard         | 16, 18                         | PostHog/wizard            | skill (needs 14)                                                       | —                                     | 4 h      |
+| docs-migrate   | 19                             | PostHog/posthog.com       | skill, wizard                                                          | —                                     | 2 h      |
+| task           | 17                             | none (Django admin, HITL) | —                                                                      | —                                     | —        |
 
 - A strand's native blocker is the strand that must finish first. A lane may start its first slices earlier once the slice it needs has merged; the table names those slices. Waiting time does not count toward the cap.
 - Attribution (01) sits in send-api because it edits the same send route as slice 04.
 - The docs are two strands, because slice 13 must come before skill v1 and slice 19 after it.
 - Slice 17 gates the live proofs of 16 and 18, not their code.
+- The Wizard's context-mill entries (`parentCommand: migrate`) sit in slice 14, so only the skill lane edits context-mill.
+- Release gates: posthog-node's template form waits for #120392 deployed, its code form for slice 06 deployed; slice 09's replay proof is a gap until then.
 
 ## Decisions recorded (2026-10-21)
 

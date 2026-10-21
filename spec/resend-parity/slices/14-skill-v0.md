@@ -4,7 +4,7 @@ Strand: skill
 Map: [Map: send code-managed email templates with one PostHog call](https://github.com/Silthus/posthog/issues/461)
 Spec: [SPEC.md](../SPEC.md), sections "Migration skill", "Testing Decisions"
 Repository: PostHog/context-mill
-Base: `feat/send-transactional-email-skill` (PostHog/context-mill#433), or `main` once #433 merges
+Base: slice 20's commits on `feat/send-transactional-email-skill` (PostHog/context-mill#433), or `main` once #433 merges
 
 ## What to build
 
@@ -20,6 +20,7 @@ A coding agent, or the Wizard's `wizard skill <id>`, runs a new `migrate-email` 
 - **Gates.** Never touch DNS or the Resend account. Never commit. The agent never creates a template.
 - Sender setup and error handling come from the same sources as `send-transactional-email`, through context-mill's `shared_docs` and `{{> partial}}` includes, so the bundle works without the send skill installed.
 - Wizard-only conventions sit in one optional section ("Inside the PostHog Wizard").
+- **Wizard entry.** The `migrate` group and the new `migrate-email` group declare `parentCommand: migrate` with `statsig` and `resend`, so slice 16 resolves `wizard migrate resend`. The Statsig entry keeps working with today's Wizard.
 
 ## Test seams
 
@@ -39,5 +40,5 @@ A coding agent, or the Wizard's `wizard skill <id>`, runs a new `migrate-email` 
 
 ## Blocked by
 
-- Native: none.
+- Native: slice 20.
 - Named: PostHog/context-mill#433, the base.

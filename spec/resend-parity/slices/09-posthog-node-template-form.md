@@ -37,7 +37,7 @@ The `emails` namespace on a real client, `fetch` mocked at the HTTP boundary, as
 
 ## Proof
 
-- Live on a local stack: a template send lands in the dev mail catcher; a replayed key returns the same `id`.
+- Live on a local stack: a template send lands in the dev mail catcher. A replayed key returns the same `id` once Harley's idempotency on the template route (PostHog/posthog#120446 and #120392) runs on the stack; until then the replay is a gap in the PR.
 - A table of each contract row against the Node behavior, so posthog-python's reviewer can check parity.
 
 ## Acceptance criteria
@@ -48,3 +48,4 @@ The `emails` namespace on a real client, `fetch` mocked at the HTTP boundary, as
 ## Blocked by
 
 - Native: none. The route exists on `master`.
+- Named, before release: PostHog/posthog#120392 deployed, so the key the SDK sends on every call is honored.

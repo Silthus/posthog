@@ -5,13 +5,14 @@ Map: [Map: send code-managed email templates with one PostHog call](https://gith
 Spec: [Spec: Resend parity](https://github.com/Silthus/posthog/blob/spec/resend-parity/spec/resend-parity/SPEC.md), section "Slicing: builders per strand"
 Contract: [PostHog/posthog#120921](https://github.com/PostHog/posthog/issues/120921)
 Repository: PostHog/context-mill
-Lane: one build lane, Opus 5.5 `high`, its own worktree, wall-time cap 6 h (waiting on other strands excluded). Prompt: [lanes/skill.md](https://github.com/Silthus/posthog/blob/spec/resend-parity/spec/resend-parity/lanes/skill.md)
-Blocked by (strands): send-api (slices 01, 06, 07), posthog-node (slice 10), docs-api (slice 13); all for slice 15. Slice 14 starts at once.
+Lane: one build lane, Opus 5.5 `high`, its own worktree, wall-time cap 7 h (waiting on other strands excluded). Prompt: [lanes/skill.md](https://github.com/Silthus/posthog/blob/spec/resend-parity/spec/resend-parity/lanes/skill.md)
+Blocked by (strands): send-api (slices 01, 06, 07), posthog-node (slice 10), docs-api (slice 13); all for slice 15. Slices 20 and 14 start at once; #433 merges only after the posthog-node release with slice 10.
 Waits on (Harley): none
 
 ## Slices, in order
 
-- [ ] Slice 14: [Resend migration skill v0: find every Resend send, set up the sender, and report](https://github.com/Silthus/posthog/blob/spec/resend-parity/spec/resend-parity/slices/14-skill-v0.md). PR: a draft PR stacked on PostHog/context-mill#433.
+- [ ] Slice 20: [send-transactional-email skill: teach the flat contract](https://github.com/Silthus/posthog/blob/spec/resend-parity/spec/resend-parity/slices/20-send-skill-flat-contract.md). PR: commits on PostHog/context-mill#433, which is unreleased.
+- [ ] Slice 14: [Resend migration skill v0: find every Resend send, set up the sender, and report](https://github.com/Silthus/posthog/blob/spec/resend-parity/spec/resend-parity/slices/14-skill-v0.md). PR: a draft PR stacked on PostHog/context-mill#433. It also carries the Wizard's `parentCommand: migrate` entries.
 - [ ] Slice 15: [Resend migration skill v1: move every supported site to posthog.emails.send](https://github.com/Silthus/posthog/blob/spec/resend-parity/spec/resend-parity/slices/15-skill-v1.md). PR: a draft PR stacked on 14.
 
 ## Done when

@@ -1,10 +1,10 @@
 Lane prompt: strand wizard (the Wizard migrate family)
 
-Cast: Opus 5.5, `high`. Worktree: a new worktree of PostHog/wizard from `main`, plus one of PostHog/context-mill for the companion entry. Wall-time cap: 4 h of building; time spent waiting on another strand does not count.
+Cast: Opus 5.5, `high`. Worktree: a new worktree of PostHog/wizard from `main`. Wall-time cap: 4 h of building; time spent waiting on another strand does not count.
 
 You build the strand **wizard** of map [#461](https://github.com/Silthus/posthog/issues/461) alone, slice by slice, in this order:
 
-1. Slice 16: `slices/16-wizard-migrate-family.md`. PR shape: a draft PR on PostHog/wizard `main`, plus a companion draft PR in PostHog/context-mill.
+1. Slice 16: `slices/16-wizard-migrate-family.md`. PR shape: a draft PR on PostHog/wizard `main`. Its context-mill entries come from slice 14.
 2. Slice 18: `slices/18-wizard-summary-and-offer.md`. PR shape: a draft PR stacked on 16.
 
 Read first:

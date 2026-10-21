@@ -28,7 +28,7 @@ Base: slice 05's branch
 
 ## Acceptance criteria
 
-- [ ] No path queues a send twice for one key.
+- [ ] A retry with the same key queues no second send. The store's own limit stays: a crash between the reservation and the queue write, or a failed completion write followed by a retry after the 60 s pending window, can queue a second send (`idempotency-keys.ts`, `PENDING_TTL_SECONDS` and `markQueued`). The docs say so (slice 13).
 - [ ] The `409` codes for in flight and for a key edited in PostHog differ.
 
 ## Blocked by

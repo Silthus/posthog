@@ -11,7 +11,10 @@ Base: slice 14's branch, or `main` once it merges
 The `migrate-email` / `resend` skill moves every supported Resend call site to posthog-node:
 
 - **Client setup:** add `posthog-node` at the release with the code form, with `secretKey` and `migratedFrom: 'resend'` once on the client.
-- **Hosted Resend templates** become local templates in the app's code: the skill writes each one into the repository, rewrites `{{{NAME}}}` to `{{ variables.name }}`, and the call site sends `templateKey`, `subject`, `html` and `templateData`. The first send uploads it; the agent never creates a template.
+- **Hosted Resend templates** become local templates in the app's code: the skill writes each one into the repository and the call site sends `templateKey`, `subject`, `html` and `templateData`. The first send uploads it; the agent never creates a template.
+  - Variables keep their names: `{{{FIRST_NAME}}}` becomes `{{ variables.FIRST_NAME }}`, and the call site's `variables` move to `templateData` unchanged.
+  - A Resend fallback becomes Liquid's `default` filter.
+  - PostHog's Liquid escapes HTML in output. A variable the app fills with HTML, or any template syntax beyond plain variables and fallbacks, keeps the site on Resend with a report row.
 - **`html:` and `text:` sites** send rendered content with a `templateKey` named for the kind of email.
 - **React sites** render in the app (`html: await render(<Welcome />)` with `@react-email/render`, added if missing) and send rendered content. The component stays unchanged.
 - `from`, `replyTo` and `idempotencyKey` move as they are. `distinctId` comes from the app's existing identify call.
@@ -22,6 +25,7 @@ The `migrate-email` / `resend` skill moves every supported Resend call site to p
 ## Test seams
 
 - Bundle build test and ranking, as in v0.
+- A hosted-template fixture: one Resend template with a plain variable, a fallback, and an HTML-valued variable. The first two convert and render as before; the third stays on Resend with a report row.
 - Agent runs on the happy fixture (PostHog/wizard-workbench#2221) and the hard fixture (Silthus/next-session: REST, idempotency key, `.ics` attachment), judged by the diff: no `from 'resend'` left on the happy app, `posthog.emails.send` count equals the old send count, the project typechecks; on the hard app every unsupported site is unchanged with a reason and `resend` stays a dependency.
 
 ## Proof

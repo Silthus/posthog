@@ -47,4 +47,4 @@ await posthog.emails.send({
 ## Blocked by
 
 - Native: slices 09 and 04.
-- Named: PostHog/posthog#118924 merged, before release.
+- Named, before release: PostHog/posthog#118924 merged, and slice 06 deployed, so a retried code send is not queued twice.
