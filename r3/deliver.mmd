@@ -7,7 +7,7 @@ sequenceDiagram
   participant St as EmailStatus
   participant T as Email tracking
   Q->>W: job with state.send
-  Note over W: fixed slot reads state.send,<br/>no second render
+  Note over W: fixed slot reads state.send,<br/>no second render<br/>Q6: tracking policy from state.send
   W->>Pol: check(send, delivery)
   alt skip: pause, suppression, preferences, sender
     Pol-->>W: skip reason
@@ -21,11 +21,11 @@ sequenceDiagram
       W->>Q: reschedule
     else accepted
       SES-->>W: MessageId
-      W->>St: record(sent, MessageId), wait for Kafka
+      W->>St: record(sent, MessageId), wait for Kafka<br/>$email_message_id on sent event
       W->>Q: ack
     end
   end
   SES-)T: SNS: delivered, bounced, complained
-  Note over T: verify signature, message_id<br/>from signed tracking header
+  Note over T: verify signature, message_id<br/>from signed tracking header<br/>Q6: capture policy from the header
   T->>St: record(feedback), wait for Kafka
   T-->>SES: 200, or 5xx so SNS retries

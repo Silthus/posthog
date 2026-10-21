@@ -7,8 +7,8 @@ sequenceDiagram
   participant Pol as Email send policy
   participant Q as Cyclotron queue
   participant St as EmailStatus
-  SDK->>Dj: POST send/email, Idempotency-Key
-  Note over Dj: key auth, hog_flow:write, sender limits,<br/>SendSource, EmailSendCommand
+  SDK->>Dj: POST send/email, distinctId, Idempotency-Key
+  Note over Dj: key auth, hog_flow:write, sender limits,<br/>SendSource, EmailSendCommand<br/>Q6: distinct_id + identity mode
   Dj->>CDP: command + JWT
   CDP->>Idem: reserve(key, fingerprint)
   alt key already used
