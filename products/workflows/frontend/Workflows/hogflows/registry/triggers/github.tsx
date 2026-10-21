@@ -90,8 +90,8 @@ function StepTriggerConfigurationGithubEvent({ node }: { node: any }): JSX.Eleme
     return (
         <div className="flex flex-col gap-2 w-full">
             <p className="mb-0 text-sm text-muted-alt">
-                This workflow runs once for each matching GitHub delivery. Runs have no associated person, so
-                person-dependent steps are unavailable.
+                This workflow runs for matching GitHub deliveries, subject to the frequency setting below. Runs have no
+                associated person, so person-dependent steps are unavailable.
             </p>
 
             <LemonField.Pure
@@ -110,7 +110,7 @@ function StepTriggerConfigurationGithubEvent({ node }: { node: any }): JSX.Eleme
             <LemonField.Pure
                 label="What starts a run"
                 error={validationResult?.errors?.eventTypes}
-                info="Pick at least one. Every delivery of that kind on the repository starts a run."
+                info="Pick at least one. Matching deliveries of that kind can start a run."
             >
                 <LemonInputSelect
                     mode="multiple"
@@ -232,4 +232,10 @@ registerTriggerType({
         return { valid: true, errors: {} }
     },
     ConfigComponent: StepTriggerConfigurationGithubEvent,
+    frequencyOptions: [
+        { value: null, label: 'Every time the trigger fires' },
+        { value: '{event.properties.repository}#{event.properties.number}', label: 'Once per pull request' },
+    ],
+    frequencyDescription:
+        'Limit how often each pull request can start this workflow. Use once per pull request with events that include a pull request number.',
 })

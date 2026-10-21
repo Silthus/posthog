@@ -77,6 +77,16 @@ describe('github event trigger', () => {
     })
 
     describe('registry entry', () => {
+        it('offers per-pull-request frequency with a configurable time window', () => {
+            expect(getTriggerType().frequencyOptions).toEqual([
+                { value: null, label: 'Every time the trigger fires' },
+                {
+                    value: '{event.properties.repository}#{event.properties.number}',
+                    label: 'Once per pull request',
+                },
+            ])
+        })
+
         it.each([
             { name: 'no repository', properties: [], valid: false },
             {

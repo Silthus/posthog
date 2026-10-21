@@ -10,6 +10,7 @@ import { HOG_FLOW_MASK_EXAMPLES, HOG_MASK_EXAMPLES } from '../../_tests/examples
 import { createExampleInvocation, createHogExecutionGlobals, createHogFunction } from '../../_tests/fixtures'
 import { createExampleHogFlowInvocation } from '../../_tests/fixtures-hogflows'
 import { createCdpValkeyShadowPools } from '../../cdp-services'
+import { compileHog } from '../../templates/compiler'
 import { CyclotronJobInvocationHogFunction, HogFunctionType } from '../../types'
 import { BASE_REDIS_KEY, HogMaskerService } from './hog-masker.service'
 
@@ -439,6 +440,46 @@ describe('HogMasker', () => {
                     const res = await masker.filterByMasking(batch)
                     expect(res.notMasked).toHaveLength(1)
                     expect(res.masked).toHaveLength(2)
+                })
+
+                it('masks repeated GitHub deliveries per repository and pull request', async () => {
+                    const flow: HogFlow = {
+                        ...hogFlowEvery,
+                        trigger: {
+                            type: 'internal-event',
+                            filters: {
+                                source: 'internal-events',
+                                events: [{ id: '$github_event_received', type: 'events' }],
+                            },
+                        },
+                        trigger_masking: {
+                            hash: '{event.properties.repository}#{event.properties.number}',
+                            bytecode: await compileHog(
+                                "return f'{event.properties.repository}#{event.properties.number}'"
+                            ),
+                            ttl: 7200,
+                            threshold: null,
+                        },
+                    }
+                    const delivery = (
+                        repository: string,
+                        number: number
+                    ): ReturnType<typeof createExampleHogFlowInvocation> => {
+                        const invocation = createExampleHogFlowInvocation(flow)
+                        invocation.state.event.event = '$github_event_received'
+                        invocation.state.event.properties = { repository, number }
+                        invocation.person = undefined
+                        return invocation
+                    }
+                    const first = delivery('example/widgets', 42)
+                    const duplicate = delivery('example/widgets', 42)
+                    const otherPr = delivery('example/widgets', 43)
+                    const otherRepository = delivery('example/tools', 42)
+
+                    expect((await masker.filterByMasking([first])).notMasked).toEqual([first])
+                    const next = await masker.filterByMasking([duplicate, otherPr, otherRepository])
+                    expect(next.masked).toEqual([duplicate])
+                    expect(next.notMasked).toEqual([otherPr, otherRepository])
                 })
 
                 it('release() undoes exactly the claims a call made, so a replay is not masked', async () => {
