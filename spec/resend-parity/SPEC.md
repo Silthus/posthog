@@ -4,7 +4,7 @@ Answers: [Spec Resend parity and slice it into PRs](https://github.com/Silthus/p
 Built on: the product decisions of [Grill Resend parity](https://github.com/Silthus/posthog/issues/525), the structure of [Shape the architecture of Resend parity](https://github.com/Silthus/posthog/issues/526) ([architecture doc](https://github.com/Silthus/posthog/blob/0f0bc0f5f32d7835f434dba7c1d6e43cb182f3ec/docs/architecture/resend-parity.md), five ADRs), and the shared SDK contract [PostHog/posthog#120921](https://github.com/PostHog/posthog/issues/120921).
 Folds in: research #522, #523, #524, #527, #529, #532, #533, #534, and [Send attribution](https://github.com/Silthus/posthog/issues/530) (draft PostHog/posthog#120628).
 
-Status: draft on branch `spec/resend-parity`, before Michael's approval. Revision 2: posthog-node follows the "Client interface (both SDKs)" section of #120921.
+Status: draft on branch `spec/resend-parity`, before Michael's approval. Revision 3: posthog-node follows the "Client interface (both SDKs)" section of #120921, with a `key` on every send (Michael and Harley, 2026-10-21; supersedes ADR 0004).
 
 ## Problem Statement
 
@@ -44,10 +44,14 @@ const { data, error } = await posthog.emails.send({
 // data: { id, warnings } once PostHog stored the send in its queue; error: { name, code, message, why, fix, statusCode, docsUrl, field }
 ```
 
-A stored template keeps working, by its key only:
+A library template keeps working. The send still names the email with its own `key`; the helper names the template by its key or id:
 
 ```ts
-await posthog.emails.send({ to: 'jane@example.com', content: libraryTemplate('welcome', { firstName: 'Jane' }) })
+await posthog.emails.send({
+  key: 'welcome',
+  to: 'jane@example.com',
+  content: libraryTemplate('welcome', { firstName: 'Jane' }),
+})
 ```
 
 - `202` means PostHog stored the send in its queue for delivery, not that the provider accepted it or that it was delivered.
@@ -83,9 +87,9 @@ Sending from Node
 18. As an engineer, I want `posthog.emails.send` on the PostHog client I already use, so that I add no new client.
 19. As an engineer, I want to send content written in my code with `html()` or `text()`, so that a Resend `html:` site is a one-line change.
 20. As an engineer, I want an `html()` send without `text` to get a plain-text part, so that every email has a text fallback without extra work.
-21. As an engineer, I want to name each kind of email with a `key`, so that each one gets its own logs, metrics and timeline in PostHog.
-22. As an engineer, I want to send a stored template with `libraryTemplate(key, data)`, so that templates edited in PostHog stay sendable.
-23. As an engineer, I want the type system to refuse a `key` next to a library send and a code send without one, so that a wrong combination does not compile.
+21. As an engineer, I want to name each kind of email with a `key` on every send, library sends included, so that each one gets its own logs, metrics and timeline in PostHog.
+22. As an engineer, I want to send a library template with `libraryTemplate(template, data)`, by its key or id, so that templates edited in PostHog stay sendable.
+23. As an engineer, I want the type system to refuse a send without a `key` or without exactly one helper's `content`, so that a wrong combination does not compile.
 24. As an engineer, I want `from` and `replyTo` on every send, so that a per-call sender from Resend keeps working.
 25. As an engineer, I want a clear error when `from` is not a verified sender, so that I fix the sender, not the call.
 26. As an engineer, I want `distinctId` optional and the address used when it is missing, so that a send needs only an address.
@@ -128,16 +132,22 @@ Marks: 👤 Michael decided, 👍 Michael accepted the recommendation, 🤖 sett
 ### Ownership
 
 - 👤 **Split (2026-10-21)** Harley owns the send API in PostHog/posthog, built directly there on his idempotency stack (PostHog/posthog#120446, #120392, #120510) and the send route of PostHog/posthog#118924. He also owns posthog-python. This map owns posthog-node on PostHog/posthog-js#5312, the context-mill skill, the Wizard run, the docs, and send attribution.
-- 👤 **Contract** [PostHog/posthog#120921](https://github.com/PostHog/posthog/issues/120921) is the source of truth for the HTTP surface: host, path, auth, request fields, `202`, errors, idempotency, retries and the status read. This spec pins the two points it leaves open (below) and lists every difference from #525 and #526 for Michael.
+- 👤 **Contract** [PostHog/posthog#120921](https://github.com/PostHog/posthog/issues/120921) is the source of truth for the HTTP surface: host, path, auth, request fields, `202`, errors, idempotency, retries and the status read. This spec pins the three points it leaves open (below: the read path, text derivation, and which workflow a library send runs on) and lists every difference from #525 and #526 for Michael.
 - 🤖 **Our tickets wait on Harley's PRs** as named dependencies, because they are pull requests in PostHog/posthog, not issues on this tracker. Native blocking covers only the tickets of this map and #530.
 
 ### Contract pins (left open by #120921)
 
 - 📌 **Status read path** `GET /api/projects/@current/messaging/emails/{message_id}/`, on the same `messaging` prefix as the send. It needs `hog_flow:read` and shares the send's throttles (#526). `message_id` is the id from the send's `202`.
-- 📌 **Code content on the wire** A code send carries a top-level `key` and `content: { subject, html?, text? }` in place of `template`. Exactly one of `template` and `content`.
-  - `key` follows the template key rule of PostHog/posthog#118924: `^[a-zA-Z0-9_-]+$`, at most 400 characters.
+- 🤖 **`key` on every send** A top-level `key` names the email on every request, library sends included, and the body carries exactly one of `template` and `content` (#120921, revised 2026-10-21). A library send is `template: { key } | { id }` plus `message_data`; a code send is `content: { subject, html?, text? }`. The idempotency fingerprint covers the `key` and the library template.
+  - 📌 `key` follows the template key rule of PostHog/posthog#118924: `^[a-zA-Z0-9_-]+$`, at most 400 characters.
   - `subject` is required. At least one of `html` and `text` is required.
   - 📌 **Text derivation on the server.** When only `html` is present, the server derives `text`, for every caller: both SDKs, REST and the skill's `fetch` calls. No SDK derives it, so posthog-node and posthog-python cannot drift (#120921 recommends the server). This reverses #525's "Text fallback" line, which had posthog-node derive it with `html-to-text`. It also makes `text` optional on the wire, where #120921's send table still writes it as required; its mapping table already writes `text?`.
+- 📌 **The email `key` picks the workflow, the template only feeds the content.** Sends stay on one transactional workflow per email (#526). A library send whose `key` differs from its template's key works like this:
+  - The server finds the workflow by `key`. A `key` that names a template uses that template's transactional workflow, as #118924 does today. A `key` with no template of its own gets one workflow, made on its first send under the same lock as a code send's.
+  - The workflow holds no copy of the content. cdp-api stamps the content source on `state.send` (`AcceptedSend`): the library template's id and its pinned published version, or the code content. The worker renders from `state.send` through the fixed slot (#526). So one workflow carries sends of any template under its key, and its logs and metrics group by the email.
+  - A library send never writes a template. Only a code send writes the "Managed by code" template under its `key`.
+  - Changing the template under a `key` is allowed and keeps the key's history in one place. A replay of the same idempotency key with another template answers `422` (the fingerprint covers it).
+  - Where a `key` without a template stores its workflow link (a key field on the workflow, or a key row beside the templates) is Harley's storage call. The behavior above is the pin.
 - 🤖 **`reply_to` on the wire** Always a list. The SDK turns a string into a one-item list (#120921).
 - 🤖 **Snake case on the wire, camel case in Node** `from`, `reply_to`, `capture_engagement`, `identifiers.distinct_id` on the wire; `from`, `replyTo`, `captureEngagement`, `distinctId` in posthog-node.
 
@@ -152,7 +162,7 @@ Marks: 👤 Michael decided, 👍 Michael accepted the recommendation, 🤖 sett
 ### Differences the contract does not cover (raised, not decided here)
 
 - **A code send to a key edited in PostHog.** #525 locked "a body send to a key edited in PostHog returns 409 with why and fix" (Key ownership). #120921 lists no such `409`. The spec keeps #525's rule and asks Harley to add the row to the contract. posthog-node does not retry it.
-- **A code send to a key uploaded from an HTML file.** The decisions do not say. 📌 The spec treats it like a key edited in PostHog: a key has one content source (ADR 0004), so a code send to it answers the same `409`. Harley's call to confirm.
+- **A code send to a key uploaded from an HTML file.** The decisions do not say. 📌 The spec treats it like a key edited in PostHog: a code send writes the "Managed by code" template under its `key`, and it must not overwrite a template whose content lives elsewhere, so it answers the same `409`. Harley's call to confirm. A library send under that `key` is fine, because it writes no template.
 - **Restricted-key error name.** #525 named a send refused by a key limit `restricted_api_key`, Resend's name. #120921 leaves restricted keys out of the contract, and its table would map that `400` to `validation_error`. The spec asks Harley to give the key-limit codes their own row when restricted keys join the contract.
 
 ### posthog-node (ours)
@@ -163,7 +173,11 @@ Builds on PostHog/posthog-js#5312, an unreleased draft, so its `template` field 
 
 ```ts
 export type CodeContent = Readonly<{ kind: 'code'; subject: string; html?: string; text?: string }>
-export type LibraryTemplate = Readonly<{ kind: 'library'; key: string; data: Record<string, unknown> }>
+export type LibraryTemplate = Readonly<{
+  kind: 'library'
+  template: { key: string } | { id: string }
+  data: Record<string, unknown>
+}>
 
 export type SendEmailOptions = {
   to: string
@@ -172,11 +186,13 @@ export type SendEmailOptions = {
   replyTo?: string | string[]
   idempotencyKey?: string
   captureEngagement?: boolean
-} & ({ key: string; content: CodeContent } | { key?: never; content: LibraryTemplate })
+  key: string
+  content: CodeContent | LibraryTemplate
+}
 ```
 
-- 🤖 **Content** One `content` field with exactly one helper: `html(subject, html, text?)`, `text(subject, text)` and `libraryTemplate(key, data?)` (#120921). This is Michael's one-field decision on #526 with the contract's positional arguments.
-- 👍 **Library key** A library send names its key only inside `libraryTemplate()`. A code send carries `key`. There is no second key (ADR 0004).
+- 🤖 **Content** One `content` field from exactly one pure helper: `html(subject, html, text?)`, `text(subject, text)` and `libraryTemplate(template, data?)` (#120921). `libraryTemplate()` sends `{ id }` when its argument is a UUID and `{ key }` otherwise. This is Michael's one-field decision on #526 with the contract's positional arguments.
+- 👤 **`key` on every send** (Michael and Harley, 2026-10-21) `key` is required on every send and names the email; the library template is named inside `libraryTemplate()`. This replaces #526's "Library key" decision and supersedes ADR 0004 ("there is no second key").
 - 📌 **Text fallback** `html()` without `text` sends no `text`; the server derives it (Contract pins). No `html-to-text` dependency.
 - 👍 **`distinctId`** Optional. A send without it uses the address. The SDK never reads `withContext` for a send (ADR 0003). The email lookup by address is a follow-up after the production proofs (#534).
 - 👤 **Capture default** `captureEngagement` is on unless the caller sets it to `false`. The JSDoc and docs say the events count as analytics events (#533).
@@ -193,7 +209,7 @@ export type SendEmailOptions = {
 - 👍 **Home** A new skill group `migrate-email` with a `resend` variant, beside `migrate`. It links to `send-transactional-email`'s references (PostHog/context-mill#433) and does not copy them (#525, #529).
 - 👍 **Steps** #522's eight steps. Unsupported call sites stay on Resend and appear in the report.
 - 👍 **One text for every host** The procedure lives in plain reference files. Wizard-only conventions (`wizard_ask`, `[STATUS]`, `[ABORT]`, `set_env_values`) sit in one optional section (#529).
-- 👍 **v0, before the SDK** Detects, lists, classifies and reports. Sets up the sender and DNS, and hands over the key. Converts hosted-template and simple HTML sends to stored templates, uploaded by key, and sent with `fetch` to the send route by `template: { key }`, carrying `X-PostHog-Migrated-From: resend` and the app's user ID. React, attachment and idempotency-key sites stay on Resend until the SDK and Harley's idempotency land.
+- 👍 **v0, before the SDK** Detects, lists, classifies and reports. Sets up the sender and DNS, and hands over the key. Converts hosted-template and simple HTML sends to stored templates, uploaded by key, and sent with `fetch` to the send route with a top-level `key` equal to the uploaded template's key and `template: { key }`, carrying `X-PostHog-Migrated-From: resend` and the app's user ID. React, attachment and idempotency-key sites stay on Resend until the SDK and Harley's idempotency land.
 - 👍 **v1** Moves everything, v0's own `fetch` calls included, to `posthog.emails.send` with `content`. Proves send, engagement and product event on one person (#532). React sites move only if `react()` is charted; otherwise they stay on Resend in the report.
 - 👍 **Machine-readable summary** The report ends with a summary block: `from`, `sites_found`, `sites_rewritten`, `sites_left`, `templates_uploaded`, `dns_ready`. The Wizard reads it.
 - 👍 **Tier check** The skill checks the project's sending tier before cutover. No pricing or tier code in this map.
@@ -220,18 +236,18 @@ export type SendEmailOptions = {
 
 These are the slices #526 agreed, in its order. Harley plans and builds them; this map charts no ticket for them. Each line names the seam and the tickets of ours that wait on it.
 
-| #   | Slice                                                                                                                                                                                                                                               | Seam (#526)                                             | Our tickets that wait on it                             |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------- |
-| S1  | Send policy refactor (R1): one `EmailSendPolicy.check(send, phase)`, no behavior change                                                                                                                                                             | `EmailSendPolicy`                                       | none directly                                           |
-| S2  | `EmailSendCommand` and the typed CDP outcome (R2)                                                                                                                                                                                                   | `EmailSendCommand`, `Queued \| Rejected \| Unavailable` | none directly                                           |
-| S3  | `idempotentEnqueue` over the store (R3), after his stack lands                                                                                                                                                                                      | `idempotentEnqueue`                                     | 03 (live proof of retries)                              |
-| S4  | Code content on the send route: `key` + `content`, server-side text derivation, `from`, `reply_to`, `capture_engagement`, the address fallback, `AcceptedSend` on the run state, the fixed slot, tracking header v3, UTMs on for new code templates | `AcceptedSend`, the fixed slot                          | 03, 04, 05, 06                                          |
-| S5  | Idempotency wiring: the shared `transactional-email` scope and the fingerprint with identity and content; `rate_limit_exceeded` with `Retry-After`                                                                                                  | `idempotentEnqueue` fingerprint                         | 03, 06                                                  |
-| S6  | Checks before queueing (every policy code is a `400` with why and fix) and pinned content for library sends                                                                                                                                         | `check(send, 'admission')`                              | 06 (report rows for refused sends)                      |
-| S7  | Attachments: worker raw MIME, cdp-api caps with bytes kept out of run records, Django validation; 512KB per email                                                                                                                                   | `AcceptedSend.attachments`                              | posthog-node attachments, not charted (Open decision 2) |
-| S8  | Restricted keys: storage, the check before queueing and at delivery, the key modal                                                                                                                                                                  | `key_limits`, `AcceptedSend.keyLimits`                  | 06 (staging key step), 10                               |
-| S9  | Status record: ClickHouse table, status writers, `GET /api/projects/@current/messaging/emails/{message_id}/`                                                                                                                                        | `EmailStatusWriter`, `get_email_status`                 | 12                                                      |
-| S10 | posthog-python on the same contract, User-Agent `posthog-python/<version>`                                                                                                                                                                          | #120921                                                 | 01 counts its User-Agent                                |
+| #   | Slice                                                                                                                                                                                                                                                                                                 | Seam (#526)                                             | Our tickets that wait on it                             |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------- |
+| S1  | Send policy refactor (R1): one `EmailSendPolicy.check(send, phase)`, no behavior change                                                                                                                                                                                                               | `EmailSendPolicy`                                       | none directly                                           |
+| S2  | `EmailSendCommand` and the typed CDP outcome (R2)                                                                                                                                                                                                                                                     | `EmailSendCommand`, `Queued \| Rejected \| Unavailable` | none directly                                           |
+| S3  | `idempotentEnqueue` over the store (R3), after his stack lands                                                                                                                                                                                                                                        | `idempotentEnqueue`                                     | 03 (live proof of retries)                              |
+| S4  | The body route: `key` on every send, code `content`, the key-picks-workflow mapping (Contract pins), server-side text derivation, `from`, `reply_to`, `capture_engagement`, the address fallback, `AcceptedSend` on the run state, the fixed slot, tracking header v3, UTMs on for new code templates | `AcceptedSend`, the fixed slot                          | 02, 03, 04, 05, 06                                      |
+| S5  | Idempotency wiring: the shared `transactional-email` scope and the fingerprint with the email `key`, the library template, identity and content; `rate_limit_exceeded` with `Retry-After`                                                                                                             | `idempotentEnqueue` fingerprint                         | 03, 06                                                  |
+| S6  | Checks before queueing (every policy code is a `400` with why and fix), and pinned content for library sends                                                                                                                                                                                          | `check(send, 'admission')`                              | 06 (report rows for refused sends)                      |
+| S7  | Attachments: worker raw MIME, cdp-api caps with bytes kept out of run records, Django validation; 512KB per email                                                                                                                                                                                     | `AcceptedSend.attachments`                              | posthog-node attachments, not charted (Open decision 2) |
+| S8  | Restricted keys: storage, the check before queueing and at delivery, the key modal                                                                                                                                                                                                                    | `key_limits`, `AcceptedSend.keyLimits`                  | 06 (staging key step), 10                               |
+| S9  | Status record: ClickHouse table, status writers, `GET /api/projects/@current/messaging/emails/{message_id}/`                                                                                                                                                                                          | `EmailStatusWriter`, `get_email_status`                 | 12                                                      |
+| S10 | posthog-python on the same contract, User-Agent `posthog-python/<version>`                                                                                                                                                                                                                            | #120921                                                 | 01 counts its User-Agent                                |
 
 Notes from #526 and its research for these slices, offered to Harley, not decided for him:
 
@@ -276,21 +292,21 @@ A good test drives the public surface a user touches and asserts what they obser
 
 ## Tickets (this map)
 
-| #   | Ticket                                                                                                     | Repo                                  | Base                                         | Blocked by (native)                 | Waits on (named)                                       |
-| --- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------- | ----------------------------------- | ------------------------------------------------------ |
-| —   | [Send attribution](https://github.com/Silthus/posthog/issues/530) (existing, draft PostHog/posthog#120628) | PostHog/posthog                       | `master`                                     | —                                   | —                                                      |
-| 01  | Attribution: `posthog-python/` as an SDK, and the contract's send route (Open decision 4)                  | PostHog/posthog                       | `feat/email-send-attribution` (#120628)      | —                                   | PostHog/posthog#118924 (route half)                    |
-| 02  | Skill v0: `migrate-email` / `resend`                                                                       | PostHog/context-mill                  | `feat/send-transactional-email-skill` (#433) | #530, 01 (if Open decision 4 holds) | PostHog/posthog#118924                                 |
-| 03  | posthog-node PR 1: `emails.send` per #120921's client interface                                            | PostHog/posthog-js                    | `feat/node-emails-send` (#5312)              | —                                   | Harley S4, S5                                          |
-| 04  | Docs: code content, errors, idempotency on the API page                                                    | PostHog/posthog.com                   | `docs/transactional-email-api` (#21306)      | 03                                  | Harley S4                                              |
-| 05  | posthog-node: `react()` language extra (Open decision 1)                                                   | PostHog/posthog-js                    | ticket 03's branch                           | 03                                  | Harley S4 (live proof)                                 |
-| 06  | Skill v1: every site on `posthog.emails.send`                                                              | PostHog/context-mill                  | ticket 02's branch                           | 02, 03, 04, 05 (if charted)         | Harley S4, S5                                          |
-| 07  | Wizard: the `migrate` family                                                                               | PostHog/wizard (+ context-mill entry) | `main`                                       | 02                                  | —                                                      |
-| 08  | Wizard OAuth app scope ceiling (ops task)                                                                  | none (Django admin, both regions)     | —                                            | —                                   | —                                                      |
-| 09  | Wizard: migration summary event and the Resend offer                                                       | PostHog/wizard                        | ticket 07's branch                           | 02, 07                              | —                                                      |
-| 10  | Docs: "Migrate from Resend" page                                                                           | PostHog/posthog.com                   | `master`                                     | 06, 07                              | —                                                      |
-| 11  | posthog-node PR 2: upload the React preview render (Open decision 1)                                       | PostHog/posthog-js                    | ticket 05's branch                           | 05                                  | Harley: refusal of a key-only send to a preview render |
-| 12  | posthog-node: `emails.get`                                                                                 | PostHog/posthog-js                    | ticket 03's branch                           | 03                                  | Harley S9 (live proof)                                 |
+| #   | Ticket                                                                                                     | Repo                                  | Base                                         | Blocked by (native)                 | Waits on (named)                                      |
+| --- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------- | ----------------------------------- | ----------------------------------------------------- |
+| —   | [Send attribution](https://github.com/Silthus/posthog/issues/530) (existing, draft PostHog/posthog#120628) | PostHog/posthog                       | `master`                                     | —                                   | —                                                     |
+| 01  | Attribution: `posthog-python/` as an SDK, and the contract's send route (Open decision 4)                  | PostHog/posthog                       | `feat/email-send-attribution` (#120628)      | —                                   | PostHog/posthog#118924 (route half)                   |
+| 02  | Skill v0: `migrate-email` / `resend`                                                                       | PostHog/context-mill                  | `feat/send-transactional-email-skill` (#433) | #530, 01 (if Open decision 4 holds) | PostHog/posthog#118924, Harley S4 (`key`)             |
+| 03  | posthog-node PR 1: `emails.send` per #120921's client interface                                            | PostHog/posthog-js                    | `feat/node-emails-send` (#5312)              | —                                   | Harley S4, S5                                         |
+| 04  | Docs: code content, errors, idempotency on the API page                                                    | PostHog/posthog.com                   | `docs/transactional-email-api` (#21306)      | 03                                  | Harley S4                                             |
+| 05  | posthog-node: `react()` language extra (Open decision 1)                                                   | PostHog/posthog-js                    | ticket 03's branch                           | 03                                  | Harley S4 (live proof)                                |
+| 06  | Skill v1: every site on `posthog.emails.send`                                                              | PostHog/context-mill                  | ticket 02's branch                           | 02, 03, 04, 05 (if charted)         | Harley S4, S5                                         |
+| 07  | Wizard: the `migrate` family                                                                               | PostHog/wizard (+ context-mill entry) | `main`                                       | 02                                  | —                                                     |
+| 08  | Wizard OAuth app scope ceiling (ops task)                                                                  | none (Django admin, both regions)     | —                                            | —                                   | —                                                     |
+| 09  | Wizard: migration summary event and the Resend offer                                                       | PostHog/wizard                        | ticket 07's branch                           | 02, 07                              | —                                                     |
+| 10  | Docs: "Migrate from Resend" page                                                                           | PostHog/posthog.com                   | `master`                                     | 06, 07                              | —                                                     |
+| 11  | posthog-node PR 2: upload the React preview render (Open decision 1)                                       | PostHog/posthog-js                    | ticket 05's branch                           | 05                                  | Harley: refusal of a library send of a preview render |
+| 12  | posthog-node: `emails.get`                                                                                 | PostHog/posthog-js                    | ticket 03's branch                           | 03                                  | Harley S9 (live proof)                                |
 
 Ticket 08 gates the live proof of 07 and 09, not their code. Tickets 05 and 11 exist only if Open decision 1 holds.
 

@@ -13,7 +13,7 @@ A coding agent, or the Wizard's `wizard skill <id>`, runs a new `migrate-email` 
 - **Detect and stop early.** No `resend` or `@react-email/*` in the package files and no `from 'resend'` or `new Resend(` in source: stop before any edit.
 - **Preflight.** Check that the transactional email API and the upload and send tools are on for the project. If a flag is off, stop and name it.
 - **Inventory and classify** every send call site (#522's steps): moved now, or left on Resend with a reason. Left on Resend in v0: React Email sites, attachments, idempotency keys (until the SDK and Harley's idempotency land), and every Resend-only field (`cc`, `bcc`, `tags`, `headers`, `scheduledAt`, `topicId`, `batch.send`, more than one `to`). Never drop a field.
-- **Move** hosted-template and simple HTML sends: upload each template by key with `source` (repository, path, ref), rewrite `{{{NAME}}}` to `{{ variables.name }}`, and rewrite the call site to `fetch` the send route `POST /api/projects/@current/messaging/send/email/` with `template: { key }`, `message_data`, `identifiers.distinct_id` from the app's existing identify call when it has one, and the header `X-PostHog-Migrated-From: resend`.
+- **Move** hosted-template and simple HTML sends: upload each template by key with `source` (repository, path, ref), rewrite `{{{NAME}}}` to `{{ variables.name }}`, and rewrite the call site to `fetch` the send route `POST /api/projects/@current/messaging/send/email/` with a top-level `key` equal to the uploaded template's key, `template: { key }`, `message_data`, `identifiers.distinct_id` from the app's existing identify call when it has one, and the header `X-PostHog-Migrated-From: resend`.
 - **Sender and DNS.** List the `from` addresses, create and verify senders through the MCP sender tools when they are on, otherwise send the person to the UI. Keep Resend's records; pick a MAIL FROM label that is not Resend's. Hand the DNS records or the Domain Connect link to the person.
 - **Key.** Ask the person for a project secret key with `hog_flow:write` and store it as `POSTHOG_PROJECT_SECRET_API_KEY`. List every other place `RESEND_API_KEY` appears.
 - **Tier.** Check the project's sending tier before cutover and say so in the report.
@@ -44,7 +44,7 @@ A coding agent, or the Wizard's `wizard skill <id>`, runs a new `migrate-email` 
 ## Blocked by
 
 - Native: [Send attribution](https://github.com/Silthus/posthog/issues/530), and ticket 01 if Open decision 4 holds (attribution on the route this skill calls).
-- Named: PostHog/posthog#118924 (upload and send by key), PostHog/context-mill#433 (the reference files it links to), and Open decision 4 of the spec (attribution on `messaging/send/email/`).
+- Named: PostHog/posthog#118924 (upload and send by key), Harley's body route (S4) for the required top-level `key`, PostHog/context-mill#433 (the reference files it links to), and Open decision 4 of the spec (attribution on `messaging/send/email/`).
 
 ## How to build (map #461)
 

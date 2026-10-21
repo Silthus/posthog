@@ -11,7 +11,7 @@ Base: ticket 02's branch, or `main` once it merges
 The `migrate-email` / `resend` skill moves every supported Resend call site, v0's own `fetch` calls included, to posthog-node:
 
 - Client setup: add `posthog-node` at the release that carries the new `emails`, with `secretKey` and `migratedFrom: 'resend'` once on the client.
-- `html:` sites become `content: html(subject, html, text?)`, `text:` sites `content: text(subject, text)`, React sites `content: react(subject, element)` (if ticket 05 is charted), hosted templates `content: libraryTemplate(key, data)`. Each code site (`html`, `text`, `react`) gets a `key` named for its kind of email; a library send carries none.
+- `html:` sites become `content: html(subject, html, text?)`, `text:` sites `content: text(subject, text)`, React sites `content: react(subject, element)` (if ticket 05 is charted), hosted templates `content: libraryTemplate(templateKey, data)`. Every site gets a `key` named for its kind of email; a v0 library site keeps the `key` it already sends.
 - `from`, `replyTo` and `idempotencyKey` move as they are. `distinctId` comes from the app's existing identify call.
 - `if (error.name === ...)` branches keep working; branches on Resend's `last_event` are rewritten to `emails.get(id).status` once ticket 12 ships, otherwise reported. Error names follow the #120921 table, so a branch on a Resend name with no PostHog counterpart is reported, not guessed.
 - Sites with Resend-only fields stay on Resend with report rows, as in v0.

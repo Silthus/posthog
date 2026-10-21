@@ -11,7 +11,7 @@ Base: `docs/transactional-email-api` (PostHog/posthog.com#21306)
 
 The page `/docs/workflows/transactional-email-api` teaches a send from code first, the way the SDK now works:
 
-- Code content with `key` and `content`, Node first (`html()`, `text()`, `libraryTemplate()`), then cURL with the wire fields.
+- A `key` on every send that names the email, and `content` from one helper, Node first (`html()`, `text()`, `libraryTemplate()`), then cURL with the wire fields. A library send under its own `key` shows how one email can switch templates and keep its history.
 - The plain-text part: PostHog derives it from `html` when `text` is missing.
 - `from`, `reply_to`, the optional `distinct_id` and the address fallback, and why to pass the app's user ID.
 - What `202` means: stored in PostHog's queue for delivery, not accepted by the provider or delivered.

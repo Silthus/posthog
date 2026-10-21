@@ -20,11 +20,12 @@ await posthog.emails.send({
   distinctId,
   content: html('Reset your password', markup),
 })
-await posthog.emails.send({ to, content: libraryTemplate('welcome', { firstName: 'Jane' }) })
+await posthog.emails.send({ key: 'welcome', to, content: libraryTemplate('welcome', { firstName: 'Jane' }) })
 ```
 
 - **Client options.** `secretKey` (exists) and a new `migratedFrom`, sent as `X-PostHog-Migrated-From` on every `emails` request. No `secretKey`: `missing_secret_key`, nothing sent.
-- **Helpers.** `html(subject, html, text?)`, `text(subject, text)`, `libraryTemplate(key, data?)`. A send takes exactly one; a code send carries `key`, a library send none. Wrong combinations do not compile. #5312's `template` field goes away, because #5312 is unreleased.
+- **`key` on every send.** Required by the type, library sends included; it names the email (#120921, revised 2026-10-21).
+- **Helpers.** Pure functions: `html(subject, html, text?)`, `text(subject, text)`, `libraryTemplate(template, data?)`. A send takes exactly one as `content`. `libraryTemplate()` sends `template: { id }` for a UUID and `template: { key }` otherwise, plus `message_data`. A send without `key` or `content` does not compile. #5312's `template` field goes away, because #5312 is unreleased.
 - **No text derivation in the SDK.** `html()` without `text` sends no `text`, and the server derives it (spec pin). No `html-to-text` dependency.
 - **Option-to-body mapping** per the contract's table: `identifiers.distinct_id` left out when absent, `reply_to` always a list, `capture_engagement` left out when absent, `Idempotency-Key` header from `idempotencyKey` or a UUID v4.
 - **`to`** one address, typed `string`.
@@ -51,7 +52,7 @@ The `emails` namespace on a real client, `fetch` mocked at the HTTP boundary, as
 ## Proof
 
 - Red then green at the seams above.
-- Live, once Harley's code-content route (spec S4) runs on a local stack: one `html()` send without `text` (the email has a text part), one `libraryTemplate()` send, one replayed key returning the same `id`. Emails in the dev mail catcher, verbatim responses in the PR. Until the route exists, a recorded gap.
+- Live, once Harley's code-content route (spec S4) runs on a local stack: one `html()` send without `text` (the email has a text part), one `libraryTemplate()` send whose `key` differs from the template's key (it lands under the email `key`), one replayed key returning the same `id`. Emails in the dev mail catcher, verbatim responses in the PR. Until the route exists, a recorded gap.
 - A side-by-side table of each contract row and the Node behavior, so posthog-python's reviewer can check parity.
 
 ## Acceptance criteria
