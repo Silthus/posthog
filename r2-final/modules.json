@@ -1,0 +1,609 @@
+{
+ "rows": [
+  {
+   "modules": [
+    {
+     "id": "app",
+     "name": "App code",
+     "note": "calls posthog-node",
+     "external": true,
+     "seam": [],
+     "flex": 1
+    },
+    {
+     "id": "admin",
+     "name": "Project admin",
+     "note": "key modal",
+     "external": true,
+     "seam": [],
+     "flex": 1
+    }
+   ]
+  },
+  {
+   "modules": [
+    {
+     "id": "sdk",
+     "name": "posthog-node emails",
+     "note": "posthog-js",
+     "used": 6,
+     "change": "changed",
+     "flex": 1.2,
+     "seam": [
+      "send",
+      {
+       "name": "get",
+       "change": "added"
+      },
+      "uploadTemplate"
+     ],
+     "chips": [
+      {
+       "text": "body, from, replyTo",
+       "change": "added"
+      },
+      {
+       "text": "Idempotency-Key, Migrated-From",
+       "change": "added"
+      }
+     ]
+    },
+    {
+     "id": "rest",
+     "name": "REST caller",
+     "note": "cURL, skill fetch",
+     "external": true,
+     "seam": [],
+     "flex": 0.8
+    },
+    {
+     "id": "keys",
+     "name": "Project secret keys",
+     "note": "Django",
+     "used": 30,
+     "change": "changed",
+     "seam": [
+      "authenticate",
+      "scopes",
+      {
+       "name": "sender limits",
+       "change": "added"
+      }
+     ],
+     "chips": [
+      {
+       "text": "email_sender_restrictions",
+       "change": "added"
+      }
+     ],
+     "flex": 1.1
+    }
+   ]
+  },
+  {
+   "modules": [
+    {
+     "id": "route",
+     "name": "Send route",
+     "note": "Django, messaging",
+     "used": 3,
+     "change": "changed",
+     "flex": 1.5,
+     "seam": [
+      "POST send/email",
+      "POST templates/{id}/send",
+      {
+       "name": "GET emails/{id}",
+       "change": "added"
+      }
+     ],
+     "chips": [
+      {
+       "text": "find_template_to_send"
+      },
+      {
+       "id": "route-cmd",
+       "text": "EmailSendCommand",
+       "change": "added"
+      }
+     ]
+    },
+    {
+     "id": "src",
+     "name": "Send source",
+     "note": "#530",
+     "seam": [
+      "SendSource",
+      "mark_organization_migrated"
+     ],
+     "flex": 1
+    },
+    {
+     "id": "reader",
+     "name": "Email status read",
+     "note": "Django, messaging",
+     "change": "added",
+     "seam": [
+      "get(team, message_id)"
+     ],
+     "chips": [
+      {
+       "text": "sync_execute, argMax"
+      }
+     ],
+     "flex": 1
+    }
+   ]
+  },
+  {
+   "modules": [
+    {
+     "id": "svc",
+     "name": "Send service",
+     "note": "messaging",
+     "used": 5,
+     "change": "changed",
+     "seam": [
+      "send_transactional_email",
+      "sync"
+     ],
+     "chips": [
+      {
+       "text": "re-reads template",
+       "change": "removed"
+      },
+      {
+       "text": "typed CDP outcome",
+       "change": "added"
+      }
+     ]
+    },
+    {
+     "id": "wf",
+     "name": "Transactional workflow",
+     "note": "workflows",
+     "used": 2,
+     "change": "changed",
+     "seam": [
+      "create",
+      "update",
+      {
+       "name": "fixed slot",
+       "change": "added"
+      }
+     ],
+     "chips": [
+      {
+       "text": "email step reads state.send",
+       "change": "added"
+      }
+     ]
+    },
+    {
+     "id": "senders",
+     "name": "Email senders",
+     "note": "Integration kind email",
+     "used": 9,
+     "seam": [
+      "verified senders"
+     ]
+    }
+   ]
+  },
+  {
+   "modules": [
+    {
+     "id": "idem",
+     "name": "Idempotency store",
+     "note": "Harley, #120446",
+     "seam": [
+      "reserve",
+      "markQueued",
+      "release"
+     ],
+     "flex": 0.96
+    },
+    {
+     "id": "cdp",
+     "name": "cdp-api send route",
+     "note": "Node",
+     "used": 7,
+     "change": "changed",
+     "flex": 1.3,
+     "seam": [
+      "postTransactionalEmail"
+     ],
+     "chips": [
+      {
+       "text": "inline reserve, release, markQueued",
+       "change": "removed"
+      },
+      {
+       "id": "cdp-idem",
+       "text": "idempotentEnqueue",
+       "change": "added"
+      },
+      {
+       "id": "cdp-queued",
+       "text": "queued row",
+       "change": "added"
+      },
+      {
+       "text": "stamps state.send",
+       "change": "added"
+      }
+     ]
+    },
+    {
+     "id": "policy",
+     "name": "Email send policy",
+     "note": "Node, refactor PR",
+     "change": "added",
+     "seam": [
+      "check(send, phase)"
+     ],
+     "chips": [
+      {
+       "text": "sender, key limits"
+      },
+      {
+       "text": "suspension, pause"
+      },
+      {
+       "text": "suppression"
+      }
+     ],
+     "flex": 1
+    }
+   ]
+  },
+  {
+   "modules": [
+    {
+     "id": "queue",
+     "name": "Cyclotron queue",
+     "note": "Postgres",
+     "used": 13,
+     "change": "changed",
+     "seam": [
+      "queueInvocations"
+     ],
+     "chips": [
+      {
+       "id": "janitor",
+       "text": "janitor: failed row",
+       "change": "added"
+      }
+     ],
+     "flex": 1.03
+    },
+    {
+     "id": "worker",
+     "name": "Email worker",
+     "note": "HogFunctionHandler, EmailService",
+     "used": 9,
+     "change": "changed",
+     "flex": 1.3,
+     "seam": [
+      "executeSendEmail"
+     ],
+     "chips": [
+      {
+       "text": "handler checks",
+       "change": "removed"
+      },
+      {
+       "text": "service checks",
+       "change": "removed"
+      },
+      {
+       "text": "keep SES MessageId",
+       "change": "added"
+      },
+      {
+       "text": "records own outcomes",
+       "change": "added"
+      }
+     ]
+    },
+    {
+     "id": "ses",
+     "name": "SES",
+     "note": "email provider",
+     "external": true,
+     "seam": [],
+     "flex": 1
+    }
+   ]
+  },
+  {
+   "modules": [
+    {
+     "id": "accepted",
+     "name": "Accepted send",
+     "note": "Node, run state",
+     "change": "added",
+     "seam": [
+      "state.send: AcceptedSend"
+     ],
+     "chips": [
+      {
+       "text": "content snapshot"
+      },
+      {
+       "text": "sender, key-limit snapshot"
+      }
+     ],
+     "flex": 1
+    },
+    {
+     "id": "status",
+     "name": "Email status",
+     "note": "Node, email-status.service.ts",
+     "change": "added",
+     "seam": [
+      "record(message, status)"
+     ],
+     "chips": [
+      {
+       "text": "version = status rank"
+      },
+      {
+       "text": "Kafka producer"
+      }
+     ],
+     "flex": 1.3
+    },
+    {
+     "id": "track",
+     "name": "Email tracking",
+     "note": "SES webhook",
+     "used": 5,
+     "change": "changed",
+     "seam": [
+      "handleSesWebhook"
+     ],
+     "chips": [
+      {
+       "id": "track-fb",
+       "text": "feedback rows",
+       "change": "added"
+      }
+     ],
+     "flex": 1
+    }
+   ]
+  },
+  {
+   "modules": [
+    {
+     "id": "table",
+     "name": "Status table",
+     "note": "ClickHouse AUX",
+     "change": "added",
+     "seam": [
+      "argMax by (team_id, message_id)"
+     ],
+     "chips": [
+      {
+       "text": "topic, MV, ReplacingMergeTree"
+      },
+      {
+       "text": "30-day TTL"
+      }
+     ],
+     "flex": 1
+    }
+   ]
+  }
+ ],
+ "wires": [
+  {
+   "from": "app",
+   "to": "sdk-seam"
+  },
+  {
+   "from": "admin",
+   "to": "keys-seam"
+  },
+  {
+   "from": "sdk",
+   "to": "route-seam",
+   "label": "body, key, headers",
+   "toAt": 0.2,
+   "labelAt": 0.5
+  },
+  {
+   "from": "rest",
+   "to": "route-seam",
+   "toAt": 0.6
+  },
+  {
+   "from": "route",
+   "to": "keys",
+   "fromSide": "top",
+   "toSide": "bottom",
+   "fromAt": 0.93,
+   "toAt": 0.5,
+   "label": "auth, limits"
+  },
+  {
+   "from": "route",
+   "to": "src",
+   "fromSide": "right",
+   "toSide": "left",
+   "change": "added"
+  },
+  {
+   "from": "route",
+   "to": "reader",
+   "change": "added",
+   "fromSide": "bottom",
+   "toSide": "bottom",
+   "fromAt": 0.95,
+   "toAt": 0.5,
+   "bend": 34
+  },
+  {
+   "from": "route-cmd",
+   "to": "svc-seam",
+   "label": "command"
+  },
+  {
+   "from": "svc",
+   "to": "wf-seam",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "from": "wf",
+   "to": "senders",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "from": "svc",
+   "to": "cdp-seam",
+   "label": "JWT",
+   "fromAt": 0.7,
+   "toAt": 0.3
+  },
+  {
+   "from": "cdp",
+   "to": "idem",
+   "fromSide": "left",
+   "toSide": "right"
+  },
+  {
+   "from": "cdp",
+   "to": "policy-seam",
+   "fromSide": "right",
+   "toSide": "left",
+   "change": "added"
+  },
+  {
+   "from": "cdp",
+   "to": "queue-seam",
+   "fromAt": 0.25,
+   "toAt": 0.6
+  },
+  {
+   "from": "queue",
+   "to": "worker",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "from": "worker",
+   "to": "ses",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "from": "worker",
+   "to": "policy",
+   "fromSide": "top",
+   "toSide": "bottom",
+   "fromAt": 0.92,
+   "toAt": 0.3,
+   "label": "delivery",
+   "change": "added"
+  },
+  {
+   "from": "cdp",
+   "to": "status-seam",
+   "change": "added",
+   "label": "queued",
+   "fromAt": 0.0,
+   "toAt": 0.0,
+   "bend": 10,
+   "labelAt": 0.12,
+   "labelOffset": [
+    26,
+    0
+   ]
+  },
+  {
+   "from": "janitor",
+   "to": "status-seam",
+   "change": "added",
+   "toAt": 0.12
+  },
+  {
+   "from": "worker",
+   "to": "status-seam",
+   "change": "added",
+   "label": "sent, failed",
+   "fromAt": 0.6,
+   "toAt": 0.6
+  },
+  {
+   "from": "ses",
+   "to": "track-seam",
+   "label": "SNS"
+  },
+  {
+   "from": "track",
+   "to": "status",
+   "fromSide": "left",
+   "toSide": "right",
+   "change": "added"
+  },
+  {
+   "from": "status",
+   "to": "table-seam",
+   "change": "added",
+   "label": "Kafka"
+  },
+  {
+   "from": "reader",
+   "to": "table",
+   "fromSide": "right",
+   "toSide": "right",
+   "change": "added",
+   "bend": 24
+  },
+  {
+   "from": "worker",
+   "to": "accepted-seam",
+   "change": "added",
+   "fromAt": 0.08,
+   "toAt": 0.8,
+   "label": "reads"
+  }
+ ],
+ "untouched": [
+  {
+   "name": "Message suppression",
+   "seam": [
+    "isSuppressed",
+    "upsert"
+   ],
+   "used": 10,
+   "note": "read by the send policy"
+  },
+  {
+   "name": "Invocation results fanout",
+   "seam": [
+    "queueInvocationResults"
+   ],
+   "used": 5,
+   "note": "best-effort logs, metrics, events"
+  },
+  {
+   "name": "Quota limiting",
+   "seam": [
+    "checkHogFlowQuotaLimits"
+   ],
+   "used": 3
+  },
+  {
+   "name": "Message assets",
+   "seam": [
+    "record sent content"
+   ],
+   "used": 8,
+   "note": "status 'sent' only"
+  }
+ ]
+}
