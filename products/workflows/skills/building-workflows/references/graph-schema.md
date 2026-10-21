@@ -123,6 +123,31 @@ Inputs are keyed by the template's input schema, each wrapped in `{value: ...}`:
 - **Dictionary input values are template strings too** — write booleans/numbers as single-expression templates: `"{true}"`, `"{42}"`, which evaluate to the typed value.
 - Required inputs must be present, or create fails with "This field is required".
 
+### Updating a Slack status message
+
+Use two `function` steps with `template_id: "template-slack"` to post a status message and edit it later. On the first step, use a channel ID (for example `C0123ABC`) and capture only the timestamp and channel:
+
+```json
+"output_variable": [
+  { "key": "slack_ts", "result_path": "body.ts" },
+  { "key": "slack_channel", "result_path": "body.channel" }
+]
+```
+
+Declare `slack_ts` and `slack_channel` as string workflow variables. Store these fields rather than the whole response body to stay within the 5 KB variable limit. In the later Slack step, use the same Slack connection and:
+
+```json
+"inputs": {
+  "slack_workspace": { "value": 123 },
+  "channel": { "value": "{variables.slack_channel}" },
+  "message_ts": { "value": "{variables.slack_ts}" },
+  "blocks": { "value": [] },
+  "text": { "value": "Finished" }
+}
+```
+
+Replace `123` with the Slack integration ID. Updates require a channel ID, not `#channel-name`, and a message posted by that Slack connection. A set `message_ts` takes precedence over `thread_ts`; an empty value posts a new message.
+
 ### Discovering function templates (do this, don't guess)
 
 The set of available `function` templates and their required inputs is **live data**, not something to hardcode — it changes as integrations are added. For a `function` node:

@@ -9,7 +9,9 @@ import { HogFlow } from '~/cdp/schema/hogflow'
 import { template as posthogCaptureTemplate } from '~/cdp/templates/_destinations/posthog_capture/posthog-capture.template'
 import { template as customerTaskTemplate } from '~/cdp/templates/_destinations/posthog_customer_analytics/posthog-create-customer-task.template'
 import { template as setVariableTemplate } from '~/cdp/templates/_destinations/posthog_workflows/posthog-set-variable.template'
+import { template as slackTemplate } from '~/cdp/templates/_destinations/slack/slack.template'
 import { compileHog } from '~/cdp/templates/compiler'
+import { compileInputs } from '~/cdp/templates/test/test-helpers'
 import { convertToHogFunctionFilterGlobal } from '~/cdp/utils/hog-function-filtering'
 import { createHub } from '~/common/utils/db/hub'
 import { parseJSON } from '~/common/utils/json-parse'
@@ -2572,6 +2574,89 @@ describe('Hogflow Executor', () => {
             }
             return result
         }
+
+        it('posts a Slack message and edits it using its captured timestamp and channel', async () => {
+            const templateId = `template-slack-test-${integrationId}`
+            await insertHogFunctionTemplate(hub.postgres, { ...slackTemplate, id: templateId })
+            await insertIntegration(hub.postgres, team.id, {
+                id: integrationId,
+                kind: 'slack',
+                config: { scope: 'chat:write,chat:write.customize' },
+                sensitive_config: { access_token: 'xoxb-test-token' },
+            })
+            const inputs = {
+                slack_workspace: integrationId,
+                channel: 'C0STATUS',
+                blocks: [],
+                text: 'Started',
+                username: 'Workflow status',
+                icon_emoji: ':hourglass:',
+            }
+            mockFetch.mockResolvedValue({
+                status: 200,
+                text: () => Promise.resolve(JSON.stringify({ ok: true, ts: '1700000000.000100', channel: 'C0STATUS' })),
+            } as FetchResponse)
+            const hogFlow = new FixtureHogFlowBuilder()
+                .withWorkflow({
+                    actions: {
+                        trigger: { type: 'trigger', config: { type: 'event', filters: {} } },
+                        post: {
+                            type: 'function',
+                            config: { template_id: templateId, inputs: await compileInputs(slackTemplate, inputs) },
+                            output_variable: [
+                                { key: 'slack_ts', result_path: 'body.ts' },
+                                { key: 'slack_channel', result_path: 'body.channel' },
+                            ],
+                        },
+                        update: {
+                            type: 'function',
+                            config: {
+                                template_id: templateId,
+                                inputs: await compileInputs(slackTemplate, {
+                                    ...inputs,
+                                    channel: '{variables.slack_channel}',
+                                    message_ts: '{variables.slack_ts}',
+                                    text: 'Finished',
+                                }),
+                            },
+                        },
+                        exit: { type: 'exit', config: {} },
+                    },
+                    edges: [
+                        { from: 'trigger', to: 'post', type: 'continue' },
+                        { from: 'post', to: 'update', type: 'continue' },
+                        { from: 'update', to: 'exit', type: 'continue' },
+                    ],
+                })
+                .withTeamId(team.id)
+                .build()
+
+            const result = await executeToCompletion(hogFlow)
+
+            expect(result.error).toBeUndefined()
+            expect(result.invocation.state.variables).toEqual({
+                slack_ts: '1700000000.000100',
+                slack_channel: 'C0STATUS',
+            })
+            expect(
+                mockFetch.mock.calls.map(([url, options]) => ({ url, body: parseJSON(options!.body as string) }))
+            ).toEqual([
+                {
+                    url: 'https://slack.com/api/chat.postMessage',
+                    body: {
+                        channel: 'C0STATUS',
+                        blocks: [],
+                        text: 'Started',
+                        username: 'Workflow status',
+                        icon_emoji: ':hourglass:',
+                    },
+                },
+                {
+                    url: 'https://slack.com/api/chat.update',
+                    body: { channel: 'C0STATUS', ts: '1700000000.000100', blocks: [], text: 'Finished' },
+                },
+            ])
+        })
 
         it('stores full result in variable with single object output_variable', async () => {
             const hogFlow = await hogFlowBuilder({ key: 'response', result_path: null })

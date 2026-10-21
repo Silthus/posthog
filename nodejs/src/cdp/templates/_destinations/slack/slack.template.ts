@@ -17,26 +17,34 @@ let body := {
   'text': inputs.text
 };
 
-// Slack rejects an empty thread_ts, so only send it when there is one to reply under.
-if (not empty(inputs.thread_ts)) {
-  body['thread_ts'] := inputs.thread_ts;
+let updating := not empty(inputs.message_ts);
+let method := 'chat.postMessage';
+
+if (updating) {
+  method := 'chat.update';
+  body['ts'] := inputs.message_ts;
+} else {
+  // Slack rejects an empty thread_ts, so only send it when there is one to reply under.
+  if (not empty(inputs.thread_ts)) {
+    body['thread_ts'] := inputs.thread_ts;
+  }
+
+  // Slack refuses the whole message when these two are present without chat:write.customize, and both
+  // carry a default, so drop them when the connection records a scope list that lacks it. An install
+  // with no recorded scopes keeps its customization, matching what the config UI reports.
+  let granted := replaceAll(inputs.slack_workspace.scope ?? '', ' ', '');
+  let can_customize := empty(granted) or has(splitByString(',', granted), 'chat:write.customize');
+
+  if (can_customize and not empty(inputs.icon_emoji)) {
+    body['icon_emoji'] := inputs.icon_emoji;
+  }
+
+  if (can_customize and not empty(inputs.username)) {
+    body['username'] := inputs.username;
+  }
 }
 
-// Slack refuses the whole message when these two are present without chat:write.customize, and both
-// carry a default, so drop them when the connection records a scope list that lacks it. An install
-// with no recorded scopes keeps its customization, matching what the config UI reports.
-let granted := replaceAll(inputs.slack_workspace.scope ?? '', ' ', '');
-let can_customize := empty(granted) or has(splitByString(',', granted), 'chat:write.customize');
-
-if (can_customize and not empty(inputs.icon_emoji)) {
-  body['icon_emoji'] := inputs.icon_emoji;
-}
-
-if (can_customize and not empty(inputs.username)) {
-  body['username'] := inputs.username;
-}
-
-let res := fetch('https://slack.com/api/chat.postMessage', {
+let res := fetch(f'https://slack.com/api/{method}', {
   'body': body,
   'method': 'POST',
   'headers': {
@@ -46,8 +54,13 @@ let res := fetch('https://slack.com/api/chat.postMessage', {
 });
 
 if (res.status != 200 or res.body.ok == false) {
+  if (updating) {
+    throw Error(f'Failed to update Slack message: {res.status}: {res.body}');
+  }
   throw Error(f'Failed to post message to Slack: {res.status}: {res.body}');
 }
+
+return res;
 `.trim(),
     inputs_schema: [
         {
@@ -144,6 +157,17 @@ if (res.status != 200 or res.body.ok == false) {
             label: 'Reply in thread',
             description:
                 'Timestamp of the message to reply under. Leave this empty to post a new message. In a workflow triggered by a Slack message, use {event.properties.thread_ts ?? event.properties.ts} to reply under the message that started the run.',
+            secret: false,
+            required: false,
+            hidden: false,
+        },
+        {
+            key: 'message_ts',
+            type: 'string',
+            label: 'Message to update',
+            description:
+                'Timestamp of a message this Slack connection posted earlier. When set, this step edits that message instead of posting or replying. Use a channel ID. Leave empty to post. In a workflow, save body.ts from an earlier Slack step as an output variable, then use {variables.slack_ts}.',
+            default: '',
             secret: false,
             required: false,
             hidden: false,
