@@ -4,7 +4,7 @@ Answers: [Spec Resend parity and slice it into PRs](https://github.com/Silthus/p
 Built on: the product decisions of [Grill Resend parity](https://github.com/Silthus/posthog/issues/525), the structure of [Shape the architecture of Resend parity](https://github.com/Silthus/posthog/issues/526) ([architecture doc](https://github.com/Silthus/posthog/blob/0f0bc0f5f32d7835f434dba7c1d6e43cb182f3ec/docs/architecture/resend-parity.md), five ADRs), and the shared SDK contract [PostHog/posthog#120921](https://github.com/PostHog/posthog/issues/120921).
 Folds in: research #522, #523, #524, #527, #529, #532, #533, #534, and [Send attribution](https://github.com/Silthus/posthog/issues/530) (draft PostHog/posthog#120628).
 
-Status: draft on branch `spec/resend-parity`, before Michael's approval. Revision 4: the flat send shape of #120921, Michael's answers to the open decisions (2026-10-21), and the builders-per-strand method, and the r3 spec pass.
+Status: approved by Michael (2026-10-21). Revision 4: the flat send shape of #120921, Michael's answers to the open decisions (2026-10-21), and the builders-per-strand method, and the r3 spec pass.
 
 ## Problem Statement
 
@@ -144,7 +144,7 @@ Built in #526's order: the refactors first as mechanical PRs, the features stack
 - **R1** `EmailSendPolicy.check(send, phase)` (slice 02). **R2** `EmailSendCommand` and the typed CDP outcome (slice 03). **R3** `idempotentEnqueue` over Harley's store (slice 05).
 - The code form on `messaging/send/email/`, `AcceptedSend` and the fixed slot, tracking header v3 (slice 04).
 - Idempotency for both forms (slice 06): scope `transactional-email`, the fingerprint of #120921, replay before checks, `422`, in-flight `409`, `503`.
-- 🤖 Harley's store accepts one known duplicate: a crash between the reservation and the queue write, or a failed completion write followed by a retry after the 60 s pending window, can queue a second send. The send API inherits that limit and the docs say so; making the store stronger is the store owner's call, with #523.
+- 🤖 Harley's store accepts one known duplicate: a crash between the reservation and the queue write, or a failed completion write followed by a retry after the 60 s pending window, can queue a second send. The send API inherits that limit and the docs say so. 👤 Michael accepted it for now (2026-10-21); a side fix tries to close it in the store, reviewed by its owner.
 - 🤖 Local templates on #118924's routes: a key PostHog does not know answers `409 template_outdated`, not `404`, so the first send uploads it. The SDK's upload carries `if_code_managed`, and under the row lock it refuses a template edited in PostHog with `409` instead of adopting it (slice 04).
 - Checks before the `202`, the two `429` codes, and pinned content for template sends (slice 07).
 - The status record and the read (slice 08).
@@ -260,3 +260,4 @@ A good test drives the public surface a user touches and asserts what they obser
 3. **#5312's file helpers** (was Open decision 3): no user-facing upload. Local templates upload inside `send` by hash; `templateFile()` and `uploadTemplate()` go away. 👤
 4. **Attribution route** (was Open decision 4): restack #120628 and attribute both routes (slice 01). 👍
 5. **Skill v0** (was Open decision 5): no call-site rewrite; v1 is the one cutover. 👤
+6. **Duplicate limit** (spec pass r3): accept the store's documented duplicate limit for now; a side fix PR tries to close it. 👤
