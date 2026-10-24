@@ -426,6 +426,12 @@ const SANDBOX_ADDRESS_BLOCK_COPY: Record<
     },
 }
 
+const SANDBOX_PAUSE_SKIP_MESSAGES = {
+    paused: 'Skipping send: the sandbox sender is paused right now. Verify your own domain to keep sending.',
+    check_failed:
+        'Skipping send: could not check whether the sandbox sender is paused. Try again later, or verify your own domain to keep sending.',
+} as const
+
 const SANDBOX_CAP_SKIP_MESSAGES = {
     project_cap_reached:
         "Skipping send: this email would go over the sandbox sender's daily limit for this project. Verify your own domain to send more.",
@@ -664,6 +670,9 @@ export class EmailService {
             }
 
             if (isSandbox) {
+                if (!(await this.passesSandboxPauseGate(result, isTest))) {
+                    return result
+                }
                 const cc = sandboxAddressList(params.cc)
                 const bcc = sandboxAddressList(params.bcc)
                 sandboxRecipients = [params.to.email, ...cc, ...bcc]
@@ -1149,6 +1158,25 @@ export class EmailService {
         return null
     }
 
+    private async passesSandboxPauseGate(
+        result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>,
+        isTest: boolean
+    ): Promise<boolean> {
+        const gate = await this.sandboxSender!.pauseGate()
+        if (gate === 'open') {
+            return true
+        }
+        createAddLogFunction(result.logs)('info', SANDBOX_PAUSE_SKIP_MESSAGES[gate])
+        result.skipped = true
+        result.invocation.state.vmState?.stack.push({ success: false })
+        await this.sandboxSender!.capture(result.invocation.teamId, isTest, {
+            type: 'blocked',
+            reason: gate,
+            blockedRecipientCount: 0,
+        })
+        return false
+    }
+
     private logSandboxRecipientBlock(
         result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>,
         blockedRecipients: string[],
@@ -1536,7 +1564,10 @@ export class EmailService {
             if (!dailyCapGrant) {
                 return false
             }
-            if (!(await this.checkSandboxRecipients(result, sandboxRecipients, isTest, dailyCapGrant.organization))) {
+            if (
+                !(await this.passesSandboxPauseGate(result, isTest)) ||
+                !(await this.checkSandboxRecipients(result, sandboxRecipients, isTest, dailyCapGrant.organization))
+            ) {
                 await this.sandboxSender!.returnDailyCaps(dailyCapGrant)
                 return false
             }

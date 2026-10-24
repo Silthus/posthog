@@ -24,6 +24,7 @@ from products.workflows.backend.presentation.views.hog_flow import HogFlowInvoca
 @override_settings(
     WORKFLOWS_SANDBOX_SENDER_DOMAIN="sandbox.example.com",
     SES_SANDBOX_FROM_ADDRESS="hello@sandbox.example.com",
+    SES_SANDBOX_TENANT_NAME="posthog-sandbox",
 )
 class TestSandboxSenderValidation(APIBaseTest):
     def setUp(self) -> None:
