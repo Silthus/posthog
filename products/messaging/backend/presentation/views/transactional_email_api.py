@@ -19,13 +19,16 @@ from posthog.rate_limit import PersonalOrProjectSecretApiKeyRateThrottle, Projec
 from products.messaging.backend.facade.contracts import TEMPLATE_KEY_MAX_LENGTH, TEMPLATE_KEY_PATTERN
 from products.messaging.backend.facade.templates import MessageTemplateRow
 from products.messaging.backend.facade.transactional_email import (
+    AcceptedSend,
     EmailSendCommand,
     EmailSendOutcome,
     Queued,
     Rejected,
+    StoredTemplate,
     Unavailable,
     send_email,
 )
+from products.messaging.backend.presentation.views.send_email_fields import PlainAddressField
 from products.workflows.backend.facade.api import WorkflowAccessDenied, WorkflowNotFound
 from products.workflows.backend.facade.workflows import get_workflow
 
@@ -48,7 +51,7 @@ class TransactionalEmailIdentifiersSerializer(serializers.Serializer):
 
 
 class SendTransactionalEmailSerializer(serializers.Serializer):
-    to = serializers.EmailField(help_text="Email address of the recipient.")
+    to = PlainAddressField(help_text="Email address of the recipient.")
     identifiers = TransactionalEmailIdentifiersSerializer(
         required=False, help_text="Who the email is for, used to attribute engagement events."
     )
@@ -235,6 +238,13 @@ class TransactionalEmailViewSetMixin(TeamAndOrgViewSetMixin):
         except WorkflowNotFound:
             return
 
+    def _require_workflow_create(self) -> None:
+        if is_authenticated_via_project_secret_api_key(self.request):
+            return
+        # Access to one workflow lets a member through the viewset's checks, but this request creates a new one.
+        if not self.user_access_control.check_access_level_for_resource("hog_flow", "editor"):
+            raise exceptions.PermissionDenied("You need editor access to workflows to create a new one.")
+
     @staticmethod
     def _auth_method(request: Request) -> str:
         return "project_secret_api_key" if is_authenticated_via_project_secret_api_key(request) else "user"
@@ -246,30 +256,32 @@ class TransactionalEmailViewSetMixin(TeamAndOrgViewSetMixin):
         data: dict[str, Any],
         *,
         usage: dict[str, str],
+        send: AcceptedSend | None = None,
         idempotency_key: str | None = None,
     ) -> Queued:
         if template.transactional_hog_flow_id:
             self._require_workflow_editor(template.transactional_hog_flow_id)
-        report: dict[str, Any] = {
-            "template_id": str(template.id),
-            **usage,
-            "has_idempotency_key": idempotency_key is not None,
-        }
+        command = EmailSendCommand(
+            team_id=self.team_id,
+            to=data["to"],
+            distinct_id=self._distinct_id(data),
+            source=StoredTemplate(template_id=template.id, message_data=data["message_data"], send=send),
+            idempotency_key=idempotency_key,
+        )
+        return self._send(request, command, report={"template_id": str(template.id), **usage})
+
+    @staticmethod
+    def _distinct_id(data: dict[str, Any]) -> str | None:
+        return (data.get("identifiers") or {}).get("distinct_id") or None
+
+    def _send(self, request: Any, command: EmailSendCommand, *, report: dict[str, str]) -> Queued:
+        properties = {**report, "has_idempotency_key": command.idempotency_key is not None}
         try:
-            outcome = send_email(
-                EmailSendCommand(
-                    team_id=self.team_id,
-                    template_id=template.id,
-                    to=data["to"],
-                    distinct_id=(data.get("identifiers") or {}).get("distinct_id") or None,
-                    message_data=data["message_data"],
-                    idempotency_key=idempotency_key,
-                )
-            )
+            outcome = send_email(command)
         except Exception:
-            self._report_transactional_email_send(request, {**report, "outcome": "error"})
+            self._report_transactional_email_send(request, {**properties, "outcome": "error"})
             raise
-        self._report_transactional_email_send(request, {**report, **_usage(outcome)})
+        self._report_transactional_email_send(request, {**properties, **_usage(outcome)})
         match outcome:
             case Queued():
                 return outcome
