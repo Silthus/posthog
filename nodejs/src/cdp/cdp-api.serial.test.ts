@@ -4,6 +4,7 @@ import { mockFetch } from '../../tests/helpers/mocks/request.mock'
 
 import { Server } from 'http'
 import jwt from 'jsonwebtoken'
+import { DateTime } from 'luxon'
 import supertest from 'supertest'
 import express from 'ultimate-express'
 
@@ -2719,6 +2720,43 @@ describe('CDP API', () => {
 
         afterEach(() => {
             emailSpy.mockRestore()
+        })
+
+        it('reports a skipped email delivery and preserves step-through continuation', async () => {
+            emailSpy.mockImplementation((invocation: any) =>
+                Promise.resolve({
+                    invocation,
+                    finished: true,
+                    skipped: true,
+                    logs: [
+                        {
+                            level: 'warn',
+                            timestamp: DateTime.now(),
+                            message: 'Skipping send: Sandbox daily cap reached.',
+                        },
+                    ],
+                    metrics: [],
+                    capturedPostHogEvents: [],
+                    warehouseWebhookPayloads: [],
+                    messageAssets: [],
+                    conversionWatchers: [],
+                })
+            )
+
+            const res = await supertest(app).post(`/api/projects/${team.id}/hog_flows/${hogFlowId}/invocations`).send({
+                globals,
+                configuration: {},
+                current_action_id: 'email_1',
+            })
+
+            expect(res.status).toBe(200)
+            expect(res.body.status).toBe('skipped')
+            expect(res.body.nextActionId).toBe('exit')
+            expect(res.body.logs).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({ message: expect.stringContaining('Sandbox daily cap reached.') }),
+                ])
+            )
         })
 
         it('sends the email inline via EmailService instead of routing to the email queue', async () => {

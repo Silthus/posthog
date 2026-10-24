@@ -739,6 +739,7 @@ describe('EmailService', () => {
                     expect(result.error).toBeUndefined()
                     expect(result.invocation.state.vmState?.stack).toEqual([{ success: !suppressed }])
                     if (suppressed) {
+                        expect(result.skipped).toBe(true)
                         expect(sendEmailSpy).not.toHaveBeenCalled()
                         expect(result.logs).toContainEqual(
                             expect.objectContaining({ message: expect.stringContaining(email) })
@@ -2562,6 +2563,18 @@ describe('EmailService', () => {
                 expect(sendEmailSpy).not.toHaveBeenCalled()
                 expect(result.metrics.map((m) => m.metric_name)).toContain('email_suppressed')
                 expect(result.metrics.map((m) => m.metric_name)).not.toContain('email_sent')
+                expect(result.skipped).not.toBe(true)
+            })
+
+            it('reports editor test sends to a suppressed recipient as skipped without recording metrics', async () => {
+                jest.spyOn(service['emailSuppressionService'], 'isSuppressed').mockResolvedValue(true)
+                sendEmailSpy.mockResolvedValue({ MessageId: 'test-message-id' })
+
+                const result = await service.executeSendEmail(invocation, true)
+
+                expect(sendEmailSpy).not.toHaveBeenCalled()
+                expect(result.metrics).toEqual([])
+                expect(result.skipped).toBe(true)
             })
 
             it('calls SES when the recipient is not suppressed', async () => {
@@ -2637,18 +2650,27 @@ describe('EmailService', () => {
                 )
             }
 
-            it('does not call SES while the team is suspended and records email_suspended', async () => {
+            it.each([false, true])('does not call SES while the team is suspended (sandbox=%s)', async (isSandbox) => {
                 await suspendTeam()
+                if (isSandbox) {
+                    await insertIntegration(hub.postgres, team.id, {
+                        id: getIntegrationId(4),
+                        kind: 'email',
+                        config: { provider: 'sandbox', verified: true },
+                    })
+                    invocation.queueParameters = createEmailParams({ from: { integrationId: 4 } })
+                }
                 sendEmailSpy.mockResolvedValue({ MessageId: 'test-message-id' })
 
                 const result = await service.executeSendEmail(invocation)
 
                 expect(sendEmailSpy).not.toHaveBeenCalled()
                 expect(result.metrics.map((m) => m.metric_name)).toEqual(['email_suspended'])
+                expect(result.skipped === true).toBe(isSandbox)
                 expect(invocation.state.vmState?.stack).toEqual([{ success: false }])
             })
 
-            it('blocks editor test sends while suspended without recording metrics', async () => {
+            it('reports editor test sends as skipped while suspended without recording metrics', async () => {
                 await suspendTeam()
                 sendEmailSpy.mockResolvedValue({ MessageId: 'test-message-id' })
 
@@ -2656,6 +2678,7 @@ describe('EmailService', () => {
 
                 expect(sendEmailSpy).not.toHaveBeenCalled()
                 expect(result.metrics).toEqual([])
+                expect(result.skipped).toBe(true)
             })
 
             // A per-workflow pause holds one workflow's email while the rest of the project keeps
