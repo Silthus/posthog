@@ -118,6 +118,7 @@ export interface CdpCoreServices {
     /** Resolved outputs shared across every CDP service/consumer. */
     outputs: CdpOutputs
     emailService: EmailService
+    sandboxEmailSender: SandboxEmailSender
     /** Buffers rendered-email asset rows and bulk-flushes them at the batch boundary. */
     messageAssetsService: MessageAssetsService
 }
@@ -466,6 +467,20 @@ export function createCdpCoreServices(
     const sandboxEmailRateLimiter = deps.emailValidationValkey
         ? new RateLimiterService(deps.emailValidationValkey, { name: 'sandbox-email' })
         : null
+    const sandboxEmailSender = new SandboxEmailSender(
+        {
+            enabled: config.WORKFLOWS_SANDBOX_SENDER_ENABLED,
+            tenantName: config.SES_SANDBOX_TENANT_NAME,
+            configurationSetName: config.SES_SANDBOX_CONFIGURATION_SET,
+            fromAddress: config.SES_SANDBOX_FROM_ADDRESS,
+            dailyTeamCap: config.WORKFLOWS_SANDBOX_DAILY_TEAM_CAP,
+            dailyRecipientCap: config.WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP,
+        },
+        deps.teamManager,
+        sandboxEmailRateLimiter,
+        redis,
+        new SandboxSenderStateService(deps.postgres, deps.pubSub)
+    )
     const emailService = new EmailService(
         {
             sesAccessKeyId: config.SES_ACCESS_KEY_ID,
@@ -488,20 +503,7 @@ export function createCdpCoreServices(
         messageAssetsService,
         workflowEmailRateLimiter,
         teamEmailRateLimiter,
-        new SandboxEmailSender(
-            {
-                enabled: config.WORKFLOWS_SANDBOX_SENDER_ENABLED,
-                tenantName: config.SES_SANDBOX_TENANT_NAME,
-                configurationSetName: config.SES_SANDBOX_CONFIGURATION_SET,
-                fromAddress: config.SES_SANDBOX_FROM_ADDRESS,
-                dailyTeamCap: config.WORKFLOWS_SANDBOX_DAILY_TEAM_CAP,
-                dailyRecipientCap: config.WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP,
-            },
-            deps.teamManager,
-            sandboxEmailRateLimiter,
-            redis,
-            new SandboxSenderStateService(deps.postgres, deps.pubSub)
-        ),
+        sandboxEmailSender,
         new OrganizationMembersService(deps.postgres)
     )
     const recipientTokensService = new RecipientTokensService(config.ENCRYPTION_SALT_KEYS, config.SITE_URL)
@@ -638,6 +640,7 @@ export function createCdpCoreServices(
         recipientTokensService,
         outputs,
         emailService,
+        sandboxEmailSender,
         messageAssetsService,
     }
 }
