@@ -2273,6 +2273,11 @@ describe('CDP API', () => {
                     { send: { ...codeSend, tags: [{ name: 'plan', value: 'free' }] } },
                     { send: { ...codeSend, tags: [{ name: 'plan', value: 'pro' }] } },
                 ],
+                [
+                    'another attachment',
+                    { send: { ...codeSend, attachments: [{ filename: 'invoice.pdf', content: 'Zmlyc3Q=' }] } },
+                    { send: { ...codeSend, attachments: [{ filename: 'invoice.pdf', content: 'c2Vjb25k' }] } },
+                ],
             ])('rejects the key for %s', async (_desc, first, retry) => {
                 await sendKeyed({ ...keyed, ...first })
 
@@ -2388,6 +2393,13 @@ describe('CDP API', () => {
             ['a sender without an integration', { ...codeSend, from: { email: 'security@example.com' } }],
             ['no tracking choice', { content: codeSend.content }],
             ['a copy that names two recipients', { ...codeSend, cc: ['jane@example.com, joe@example.com'] }],
+            [
+                'attachments over the size cap',
+                {
+                    ...codeSend,
+                    attachments: [{ filename: 'big.pdf', content: Buffer.alloc(512 * 1024 + 1).toString('base64') }],
+                },
+            ],
         ])('refuses a code send with %s', async (_desc, acceptedSend) => {
             const invalidBefore = await outcomeCount('invalid_request')
 
