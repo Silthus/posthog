@@ -40035,6 +40035,62 @@ export namespace Schemas {
       readonly email_sending_suspension_reason: string;
     }
 
+    /**
+     * * `queued` - Queued
+     * * `unknown` - Unknown
+     * * `skipped` - Skipped
+     * * `failed` - Failed
+     * * `sent` - Sent
+     * * `delivered` - Delivered
+     * * `bounced` - Bounced
+     * * `complained` - Complained
+     */
+    export type EmailStatusEnum = typeof EmailStatusEnum[keyof typeof EmailStatusEnum];
+
+
+    export const EmailStatusEnum = {
+      Queued: 'queued',
+      Unknown: 'unknown',
+      Skipped: 'skipped',
+      Failed: 'failed',
+      Sent: 'sent',
+      Delivered: 'delivered',
+      Bounced: 'bounced',
+      Complained: 'complained',
+    } as const;
+
+    export interface EmailStatus {
+      /** The email's `message_id`, as the send answered it. */
+      id: string;
+      /** Where the email is. A status never moves back: a late `sent` never replaces `delivered`.
+       *
+       * * `queued` - Queued
+       * * `unknown` - Unknown
+       * * `skipped` - Skipped
+       * * `failed` - Failed
+       * * `sent` - Sent
+       * * `delivered` - Delivered
+       * * `bounced` - Bounced
+       * * `complained` - Complained */
+      status: EmailStatusEnum;
+      /** When PostHog accepted the send. */
+      created_at: string;
+      /** When the email reached its status. */
+      status_at: string;
+      /** Why the email is `skipped`, `failed`, `bounced` or `complained`, such as `recipient_suppressed`, `provider_error` or `hard`. Absent for the other statuses. */
+      reason?: string;
+    }
+
+    export interface EmailStatusPage {
+      /** The recipient's emails, newest first. */
+      results: EmailStatus[];
+      /**
+         * Pass this as `cursor` to read the next page. Null on the last page.
+         * @nullable
+         */
+      next_cursor: string | null;
+    }
+
     export interface EmailTag {
       /**
          * Tag name: ASCII letters, numbers, `_` and `-`. Names starting with `ph_` are PostHog's.
@@ -134350,6 +134406,24 @@ export namespace Schemas {
      * The initial index from which to return the results.
      */
     offset?: number;
+    };
+
+    export type MessagingEmailsListParams = {
+    /**
+     * The `next_cursor` of the previous page. Leave it out to read the first page.
+     */
+    cursor?: string;
+    /**
+     * How many emails a page holds, from 1 to 100.
+     * @minimum 1
+     * @maximum 100
+     */
+    limit?: number;
+    /**
+     * The recipient's address. Case and the spaces around it do not matter. A send's `cc` and `bcc` copies are not looked up.
+     * @minLength 1
+     */
+    to: string;
     };
 
     export type MessagingCategoriesListParams = {

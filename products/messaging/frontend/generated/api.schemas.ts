@@ -8,6 +8,81 @@
  * OpenAPI spec version: 1.0.0
  */
 /**
+ * * `queued` - Queued
+ * * `unknown` - Unknown
+ * * `skipped` - Skipped
+ * * `failed` - Failed
+ * * `sent` - Sent
+ * * `delivered` - Delivered
+ * * `bounced` - Bounced
+ * * `complained` - Complained
+ */
+export type EmailStatusEnumApi = (typeof EmailStatusEnumApi)[keyof typeof EmailStatusEnumApi]
+
+export const EmailStatusEnumApi = {
+    Queued: 'queued',
+    Unknown: 'unknown',
+    Skipped: 'skipped',
+    Failed: 'failed',
+    Sent: 'sent',
+    Delivered: 'delivered',
+    Bounced: 'bounced',
+    Complained: 'complained',
+} as const
+
+export interface EmailStatusApi {
+    /** The email's `message_id`, as the send answered it. */
+    id: string
+    /** Where the email is. A status never moves back: a late `sent` never replaces `delivered`.
+     *
+     * * `queued` - Queued
+     * * `unknown` - Unknown
+     * * `skipped` - Skipped
+     * * `failed` - Failed
+     * * `sent` - Sent
+     * * `delivered` - Delivered
+     * * `bounced` - Bounced
+     * * `complained` - Complained */
+    status: EmailStatusEnumApi
+    /** When PostHog accepted the send. */
+    created_at: string
+    /** When the email reached its status. */
+    status_at: string
+    /** Why the email is `skipped`, `failed`, `bounced` or `complained`, such as `recipient_suppressed`, `provider_error` or `hard`. Absent for the other statuses. */
+    reason?: string
+}
+
+export interface EmailStatusPageApi {
+    /** The recipient's emails, newest first. */
+    results: EmailStatusApi[]
+    /**
+     * Pass this as `cursor` to read the next page. Null on the last page.
+     * @nullable
+     */
+    next_cursor: string | null
+}
+
+export interface TemplateErrorApi {
+    /** Error class, such as `invalid_request`. */
+    type: string
+    /** Stable error code to branch on, such as `invalid_template_key`. */
+    code: string
+    /** What went wrong. */
+    detail: string
+    /**
+     * The request field the error is about, if any.
+     * @nullable
+     */
+    attr: string | null
+    /** Why PostHog refuses the request. */
+    why?: string
+    /** What to change before you retry. */
+    fix?: string
+    /** Documentation for this error code. */
+    docs_url?: string
+}
+
+/**
  * Data for the template's Liquid placeholders, available as `variables`. For example `{"reset_link": "https://..."}` fills `{{ variables.reset_link }}`.
  */
 export type SendEmailApiMessageData = { [key: string]: unknown }
@@ -134,26 +209,6 @@ export interface SendEmailResponseApi {
     replayed: boolean
     /** Things to know about the queued email. Empty in the normal case. */
     warnings: SendEmailWarningApi[]
-}
-
-export interface TemplateErrorApi {
-    /** Error class, such as `invalid_request`. */
-    type: string
-    /** Stable error code to branch on, such as `invalid_template_key`. */
-    code: string
-    /** What went wrong. */
-    detail: string
-    /**
-     * The request field the error is about, if any.
-     * @nullable
-     */
-    attr: string | null
-    /** Why PostHog refuses the request. */
-    why?: string
-    /** What to change before you retry. */
-    fix?: string
-    /** Documentation for this error code. */
-    docs_url?: string
 }
 
 /**
@@ -888,6 +943,24 @@ export interface UploadTemplateResponseApi {
     source: TemplateSourceApi
     /** The workflow that sends this template. Each upload that changes the content writes a new version of it. */
     transactional_hog_flow_id: string
+}
+
+export type MessagingEmailsListParams = {
+    /**
+     * The `next_cursor` of the previous page. Leave it out to read the first page.
+     */
+    cursor?: string
+    /**
+     * How many emails a page holds, from 1 to 100.
+     * @minimum 1
+     * @maximum 100
+     */
+    limit?: number
+    /**
+     * The recipient's address. Case and the spaces around it do not matter. A send's `cc` and `bcc` copies are not looked up.
+     * @minLength 1
+     */
+    to: string
 }
 
 export type MessagingCategoriesListParams = {
