@@ -13,16 +13,18 @@ import { CdpApi } from '~/cdp/cdp-api'
 import { CyclotronJobInvocationHogFunction, HogFunctionType } from '~/cdp/types'
 import { setupExpressApp } from '~/common/api/router'
 import { defaultConfig } from '~/common/config/config'
-import { KAFKA_APP_METRICS_2, KAFKA_LOG_ENTRIES } from '~/common/config/kafka-topics'
+import { KAFKA_APP_METRICS_2, KAFKA_EMAIL_STATUS, KAFKA_LOG_ENTRIES } from '~/common/config/kafka-topics'
 import { closeHub, createHub } from '~/common/utils/db/hub'
 import { PostgresUse } from '~/common/utils/db/postgres'
 import * as envUtils from '~/common/utils/env-utils'
 import { parseJSON } from '~/common/utils/json-parse'
+import { UUIDT } from '~/common/utils/utils'
 import { createCdpConsumerDeps } from '~/tests/helpers/cdp'
 import { waitForExpect } from '~/tests/helpers/expectations'
 import { createTestTeamFixture } from '~/tests/helpers/sql'
 
 import { Hub, Team } from '../../../types'
+import { emailRecipientHash } from './email-recipient-hash'
 import {
     METRIC_NAME_TO_EVENT_NAME,
     PIXEL_GIF,
@@ -424,6 +426,167 @@ describe('EmailTrackingService', () => {
 
                 const messages = mockProducerObserver.getProducedKafkaMessagesForTopic(KAFKA_APP_METRICS_2)
                 expect(messages).toHaveLength(0)
+            })
+        })
+
+        describe('SES webhook transactional email status', () => {
+            const messageId = new UUIDT(Date.parse('2026-10-22T07:00:00.000Z')).toString()
+            const recipientHash = emailRecipientHash('user@example.com', defaultConfig.ENCRYPTION_SALT_KEYS)!
+            let verifySignatureSpy: jest.SpyInstance
+
+            beforeEach(() => {
+                verifySignatureSpy = jest
+                    .spyOn(SesWebhookHandler.prototype as any, 'verifySnsSignature')
+                    .mockResolvedValue(true)
+            })
+
+            afterEach(() => {
+                verifySignatureSpy.mockRestore()
+            })
+
+            const deliveryDetail = {
+                delivery: { timestamp: '2026-10-22T07:01:00.000Z', recipients: ['user@example.com'] },
+            }
+            const bounceDetail = (emailAddress = 'User@Example.com'): Record<string, unknown> => ({
+                bounce: {
+                    bounceType: 'Permanent',
+                    bouncedRecipients: [{ emailAddress }],
+                    timestamp: '2026-10-22T07:02:00.000Z',
+                },
+            })
+            const complaintDetail = (
+                complaintFeedbackType: string,
+                emailAddress = 'user@example.com'
+            ): Record<string, unknown> => ({
+                complaint: {
+                    complainedRecipients: [{ emailAddress }],
+                    timestamp: '2026-10-22T07:03:00.000Z',
+                    complaintFeedbackType,
+                },
+            })
+
+            const postSesEvent = async (
+                eventType: string,
+                detail: Record<string, unknown>,
+                tags: Record<string, string[]>
+            ): Promise<supertest.Response> => {
+                const sesRecord = {
+                    eventType,
+                    mail: {
+                        timestamp: '2026-10-22T07:00:00.500Z',
+                        source: 'sender@posthog.com',
+                        messageId: 'ses-message-id',
+                        destination: ['user@example.com'],
+                        headers: [
+                            {
+                                name: TRACKING_CODE_HEADER_NAME,
+                                value: signer.generate({ functionId: hogFunction.id, id: messageId, teamId: team.id }),
+                            },
+                        ],
+                        tags,
+                    },
+                    ...detail,
+                }
+                const envelope = {
+                    Type: 'Notification',
+                    MessageId: 'sns-message-id',
+                    TopicArn: 'arn:aws:sns:us-east-1:123456789012:ses-events',
+                    Message: JSON.stringify(sesRecord),
+                    Timestamp: '2026-10-22T07:03:00.000Z',
+                    SignatureVersion: '1',
+                    Signature: 'stubbed',
+                    SigningCertURL: 'https://sns.us-east-1.amazonaws.com/cert.pem',
+                }
+                return await supertest(app)
+                    .post('/public/m/ses_webhook')
+                    .set('Content-Type', 'text/plain')
+                    .send(JSON.stringify(envelope))
+            }
+
+            it.each([
+                [
+                    'a delivery as delivered',
+                    'Delivery',
+                    deliveryDetail,
+                    { status: 'delivered', status_at: '2026-10-22 07:01:00.000000', reason: '' },
+                ],
+                [
+                    'a bounce as bounced with its bounce type',
+                    'Bounce',
+                    bounceDetail(),
+                    { status: 'bounced', status_at: '2026-10-22 07:02:00.000000', reason: 'hard' },
+                ],
+                [
+                    'a complaint as complained with its feedback type',
+                    'Complaint',
+                    complaintDetail('abuse'),
+                    { status: 'complained', status_at: '2026-10-22 07:03:00.000000', reason: 'abuse' },
+                ],
+                [
+                    'a reject as failed',
+                    'Reject',
+                    { reject: { reason: 'Bad content' } },
+                    { status: 'failed', status_at: '2026-10-22 07:00:00.500000', reason: 'rejected' },
+                ],
+            ])('records %s', async (_name, eventType, detail, expected) => {
+                const res = await postSesEvent(eventType, detail, { ph_recipient_hash: [recipientHash] })
+
+                expect(res.status).toBe(200)
+                const rows = mockProducerObserver.getProducedKafkaMessagesForTopic(KAFKA_EMAIL_STATUS)
+                expect(rows.map((row) => row.key)).toEqual([messageId])
+                expect(rows.map((row) => row.value)).toEqual([
+                    expect.objectContaining({
+                        team_id: team.id,
+                        message_id: messageId,
+                        created_at: '2026-10-22 07:00:00.000000',
+                        recipient_hash: recipientHash,
+                        ...expected,
+                    }),
+                ])
+            })
+
+            it.each([
+                ['an email the transactional route did not send', 'Delivery', deliveryDetail, {}],
+                [
+                    'a not-spam correction of a complaint',
+                    'Complaint',
+                    complaintDetail('Not-Spam'),
+                    { ph_recipient_hash: [recipientHash] },
+                ],
+                [
+                    'a delivery to a cc copy',
+                    'Delivery',
+                    { delivery: { timestamp: '2026-10-22T07:01:00.000Z', recipients: ['cc@example.com'] } },
+                    { ph_recipient_hash: [recipientHash] },
+                ],
+                [
+                    'a bounce of a bcc copy',
+                    'Bounce',
+                    bounceDetail('bcc@example.com'),
+                    { ph_recipient_hash: [recipientHash] },
+                ],
+                [
+                    'a complaint from a cc recipient',
+                    'Complaint',
+                    complaintDetail('abuse', 'cc@example.com'),
+                    { ph_recipient_hash: [recipientHash] },
+                ],
+            ])('records nothing for %s', async (_name, eventType, detail, tags) => {
+                const res = await postSesEvent(eventType, detail, tags)
+
+                expect(res.status).toBe(200)
+                expect(mockProducerObserver.getProducedKafkaMessagesForTopic(KAFKA_EMAIL_STATUS)).toEqual([])
+            })
+
+            it('answers SNS with a 5xx before counting anything when the status write fails, so the retry counts once', async () => {
+                mockProducerObserver.produceSpy.mockImplementation(({ topic }) =>
+                    topic === KAFKA_EMAIL_STATUS ? Promise.reject(new Error('kafka is down')) : Promise.resolve()
+                )
+
+                const res = await postSesEvent('Delivery', deliveryDetail, { ph_recipient_hash: [recipientHash] })
+
+                expect(res.status).toBe(500)
+                expect(mockProducerObserver.getProducedKafkaMessagesForTopic(KAFKA_APP_METRICS_2)).toEqual([])
             })
         })
 

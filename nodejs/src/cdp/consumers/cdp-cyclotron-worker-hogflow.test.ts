@@ -1,8 +1,11 @@
 import { createMockJobQueue } from '~/tests/helpers/mocks/job-queue.mock'
+import { mockProducerObserver } from '~/tests/helpers/mocks/producer.mock'
 
 import { DateTime } from 'luxon'
 
 import { HogFlow } from '~/cdp/schema/hogflow'
+import { TRANSACTIONAL_EMAIL_EVENT } from '~/cdp/services/hogflows/hogflow-sensitivity'
+import { KAFKA_EMAIL_STATUS } from '~/common/config/kafka-topics'
 import { InternalPersonWithDistinctId, PersonReadRepository } from '~/common/persons/repositories/person-repository'
 import { closeHub, createHub } from '~/common/utils/db/hub'
 import { PostgresUse } from '~/common/utils/db/postgres'
@@ -759,6 +762,58 @@ describe('CdpCyclotronWorkerHogFlow', () => {
             // terminal lifecycle row off its presence, so without it the row keys `hog_function`,
             // never collapses the `running` row, and the run stays stuck at `running` in the UI.
             expect((results2[0].invocation as CyclotronJobInvocationHogFlow).hogFlow?.id).toBe(hogFlow.id)
+        })
+
+        it.each([
+            [
+                'its workflow stopped',
+                'workflow_inactive',
+                async (invocation: CyclotronJobInvocation): Promise<void> => {
+                    await hub.postgres.query(
+                        PostgresUse.COMMON_WRITE,
+                        `UPDATE posthog_hogflow SET status = 'archived' WHERE id = $1`,
+                        [invocation.functionId],
+                        'disableHogFlow'
+                    )
+                    processor['hogFlowManager']['onHogFlowsReloaded'](invocation.teamId, [invocation.functionId])
+                },
+            ],
+            [
+                'its run was canceled',
+                'run_canceled',
+                (invocation: CyclotronJobInvocation): Promise<void> => {
+                    invocation.cancelRequestedAt = DateTime.now()
+                    return Promise.resolve()
+                },
+            ],
+            [
+                'its workflow is gone',
+                'workflow_missing',
+                (invocation: CyclotronJobInvocation): Promise<void> => {
+                    invocation.functionId = new UUIDT().toString()
+                    return Promise.resolve()
+                },
+            ],
+        ])('records a transactional email as skipped when %s before it ran', async (_name, reason, before) => {
+            const invocation = createSerializedHogFlowInvocation(hogFlows[0], {
+                event: { event: TRANSACTIONAL_EMAIL_EVENT, distinct_id: 'distinct_person_1', properties: {} } as any,
+                emailRecipientHash: 'a1b2',
+            })
+            await before(invocation)
+            mockProducerObserver.resetKafkaProducer()
+
+            await processor.processInvocations([invocation])
+
+            expect(
+                mockProducerObserver.getProducedKafkaMessagesForTopic(KAFKA_EMAIL_STATUS).map((row) => row.value)
+            ).toEqual([
+                expect.objectContaining({
+                    message_id: invocation.id,
+                    status: 'skipped',
+                    recipient_hash: 'a1b2',
+                    reason,
+                }),
+            ])
         })
 
         it('attaches the live flow to a cancel-requested run so the terminal row keys as hog_flow', async () => {

@@ -67,7 +67,9 @@ import { JobQueue } from './services/job-queue/job-queue.interface'
 import { GroupsManagerService } from './services/managers/groups-manager.service'
 import { HogFunctionManagerService } from './services/managers/hog-function-manager.service'
 import { EMAIL_QUEUE_PRIORITY } from './services/messaging/email-priority'
+import { emailRecipientHash } from './services/messaging/email-recipient-hash'
 import { EmailSendPolicy } from './services/messaging/email-send-policy'
+import { EmailStatusWriter, transactionalEmailRecipientHash } from './services/messaging/email-status.service'
 import { EmailTrackingService } from './services/messaging/email-tracking.service'
 import { EmailTrackingCodeSigner } from './services/messaging/helpers/tracking-code'
 import { RecipientTokensService } from './services/messaging/recipient-tokens.service'
@@ -187,6 +189,7 @@ export class CdpApi {
     private hogQueue: JobQueue
     private hogflowQueue: JobQueue
     private emailTrackingService: EmailTrackingService
+    private emailStatus: EmailStatusWriter
     private recipientTokensService: RecipientTokensService
     private batchExportHogFunctionService: BatchExportHogFunctionService
     private groupsManager: GroupsManagerService
@@ -223,6 +226,7 @@ export class CdpApi {
         this.hogWatcher = services.hogWatcher
         this.hogWatcherMirror = services.hogWatcherMirror
         this.invocationResultsService = services.invocationResultsService
+        this.emailStatus = services.emailStatus
 
         // API-only services. The hog-transformer's monitoring service reuses the same
         // resolved outputs registry as the core CDP services — no separate construction.
@@ -246,7 +250,9 @@ export class CdpApi {
             services.capturedEventsService,
             services.teamWorkflowsConfigService,
             new EmailTrackingCodeSigner(config.ENCRYPTION_SALT_KEYS, config.CDP_EMAIL_TRACKING_URL),
-            services.emailSuppressionService
+            services.emailSuppressionService,
+            services.emailStatus,
+            config.ENCRYPTION_SALT_KEYS
         )
         this.transactionalEmailPolicy = new EmailSendPolicy(
             services.teamWorkflowsConfigService,
@@ -1265,6 +1271,16 @@ export class CdpApi {
                     }
                     return reply('quota_limited', 429, { error: 'quota_limited' })
                 }
+                const recipientHash = transactionalEmailRecipientHash(
+                    {
+                        triggerEvent: event.event,
+                        recipientHash: emailRecipientHash(to, this.config.ENCRYPTION_SALT_KEYS),
+                    },
+                    'route'
+                )
+                if (recipientHash) {
+                    invocation.state.emailRecipientHash = recipientHash
+                }
                 this.invocationResultsService.invocationResultsRowsService.queueLifecycleRow(invocation, 'running')
                 try {
                     await this.hogflowQueue.queueInvocations([invocation])
@@ -1281,6 +1297,16 @@ export class CdpApi {
             }
             if (idempotencyKey) {
                 await idempotencyKeys.markQueued(team.id, idempotencyKey, fingerprint, invocation.id)
+            }
+            const { emailRecipientHash: recipientHash } = invocation.state
+            if (recipientHash) {
+                this.emailStatus.recordInBackground({
+                    teamId: team.id,
+                    messageId: invocation.id,
+                    status: 'queued',
+                    at: new Date(),
+                    recipientHash,
+                })
             }
             await this.invocationResultsService.invocationResultsRowsService.flush()
             // The run skips the trigger pipeline that counts runs for event-triggered workflows.

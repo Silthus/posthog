@@ -1,5 +1,6 @@
 // Serial: resets shared Postgres and relies on the reset-created default team.
 import { createMockJobQueue } from '../../tests/helpers/mocks/job-queue.mock'
+import { mockProducerObserver } from '../../tests/helpers/mocks/producer.mock'
 import { mockFetch } from '../../tests/helpers/mocks/request.mock'
 
 import { Server } from 'http'
@@ -11,6 +12,7 @@ import { HogFlow } from '~/cdp/schema/hogflow'
 import { PosthogJwtAudience } from '~/cdp/utils/jwt-utils'
 import { ScopedServiceJwt } from '~/cdp/utils/scoped-service-jwt'
 import { setupExpressApp } from '~/common/api/router'
+import { KAFKA_EMAIL_STATUS } from '~/common/config/kafka-topics'
 import { deleteKeysWithPrefix } from '~/common/redis/_tests/redis'
 import { createRedisV2PoolFromConfig } from '~/common/redis/redis-v2'
 import { closeHub, createHub } from '~/common/utils/db/hub'
@@ -37,6 +39,8 @@ import { CdpConsumerBaseDeps } from './consumers/cdp-base.consumer'
 import { posthogFilterOutPlugin } from './legacy-plugins/_transformations/posthog-filter-out-plugin/template'
 import { IdempotencyKeys, createIdempotencyValkeyPool } from './services/hogflows/idempotency-keys'
 import { transactionalEmailRequestsTotal } from './services/hogflows/transactional-email'
+import { emailRecipientHash } from './services/messaging/email-recipient-hash'
+import { emailStatusMissingRecipientHash } from './services/messaging/email-status.service'
 import { BASE_REDIS_KEY, HogWatcherState } from './services/monitoring/hog-watcher.service'
 import { compileHog } from './templates/compiler'
 import { HogFunctionInvocationGlobals, HogFunctionType } from './types'
@@ -2169,6 +2173,9 @@ describe('CDP API', () => {
                 .set(headers)
                 .send(payload)
 
+        const statusRows = (): Record<string, any>[] =>
+            mockProducerObserver.getProducedKafkaMessagesForTopic(KAFKA_EMAIL_STATUS).map((row) => row.value)
+
         const codeSend = {
             content: { subject: 'Reset your password', html: '<p>Hi {{ variables.name }}</p>', text: 'Hi' },
             from: { integrationId: 12, email: 'security@example.com', name: 'Example' },
@@ -2179,6 +2186,7 @@ describe('CDP API', () => {
         beforeEach(async () => {
             mockQueueInvocations = jest.fn().mockResolvedValue(undefined)
             api['hogflowQueue'] = { queueInvocations: mockQueueInvocations } as any
+            mockProducerObserver.resetKafkaProducer()
             hogFlow = await insertHogFlow(transactionalFlow('api', 'active'))
             await insertSender(SENDER_ID)
         })
@@ -2213,6 +2221,48 @@ describe('CDP API', () => {
                 expect.objectContaining({ app_source_id: hogFlow.id, metric_name: 'triggered', count: 1 }),
                 'hog_flow'
             )
+            // The worker, the SES webhook and the janitor write later statuses with the hash on the run.
+            const recipientHash = emailRecipientHash('user@example.com', hub.ENCRYPTION_SALT_KEYS)
+            expect(invocation.state.emailRecipientHash).toEqual(recipientHash)
+            expect(statusRows()).toEqual([
+                expect.objectContaining({
+                    team_id: team.id,
+                    message_id: invocation.id,
+                    status: 'queued',
+                    reason: '',
+                    recipient_hash: recipientHash,
+                }),
+            ])
+        })
+
+        it.each([
+            ['no salt keys', ''],
+            ['no usable first salt key', ' ,00beef0000beef0000beef0000beef00'],
+        ])('still queues the send with %s and only skips its status', async (_name, saltKeys) => {
+            const missingHashCount = async (): Promise<number> =>
+                (await emailStatusMissingRecipientHash.get()).values.find((v) => v.labels.source === 'route')?.value ??
+                0
+            const missingBefore = await missingHashCount()
+            const configuredSaltKeys = hub.ENCRYPTION_SALT_KEYS
+            hub.ENCRYPTION_SALT_KEYS = saltKeys
+            const keyed = { ...body, idempotency_key: `key-${new UUIDT().toString()}` }
+            try {
+                const res = await send(hogFlow.id, { Authorization: `Bearer ${mintToken(team.id, hogFlow.id)}` }, keyed)
+                const retry = await send(
+                    hogFlow.id,
+                    { Authorization: `Bearer ${mintToken(team.id, hogFlow.id)}` },
+                    keyed
+                )
+
+                expect(res.status).toEqual(202)
+                expect(retry.body).toMatchObject({ replayed: true })
+                expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
+                expect(mockQueueInvocations.mock.calls[0][0][0].state.emailRecipientHash).toBeUndefined()
+                expect(statusRows()).toEqual([])
+                expect(await missingHashCount()).toEqual(missingBefore + 1)
+            } finally {
+                hub.ENCRYPTION_SALT_KEYS = configuredSaltKeys
+            }
         })
 
         describe('with an idempotency key', () => {
@@ -2238,6 +2288,7 @@ describe('CDP API', () => {
                     replayed: true,
                 })
                 expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
+                expect(statusRows()).toHaveLength(1)
             })
 
             it.each([
@@ -2346,6 +2397,7 @@ describe('CDP API', () => {
                 expect(retry.status).toEqual(202)
                 expect(retry.body).toMatchObject({ replayed: false })
                 expect(mockQueueInvocations).toHaveBeenCalledTimes(2)
+                expect(statusRows()).toHaveLength(1)
             })
 
             it('refuses a keyed send when no idempotency store is configured', async () => {
@@ -2541,6 +2593,7 @@ describe('CDP API', () => {
                 })
                 expect(await outcomeCount(code)).toEqual(rejectedBefore + 1)
                 expect(mockQueueInvocations).not.toHaveBeenCalled()
+                expect(statusRows()).toEqual([])
             })
 
             it('sends a keyed send that was refused once the refusal is fixed', async () => {
