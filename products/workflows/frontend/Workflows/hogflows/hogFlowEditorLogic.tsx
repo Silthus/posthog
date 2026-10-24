@@ -41,7 +41,7 @@ import type {
     TeamType,
     UserBasicType,
 } from '../../../../../frontend/src/types'
-import { resolveDefaultEmailSender } from '../../Channels/defaultEmailSender'
+import { firstRunSenderLogic } from '../../firstRun/firstRunSenderLogic'
 import { optOutCategoriesLogic } from '../../OptOuts/optOutCategoriesLogic'
 import type { MessageCategory } from '../../OptOuts/optOutCategoriesLogic'
 import { EXIT_NODE_ID, TRIGGER_NODE_ID, WorkflowLogicProps, workflowLogic } from '../workflowLogic'
@@ -267,6 +267,7 @@ export interface hogFlowEditorLogicValues {
     categoriesLoading: boolean // optOutCategoriesLogic
     currentTeam: TeamPublicType | TeamType | null // teamLogic
     edgesByActionId: Record<string, HogFlowEdge[]> // workflowLogic
+    emailInsertionPending: boolean // workflowLogic
     hogFunctionTemplatesById: Record<string, HogFunctionTemplateType> // workflowLogic
     workflow: HogFlow // workflowLogic
     actionMetricsById: Record<string, HogFlowEditorActionMetrics> | null
@@ -2074,6 +2075,9 @@ export interface hogFlowEditorLogicActions {
               }
         payload?: any
     } // workflowLogic
+    setEmailInsertionPending: (pending: boolean) => {
+        pending: boolean
+    } // workflowLogic
     setWorkflowAction: (
         actionId: string,
         action: HogFlowAction
@@ -2299,7 +2303,7 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
     connect(() => ({
         values: [
             workflowLogic,
-            ['workflow', 'edgesByActionId', 'hogFunctionTemplatesById'],
+            ['workflow', 'edgesByActionId', 'hogFunctionTemplatesById', 'emailInsertionPending'],
             optOutCategoriesLogic(),
             ['categories', 'categoriesLoading'],
             integrationsLogic,
@@ -2311,7 +2315,13 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
         ],
         actions: [
             workflowLogic,
-            ['setWorkflowInfo', 'setWorkflowAction', 'setWorkflowActionEdges', 'loadWorkflowSuccess'],
+            [
+                'setWorkflowInfo',
+                'setWorkflowAction',
+                'setWorkflowActionEdges',
+                'loadWorkflowSuccess',
+                'setEmailInsertionPending',
+            ],
             optOutCategoriesLogic(),
             ['loadCategories'],
         ],
@@ -2589,7 +2599,7 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
             },
         ],
     })),
-    listeners(({ values, actions }) => {
+    listeners(({ values, actions, props, cache }) => {
         let animationTimeout: ReturnType<typeof setTimeout> | null = null
         return {
             onEdgesChange: ({ edges }) => {
@@ -2856,8 +2866,12 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                 event.dataTransfer.dropEffect = 'move'
             },
 
-            onDrop: ({ event, targetEdge, joinEdges }) => {
+            onDrop: async ({ event, targetEdge, joinEdges }) => {
                 event?.preventDefault()
+                if (values.emailInsertionPending) {
+                    return
+                }
+                const nodeToBeAdded = values.nodeToBeAdded
                 const dropzoneNode = values.dropzoneNodes.find((x) => x.id === values.highlightedDropzoneNodeId)
 
                 if (values.nodeToBeAdded && (dropzoneNode || targetEdge)) {
@@ -2914,16 +2928,75 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                         }
                     }
 
-                    if (!isHogFlowActionNode && 'template_id' in config && config.template_id === 'template-email') {
-                        const emailInput = config.inputs?.email
-                        const team = values.currentTeam
-                        const sender = resolveDefaultEmailSender(
-                            values.integrations,
-                            team && 'workflows_config' in team
-                                ? team.workflows_config?.default_email_integration_id
-                                : null
-                        )
-                        if (sender && emailInput?.value && !emailInput.value.from?.integrationId) {
+                    if (
+                        !isHogFlowActionNode &&
+                        'template_id' in config &&
+                        config.template_id === 'template-email' &&
+                        !config.inputs?.email?.value?.from?.integrationId &&
+                        !config.inputs?.email?.value?.from?.email &&
+                        !config.inputs?.email?.value?.from?.name
+                    ) {
+                        let emailInput = config.inputs?.email
+                        const workflowId = values.workflow.id
+                        const teamId = values.currentTeam?.id
+                        const mountGeneration = cache.mountGeneration
+                        const insertionIsCurrent = (): boolean =>
+                            cache.mountGeneration === mountGeneration &&
+                            values.workflow.id === workflowId &&
+                            values.currentTeam?.id === teamId
+                        const abandonInsertion = (): void => {
+                            if (cache.mountGeneration !== mountGeneration) {
+                                return
+                            }
+                            lemonToast.error("The email step wasn't added because the workflow changed. Add it again.")
+                            actions.setNodeToBeAdded(null)
+                            actions.hideDropzones()
+                        }
+                        actions.setEmailInsertionPending(true)
+                        let sender
+                        let unmount: (() => void) | undefined
+                        try {
+                            if (!emailInput && !values.hogFunctionTemplatesById['template-email']) {
+                                await workflowLogic(props).asyncActions.loadHogFunctionTemplatesById()
+                                if (!insertionIsCurrent()) {
+                                    abandonInsertion()
+                                    return
+                                }
+                                const template = values.hogFunctionTemplatesById['template-email']
+                                if (template) {
+                                    config = {
+                                        ...config,
+                                        inputs: { ...templateToConfiguration(template).inputs, ...config.inputs },
+                                    }
+                                    emailInput = config.inputs?.email
+                                }
+                            }
+                            if (
+                                !emailInput?.value?.from?.integrationId &&
+                                !emailInput?.value?.from?.email &&
+                                !emailInput?.value?.from?.name
+                            ) {
+                                const senderLogic = firstRunSenderLogic({
+                                    allowSandbox:
+                                        partialNewAction.type === 'function_email' &&
+                                        values.workflow.origin_product !== 'broadcasts' &&
+                                        !emailInput?.value?.replyTo,
+                                })
+                                unmount = senderLogic.mount()
+                                await senderLogic.asyncActions.resolveFirstRunSender()
+                                sender = senderLogic.values.resolvedFirstRunSender
+                            }
+                        } finally {
+                            unmount?.()
+                            if (cache.mountGeneration === mountGeneration) {
+                                actions.setEmailInsertionPending(false)
+                            }
+                        }
+                        if (!insertionIsCurrent()) {
+                            abandonInsertion()
+                            return
+                        }
+                        if (sender) {
                             config = {
                                 ...config,
                                 inputs: {
@@ -2931,8 +3004,8 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                                     email: {
                                         ...emailInput,
                                         value: {
-                                            ...emailInput.value,
-                                            from: { ...emailInput.value.from, integrationId: sender.integrationId },
+                                            ...emailInput?.value,
+                                            from: { ...emailInput?.value?.from, integrationId: sender.integrationId },
                                         },
                                     },
                                 },
@@ -2944,7 +3017,7 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
 
                     const newAction = {
                         id: isHogFlowActionNode
-                            ? (values.nodeToBeAdded as HogFlowActionNode).id
+                            ? (nodeToBeAdded as HogFlowActionNode).id
                             : `action_${partialNewAction.type}_${uuid()}`,
                         type: partialNewAction.type,
                         name: partialNewAction.name,
@@ -2986,8 +3059,10 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                         edgesToBeReplaced
                     )
 
-                    if (!newEdges) {
-                        throw new Error('Edge to be replaced not found')
+                    if (!newEdges || (joinEdges && edgesToBeReplaced.length !== joinEdges.length)) {
+                        lemonToast.error('The insertion point changed. Choose where to insert the step again.')
+                        actions.setNodeToBeAdded(null)
+                        return
                     }
 
                     // Auto-create workflow variables if the action has a default output_variable
@@ -3196,6 +3271,9 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                 })
             },
             duplicateNodeBelow: ({ actionId }) => {
+                if (values.emailInsertionPending) {
+                    return
+                }
                 const action = values.workflow.actions.find((action) => action.id === actionId)
                 const targetEdge = values.workflow.edges.find((edge) => edge.from === actionId)
 
@@ -3281,8 +3359,9 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
             [urls.workflow(':id', ':tab')]: reactToTabChange,
         }
     }),
-    events(({ actions, values }) => ({
+    events(({ actions, values, cache }) => ({
         afterMount: () => {
+            cache.mountGeneration = uuid()
             if (values.editorLayout === 'simple' && !isWorkflowTreeComplete(values.workflow)) {
                 actions.setEditorLayout('advanced')
             }
@@ -3305,6 +3384,8 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
             ;(actions as any)._keydownHandler = handleKeyDown
         },
         beforeUnmount: () => {
+            cache.mountGeneration = null
+            actions.setEmailInsertionPending(false)
             const handler = (actions as any)._keydownHandler
             if (handler) {
                 document.removeEventListener('keydown', handler)

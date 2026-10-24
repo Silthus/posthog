@@ -254,10 +254,23 @@ describe('integrationsLogic', () => {
 
             ensureStatus = 200
             await expectLogic(logic, () => logic.actions.ensureSandboxEmailSender())
-                .toDispatchActions(['provisionSandboxEmailSenderSuccess', 'loadIntegrationsSuccess'])
+                .toDispatchActions(['loadIntegrationsSuccess', 'provisionSandboxEmailSenderSuccess'])
                 .toMatchValues({ sandboxEmailSender: expect.objectContaining({ id: sandboxSender.id }) })
 
             expect(ensureCalls).toBe(2)
+        })
+
+        it('reports provisioning failure when the refreshed sender list cannot load', async () => {
+            useMocks({
+                get: {
+                    '/api/projects/:team_id/integrations/': () => [500, { detail: 'Sender list unavailable' }],
+                },
+            })
+            enableFlag()
+            await expectLogic(logic, () => logic.actions.ensureSandboxEmailSender()).toFinishAllListeners()
+
+            expect(logic.values.sandboxEmailSenderProvisionResult).toBe('failed')
+            expect(ensureCalls).toBe(1)
         })
 
         it('provisions once the flag arrives after a surface asked for the sandbox sender', async () => {

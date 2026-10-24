@@ -1105,7 +1105,7 @@ export const integrationsLogic = kea<integrationsLogicType>([
             },
         ],
     }),
-    loaders(({ actions, values, cache }) => ({
+    loaders(({ actions, asyncActions, values, cache }) => ({
         integrations: [
             null as IntegrationType[] | null,
             {
@@ -1233,14 +1233,36 @@ export const integrationsLogic = kea<integrationsLogicType>([
             {
                 provisionSandboxEmailSender: async (): Promise<SandboxEmailSenderProvisionResult | null> => {
                     const projectId = values.currentProjectId
-                    const result = await requestSandboxEmailSender(String(projectId))
+                    if (!cache.sandboxProvisionRequest || cache.sandboxProvisionRequest.projectId !== projectId) {
+                        const promise = requestSandboxEmailSender(String(projectId))
+                            .then(async (result): Promise<Awaited<ReturnType<typeof requestSandboxEmailSender>>> => {
+                                if (values.currentProjectId === projectId && result.result === 'provisioned') {
+                                    await asyncActions.loadIntegrations()
+                                    if (
+                                        values.currentProjectId === projectId &&
+                                        !values.integrations?.some(isSandboxEmailSender)
+                                    ) {
+                                        return {
+                                            result: 'failed',
+                                            error: 'Could not load the sandbox sender after setup. Try again.',
+                                        }
+                                    }
+                                }
+                                return result
+                            })
+                            .finally(() => {
+                                if (cache.sandboxProvisionRequest?.promise === promise) {
+                                    cache.sandboxProvisionRequest = undefined
+                                }
+                            })
+                        cache.sandboxProvisionRequest = { projectId, promise }
+                    }
+                    const result: Awaited<ReturnType<typeof requestSandboxEmailSender>> =
+                        await cache.sandboxProvisionRequest.promise
                     if (values.currentProjectId !== projectId) {
                         return values.sandboxEmailSenderProvisionResult
                     }
                     actions.setSandboxEmailSenderProvisionError(result.error)
-                    if (result.result === 'provisioned') {
-                        actions.loadIntegrations()
-                    }
                     return result.result
                 },
             },
