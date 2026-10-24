@@ -133,18 +133,34 @@ class TestTransactionalEmail(APIBaseTest):
         }
         if addressed_by == "key":
             expected_payload["send"] = {"tracking": {"captureEngagement": True}}
+        if addressed_by != "url_id":
+            expected_payload["route"] = "send_email"
         assert mock_post.call_args.kwargs["json"] == expected_payload
 
-    def test_passes_the_idempotency_key_to_the_pipeline_and_reports_a_replay(self, mock_post, _flag, capture):
+    @parameterized.expand(["url_id", "key", "id", "template_key"])
+    def test_passes_the_idempotency_key_to_the_pipeline_and_reports_a_replay(
+        self, mock_post, _flag, capture, addressed_by
+    ):
         mock_post.return_value = MagicMock(
             status_code=202, json=lambda: {"invocation_id": "first-send", "replayed": True}
         )
+        if addressed_by == "template_key":
+            url, body = (
+                self.send_email_url,
+                {"to": "user@example.com", "template_key": "welcome", "subject": "Hi", "html": "<p>Hi</p>"},
+            )
+        else:
+            url, body = self._send_request(addressed_by, self.body)
 
-        response = self.client.post(self.url, self.body, format="json", headers={"Idempotency-Key": "reset:user-1:42"})
+        response = self.client.post(url, body, format="json", headers={"Idempotency-Key": "reset:user-1:42"})
 
         assert response.status_code == status.HTTP_202_ACCEPTED, response.json()
-        assert response.json() == {"message_id": "first-send", "replayed": True}
-        assert mock_post.call_args.kwargs["json"]["idempotency_key"] == "reset:user-1:42"
+        assert response.json()["message_id"] == "first-send"
+        assert response.json()["replayed"] is True
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["idempotency_key"] == "reset:user-1:42"
+        # The route joins the key's fingerprint, so the same key on the other route is a different request.
+        assert payload.get("route") == (None if addressed_by == "url_id" else "send_email")
         assert capture.call_args.kwargs["properties"]["outcome"] == "replayed"
         assert capture.call_args.kwargs["properties"]["has_idempotency_key"] is True
 
@@ -220,11 +236,6 @@ class TestTransactionalEmail(APIBaseTest):
                 for addressed_by in ("url_id", "key")
                 for case, code, detail in [
                     (
-                        "workflow_archived",
-                        "transactional_email_paused",
-                        "The template's transactional email isn't active.",
-                    ),
-                    (
                         "category_turned_marketing",
                         "marketing_template",
                         "The template is in a marketing category. Only transactional templates can be sent.",
@@ -247,12 +258,7 @@ class TestTransactionalEmail(APIBaseTest):
         self, mock_post, _flag, capture, case, addressed_by, expected_code, expected_detail
     ):
         body, headers = dict(self.body), {}
-        if case == "workflow_archived":
-            archived = self.client.patch(
-                f"/api/projects/{self.team.id}/hog_flows/{self.hog_flow_id}", {"status": "archived"}
-            )
-            assert archived.status_code == status.HTTP_200_OK, archived.json()
-        elif case == "category_turned_marketing":
+        if case == "category_turned_marketing":
             category = MessageCategory.objects.create(
                 team=self.team, key="account", name="Account", category_type=MessageCategoryType.TRANSACTIONAL
             )
@@ -496,6 +502,7 @@ class TestTransactionalEmail(APIBaseTest):
                     "sending_suspended",
                     "template_paused",
                     "recipient_suppressed",
+                    "transactional_email_paused",
                 )
             ),
         ]
@@ -571,9 +578,10 @@ class TestTransactionalEmail(APIBaseTest):
                     "html": "<p>Hi {{ variables.name }}</p>",
                     "text": "Hi {{ variables.name }}",
                 },
-                "from": {"integrationId": self.sender.id},
+                "from": {"integrationId": self.sender.id, "isDefault": True},
                 "tracking": {"captureEngagement": True},
             },
+            "route": "send_email",
         }
         assert MessageTemplate.objects.filter(team=self.team).count() == templates_before
         assert capture.call_args.kwargs["properties"]["addressed_by"] == "template_key"
@@ -601,7 +609,7 @@ class TestTransactionalEmail(APIBaseTest):
                         "html": "<p>Hi {{ variables.name }}</p>",
                         "text": "Hi {{ variables.name }}",
                     },
-                    "from": {"integrationId": "default"},
+                    "from": {"integrationId": "default", "isDefault": True},
                     "tracking": {"captureEngagement": False},
                 },
             ),
@@ -611,7 +619,7 @@ class TestTransactionalEmail(APIBaseTest):
                 {"html": "", "text": "Hi"},
                 {
                     "content": {"subject": "Welcome, Jane", "text": "Hi"},
-                    "from": {"integrationId": "default"},
+                    "from": {"integrationId": "default", "isDefault": True},
                     "tracking": {"captureEngagement": True},
                 },
             ),
@@ -833,7 +841,7 @@ class TestTransactionalEmail(APIBaseTest):
         template.refresh_from_db()
         assert template.transactional_hog_flow_id is None
 
-    @patch("products.messaging.backend.services.transactional_email.reload_hog_flows_on_workers")
+    @patch("products.workflows.backend.models.hog_flow.hog_flow.reload_hog_flows_on_workers")
     def test_saving_a_transactional_template_writes_a_new_workflow_version(self, reload, mock_post, _flag, _capture):
         MessageTemplate.objects.filter(id=self.template.id).update(draft_content={"email": {"subject": "Draft"}})
         security = Integration.objects.create(
@@ -852,9 +860,10 @@ class TestTransactionalEmail(APIBaseTest):
                 {"content": {"email": email_content}},
                 format="json",
             )
+            # A worker reloading before the commit would cache the old version.
+            reload.assert_not_called()
 
         assert response.status_code == status.HTTP_200_OK, response.json()
-        # Workers reload once the new version is committed, not only from inside the transaction.
         reload.assert_called_once_with(team_id=self.team.id, hog_flow_ids=[str(self.hog_flow_id)])
         workflow = self._workflow(self.hog_flow_id)
         assert workflow["version"] == 2

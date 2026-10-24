@@ -12,10 +12,7 @@ from django.db import IntegrityError, transaction
 import structlog
 
 from posthog.models.integration import Integration
-from posthog.plugins.plugin_server_api import (
-    reload_hog_flows_on_workers,
-    send_transactional_email as run_transactional_workflow,
-)
+from posthog.plugins.plugin_server_api import send_transactional_email as run_transactional_workflow
 
 from products.messaging.backend.facade.contracts import (
     AcceptedSend,
@@ -30,6 +27,7 @@ from products.messaging.backend.facade.contracts import (
     SenderNotVerified,
     SenderUnavailable,
     SendFrom,
+    SendRoute,
     StoredTemplate,
     TemplateNotSendable,
     TemplateNotTransactional,
@@ -198,15 +196,6 @@ def check_still_sendable(template: MessageTemplate) -> None:
     )
 
 
-def _reload_workers(team_id: int, hog_flow_id: UUID) -> None:
-    # The edit is already committed, so a failed reload must not fail the request. Workers still pick up the
-    # new version when their cache expires.
-    try:
-        reload_hog_flows_on_workers(team_id=team_id, hog_flow_ids=[str(hog_flow_id)])
-    except Exception:
-        logger.exception("transactional_email_worker_reload_failed", team_id=team_id, hog_flow_id=str(hog_flow_id))
-
-
 def sync_transactional_workflow(team_id: int, template_id: UUID, *, user_id: int | None) -> None:
     """Write the template's current content as a new version of its workflow, if it has one."""
     template = MessageTemplate.objects.get(team_id=team_id, id=template_id)
@@ -224,9 +213,6 @@ def sync_transactional_workflow(team_id: int, template_id: UUID, *, user_id: int
             hog_flow_id=hog_flow_id,
             content=_content(template),
         )
-        # The save already told the workers to reload, but before the caller's transaction committed, so a
-        # worker can cache the old version. This reload runs once the new version is visible.
-        transaction.on_commit(lambda: _reload_workers(team_id, hog_flow_id))
     except WorkflowNotFound:
         # Deleted between the check above and the update.
         MessageTemplate.objects.filter(team_id=team_id, id=template_id).update(transactional_hog_flow_id=None)
@@ -247,17 +233,17 @@ def _transactional_workflow_id(team_id: int, template_id: UUID) -> UUID:
         content=template.content,
         message_category_id=template.message_category_id,
     )
-    _require_active(team_id, template.transactional_hog_flow_id)
+    _require_workflow(team_id, template.transactional_hog_flow_id)
     return template.transactional_hog_flow_id
 
 
-def _require_active(team_id: int, hog_flow_id: UUID) -> None:
+def _require_workflow(team_id: int, hog_flow_id: UUID) -> None:
+    # The CDP service checks that the workflow is active after it looks up the idempotency key,
+    # so a retry of a send that went out still replays after its workflow is paused.
     try:
-        workflow = get_workflow_summary(team_id=team_id, workflow_id=str(hog_flow_id))
+        get_workflow_summary(team_id=team_id, workflow_id=str(hog_flow_id))
     except WorkflowNotFound as e:
         raise TransactionalEmailPaused("The template's transactional email no longer exists.") from e
-    if workflow.status != "active":
-        raise TransactionalEmailPaused("The template's transactional email isn't active.")
 
 
 def _code_email_workflow_id(team_id: int, key: str) -> UUID:
@@ -267,7 +253,7 @@ def _code_email_workflow_id(team_id: int, key: str) -> UUID:
     if template_id is not None:
         return _transactional_workflow_id(team_id, template_id)
     hog_flow_id = _key_workflow_id(team_id, key)
-    _require_active(team_id, hog_flow_id)
+    _require_workflow(team_id, hog_flow_id)
     return hog_flow_id
 
 
@@ -325,7 +311,7 @@ def code_send_from(team_id: int, address: str | None) -> SendFrom:
         if address:
             raise SenderNotAllowed(f"No verified sender in this project can send from `{email}`.") from e
         raise SenderNotVerified("The project has no verified default email sender.") from e
-    return SendFrom(integration_id=sender.integration_id, email=sender.email, name=sender.name)
+    return SendFrom(integration_id=sender.integration_id, email=sender.email, name=sender.name, is_default=not address)
 
 
 def rendered_content(*, subject: str, html: str, text: str) -> RenderedContent:
@@ -356,6 +342,9 @@ def send_email(command: EmailSendCommand) -> EmailSendOutcome:
         payload["idempotency_key"] = command.idempotency_key
     if command.source.send is not None:
         payload["send"] = _send_payload(command.source.send)
+    if command.route == SendRoute.SEND_EMAIL:
+        # The template route sends none, so its keys keep the fingerprint they were reserved with.
+        payload["route"] = command.route.value
     try:
         response = run_transactional_workflow(command.team_id, str(hog_flow_id), payload)
     except Exception:
@@ -391,7 +380,14 @@ def send_email(command: EmailSendCommand) -> EmailSendOutcome:
 
 # The CDP service runs these checks before it queues, and answers each with what to change.
 SEND_CHECK_CODES = frozenset(
-    {"invalid_recipient", "sender_not_verified", "sending_suspended", "template_paused", "recipient_suppressed"}
+    {
+        "invalid_recipient",
+        "sender_not_verified",
+        "sending_suspended",
+        "template_paused",
+        "recipient_suppressed",
+        "transactional_email_paused",
+    }
 )
 
 
@@ -421,7 +417,12 @@ def _send_payload(send: AcceptedSend) -> dict[str, Any]:
         )
     if send.sender is not None:
         payload["from"] = _without_empty(
-            {"integrationId": send.sender.integration_id, "email": send.sender.email, "name": send.sender.name}
+            {
+                "integrationId": send.sender.integration_id,
+                "email": send.sender.email,
+                "name": send.sender.name,
+                "isDefault": send.sender.is_default,
+            }
         )
     if send.reply_to:
         payload["replyTo"] = list(send.reply_to)
