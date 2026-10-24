@@ -70,7 +70,14 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
 
 - The batch audience cap is decided when the batch is dispatched. Adding an email step to the workflow while a batch is queued does not re-cap it; the send-time buckets still cap every email at execution. This is why enforcement requires the worker caps to be deployed (see the rollout order).
 - Test-panel sends bypass the team buckets on purpose, matching the per-workflow rate limit.
-- Sandbox sender sends bypass the team buckets without spending their tokens. Sandbox limits run independently. Keep `WORKFLOWS_SANDBOX_SENDER_ENABLED` off until the recipient membership checks, sandbox caps and sandbox pause gate are deployed.
+- Sandbox sender sends bypass the team buckets without spending their tokens. Sandbox limits run independently.
+  The worker holds every sandbox send, test sends included, to a daily cap per project (`WORKFLOWS_SANDBOX_DAILY_TEAM_CAP`, one token per recipient copy) and per recipient address within that organization (`WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP`). These are continuously refilling token buckets, not calendar-day counters; an idle bucket starts full and refills its capacity over 24 hours.
+  A reached cap skips the send instead of delaying it. A limiter error or an empty or invalid cap value skips every sandbox send.
+  Cap keys and the final membership check share one organization snapshot, valid for at most one minute. A stalled claim or member lookup that outlives that snapshot skips the send and returns the claim.
+  SES throttle responses return the sandbox claim before the existing delivery retry. Returns are deduplicated, and Valkey ignores a return command that arrives more than five minutes after it was issued.
+  Test sends run inline in the CDP API, so the API reads the same `SES_RATE_LIMITER_VALKEY_*` settings as the email worker. Without them, every sandbox test send is skipped.
+  CDP API opens the SES Valkey pool only when sandbox delivery is enabled; otherwise its MX validation uses the existing local cache and DNS.
+  Deploy membership checks, daily caps, and the shared pause gate first. Configure the SES identity and Valkey pool, enable `WORKFLOWS_SANDBOX_SENDER_ENABLED`, then enable the UI flag.
 - The buckets are token buckets: a full idle bucket plus refill allows up to roughly twice the stated cap in the very first period. The bucket TTLs exceed the refill periods so this does not recur from idling.
 - A denied send parks until every short bucket has refilled enough to cover it, instead of retrying on a fixed few-minute cadence.
   The computed wait is capped at one hour and then jittered 1x to 2x, so a parked send can wait just under two hours between attempts.

@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from 'crypto'
 import { type DefaultTreeAdapterMap, defaultTreeAdapter, parse, parseFragment, serialize } from 'parse5'
 
 import { CyclotronInvocationQueueParametersEmailType } from '~/cdp/schema/cyclotron'
@@ -6,13 +7,20 @@ import { logger } from '~/common/utils/logger'
 import { captureTeamEvent } from '~/common/utils/posthog'
 import { TeamManager } from '~/common/utils/team-manager'
 
+import { TeamOrganizationSnapshot } from '../managers/organization-members.service'
+import { ClaimRequest, RateLimiterService } from '../rate-limiter/rate-limiter.service'
 import { maybeAddPreheaderToEmail } from './helpers/preheader'
+
+const SECONDS_PER_DAY = 86400
+const DAILY_CAP_TTL_SECONDS = 2 * SECONDS_PER_DAY
 
 export interface SandboxEmailSenderConfig {
     enabled: boolean
     tenantName: string
     configurationSetName: string
     fromAddress: string
+    dailyTeamCap: string
+    dailyRecipientCap: string
 }
 
 const ROUTE_SETTING_NAMES = {
@@ -27,13 +35,56 @@ function emptyRouteSettings(config: SandboxEmailSenderConfig): string[] {
         .map((setting) => ROUTE_SETTING_NAMES[setting])
 }
 
+export type SandboxDailyCapGrant = {
+    type: 'granted'
+    claimId: string
+    buckets: ClaimRequest[]
+    organization: TeamOrganizationSnapshot
+}
+
+export type SandboxDailyCapClaim =
+    | SandboxDailyCapGrant
+    | { type: 'project_cap_reached' }
+    | { type: 'recipient_cap_reached'; addresses: string[] }
+    | { type: 'check_failed' }
+
 type SandboxEmailOutcome =
     | { type: 'sent'; recipientCount: number }
     | {
           type: 'blocked'
-          reason: 'switch_off' | 'recipient_not_member' | 'recipient_unverified' | 'check_failed'
+          reason: 'switch_off' | 'recipient_not_member' | 'recipient_unverified' | 'check_failed' | 'cap_reached'
           blockedRecipientCount: number
       }
+
+function dailyBucket(key: string, requested: number, capacity: number): ClaimRequest {
+    return { key, requested, capacity, refillPerSecond: capacity / SECONDS_PER_DAY, ttlSeconds: DAILY_CAP_TTL_SECONDS }
+}
+
+function parseDailyCap(value: string): number | null {
+    const cap = /^\d+$/.test(value) ? Number(value) : null
+    return cap !== null && Number.isSafeInteger(cap) && cap > 0 ? cap : null
+}
+
+// The organization hash tag keeps shared recipient and project claims in one Valkey cluster slot.
+function dailyCapKeyPrefix(organizationId: string): string {
+    return `@posthog/workflows-sandbox-daily/{${organizationId}}`
+}
+
+function addressDigest(address: string): string {
+    return createHash('sha256').update(address.toLowerCase()).digest('hex')
+}
+
+function distinctAddresses(recipients: string[]): string[] {
+    const addresses = new Map<string, string>()
+    for (const recipient of recipients) {
+        const trimmed = recipient.trim()
+        const normalized = trimmed.toLowerCase()
+        if (!addresses.has(normalized)) {
+            addresses.set(normalized, trimmed)
+        }
+    }
+    return [...addresses.values()]
+}
 
 function htmlBody(document: DefaultTreeAdapterMap['document']): DefaultTreeAdapterMap['element'] | undefined {
     const root = document.childNodes.find(defaultTreeAdapter.isElementNode)
@@ -122,6 +173,7 @@ export class SandboxEmailSender {
     constructor(
         public readonly config: SandboxEmailSenderConfig,
         private teamManager: TeamManager,
+        private dailyCapLimiter: RateLimiterService | null = null,
         private blockedEventRedis: Pick<RedisV2, 'useClient'> | null = null
     ) {
         this.config = {
@@ -137,6 +189,45 @@ export class SandboxEmailSender {
             })
         }
         this.canSend = config.enabled && !emptySettings.length
+    }
+
+    public async claimDailyCaps(
+        teamId: number,
+        recipients: string[],
+        organization: TeamOrganizationSnapshot
+    ): Promise<SandboxDailyCapClaim> {
+        const dailyTeamCap = parseDailyCap(this.config.dailyTeamCap)
+        const dailyRecipientCap = parseDailyCap(this.config.dailyRecipientCap)
+        if (!this.dailyCapLimiter || dailyTeamCap === null || dailyRecipientCap === null) {
+            logger.error('Sandbox email daily caps are not configured correctly', { teamId })
+            return { type: 'check_failed' }
+        }
+        if (Date.now() >= organization.expiresAt) {
+            return { type: 'check_failed' }
+        }
+        const prefix = dailyCapKeyPrefix(organization.organizationId)
+        const addresses = distinctAddresses(recipients)
+        const buckets = [
+            dailyBucket(`${prefix}/project/${teamId}`, recipients.length, dailyTeamCap),
+            ...addresses.map((address) =>
+                dailyBucket(`${prefix}/recipient/${addressDigest(address)}`, 1, dailyRecipientCap)
+            ),
+        ]
+        const claim = await this.dailyCapLimiter.claimAllOrNothing(buckets)
+        if (claim.granted) {
+            return { type: 'granted', claimId: randomUUID(), buckets, organization }
+        }
+        if (claim.deniedIndexes === null) {
+            return { type: 'check_failed' }
+        }
+        if (claim.deniedIndexes.includes(0)) {
+            return { type: 'project_cap_reached' }
+        }
+        return { type: 'recipient_cap_reached', addresses: claim.deniedIndexes.map((index) => addresses[index - 1]) }
+    }
+
+    public async returnDailyCaps(grant: SandboxDailyCapGrant): Promise<void> {
+        await this.dailyCapLimiter?.returnClaim(grant.claimId, grant.buckets)
     }
 
     public async withIdentificationFooter(
