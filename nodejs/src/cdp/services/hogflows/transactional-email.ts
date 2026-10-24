@@ -2,6 +2,12 @@ import { Counter } from 'prom-client'
 import { z } from 'zod'
 
 import { BareEmailAddressSchema } from '~/cdp/schema/emailFields'
+import { HogFlow } from '~/cdp/schema/hogflow'
+
+import { IntegrationManagerService } from '../managers/integration-manager.service'
+import { PolicyCode, SendCandidate } from '../messaging/email-send-policy'
+import { EmailSenderConfiguration, selectEmailSenderIntegrationId } from '../messaging/email-sender-selection'
+import { emailPauseMetadata } from './hogflow-functions.service'
 
 export const AcceptedSendSchema = z
     .object({
@@ -57,6 +63,7 @@ export type TransactionalEmailOutcome =
     | 'not_found'
     | 'not_sendable'
     | 'quota_limited'
+    | PolicyCode
     | 'error'
 
 export const transactionalEmailRequestsTotal = new Counter({
@@ -64,3 +71,30 @@ export const transactionalEmailRequestsTotal = new Counter({
     help: 'Requests from Django to run a transactional email, by outcome. Every outcome except `queued` means this request queued no email.',
     labelNames: ['outcome'],
 })
+
+/**
+ * What the delivery's send checks will see, known when the send is accepted: the sender the email step
+ * resolves to for this run, and the recipient. The caller's `send.from` replaces the step's sender, as it
+ * does at delivery.
+ */
+export async function transactionalSendCandidate(
+    hogFlow: HogFlow,
+    invocationId: string,
+    to: string,
+    send: AcceptedSend | undefined,
+    integrationManager: Pick<IntegrationManagerService, 'get'>
+): Promise<SendCandidate> {
+    const from = send?.from ?? emailStepSender(hogFlow)
+    return {
+        teamId: hogFlow.team_id,
+        workflowMetadata: emailPauseMetadata(hogFlow),
+        sender: from ? await integrationManager.get(selectEmailSenderIntegrationId(invocationId, from)) : null,
+        recipients: [to],
+    }
+}
+
+function emailStepSender(hogFlow: HogFlow): EmailSenderConfiguration | null {
+    const step = hogFlow.actions.find((action) => action.type === 'function_email')
+    const from = step?.type === 'function_email' ? step.config.inputs?.email?.value?.from : undefined
+    return typeof from?.integrationId === 'number' ? from : null
+}

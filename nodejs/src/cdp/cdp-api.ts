@@ -57,12 +57,14 @@ import {
     TransactionalEmailOutcome,
     TransactionalEmailRequestSchema,
     transactionalEmailRequestsTotal,
+    transactionalSendCandidate,
 } from './services/hogflows/transactional-email'
 import { InvocationResultsService } from './services/invocation-results.service'
 import { JobQueue } from './services/job-queue/job-queue.interface'
 import { GroupsManagerService } from './services/managers/groups-manager.service'
 import { HogFunctionManagerService } from './services/managers/hog-function-manager.service'
 import { EMAIL_QUEUE_PRIORITY } from './services/messaging/email-priority'
+import { EmailSendPolicy } from './services/messaging/email-send-policy'
 import { EmailTrackingService } from './services/messaging/email-tracking.service'
 import { EmailTrackingCodeSigner } from './services/messaging/helpers/tracking-code'
 import { RecipientTokensService } from './services/messaging/recipient-tokens.service'
@@ -195,6 +197,7 @@ export class CdpApi {
     private stepResumeJwt: ScopedServiceJwt
     private transactionalEmailJwt: ScopedServiceJwt
     private transactionalEmailIdempotencyKeys: IdempotencyKeys
+    private transactionalEmailPolicy: EmailSendPolicy
     private hogFunctionMonitoringService: HogFunctionMonitoringService
     private resumeBatchJwt: ScopedServiceJwt
 
@@ -241,6 +244,11 @@ export class CdpApi {
             services.teamWorkflowsConfigService,
             new EmailTrackingCodeSigner(config.ENCRYPTION_SALT_KEYS, config.CDP_EMAIL_TRACKING_URL),
             services.emailSuppressionService
+        )
+        this.transactionalEmailPolicy = new EmailSendPolicy(
+            services.teamWorkflowsConfigService,
+            services.emailSuppressionService,
+            services.emailValidationService
         )
         this.groupsManager = new GroupsManagerService(deps.teamManager, deps.groupRepository)
         this.batchExportHogFunctionService = new BatchExportHogFunctionService(
@@ -1229,6 +1237,16 @@ export class CdpApi {
                 }
             }
             try {
+                const decision = await this.transactionalEmailPolicy.check(
+                    await transactionalSendCandidate(hogFlow, invocation.id, to, send, this.deps.integrationManager)
+                )
+                if (!decision.ok) {
+                    if (idempotencyKey) {
+                        await idempotencyKeys.release(team.id, idempotencyKey, invocation.id)
+                    }
+                    const { code, detail, why, fix } = decision
+                    return reply(code, 400, { error: code, code, detail, why, fix })
+                }
                 const { isLimited } = await checkHogFlowQuotaLimits(hogFlow, team.id, this.deps.quotaLimiting)
                 if (isLimited) {
                     if (idempotencyKey) {

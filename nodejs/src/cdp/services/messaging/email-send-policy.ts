@@ -2,12 +2,18 @@ import { HogFunctionType, IntegrationType } from '~/cdp/types'
 
 import { EmailSendingSuspensionCause, TeamWorkflowsConfigService } from '../managers/team-workflows-config.service'
 import { EmailSuppressionService } from './email-suppression.service'
+import { EmailValidationService, Undeliverable } from './email-validation.service'
 
-export type PolicyCode = 'sending_suspended' | 'template_paused' | 'sender_not_verified' | 'recipient_suppressed'
+export type PolicyCode =
+    | 'sending_suspended'
+    | 'template_paused'
+    | 'sender_not_verified'
+    | 'invalid_recipient'
+    | 'recipient_suppressed'
 
 type Rejection = {
     ok: false
-    /** What happened, as the run log shows it. */
+    /** What happened, as the caller's 400 and the run log both show it. Delivery adds its own prefix in the log. */
     detail: string
     why: string
     fix: string
@@ -37,9 +43,14 @@ const CONTACT_SUPPORT = 'Contact support to get sending re-enabled.'
  * present it.
  */
 export class EmailSendPolicy {
+    /**
+     * `addresses` checks that each recipient can receive email at all. Delivery already skips those
+     * recipients before this policy runs, so only the API's admission passes it.
+     */
     constructor(
         private teamWorkflowsConfigService: Pick<TeamWorkflowsConfigService, 'getEmailSendingSuspension'>,
-        private emailSuppressionService: Pick<EmailSuppressionService, 'isSuppressed'>
+        private emailSuppressionService: Pick<EmailSuppressionService, 'isSuppressed'>,
+        private addresses: Pick<EmailValidationService, 'findUndeliverable'> | null = null
     ) {}
 
     public async check(send: SendCandidate): Promise<PolicyDecision> {
@@ -58,7 +69,20 @@ export class EmailSendPolicy {
         if ('code' in sender) {
             return sender
         }
-        return (await this.recipientsSuppressed(send.teamId, send.recipients)) ?? { ok: true, sender }
+        return (
+            (await this.recipientsUndeliverable(send.teamId, send.recipients)) ??
+            (await this.recipientsSuppressed(send.teamId, send.recipients)) ?? { ok: true, sender }
+        )
+    }
+
+    private async recipientsUndeliverable(teamId: number, recipients: string[]): Promise<PolicyRejection | null> {
+        const addresses = this.addresses
+        if (!addresses) {
+            return null
+        }
+        const verdicts = await Promise.all(recipients.map((email) => addresses.findUndeliverable(email, teamId)))
+        const undeliverable = verdicts.find((verdict) => verdict !== null)
+        return undeliverable ? invalidRecipient(undeliverable) : null
     }
 
     private async recipientsSuppressed(teamId: number, recipients: string[]): Promise<PolicyRejection | null> {
@@ -69,7 +93,7 @@ export class EmailSendPolicy {
         return {
             ok: false,
             code: 'recipient_suppressed',
-            detail: `Skipping send: recipient(s) on the suppression list — ${suppressed.join(', ')}`,
+            detail: `Recipient(s) on the suppression list: ${suppressed.join(', ')}`,
             why: `An earlier email to ${suppressed.join(', ')} bounced or was marked as spam, so PostHog no longer sends to it.`,
             fix: 'Send to another address, or remove the address from the suppression list once it can receive email again.',
         }
@@ -97,7 +121,7 @@ function sendingSuspended(cause: EmailSendingSuspensionCause): PolicyRejection {
             ok: false,
             code: 'sending_suspended',
             cause,
-            detail: `Skipping send: email sending is suspended for this project. ${CONTACT_SUPPORT}`,
+            detail: `Email sending is suspended for this project. ${CONTACT_SUPPORT}`,
             why: 'Email sending is suspended for this project.',
             fix: CONTACT_SUPPORT,
         }
@@ -106,7 +130,7 @@ function sendingSuspended(cause: EmailSendingSuspensionCause): PolicyRejection {
         ok: false,
         code: 'sending_suspended',
         cause,
-        detail: 'Skipping send: our email provider paused sending for this project. Check the Reputation tab to see what to fix.',
+        detail: 'Our email provider paused sending for this project. Check the Reputation tab to see what to fix.',
         why: 'Our email provider paused sending for this project.',
         fix: 'Check the Reputation tab to see what to fix.',
     }
@@ -127,7 +151,7 @@ function workflowPaused(metadata: HogFunctionType['metadata']): PolicyRejection 
         return {
             ok: false,
             code: 'template_paused',
-            detail: `Skipping send: PostHog staff paused email sending for this workflow.${pauseDetail} ${CONTACT_SUPPORT}`,
+            detail: `PostHog staff paused email sending for this workflow.${pauseDetail} ${CONTACT_SUPPORT}`,
             why: `PostHog staff paused email sending for this email's workflow.${pauseDetail}`,
             fix: CONTACT_SUPPORT,
         }
@@ -136,7 +160,7 @@ function workflowPaused(metadata: HogFunctionType['metadata']): PolicyRejection 
     return {
         ok: false,
         code: 'template_paused',
-        detail: `Skipping send: email sending is paused for this workflow.${pauseDetail} ${fix}`,
+        detail: `Email sending is paused for this workflow.${pauseDetail} ${fix}`,
         why: `Email sending is paused for this email's workflow.${pauseDetail}`,
         fix,
     }
@@ -173,6 +197,20 @@ function usableSender(sender: IntegrationType | null, teamId: number): Integrati
         )
     }
     return sender
+}
+
+function invalidRecipient(undeliverable: Undeliverable): PolicyRejection {
+    const why =
+        undeliverable.reason === 'invalid_syntax'
+            ? `\`${undeliverable.address}\` is not a valid email address.`
+            : `The domain \`${undeliverable.domain}\` has no mail servers, so an email to \`${undeliverable.address}\` would bounce.`
+    return {
+        ok: false,
+        code: 'invalid_recipient',
+        detail: undeliverable.message,
+        why,
+        fix: 'Check the address for a typo. If it is right, the recipient cannot receive email, so skip them.',
+    }
 }
 
 function senderNotVerified(detail: string, why: string, fix: string): PolicyRejection {
