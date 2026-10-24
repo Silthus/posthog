@@ -69,6 +69,7 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
 
 - The batch audience cap is decided when the batch is dispatched. Adding an email step to the workflow while a batch is queued does not re-cap it; the send-time buckets still cap every email at execution. This is why enforcement requires the worker caps to be deployed (see the rollout order).
 - Test-panel sends bypass the team buckets on purpose, matching the per-workflow rate limit.
+- Sandbox sender sends bypass the team buckets without spending their tokens. Sandbox limits run independently. Keep `WORKFLOWS_SANDBOX_SENDER_ENABLED` off until the recipient membership checks, sandbox caps and sandbox pause gate are deployed.
 - The buckets are token buckets: a full idle bucket plus refill allows up to roughly twice the stated cap in the very first period. The bucket TTLs exceed the refill periods so this does not recur from idling.
 - A denied send parks until every short bucket has refilled enough to cover it, instead of retrying on a fixed few-minute cadence.
   The computed wait is capped at one hour and then jittered 1x to 2x, so a parked send can wait just under two hours between attempts.
@@ -78,3 +79,10 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
   A send denied because the limiter itself failed keeps the shorter token bucket cadence, at most 5 to 10 minutes.
 - Gmail provides no per-message feedback loop, so complaint rates (ours and AWS's) cannot see Gmail complaints at all.
 - The `HOGFLOW_BATCH_TRIGGER_ELEVATED_TEAM_IDS` allowlist elevates a team to the top tier in Django only: the UI, the admin, and the batch audience cap show top-tier numbers, but the worker's send-time buckets read the stored tier. An allowlisted team below the top tier is therefore throttled at its stored tier while being told otherwise, and its shadow-mode delay counts overstate real impact. Before enforcing, pin each allowlisted team at the top tier from the Django admin and empty the allowlist, rather than plumbing the list into the worker.
+
+### Sandbox delivery
+
+Sandbox email uses a fixed SES tenant, configuration set, and From address. Set `SES_SANDBOX_TENANT_NAME`, `SES_SANDBOX_CONFIGURATION_SET`, and `SES_SANDBOX_FROM_ADDRESS` on the worker. Django reads the same `SES_SANDBOX_FROM_ADDRESS` for the address it stores and shows. The address must belong to the shared SES identity.
+Sandbox sends disable click tracking and unsubscribe headers because the complete stack restricts them to verified organization members for internal testing. Marketing delivery to external audiences requires a verified sender.
+HTML is parsed and normalized before the identification footer is appended. Root clipping and visibility styles are overridden while template typography is preserved; malformed markup may render differently from an own-domain send. Preview text is parsed separately so escaped template values remain readable.
+The visible footer is best effort across email clients and arbitrary template CSS. Signed message tracking headers retain sender attribution independently of the template.

@@ -1,6 +1,13 @@
 import { mockFetch } from '~/tests/helpers/mocks/request.mock'
 
-import { MessageRejected, SendingPausedException, TooManyRequestsException } from '@aws-sdk/client-sesv2'
+import {
+    MessageRejected,
+    SendEmailCommand,
+    SendingPausedException,
+    TooManyRequestsException,
+} from '@aws-sdk/client-sesv2'
+import Redis from 'ioredis'
+import { defaultTreeAdapter, parse, parseFragment } from 'parse5'
 
 import { createExampleInvocation, insertIntegration } from '~/cdp/_tests/fixtures'
 import {
@@ -9,9 +16,12 @@ import {
 } from '~/cdp/schema/cyclotron'
 import { CyclotronJobInvocationHogFunction } from '~/cdp/types'
 import { IngestionOutputs } from '~/common/outputs/ingestion-outputs'
-import { createRedisV2PoolFromConfig } from '~/common/redis/redis-v2'
+import { defineLuaTokenBucketV2 } from '~/common/redis/redis-token-bucket-v2.lua'
+import { defineLuaTokenBucketV3 } from '~/common/redis/redis-token-bucket-v3.lua'
+import { RedisClient, RedisClientPipeline, RedisV2, createRedisV2PoolFromConfig } from '~/common/redis/redis-v2'
 import { closeHub, createHub } from '~/common/utils/db/hub'
 import { PostgresUse } from '~/common/utils/db/postgres'
+import * as posthog from '~/common/utils/posthog'
 import { waitForExpect } from '~/tests/helpers/expectations'
 import { createTestTeamFixture } from '~/tests/helpers/sql'
 
@@ -31,6 +41,7 @@ import {
 import { MailDevAPI } from './helpers/maildev'
 import { EmailTrackingCodeSigner } from './helpers/tracking-code'
 import { MessageAssetsService } from './message-assets.service'
+import { SandboxEmailSender, SandboxEmailSenderConfig } from './sandbox-email-sender'
 
 class ThrottlingException extends Error {
     constructor(message: string) {
@@ -216,6 +227,422 @@ describe('EmailService', () => {
             // Mock SES v2 send to avoid actual AWS calls
             sendEmailSpy = jest.spyOn(service.sesV2Client!, 'send') as any
             sendEmailSpy.mockResolvedValue({ MessageId: 'test-message-id' })
+        })
+        describe('sandbox sender', () => {
+            let capture: jest.SpyInstance
+            let sandboxRedisClient: Redis.Redis | undefined
+            const createSandboxLimiter = async (name: string): Promise<RateLimiterService> => {
+                sandboxRedisClient = await hub.redisPool.acquire()
+                const client = sandboxRedisClient
+                defineLuaTokenBucketV2(client)
+                defineLuaTokenBucketV3(client)
+                const redis: RedisV2 = {
+                    useClient: async (_options, callback) => callback(client as unknown as RedisClient),
+                    usePipeline: async (_options, callback) => {
+                        const pipeline = client.pipeline() as RedisClientPipeline
+                        callback(pipeline)
+                        return pipeline.exec()
+                    },
+                }
+                return new RateLimiterService(redis, { name })
+            }
+            const createSandboxService = (
+                enabled: boolean,
+                tierLimiter: RateLimiterService | null = null,
+                messageAssetsService?: MessageAssetsService,
+                routeSettings: Partial<SandboxEmailSenderConfig> = {}
+            ): EmailService => {
+                const sandboxService = new EmailService(
+                    {
+                        sesAccessKeyId: hub.SES_ACCESS_KEY_ID,
+                        sesSecretAccessKey: hub.SES_SECRET_ACCESS_KEY,
+                        sesRegion: hub.SES_REGION,
+                        sesEndpoint: hub.SES_ENDPOINT,
+                        sesTrackedConfigurationSet: hub.SES_TRACKED_CONFIGURATION_SET,
+                        sesUntrackedConfigurationSet: hub.SES_UNTRACKED_CONFIGURATION_SET,
+                        teamEmailCapMode: 'enforce',
+                        teamEmailTierHourlyCaps: [1],
+                        teamEmailTierDailyCaps: [1],
+                    },
+                    hub.integrationManager,
+                    new TeamWorkflowsConfigService(hub.postgres, hub.pubSub),
+                    hub.ENCRYPTION_SALT_KEYS,
+                    hub.SITE_URL,
+                    new EmailTrackingCodeSigner(hub.ENCRYPTION_SALT_KEYS, hub.CDP_EMAIL_TRACKING_URL),
+                    new EmailSuppressionService(hub.postgres, emailSuppressionConfigFromEnv()),
+                    new RecipientsManagerService(hub.postgres),
+                    messageAssetsService,
+                    null,
+                    tierLimiter,
+                    new SandboxEmailSender(
+                        {
+                            enabled,
+                            tenantName: 'sandbox-tenant',
+                            configurationSetName: 'sandbox-email',
+                            fromAddress: 'fixed-sandbox@example.com',
+                            ...routeSettings,
+                        },
+                        hub.teamManager
+                    )
+                )
+                sendEmailSpy = jest.spyOn(sandboxService.sesV2Client!, 'send') as jest.SpyInstance
+                sendEmailSpy.mockResolvedValue({ MessageId: 'sandbox-message-id' })
+                return sandboxService
+            }
+
+            beforeEach(async () => {
+                capture = jest.spyOn(posthog, 'captureTeamEvent').mockImplementation(() => {})
+                await insertIntegration(hub.postgres, team.id, {
+                    id: getIntegrationId(4),
+                    kind: 'email',
+                    config: {
+                        provider: 'sandbox',
+                        email: 'sandbox@example.com',
+                        domain: 'example.com',
+                        name: 'Example organization via PostHog',
+                        verified: true,
+                    },
+                })
+                invocation.queueParameters = createEmailParams({ from: { integrationId: 4 } })
+                Object.assign(invocation, { hogFlow: { id: invocation.functionId, team_id: team.id } })
+            })
+
+            afterEach(async () => {
+                capture.mockRestore()
+                if (sandboxRedisClient) {
+                    await hub.redisPool.release(sandboxRedisClient)
+                    sandboxRedisClient = undefined
+                }
+            })
+
+            it.each([false, true])(
+                'permits sandbox destination invocations only as explicit tests (%s)',
+                async (isTest) => {
+                    service = createSandboxService(true)
+                    const destination = createExampleInvocation({ team_id: team.id, id: 'email-destination' })
+                    destination.state.vmState = { stack: [] } as any
+                    destination.queueParameters = createEmailParams({ from: { integrationId: 4 } })
+
+                    const result = await service.executeSendEmail(destination, isTest)
+
+                    expect(result.error).toBeUndefined()
+                    expect(result.skipped === true).toBe(!isTest)
+                    expect(sendEmailSpy).toHaveBeenCalledTimes(isTest ? 1 : 0)
+                    expect(result.invocation.state.vmState?.stack).toEqual([{ success: isTest }])
+                    if (!isTest) {
+                        expect(result.logs).toContainEqual(
+                            expect.objectContaining({
+                                message:
+                                    'Skipping send: the sandbox sender is only available for workflows and test sends.',
+                            })
+                        )
+                    }
+                }
+            )
+
+            it.each([
+                ['the switch is off', false, false, {}],
+                ['the switch is off', true, false, {}],
+                ['the tenant is empty', false, true, { tenantName: '' }],
+                ['the configuration set is empty', true, true, { configurationSetName: '   ' }],
+                ['the From address is empty', false, true, { fromAddress: '' }],
+            ] as const)(
+                'skips when the sandbox route is unavailable because %s (isTest=%s)',
+                async (_reason, isTest, enabled: boolean, routeSettings: Partial<SandboxEmailSenderConfig>) => {
+                    service = createSandboxService(enabled, null, undefined, routeSettings)
+                    const result = await service.executeSendEmail(invocation, isTest)
+
+                    expect(result).toMatchObject({ finished: true, skipped: true, metrics: [] })
+                    expect(result.error).toBeUndefined()
+                    expect(result.invocation.state.vmState?.stack).toEqual([{ success: false }])
+                    expect(sendEmailSpy).not.toHaveBeenCalled()
+                    expect(result.logs).toEqual(
+                        expect.arrayContaining([
+                            expect.objectContaining({
+                                level: 'info',
+                                message:
+                                    'Skipping send: the sandbox sender is unavailable right now. Verify your own domain to keep sending.',
+                            }),
+                        ])
+                    )
+                    expect(capture).toHaveBeenCalledWith(
+                        expect.objectContaining({ id: team.id }),
+                        'workflows sandbox email blocked',
+                        {
+                            reason: 'switch_off',
+                            is_test: isTest,
+                            blocked_recipient_count: 0,
+                        }
+                    )
+                }
+            )
+
+            it.each([
+                [false, '<body>Hello <a href="https://example.com">there</a>.</body>', 'Hello '],
+                [true, '<body>Hello <a href="https://example.com">there</a>.</body>', 'Hello '],
+                [false, '<body><p>Hello</p></body>', '<p>Hello</p>', true],
+            ] as const)(
+                'sends untracked with the fixed identity and organization footer (isTest=%s, html=%s)',
+                async (isTest, html, expectedContent, htmlOnly: boolean = false) => {
+                    const outputs = {
+                        produce: jest.fn().mockResolvedValue(undefined),
+                    } as unknown as IngestionOutputs<'message_assets'>
+                    service = createSandboxService(true, null, new MessageAssetsService(outputs))
+                    invocation.state.actionId = 'send-email'
+                    invocation.queueParameters = createEmailParams({
+                        from: { integrationId: 4, email: 'override@example.com', name: 'Custom sender' },
+                        replyTo: 'reply@example.com',
+                        cc: 'cc@example.com',
+                        bcc: 'bcc@example.com',
+                        text: htmlOnly ? undefined : 'Hello there.',
+                        html,
+                    })
+                    invocation.hogFunction.metadata = {
+                        message_category_type: 'marketing',
+                        tracking_enabled: true,
+                        utm_tags_enabled: true,
+                    }
+
+                    const result = await service.executeSendEmail(invocation, isTest)
+
+                    expect(result.error).toBeUndefined()
+                    expect(result.finished).toBe(true)
+                    expect(result.skipped).not.toBe(true)
+                    expect(result.invocation.state.vmState?.stack).toEqual([{ success: true }])
+                    expect(sendEmailSpy).toHaveBeenCalledTimes(1)
+                    const input = (sendEmailSpy.mock.calls[0][0] as SendEmailCommand).input
+                    const footer = `This email was sent by Example organization via PostHog with the PostHog sandbox sender. Organization ID: ${team.organization_id}.`
+                    expect(input).toMatchObject({
+                        TenantName: 'sandbox-tenant',
+                        ConfigurationSetName: 'sandbox-email',
+                        FromEmailAddress: '"Example organization via PostHog" <fixed-sandbox@example.com>',
+                        FeedbackForwardingEmailAddress: 'fixed-sandbox@example.com',
+                        Destination: {
+                            ToAddresses: ['"Test User" <test@example.com>'],
+                            CcAddresses: ['cc@example.com'],
+                            BccAddresses: ['bcc@example.com'],
+                        },
+                        Content: {
+                            Simple: {
+                                Body: {
+                                    ...(htmlOnly
+                                        ? {}
+                                        : { Text: { Data: `Hello there.\n\n${footer}`, Charset: 'UTF-8' } }),
+                                    Html: {
+                                        Charset: 'UTF-8',
+                                    },
+                                },
+                            },
+                        },
+                    })
+                    const sentHtml = input.Content?.Simple?.Body?.Html?.Data
+                    expect(sentHtml).toContain(expectedContent)
+                    if (html.includes('<a href')) {
+                        expect(sentHtml).toContain('utm_source=posthog')
+                        expect(sentHtml).toContain('utm_medium=email')
+                    }
+                    expect(sentHtml?.endsWith(`>${footer}</div></body></html>`)).toBe(true)
+                    for (const scriptingEnabled of [false, true]) {
+                        expect(parseFragment(sentHtml!, { scriptingEnabled }).childNodes.at(-1)).toMatchObject({
+                            tagName: 'div',
+                            childNodes: [{ nodeName: '#text', value: footer }],
+                        })
+                        const root = parse(sentHtml!, { scriptingEnabled }).childNodes.find(
+                            defaultTreeAdapter.isElementNode
+                        )
+                        const body = root?.childNodes
+                            .filter(defaultTreeAdapter.isElementNode)
+                            .find((node) => node.tagName === 'body')
+                        expect(body?.childNodes.at(-1)).toMatchObject({
+                            tagName: 'div',
+                            namespaceURI: 'http://www.w3.org/1999/xhtml',
+                            childNodes: [{ nodeName: '#text', value: footer }],
+                        })
+                    }
+                    if (htmlOnly) {
+                        expect(input.Content?.Simple?.Body?.Text).toBeUndefined()
+                    }
+                    expect(sentHtml).toContain(
+                        'display:block!important;visibility:visible!important;opacity:1!important'
+                    )
+                    expect(sentHtml).toContain('background:#fff!important')
+                    expect(input.ReplyToAddresses).toBeUndefined()
+                    const headerNames = input.Content?.Simple?.Headers?.map((header) => header.Name)
+                    expect(headerNames).toContain('X-PostHog-Tracking-Code')
+                    expect(headerNames).not.toContain('List-Unsubscribe')
+                    expect(headerNames).not.toContain('List-Unsubscribe-Post')
+                    expect(result.logs.filter((log) => log.message.startsWith('Ignoring custom sender'))).toEqual([
+                        expect.objectContaining({
+                            level: 'info',
+                            message:
+                                'Ignoring custom sender and Reply-To settings: the sandbox sender uses a fixed identity.',
+                        }),
+                    ])
+                    expect(result.metrics.map((metric) => metric.metric_name)).toEqual(
+                        isTest ? [] : ['email_sent', 'email_untracked', 'email_sandbox_sent']
+                    )
+                    expect(capture).toHaveBeenCalledWith(
+                        expect.objectContaining({ id: team.id, organization_id: team.organization_id }),
+                        'workflows sandbox email sent',
+                        { is_test: isTest, recipient_count: 3, source: isTest ? 'test' : 'workflow' }
+                    )
+                    expect(result.messageAssets).toEqual(
+                        isTest
+                            ? []
+                            : [
+                                  expect.objectContaining({
+                                      html: input.Content?.Simple?.Body?.Html?.Data,
+                                  }),
+                              ]
+                    )
+                }
+            )
+
+            it.each([
+                [false, '<body><p>Hello</p><script><!--<script>'],
+                [
+                    true,
+                    '',
+                    '',
+                    'The sandbox email template must include HTML or text content. Update the template and try again.',
+                ],
+            ] as const)(
+                'rejects HTML that cannot retain the identification footer (isTest=%s, html=%s)',
+                async (
+                    isTest,
+                    html,
+                    text: string | undefined = undefined,
+                    expectedError: string = 'The sandbox email template could not retain its identification footer. Update the template and try again.'
+                ) => {
+                    const outputs = {
+                        produce: jest.fn().mockResolvedValue(undefined),
+                    } as unknown as IngestionOutputs<'message_assets'>
+                    const limiter = await createSandboxLimiter('sandbox-rejected-html-budget-test')
+                    service = createSandboxService(true, limiter, new MessageAssetsService(outputs))
+                    invocation.state.actionId = 'send-email'
+                    const params = createEmailParams({ from: { integrationId: 4 }, text, html })
+                    invocation.queueParameters = params
+
+                    const result = await service.executeSendEmail(invocation, isTest)
+
+                    expect(sendEmailSpy).not.toHaveBeenCalled()
+                    expect(result).toMatchObject({
+                        finished: true,
+                        error: expectedError,
+                        messageAssets: [],
+                    })
+                    expect(result.skipped).not.toBe(true)
+                    expect(result.invocation.queueScheduledAt).toBeUndefined()
+                    expect(result.invocation.state.vmState?.stack).toEqual([{ success: false }])
+                    expect(result.logs).toContainEqual(
+                        expect.objectContaining({ level: 'error', message: result.error })
+                    )
+                    expect(result.logs.some((log) => log.message.startsWith('Email sent to'))).toBe(false)
+                    expect(result.metrics.map((metric) => metric.metric_name)).toEqual(isTest ? [] : ['email_failed'])
+                    expect(capture).not.toHaveBeenCalled()
+                    expect(result.capturedPostHogEvents.some((event) => event.event === '$workflows_email_sent')).toBe(
+                        false
+                    )
+                    expect(params).toEqual(createEmailParams({ from: { integrationId: 4 }, text, html }))
+
+                    invocation.queueParameters = createEmailParams({ from: { integrationId: 1 } })
+                    const ownSender = await service.executeSendEmail(invocation)
+                    expect(ownSender.error).toBeUndefined()
+                    expect(ownSender.finished).toBe(true)
+                    expect(sendEmailSpy).toHaveBeenCalledTimes(1)
+                }
+            )
+
+            it('sends untracked with the fixed identity and organization footer for text-only content', async () => {
+                service = createSandboxService(true)
+                invocation.queueParameters = createEmailParams({
+                    from: { integrationId: 4 },
+                    html: '',
+                    text: 'Hello there.',
+                })
+
+                const result = await service.executeSendEmail(invocation)
+
+                expect(result.error).toBeUndefined()
+                expect(result.finished).toBe(true)
+                expect(sendEmailSpy).toHaveBeenCalledTimes(1)
+                const input = (sendEmailSpy.mock.calls[0][0] as SendEmailCommand).input
+                const textBody = input.Content?.Simple?.Body
+                expect(textBody).toEqual({
+                    Text: {
+                        Data:
+                            'Hello there.\n\nThis email was sent by Example organization via PostHog with the PostHog sandbox sender. Organization ID: ' +
+                            team.organization_id +
+                            '.',
+                        Charset: 'UTF-8',
+                    },
+                })
+                expect(capture).toHaveBeenCalledWith(
+                    expect.objectContaining({ id: team.id, organization_id: team.organization_id }),
+                    'workflows sandbox email sent',
+                    { is_test: false, recipient_count: 1, source: 'workflow' }
+                )
+            })
+
+            it.each([
+                ['provider rejection', new Error('Message rejected'), true],
+                ['provider throttle', new ThrottlingException('Rate exceeded'), false],
+                ['missing message ID', null, true],
+            ] as const)('does not report SES %s as a sandbox send', async (_name, error, finished) => {
+                service = createSandboxService(true)
+                if (error) {
+                    sendEmailSpy.mockRejectedValue(error)
+                } else {
+                    sendEmailSpy.mockResolvedValue({})
+                }
+
+                const result = await service.executeSendEmail(invocation)
+
+                expect(sendEmailSpy).toHaveBeenCalledTimes(1)
+                expect(result.finished).toBe(finished)
+                expect(capture).not.toHaveBeenCalled()
+                expect(result.metrics.map((metric) => metric.metric_name)).toEqual(finished ? ['email_failed'] : [])
+                expect(result.invocation.state.vmState?.stack).toEqual(finished ? [{ success: false }] : [])
+                if (finished) {
+                    expect(result.error).toContain('Failed to send email via SES')
+                } else {
+                    expect(result.error).toBeUndefined()
+                    expect(result.invocation.queueScheduledAt).toBeDefined()
+                    expect(result.invocation.queueParameters).toMatchObject({ text: 'Test Text', html: 'Test HTML' })
+                    sendEmailSpy.mockResolvedValue({ MessageId: 'retry-message-id' })
+                    const retried = await service.executeSendEmail(result.invocation)
+                    expect(retried).toMatchObject({ finished: true })
+                    expect(retried.error).toBeUndefined()
+                    const retryHtml = (sendEmailSpy.mock.calls[1][0] as SendEmailCommand).input.Content?.Simple?.Body
+                        ?.Html?.Data
+                    expect(retryHtml?.match(/Organization ID:/g)).toHaveLength(1)
+                }
+            })
+
+            it('bypasses an exhausted sending tier and leaves its budget for own senders', async () => {
+                const limiter = await createSandboxLimiter('sandbox-tier-budget-test')
+                service = createSandboxService(true, limiter)
+                const sandbox = await service.executeSendEmail(invocation)
+                expect(sandbox).toMatchObject({ finished: true })
+                expect(sandbox.error).toBeUndefined()
+                expect(sendEmailSpy).toHaveBeenCalledTimes(1)
+
+                invocation.queueParameters = createEmailParams({ from: { integrationId: 1 } })
+                const ownSender = await service.executeSendEmail(invocation)
+                expect(ownSender).toMatchObject({ finished: true })
+                expect(ownSender.error).toBeUndefined()
+                expect(sendEmailSpy).toHaveBeenCalledTimes(2)
+
+                const exhausted = await service.executeSendEmail(invocation)
+                expect(exhausted.finished).toBe(false)
+                expect(sendEmailSpy).toHaveBeenCalledTimes(2)
+
+                invocation.queueParameters = createEmailParams({ from: { integrationId: 4 } })
+                const afterExhaustion = await service.executeSendEmail(invocation)
+                expect(afterExhaustion).toMatchObject({ finished: true })
+                expect(afterExhaustion.error).toBeUndefined()
+                expect(sendEmailSpy).toHaveBeenCalledTimes(3)
+            })
         })
         describe('integration validation', () => {
             beforeEach(async () => {
