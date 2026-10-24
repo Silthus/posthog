@@ -1,6 +1,7 @@
 import { type DefaultTreeAdapterMap, defaultTreeAdapter, parse, parseFragment, serialize } from 'parse5'
 
 import { CyclotronInvocationQueueParametersEmailType } from '~/cdp/schema/cyclotron'
+import { RedisV2 } from '~/common/redis/redis-v2'
 import { logger } from '~/common/utils/logger'
 import { captureTeamEvent } from '~/common/utils/posthog'
 import { TeamManager } from '~/common/utils/team-manager'
@@ -28,7 +29,11 @@ function emptyRouteSettings(config: SandboxEmailSenderConfig): string[] {
 
 type SandboxEmailOutcome =
     | { type: 'sent'; recipientCount: number }
-    | { type: 'blocked'; reason: 'switch_off'; blockedRecipientCount: number }
+    | {
+          type: 'blocked'
+          reason: 'switch_off' | 'recipient_not_member' | 'recipient_unverified' | 'check_failed'
+          blockedRecipientCount: number
+      }
 
 function htmlBody(document: DefaultTreeAdapterMap['document']): DefaultTreeAdapterMap['element'] | undefined {
     const root = document.childNodes.find(defaultTreeAdapter.isElementNode)
@@ -116,7 +121,8 @@ export class SandboxEmailSender {
 
     constructor(
         public readonly config: SandboxEmailSenderConfig,
-        private teamManager: TeamManager
+        private teamManager: TeamManager,
+        private blockedEventRedis: Pick<RedisV2, 'useClient'> | null = null
     ) {
         this.config = {
             ...config,
@@ -160,6 +166,22 @@ export class SandboxEmailSender {
 
     public async capture(teamId: number, isTest: boolean, outcome: SandboxEmailOutcome): Promise<void> {
         try {
+            if (outcome.type === 'blocked') {
+                const firstBlock = await this.blockedEventRedis?.useClient(
+                    { name: 'sandbox-blocked-event', timeout: 1000 },
+                    (client) =>
+                        client.set(
+                            `@posthog/workflows-sandbox-blocked/${teamId}/${outcome.reason}/${isTest ? 'test' : 'live'}`,
+                            '1',
+                            'EX',
+                            3600,
+                            'NX'
+                        )
+                )
+                if (firstBlock !== 'OK') {
+                    return
+                }
+            }
             const team = await this.teamManager.getTeam(teamId)
             if (team) {
                 const properties =
