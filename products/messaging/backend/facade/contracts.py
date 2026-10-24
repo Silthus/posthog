@@ -60,37 +60,41 @@ class TransactionalEmailPaused(TransactionalEmailError):
     code = "transactional_email_paused"
 
 
-class InvalidRecipient(TransactionalEmailError):
-    code = "invalid_recipient"
+@frozen
+class EmailSendCommand:
+    """One email to send: who it goes to, and the template and data it is made from."""
 
-
-class QuotaLimited(TransactionalEmailError):
-    code = "quota_limited"
-
-
-class InvalidIdempotencyKey(TransactionalEmailError):
-    code = "invalid_idempotency_key"
-
-
-class IdempotencyKeyInFlight(TransactionalEmailError):
-    """The first request with this key is still being queued. Safe to retry shortly."""
-
-    code = "idempotency_key_in_flight"
-
-
-class IdempotencyKeyReused(TransactionalEmailError):
-    code = "idempotency_key_reused"
-
-
-class DeliveryUnavailable(Exception):
-    """The email pipeline did not accept the send. Safe to retry."""
+    team_id: int
+    template_id: UUID
+    to: str
+    # The person the send is tracked against. Without one, the recipient's address is that person.
+    distinct_id: str | None
+    message_data: Mapping[str, Any]
+    # Checked by the CDP service, so a retry with the same key queues nothing new.
+    idempotency_key: str | None = None
 
 
 @frozen
-class QueuedEmail:
+class Queued:
     message_id: str
     # True when an earlier request with the same idempotency key already queued this email.
     replayed: bool = False
+
+
+@frozen
+class Rejected:
+    """A send the caller has to fix before retrying. `code` is stable for API clients."""
+
+    code: str
+    detail: str
+
+
+@frozen
+class Unavailable:
+    """The email pipeline did not accept the send. Safe to retry."""
+
+
+EmailSendOutcome = Queued | Rejected | Unavailable
 
 
 TEMPLATE_KEY_PATTERN = r"^[a-zA-Z0-9_-]+$"
