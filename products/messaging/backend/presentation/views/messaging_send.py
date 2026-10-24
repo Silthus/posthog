@@ -22,6 +22,7 @@ from products.messaging.backend.facade.transactional_email import (
     SENDER_ADDRESS_MAX_LENGTH,
     SENDER_ADDRESS_PATTERN,
     AcceptedSend,
+    EmailField,
     EmailSendCommand,
     RenderedContent,
     RenderedEmail,
@@ -32,7 +33,19 @@ from products.messaging.backend.facade.transactional_email import (
     rendered_content,
     require_code_email_access,
 )
-from products.messaging.backend.presentation.views.send_email_fields import PlainAddressField
+from products.messaging.backend.presentation.views.send_email_fields import (
+    MAX_COPIES,
+    MAX_HEADER_VALUE_LENGTH,
+    MAX_HEADERS,
+    MAX_TAGS,
+    UNKNOWN_FIELD,
+    EmailTagSerializer,
+    PlainAddressField,
+    RefusesUnknownFieldsSerializer,
+    copies_field,
+    validate_headers,
+    validate_tags,
+)
 from products.messaging.backend.presentation.views.transactional_email_api import (
     IDEMPOTENCY_KEY_PARAMETER,
     TRANSACTIONAL_EMAIL_THROTTLES,
@@ -46,17 +59,6 @@ from products.messaging.backend.presentation.views.transactional_email_api impor
     invalid_request,
     invalid_template_key,
 )
-
-UNKNOWN_FIELD = "PostHog doesn't take this field on this route."
-
-
-class RefusesUnknownFieldsSerializer(serializers.Serializer):
-    def to_internal_value(self, data: Any) -> dict[str, Any]:
-        if isinstance(data, Mapping):
-            unknown = [field for field in data if field not in self.fields]
-            if unknown:
-                raise serializers.ValidationError({unknown[0]: UNKNOWN_FIELD})
-        return super().to_internal_value(data)
 
 
 class TemplateReferenceSerializer(RefusesUnknownFieldsSerializer):
@@ -83,6 +85,7 @@ class TemplateReferenceSerializer(RefusesUnknownFieldsSerializer):
 
 
 CODE_FORM_FIELDS = ("subject", "html", "text")
+CODE_SEND_FIELDS = ("from", "reply_to", "cc", "bcc", "headers", "tags")
 
 
 class SendIdentifiersSerializer(RefusesUnknownFieldsSerializer, TransactionalEmailIdentifiersSerializer):
@@ -134,6 +137,30 @@ class SendEmailSerializer(RefusesUnknownFieldsSerializer, SendTransactionalEmail
         allow_empty=False,
         max_length=10,
         help_text="Addresses replies go to. Not with `template.id`.",
+    )
+    cc = copies_field(
+        help_text=f"Addresses that get a visible copy, at most {MAX_COPIES}. Each one is checked against the "
+        "suppression list, and one suppressed address stops the send. Not with `template.id`."
+    )
+    bcc = copies_field(
+        help_text=f"Addresses that get a hidden copy, at most {MAX_COPIES}. Each one is checked against the "
+        "suppression list, and one suppressed address stops the send. Not with `template.id`."
+    )
+    headers = serializers.DictField(
+        child=serializers.CharField(trim_whitespace=False, allow_blank=True),
+        required=False,
+        validators=[validate_headers],
+        help_text=f"Extra email headers by name, such as `X-Entity-Ref-ID` or `List-Unsubscribe`, at most "
+        f"{MAX_HEADERS}. Values are printable ASCII up to {MAX_HEADER_VALUE_LENGTH} characters. Headers PostHog "
+        "sets itself, such as `From`, `Subject` and `Content-Type`, are refused. Not with `template.id`.",
+    )
+    tags = serializers.ListField(
+        child=EmailTagSerializer(),
+        required=False,
+        max_length=MAX_TAGS,
+        validators=[validate_tags],
+        help_text=f"Name and value pairs, at most {MAX_TAGS}, that PostHog adds to the email's engagement events "
+        "as `$email_tags`. Not with `template.id`.",
     )
     capture_engagement = serializers.BooleanField(
         required=False,
@@ -192,9 +219,11 @@ class SendEmailSerializer(RefusesUnknownFieldsSerializer, SendTransactionalEmail
             if field in data:
                 raise serializers.ValidationError({field: "Only with `template_key`."})
         if "id" in data["template"]:
-            for field in ("from", "reply_to"):
+            for field in CODE_SEND_FIELDS:
                 if field in data:
-                    raise serializers.ValidationError({field: "Not with `template.id`. The template's sender applies."})
+                    raise serializers.ValidationError(
+                        {field: "Not with `template.id`. A template made in PostHog sends with its own settings."}
+                    )
 
 
 class SendEmailWarningSerializer(serializers.Serializer):
@@ -233,7 +262,8 @@ RENDERED_CONTENT_WHY = (
     "send takes all three from the template."
 )
 SEND_FIELD_WHY = {
-    "to": "PostHog sends each email to one recipient, so `to` must be one email address.",
+    "to": "`to` is one email address. A send by `template.key` or `template_key` adds more with `cc` and `bcc`, and "
+    "a template made in PostHog keeps its own recipients.",
     "identifiers": "PostHog records the email's engagement events against `identifiers.distinct_id`.",
     "message_data": "`message_data` fills a template's `{{ variables.* }}` placeholders, so it is an object, and "
     "content your code rendered takes none.",
@@ -245,6 +275,14 @@ SEND_FIELD_WHY = {
     "from": "PostHog sends from an address on a verified domain, given in `from`. A template made in PostHog keeps "
     "its own sender.",
     "reply_to": "Replies go to the addresses in `reply_to`. A template made in PostHog keeps its own reply-to.",
+    "cc": f"`cc` holds up to {MAX_COPIES} plain addresses that get a visible copy. A template made in PostHog keeps "
+    "its own recipients.",
+    "bcc": f"`bcc` holds up to {MAX_COPIES} plain addresses that get a hidden copy. A template made in PostHog keeps "
+    "its own recipients.",
+    "headers": f"`headers` adds up to {MAX_HEADERS} headers of your own. PostHog sets `From`, `Subject` and the "
+    "other standard headers itself, so you can't set them here.",
+    "tags": f"`tags` holds up to {MAX_TAGS} name and value pairs of letters, numbers, `_` and `-`, which PostHog "
+    "adds to the email's engagement events.",
     "capture_engagement": "`capture_engagement` turns the email's engagement events on or off, so it is true or false.",
 }
 
@@ -360,13 +398,14 @@ class MessagingSendViewSet(TransactionalEmailViewSetMixin, viewsets.ViewSet):
         },
         summary="Send a transactional email",
         description=(
-            "Send one transactional email to one recipient, in one of two forms. A template named by its key or id: "
-            "`message_data` fills its `{{ variables.* }}` placeholders. With `template.hash`, PostHog checks that it "
-            "holds the content you hold: a key or content it doesn't hold sends nothing and answers "
-            "`template_outdated`, and content that newer content replaced sends the current content with a "
-            "`template_superseded` warning. Or content your code rendered, named by `template_key`: PostHog sends "
-            "it as is and never stores it. Transactional emails skip opt-outs and frequency caps. Send an "
-            "`Idempotency-Key` header to retry safely without sending the email twice."
+            "Send one transactional email to the address in `to`, in one of two forms. A template named by its key or id:"
+            " `message_data` fills its `{{ variables.* }}` placeholders. With `template.hash`, PostHog checks that it "
+            "holds the content you hold: a key or content it doesn't hold sends nothing and answers `template_outdated`, "
+            "and content that newer content replaced sends the current content with a `template_superseded` warning. Or "
+            "content your code rendered, named by `template_key`: PostHog sends it as is and never stores it. A send by "
+            "`template.key` or `template_key` can copy more addresses with `cc` and `bcc`, and a template made in PostHog"
+            " keeps its own recipients. Transactional emails skip opt-outs and frequency caps. Send an `Idempotency-Key` "
+            "header to retry safely without sending the email twice."
         ),
         parameters=[IDEMPOTENCY_KEY_PARAMETER],
     )
@@ -451,6 +490,15 @@ class MessagingSendViewSet(TransactionalEmailViewSetMixin, viewsets.ViewSet):
             sender=code_send_from(self.team_id, data.get("from")) if needs_sender else None,
             reply_to=tuple(data.get("reply_to", ())),
             capture_engagement=True if capture is None else capture,
+            cc=tuple(data.get("cc", ())),
+            bcc=tuple(data.get("bcc", ())),
+            headers=tuple(
+                EmailField(name=name, value=value) for name, value in sorted(data.get("headers", {}).items())
+            ),
+            tags=tuple(
+                EmailField(name=tag["name"], value=tag["value"])
+                for tag in sorted(data.get("tags", ()), key=lambda tag: tag["name"])
+            ),
         )
 
     @staticmethod

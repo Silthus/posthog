@@ -93,6 +93,14 @@ class SendFrom:
 
 
 @frozen
+class EmailField:
+    """A header or tag a code send sets on its email, by name."""
+
+    name: str
+    value: str
+
+
+@frozen
 class AcceptedSend:
     """What a code send sets on its own, over what its workflow's email step holds."""
 
@@ -100,6 +108,10 @@ class AcceptedSend:
     sender: SendFrom | None
     reply_to: tuple[str, ...]
     capture_engagement: bool
+    cc: tuple[str, ...] = ()
+    bcc: tuple[str, ...] = ()
+    headers: tuple[EmailField, ...] = ()
+    tags: tuple[EmailField, ...] = ()
 
 
 class SendRoute(LabeledStrEnum):
@@ -157,6 +169,8 @@ class Rejected:
     # Set for the send checks, which say why PostHog refused the send and what to change.
     why: str | None = None
     fix: str | None = None
+    # The request field that holds a refused recipient, or None when that is not known.
+    recipient_field: str | None = None
 
 
 @frozen

@@ -524,6 +524,33 @@ class TestTransactionalEmail(APIBaseTest):
         reported = capture.call_args.kwargs["properties"]
         assert (reported["outcome"], reported["error_code"]) == ("rejected", code)
 
+    @parameterized.expand(
+        [
+            ("copy_the_pipeline_names", ["copy@example.com"], {"attr": "cc"}, "cc"),
+            ("addresses_in_two_fields", ["copy@example.com"], {"attr": None}, None),
+            ("copy_and_a_pipeline_that_names_none", ["copy@example.com"], {}, None),
+            ("no_copies", [], {}, "to"),
+        ]
+    )
+    def test_a_refused_recipient_names_the_field_that_holds_it(
+        self, mock_post, _flag, _capture, _name, cc, cdp_attr, expected_attr
+    ):
+        cdp_body = {
+            "error": "recipient_suppressed",
+            "code": "recipient_suppressed",
+            "detail": "Refused by a send check.",
+            "why": "Why.",
+            "fix": "Fix it.",
+            **cdp_attr,
+        }
+        mock_post.return_value = MagicMock(status_code=400, json=lambda: cdp_body)
+        body = self._send_body("key", **({"cc": cc} if cc else {}))
+
+        response = self.client.post(self.send_email_url, body, format="json")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()
+        assert (response.json()["code"], response.json()["attr"]) == ("recipient_suppressed", expected_attr)
+
     def _send_body(self, addressed_by: str, **fields: Any) -> dict[str, Any]:
         if addressed_by == "template_key":
             return self._rendered(**fields)
@@ -634,6 +661,32 @@ class TestTransactionalEmail(APIBaseTest):
                 },
             ),
             (
+                "rendered_content_with_copies_headers_and_tags",
+                "template_key",
+                {
+                    "text": "Hi",
+                    "cc": ["jane@example.com"],
+                    "bcc": ["audit@example.com"],
+                    "headers": {"X-Entity-Ref-ID": "order-123"},
+                    "tags": [{"name": "category", "value": "password_reset"}],
+                },
+                {
+                    "content": {"subject": "Welcome, Jane", "html": "<p>Hi {{ variables.name }}</p>", "text": "Hi"},
+                    "from": {"integrationId": "default", "isDefault": True},
+                    "cc": ["jane@example.com"],
+                    "bcc": ["audit@example.com"],
+                    "headers": [{"name": "X-Entity-Ref-ID", "value": "order-123"}],
+                    "tags": [{"name": "category", "value": "password_reset"}],
+                    "tracking": {"captureEngagement": True},
+                },
+            ),
+            (
+                "template_by_key_with_a_copy",
+                "key",
+                {"bcc": ["audit@example.com"]},
+                {"bcc": ["audit@example.com"], "tracking": {"captureEngagement": True}},
+            ),
+            (
                 "template_by_id_with_capture",
                 "id",
                 {"capture_engagement": True},
@@ -659,6 +712,22 @@ class TestTransactionalEmail(APIBaseTest):
         if sent is not None and "from" in sent:
             sent = {**sent, "from": {**sent["from"], "integrationId": sender_ids[sent["from"]["integrationId"]]}}
         assert mock_post.call_args.kwargs["json"].get("send") == sent
+
+    def test_a_send_posts_the_same_headers_and_tags_whatever_their_order(self, mock_post, _flag, _capture):
+        self._cdp_accepts(mock_post)
+        client = self._psak_client(["hog_flow:write"])
+        plan, region = {"name": "plan", "value": "pro"}, {"name": "region", "value": "eu"}
+
+        for headers, tags in (
+            ({"X-Entity-Ref-ID": "order-123", "X-Ref": "1"}, [plan, region]),
+            ({"X-Ref": "1", "X-Entity-Ref-ID": "order-123"}, [region, plan]),
+        ):
+            body = self._send_body("template_key", headers=headers, tags=tags)
+            response = client.post(self.send_email_url, body, format="json")
+            assert response.status_code == status.HTTP_202_ACCEPTED, response.json()
+
+        first, second = (call.kwargs["json"]["send"] for call in mock_post.call_args_list)
+        assert first == second
 
     @parameterized.expand(
         [
@@ -688,6 +757,8 @@ class TestTransactionalEmail(APIBaseTest):
                 "invalid_request",
                 "identifiers__email",
             ),
+            ("header_posthog_sets", {"headers": {"From": "a@example.com"}}, "invalid_request", "headers"),
+            ("bad_tag", {"tags": [{"name": "plan", "value": "pro.v2"}]}, "invalid_request", "tags__0__value"),
         ]
     )
     def test_refuses_a_rendered_send_it_cannot_make_with_what_to_fix(
@@ -703,10 +774,10 @@ class TestTransactionalEmail(APIBaseTest):
         assert error["why"] and error["fix"]
         if expected_code == "invalid_request":
             # The why explains the field that failed, not what a send needs in general.
-            named = {"reply_to__0": "reply_to", "identifiers__email": "identifiers.email"}.get(
-                expected_attr, expected_attr
-            )
+            named = {"identifiers__email": "identifiers.email"}.get(expected_attr, expected_attr.split("__")[0])
             assert f"`{named}`" in error["why"], error["why"]
+            unknown = expected_attr in ("scheduled_at", "identifiers__email")
+            assert ("doesn't know" in error["why"]) == unknown, error["why"]
         if expected_attr == "to":
             assert error["detail"] == f"to: `{fields['to']}` is not a bare address. Send it as `jane@example.com`."
         mock_post.assert_not_called()

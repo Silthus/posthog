@@ -9,7 +9,7 @@
 import * as zod from 'zod'
 
 /**
- * Send one transactional email to one recipient, in one of two forms. A template named by its key or id: `message_data` fills its `{{ variables.* }}` placeholders. With `template.hash`, PostHog checks that it holds the content you hold: a key or content it doesn't hold sends nothing and answers `template_outdated`, and content that newer content replaced sends the current content with a `template_superseded` warning. Or content your code rendered, named by `template_key`: PostHog sends it as is and never stores it. Transactional emails skip opt-outs and frequency caps. Send an `Idempotency-Key` header to retry safely without sending the email twice.
+ * Send one transactional email to the address in `to`, in one of two forms. A template named by its key or id: `message_data` fills its `{{ variables.* }}` placeholders. With `template.hash`, PostHog checks that it holds the content you hold: a key or content it doesn't hold sends nothing and answers `template_outdated`, and content that newer content replaced sends the current content with a `template_superseded` warning. Or content your code rendered, named by `template_key`: PostHog sends it as is and never stores it. A send by `template.key` or `template_key` can copy more addresses with `cc` and `bcc`, and a template made in PostHog keeps its own recipients. Transactional emails skip opt-outs and frequency caps. Send an `Idempotency-Key` header to retry safely without sending the email twice.
  * @summary Send a transactional email
  */
 export const MessagingSendEmailCreateParams = () => zod.object({
@@ -32,6 +32,16 @@ export const MessagingSendEmailCreateHeader = () => zod.object({
 export const messagingSendEmailCreateBodyIdentifiersOneDistinctIdMax = 400
 
 export const messagingSendEmailCreateBodyReplyToMax = 10
+
+export const messagingSendEmailCreateBodyCcMax = 10
+
+export const messagingSendEmailCreateBodyBccMax = 10
+
+export const messagingSendEmailCreateBodyTagsItemNameMax = 256
+
+export const messagingSendEmailCreateBodyTagsItemValueMax = 256
+
+export const messagingSendEmailCreateBodyTagsMax = 10
 
 export const MessagingSendEmailCreateBody = () => zod.object({
     to: zod.email().describe('Email address of the recipient, as `jane@example.com`.'),
@@ -95,6 +105,46 @@ export const MessagingSendEmailCreateBody = () => zod.object({
         .max(messagingSendEmailCreateBodyReplyToMax)
         .optional()
         .describe('Addresses replies go to. Not with `template.id`.'),
+    cc: zod
+        .array(zod.email())
+        .max(messagingSendEmailCreateBodyCcMax)
+        .optional()
+        .describe(
+            'Addresses that get a visible copy, at most 10. Each one is checked against the suppression list, and one suppressed address stops the send. Not with `template.id`.'
+        ),
+    bcc: zod
+        .array(zod.email())
+        .max(messagingSendEmailCreateBodyBccMax)
+        .optional()
+        .describe(
+            'Addresses that get a hidden copy, at most 10. Each one is checked against the suppression list, and one suppressed address stops the send. Not with `template.id`.'
+        ),
+    headers: zod
+        .record(zod.string(), zod.string())
+        .optional()
+        .describe(
+            'Extra email headers by name, such as `X-Entity-Ref-ID` or `List-Unsubscribe`, at most 10. Values are printable ASCII up to 870 characters. Headers PostHog sets itself, such as `From`, `Subject` and `Content-Type`, are refused. Not with `template.id`.'
+        ),
+    tags: zod
+        .array(
+            zod.object({
+                name: zod
+                    .string()
+                    .max(messagingSendEmailCreateBodyTagsItemNameMax)
+                    .describe(
+                        "Tag name: ASCII letters, numbers, `_` and `-`. Names starting with `ph_` are PostHog's."
+                    ),
+                value: zod
+                    .string()
+                    .max(messagingSendEmailCreateBodyTagsItemValueMax)
+                    .describe('Tag value: ASCII letters, numbers, `_` and `-`.'),
+            })
+        )
+        .max(messagingSendEmailCreateBodyTagsMax)
+        .optional()
+        .describe(
+            "Name and value pairs, at most 10, that PostHog adds to the email's engagement events as `$email_tags`. Not with `template.id`."
+        ),
     capture_engagement: zod
         .boolean()
         .optional()

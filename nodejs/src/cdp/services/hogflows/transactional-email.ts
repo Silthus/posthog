@@ -1,7 +1,14 @@
 import { Counter } from 'prom-client'
 import { z } from 'zod'
 
-import { BareEmailAddressSchema } from '~/cdp/schema/emailFields'
+import {
+    BareEmailAddressSchema,
+    EmailHeaderSchema,
+    EmailTagSchema,
+    MAX_EMAIL_COPIES,
+    MAX_EMAIL_HEADERS,
+    MAX_EMAIL_TAGS,
+} from '~/cdp/schema/emailFields'
 import { HogFlow } from '~/cdp/schema/hogflow'
 
 import { IntegrationManagerService } from '../managers/integration-manager.service'
@@ -34,6 +41,10 @@ export const AcceptedSendSchema = z
             .readonly()
             .optional(),
         replyTo: z.array(z.string()).readonly().optional(),
+        cc: z.array(BareEmailAddressSchema).max(MAX_EMAIL_COPIES).readonly().optional(),
+        bcc: z.array(BareEmailAddressSchema).max(MAX_EMAIL_COPIES).readonly().optional(),
+        headers: z.array(EmailHeaderSchema.readonly()).max(MAX_EMAIL_HEADERS).readonly().optional(),
+        tags: z.array(EmailTagSchema.readonly()).max(MAX_EMAIL_TAGS).readonly().optional(),
         tracking: z.object({ captureEngagement: z.boolean() }).readonly(),
     })
     .readonly()
@@ -102,7 +113,7 @@ export const transactionalEmailRequestsTotal = new Counter({
 
 /**
  * What the delivery's send checks will see, known when the send is accepted: the sender the email step
- * resolves to for this run, and the recipient. The caller's `send.from` replaces the step's sender, as it
+ * resolves to for this run, and the recipients. The caller's `send.from` replaces the step's sender, as it
  * does at delivery.
  */
 export async function transactionalSendCandidate(
@@ -117,8 +128,24 @@ export async function transactionalSendCandidate(
         teamId: hogFlow.team_id,
         workflowMetadata: emailPauseMetadata(hogFlow),
         sender: from ? await integrationManager.get(selectEmailSenderIntegrationId(invocationId, from)) : null,
-        recipients: [to],
+        // Every copy is a recipient, so suppression covers the whole send.
+        recipients: [to, ...(send?.cc ?? []), ...(send?.bcc ?? [])],
     }
+}
+
+type RecipientField = 'to' | 'cc' | 'bcc'
+
+/** The request field that holds every refused address, or null when they sit in more than one field. */
+export function refusedRecipientField(
+    refusedAddresses: string[],
+    to: string,
+    send: AcceptedSend | undefined
+): RecipientField | null {
+    const held: Record<RecipientField, readonly string[]> = { to: [to], cc: send?.cc ?? [], bcc: send?.bcc ?? [] }
+    const holding = (Object.keys(held) as RecipientField[]).filter((field) =>
+        refusedAddresses.some((address) => held[field].includes(address))
+    )
+    return holding.length === 1 ? holding[0] : null
 }
 
 function emailStepSender(hogFlow: HogFlow): EmailSenderConfiguration | null {

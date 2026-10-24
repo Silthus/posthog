@@ -2253,6 +2253,26 @@ describe('CDP API', () => {
                     { send: codeSend },
                     { send: { ...codeSend, from: { ...codeSend.from, integrationId: 13 } } },
                 ],
+                [
+                    'another cc',
+                    { send: { ...codeSend, cc: ['first@example.com'] } },
+                    { send: { ...codeSend, cc: ['second@example.com'] } },
+                ],
+                [
+                    'another bcc',
+                    { send: { ...codeSend, bcc: ['first@example.com'] } },
+                    { send: { ...codeSend, bcc: ['second@example.com'] } },
+                ],
+                [
+                    'other headers',
+                    { send: { ...codeSend, headers: [{ name: 'X-Entity-Ref-ID', value: 'order-1' }] } },
+                    { send: { ...codeSend, headers: [{ name: 'X-Entity-Ref-ID', value: 'order-2' }] } },
+                ],
+                [
+                    'other tags',
+                    { send: { ...codeSend, tags: [{ name: 'plan', value: 'free' }] } },
+                    { send: { ...codeSend, tags: [{ name: 'plan', value: 'pro' }] } },
+                ],
             ])('rejects the key for %s', async (_desc, first, retry) => {
                 await sendKeyed({ ...keyed, ...first })
 
@@ -2346,6 +2366,10 @@ describe('CDP API', () => {
                 { ...codeSend, content: { subject: 'Hi', html: '<img src="https://example.com/a.png" alt="Hi">' } },
             ],
             ['a code send for a local template', { tracking: { captureEngagement: false } }],
+            [
+                'a code send with copies to addresses with punctuation',
+                { ...codeSend, cc: ['archive=orders@example.com'], bcc: ["o'brien+audit@example.com"] },
+            ],
         ])('stamps %s on the queued run', async (_desc, acceptedSend) => {
             const res = await send(
                 hogFlow.id,
@@ -2363,6 +2387,7 @@ describe('CDP API', () => {
             ['content with an empty subject', { ...codeSend, content: { subject: '', text: 'Hi' } }],
             ['a sender without an integration', { ...codeSend, from: { email: 'security@example.com' } }],
             ['no tracking choice', { content: codeSend.content }],
+            ['a copy that names two recipients', { ...codeSend, cc: ['jane@example.com, joe@example.com'] }],
         ])('refuses a code send with %s', async (_desc, acceptedSend) => {
             const invalidBefore = await outcomeCount('invalid_request')
 
@@ -2394,7 +2419,7 @@ describe('CDP API', () => {
         })
 
         describe('send checks', () => {
-            type Target = { teamId: number; flowId: string; to: string }
+            type Target = { teamId: number; flowId: string; to: string; send?: Record<string, unknown> }
 
             const suppress = async (address: string): Promise<void> => {
                 await hub.postgres.query(
@@ -2463,23 +2488,35 @@ describe('CDP API', () => {
                 return { teamId: team.id, flowId: flow.id, to: body.to }
             }
 
+            const suppressedCopy = async (): Promise<Target> => {
+                const { teamId, flowId } = await suppressedRecipient()
+                return { teamId, flowId, to: body.to, send: { ...codeSend, cc: ['bounced@example.com'] } }
+            }
+
+            const suppressedRecipientAndCopy = async (): Promise<Target> => {
+                const target = await suppressedRecipient()
+                return { ...target, send: { ...codeSend, cc: ['bounced@example.com'] } }
+            }
+
             const domainWithoutMailServers = (): Promise<Target> =>
                 Promise.resolve({ teamId: team.id, flowId: hogFlow.id, to: 'someone@no-mail.invalid' })
 
             it.each([
-                ['invalid_recipient', domainWithoutMailServers, 'has no mail servers'],
-                ['recipient_suppressed', suppressedRecipient, 'bounced or was marked as spam'],
-                ['template_paused', pausedWorkflow, 'Email sending is paused for this email'],
-                ['sending_suspended', suspendedProject, 'Email sending is suspended for this project'],
-                ['sender_not_verified', unverifiedSender, "The sender's domain is not verified"],
-            ])('refuses a send that fails %s before it queues', async (code, setUp, why) => {
-                const { teamId, flowId, to } = await setUp()
+                ['invalid_recipient', domainWithoutMailServers, 'has no mail servers', 'to'],
+                ['recipient_suppressed', suppressedRecipient, 'bounced or was marked as spam', 'to'],
+                ['recipient_suppressed', suppressedCopy, 'bounced or was marked as spam', 'cc'],
+                ['recipient_suppressed', suppressedRecipientAndCopy, 'bounced or was marked as spam', null],
+                ['template_paused', pausedWorkflow, 'Email sending is paused for this email', undefined],
+                ['sending_suspended', suspendedProject, 'Email sending is suspended for this project', undefined],
+                ['sender_not_verified', unverifiedSender, "The sender's domain is not verified", undefined],
+            ])('refuses a send that fails %s before it queues, set up by %p', async (code, setUp, why, attr) => {
+                const { teamId, flowId, to, send } = await setUp()
                 const rejectedBefore = await outcomeCount(code)
 
                 const res = await supertest(app)
                     .post(`/api/projects/${teamId}/hog_flows/${flowId}/transactional_email`)
                     .set({ Authorization: `Bearer ${mintToken(teamId, flowId)}` })
-                    .send({ ...body, to })
+                    .send({ ...body, to, ...(send && { send }) })
 
                 expect(res.status).toEqual(400)
                 expect(res.body).toEqual({
@@ -2488,6 +2525,7 @@ describe('CDP API', () => {
                     detail: expect.not.stringMatching(/^Skipping send/),
                     why: expect.stringContaining(why),
                     fix: expect.any(String),
+                    attr,
                 })
                 expect(await outcomeCount(code)).toEqual(rejectedBefore + 1)
                 expect(mockQueueInvocations).not.toHaveBeenCalled()
