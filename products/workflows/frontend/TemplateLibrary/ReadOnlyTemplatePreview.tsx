@@ -1,12 +1,31 @@
+import { useValues } from 'kea'
+
+import { LemonSkeleton } from '@posthog/lemon-ui'
+
+import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { LemonField } from 'lib/lemon-ui/LemonField'
+import { EmailSenderDetails } from 'scenes/hog-functions/email-templater/EmailSenderDetails'
 import type { EmailTemplate } from 'scenes/hog-functions/email-templater/types'
 
 import { EmailHtmlFrame } from './EmailHtmlFrame'
+
+function ReadOnlySender({ email }: { email: EmailTemplate }): JSX.Element {
+    const { integrations } = useValues(integrationsLogic)
+
+    if (!integrations) {
+        return <LemonSkeleton className="h-4 w-48" />
+    }
+    const senders = integrations.filter((integration) => integration.kind === 'email')
+    return <EmailSenderDetails email={email} senders={senders} placeholder="No sender set" />
+}
 
 export function ReadOnlyTemplatePreview({ email }: { email: EmailTemplate }): JSX.Element {
     return (
         <div className="flex flex-col flex-1 gap-4 min-h-0" data-attr="message-template-read-only-preview">
             <div className="flex flex-col gap-3 rounded border bg-surface-primary p-3">
+                <LemonField.Pure label="From" className="gap-1 min-w-0">
+                    <ReadOnlySender email={email} />
+                </LemonField.Pure>
                 <LemonField.Pure label="Subject" className="gap-1 min-w-0">
                     <span className="break-words">{email.subject}</span>
                 </LemonField.Pure>
