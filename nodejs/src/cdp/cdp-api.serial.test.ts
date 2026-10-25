@@ -2394,15 +2394,18 @@ describe('CDP API', () => {
             ['transactional_email/send', { ...body, send: codeSend }],
         ])('sends on %s under a workflow created after the cached read missed it', async (route, payload) => {
             const unseen = transactionalFlow('api', 'active')
-            expect(await api['hogFlowManager'].getHogFlow(unseen.id)).toBeNull()
+            const post = () =>
+                supertest(app)
+                    .post(`/api/projects/${team.id}/hog_flows/${unseen.id}/${route}`)
+                    .set({ Authorization: `Bearer ${mintToken(team.id, unseen.id)}` })
+                    .send(payload)
+
+            expect((await post()).status).toEqual(404)
+            expect(mockQueueInvocations).not.toHaveBeenCalled()
+
             await _insertHogFlow(hub.postgres, unseen)
 
-            const res = await supertest(app)
-                .post(`/api/projects/${team.id}/hog_flows/${unseen.id}/${route}`)
-                .set({ Authorization: `Bearer ${mintToken(team.id, unseen.id)}` })
-                .send(payload)
-
-            expect(res.status).toEqual(202)
+            expect((await post()).status).toEqual(202)
             expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
         })
 

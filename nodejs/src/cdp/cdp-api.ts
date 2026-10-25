@@ -165,16 +165,15 @@ function parseRealtimeCohort(value: unknown): BatchResolverState['realtimeCohort
     return { id: id as number, teamId: team_id as number, waitUntil: waitUntil.toISOString() }
 }
 
-type TransactionalEmailRoute = 'template' | 'accepted_send'
+const ACCEPTED_SEND_FINGERPRINT_MARKER = 'accepted_send'
 
 const transactionalEmailFingerprint = (
-    route: TransactionalEmailRoute,
     hogFlowId: string,
     { to, distinct_id, variables, send }: TransactionalEmailRequest
 ): string => {
     const templateRequest = [hogFlowId, to, distinct_id, variables]
     return IdempotencyKeys.fingerprint(
-        route === 'template' ? templateRequest : [...templateRequest, route, send ?? null]
+        send ? [...templateRequest, ACCEPTED_SEND_FINGERPRINT_MARKER, send] : templateRequest
     )
 }
 
@@ -386,11 +385,11 @@ export class CdpApi {
         router.post('/api/projects/:team_id/workflow_steps/resume', asyncHandler(this.postWorkflowStepResume))
         router.post(
             '/api/projects/:team_id/hog_flows/:id/transactional_email',
-            asyncHandler(this.postTransactionalEmail(TransactionalEmailRequestSchema, 'template'))
+            asyncHandler(this.postTransactionalEmail(TransactionalEmailRequestSchema))
         )
         router.post(
             '/api/projects/:team_id/hog_flows/:id/transactional_email/send',
-            asyncHandler(this.postTransactionalEmail(AcceptedSendRequestSchema, 'accepted_send'))
+            asyncHandler(this.postTransactionalEmail(AcceptedSendRequestSchema))
         )
         router.get('/api/projects/:team_id/hog_functions/:id/status', asyncHandler(this.getFunctionStatus()))
         router.patch('/api/projects/:team_id/hog_functions/:id/status', asyncHandler(this.patchFunctionStatus()))
@@ -1164,7 +1163,7 @@ export class CdpApi {
     // Auth: a per-call JWT minted by Django on its own audience and key, pinned to the team and the workflow,
     // never the fleet-wide internal secret.
     private postTransactionalEmail =
-        (schema: z.ZodType<TransactionalEmailRequest, unknown>, route: TransactionalEmailRoute) =>
+        (schema: z.ZodType<TransactionalEmailRequest, unknown>) =>
         async (req: ModifiedRequest, res: express.Response): Promise<any> => {
             const reply = (outcome: TransactionalEmailOutcome, status: number, body: Record<string, unknown>) => {
                 transactionalEmailRequestsTotal.inc({ outcome })
@@ -1231,7 +1230,7 @@ export class CdpApi {
                 invocation.queuePriority = EMAIL_QUEUE_PRIORITY.fast
 
                 const idempotencyKeys = this.transactionalEmailIdempotencyKeys
-                const fingerprint = transactionalEmailFingerprint(route, hogFlow.id, parsed.data)
+                const fingerprint = transactionalEmailFingerprint(hogFlow.id, parsed.data)
                 if (idempotencyKey) {
                     const reservation = await idempotencyKeys.reserve(
                         team.id,
