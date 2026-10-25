@@ -13,7 +13,6 @@ import { formatInput } from '../hog-inputs.service'
 import { IntegrationManagerService } from '../managers/integration-manager.service'
 import { PolicyCode, PolicyRejection, SendCandidate } from '../messaging/email-send-policy'
 import { EmailSenderConfiguration, selectEmailSenderIntegrationId } from '../messaging/email-sender-selection'
-import { EmailSuppressionService } from '../messaging/email-suppression.service'
 import { EmailValidationService, Undeliverable } from '../messaging/email-validation.service'
 import { recipientsUnlessToIsMissing } from '../messaging/email.service'
 import { emailPauseMetadata } from './hogflow-functions.service'
@@ -107,28 +106,21 @@ export async function transactionalSendCandidate(
     }
 }
 
-export async function policyRefusal(
-    rejection: PolicyRejection,
-    candidate: SendCandidate,
-    to: string,
-    send: AcceptedSend,
-    suppression: Pick<EmailSuppressionService, 'isSuppressed' | 'findSuppressed'>
-): Promise<AdmissionRefusal> {
-    const { code, detail, why, fix } = rejection
-    switch (code) {
+export function policyRefusal(rejection: PolicyRejection, to: string, send: AcceptedSend): AdmissionRefusal {
+    switch (rejection.code) {
         case 'recipient_suppressed':
-            if (await suppression.isSuppressed(candidate.teamId, to)) {
-                return { code, detail, attr: 'to', why, fix }
-            }
-            return storedCopySuppressed(
-                detail,
-                await suppression.findSuppressed(candidate.teamId, candidate.recipients)
-            )
+            return rejection.suppressed.includes(to)
+                ? refusalOf(rejection, 'to')
+                : storedCopySuppressed(rejection.detail, rejection.suppressed)
         case 'sender_not_verified':
-            return { code, detail, attr: send.from ? 'from' : null, why, fix }
+            return refusalOf(rejection, send.from ? 'from' : null)
         default:
-            return { code, detail, attr: null, why, fix }
+            return refusalOf(rejection, null)
     }
+}
+
+function refusalOf({ code, detail, why, fix }: PolicyRejection, attr: AdmissionRefusal['attr']): AdmissionRefusal {
+    return { code, detail, attr, why, fix }
 }
 
 function storedCopySuppressed(detail: string, copies: string[]): AdmissionRefusal {

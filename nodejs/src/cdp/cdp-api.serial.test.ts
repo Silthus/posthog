@@ -4,6 +4,7 @@ import { mockFetch } from '../../tests/helpers/mocks/request.mock'
 
 import { Server } from 'http'
 import jwt from 'jsonwebtoken'
+import { register } from 'prom-client'
 import supertest from 'supertest'
 import express from 'ultimate-express'
 
@@ -2164,6 +2165,11 @@ describe('CDP API', () => {
         const outcomeCount = async (outcome: string): Promise<number> =>
             (await transactionalEmailRequestsTotal.get()).values.find((v) => v.labels.outcome === outcome)?.value ?? 0
 
+        const suppressionHits = async (): Promise<number> =>
+            (await register.getSingleMetric('cdp_email_suppression_total')!.get()).values.find(
+                (v) => v.labels.result === 'suppressed_hit'
+            )?.value ?? 0
+
         const send = (flowId: string, headers: Record<string, string>, payload: Record<string, unknown> = body) =>
             supertest(app)
                 .post(`/api/projects/${team.id}/hog_flows/${flowId}/transactional_email`)
@@ -2477,14 +2483,15 @@ describe('CDP API', () => {
                     .send({ ...payload, to: target.to })
 
             it.each([
-                ['invalid_recipient', domainWithoutMailServers, 'to', 'has no mail servers'],
-                ['recipient_suppressed', suppressedRecipient, 'to', 'bounced or was marked as spam'],
-                ['template_paused', pausedWorkflow, null, 'Email sending is paused for this email'],
-                ['sending_suspended', suspendedFreshProject, null, 'Email sending is suspended for this project'],
-                ['sender_not_verified', unverifiedSender, null, "The sender's domain is not verified"],
-            ])('refuses an accepted send that fails %s before it queues', async (code, setUp, attr, why) => {
+                ['invalid_recipient', domainWithoutMailServers, 'to', 'has no mail servers', 0],
+                ['recipient_suppressed', suppressedRecipient, 'to', 'bounced or was marked as spam', 1],
+                ['template_paused', pausedWorkflow, null, 'Email sending is paused for this email', 0],
+                ['sending_suspended', suspendedFreshProject, null, 'Email sending is suspended for this project', 0],
+                ['sender_not_verified', unverifiedSender, null, "The sender's domain is not verified", 0],
+            ])('refuses an accepted send that fails %s before it queues', async (code, setUp, attr, why, hits) => {
                 const target = await setUp()
                 const refusedBefore = await outcomeCount(code)
+                const hitsBefore = await suppressionHits()
 
                 const res = await postTo('transactional_email/send', target, { ...body, send: templateFormSend })
 
@@ -2498,6 +2505,7 @@ describe('CDP API', () => {
                     fix: expect.any(String),
                 })
                 expect(await outcomeCount(code)).toEqual(refusedBefore + 1)
+                expect(await suppressionHits()).toEqual(hitsBefore + hits)
                 expect(mockQueueInvocations).not.toHaveBeenCalled()
             })
 
@@ -2587,6 +2595,7 @@ describe('CDP API', () => {
                     code: 'template_paused',
                     why: expect.stringContaining('Email sending is paused for this email'),
                     fixCopy: expect.any(String),
+                    hits: 0,
                     fix: (flowId: string) =>
                         reloadAfter(
                             flowId,
@@ -2602,6 +2611,7 @@ describe('CDP API', () => {
                     why: `The workflow's email step sends a cc or bcc to ${storedCopy.suppressed}. An earlier email to it bounced or was marked as spam, so PostHog sent nothing.`,
                     fixCopy:
                         "Remove the address from the cc or bcc of the workflow's email step, or remove it from the suppression list once it can receive email again.",
+                    hits: 1,
                     fix: (flowId: string) =>
                         reloadAfter(flowId, `UPDATE posthog_hogflow SET actions = $2 WHERE id = $1`, [
                             JSON.stringify(transactionalFlow('api', 'active').actions),
@@ -2609,8 +2619,9 @@ describe('CDP API', () => {
                 })),
             ])(
                 'refuses a keyed send when $refusal, then sends it on the same key once fixed',
-                async ({ target, variables, code, why, fixCopy, fix }) => {
+                async ({ target, variables, code, why, fixCopy, hits, fix }) => {
                     const sendTo = await target()
+                    const hitsBefore = await suppressionHits()
                     const keyed = {
                         ...body,
                         variables,
@@ -2624,6 +2635,7 @@ describe('CDP API', () => {
 
                     expect(refused.status).toEqual(400)
                     expect(refused.body).toMatchObject({ code, attr: null, why, fix: fixCopy })
+                    expect(await suppressionHits()).toEqual(hitsBefore + hits)
                     expect(retried.status).toEqual(202)
                     expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
                 }

@@ -113,6 +113,7 @@ describe('EmailSendPolicy', () => {
             ok: false,
             code: 'recipient_suppressed',
             detail: 'Recipient(s) on the suppression list: cc@example.com, bcc@example.com',
+            suppressed: ['cc@example.com', 'bcc@example.com'],
         })
     })
 

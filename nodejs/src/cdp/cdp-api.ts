@@ -71,7 +71,6 @@ import { GroupsManagerService } from './services/managers/groups-manager.service
 import { HogFunctionManagerService } from './services/managers/hog-function-manager.service'
 import { EMAIL_QUEUE_PRIORITY } from './services/messaging/email-priority'
 import { EmailSendPolicy } from './services/messaging/email-send-policy'
-import { EmailSuppressionService } from './services/messaging/email-suppression.service'
 import { EmailTrackingService } from './services/messaging/email-tracking.service'
 import { EmailValidationService } from './services/messaging/email-validation.service'
 import { EmailTrackingCodeSigner } from './services/messaging/helpers/tracking-code'
@@ -218,7 +217,6 @@ export class CdpApi {
     private transactionalEmailJwt: ScopedServiceJwt
     private transactionalEmailIdempotencyKeys: IdempotencyKeys
     private transactionalEmailPolicy: EmailSendPolicy
-    private emailSuppressionService: EmailSuppressionService
     private emailValidationService: EmailValidationService
     private hogFunctionMonitoringService: HogFunctionMonitoringService
     private resumeBatchJwt: ScopedServiceJwt
@@ -271,7 +269,6 @@ export class CdpApi {
             services.teamWorkflowsConfigService,
             services.emailSuppressionService
         )
-        this.emailSuppressionService = services.emailSuppressionService
         this.emailValidationService = services.emailValidationService
         this.groupsManager = new GroupsManagerService(deps.teamManager, deps.groupRepository)
         this.batchExportHogFunctionService = new BatchExportHogFunctionService(
@@ -1340,7 +1337,7 @@ export class CdpApi {
         )
         const decision = await this.transactionalEmailPolicy.check(candidate)
         if (!decision.ok) {
-            return await policyRefusal(decision, candidate, to, send, this.emailSuppressionService)
+            return policyRefusal(decision, to, send)
         }
         return await undeliverableRecipient(to, invocation.hogFlow.team_id, this.emailValidationService)
     }
