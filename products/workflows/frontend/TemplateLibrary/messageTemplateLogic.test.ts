@@ -591,6 +591,30 @@ describe('messageTemplateLogic', () => {
             ].filter((field) => field in patchBodies[1])
             expect(serverOwnedFieldsSent).toEqual([])
         })
+
+        it('takes content an upload published during the release as the published content', async () => {
+            const uploaded = {
+                ...CODE_MANAGED.content,
+                email: { ...CODE_MANAGED.content.email, subject: 'Uploaded during the release' },
+            }
+            useMocks({
+                patch: {
+                    '/api/environments/:team_id/messaging_templates/:id/': () => [
+                        200,
+                        { ...CODE_MANAGED, managed_by: 'gui', transactional_hog_flow_id: 'flow-id', content: uploaded },
+                    ],
+                },
+            })
+
+            await expectLogic(logic, () => {
+                logic.actions.releaseTemplate()
+            })
+                .toDispatchActions(['releaseTemplateSuccess'])
+                .toFinishAllListeners()
+
+            expect(logic.values.template.content).toEqual(uploaded)
+            await expectLogic(logic).toMatchValues({ draftsEnabled: true, hasDraft: false, hasUnsavedChanges: false })
+        })
     })
 
     describe('claimed back by an upload while editing', () => {

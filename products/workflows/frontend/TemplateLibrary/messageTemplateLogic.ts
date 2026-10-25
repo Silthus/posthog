@@ -1054,8 +1054,10 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
             actions.replayDeferredExternalEdit()
         },
         releaseTemplateSuccess: ({ template }) => {
-            actions.resetTemplate(template)
-            actions.setOriginalTemplate(template)
+            const { form, draft, published } = splitDraft(template)
+            actions.setDraftState(draft, published)
+            actions.resetTemplate(form)
+            actions.setOriginalTemplate(form)
             const edits = values.refusedEdits
             if (edits) {
                 actions.setRefusedEdits(null)
