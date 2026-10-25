@@ -24,6 +24,7 @@
             "type": "string"
         },
         "source": {
+            "additionalProperties": false,
             "description": "Where the template file lives, so people in PostHog can find it. Leaving it out, or a part of it, keeps what is stored.",
             "properties": {
                 "path": {
