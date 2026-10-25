@@ -418,7 +418,7 @@ export class EmailService {
                 recipients: recipientsUnlessToIsMissing(params),
             })
             if (!decision.ok) {
-                return this.skipForPolicy(result, decision, isTest)
+                return this.handlePolicyRejection(result, decision, isTest)
             }
 
             const sender = decision.sender
@@ -853,7 +853,7 @@ export class EmailService {
         return this.sesConfig.sesTrackedConfigurationSet
     }
 
-    private skipForPolicy(
+    private handlePolicyRejection(
         result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>,
         decision: PolicyRejection,
         isTest: boolean
