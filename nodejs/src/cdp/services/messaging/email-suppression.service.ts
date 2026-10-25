@@ -94,6 +94,13 @@ export class EmailSuppressionService {
         }
     }
 
+    public async findSuppressed(teamId: number, emails: string[]): Promise<string[]> {
+        const results = await Promise.all(
+            emails.map(async (email) => ({ email, suppressed: await this.isSuppressed(teamId, email) }))
+        )
+        return results.filter((result) => result.suppressed).map((result) => result.email)
+    }
+
     /**
      * Record one or more soft (Transient) bounces. Increments each address's consecutive-bounce
      * counter and auto-suppresses it in the same statement once it reaches the threshold. Manual

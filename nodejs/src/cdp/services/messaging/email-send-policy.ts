@@ -30,7 +30,7 @@ const CONTACT_SUPPORT = 'Contact support to get sending re-enabled.'
 export class EmailSendPolicy {
     constructor(
         private teamWorkflowsConfigService: Pick<TeamWorkflowsConfigService, 'getEmailSendingSuspension'>,
-        private emailSuppressionService: Pick<EmailSuppressionService, 'isSuppressed'>
+        private emailSuppressionService: Pick<EmailSuppressionService, 'findSuppressed'>
     ) {}
 
     public async check(send: SendCandidate): Promise<PolicyDecision> {
@@ -50,7 +50,7 @@ export class EmailSendPolicy {
     }
 
     private async recipientsSuppressed(teamId: number, recipients: string[]): Promise<PolicyRejection | null> {
-        const suppressed = await findSuppressedRecipients(this.emailSuppressionService, teamId, recipients)
+        const suppressed = await this.emailSuppressionService.findSuppressed(teamId, recipients)
         if (suppressed.length === 0) {
             return null
         }
@@ -62,20 +62,6 @@ export class EmailSendPolicy {
             fix: 'Send to another address, or remove the address from the suppression list once it can receive email again.',
         }
     }
-}
-
-export async function findSuppressedRecipients(
-    emailSuppressionService: Pick<EmailSuppressionService, 'isSuppressed'>,
-    teamId: number,
-    recipients: string[]
-): Promise<string[]> {
-    const results = await Promise.all(
-        recipients.map(async (email) => ({
-            email,
-            suppressed: await emailSuppressionService.isSuppressed(teamId, email),
-        }))
-    )
-    return results.filter((result) => result.suppressed).map((result) => result.email)
 }
 
 function sendingSuspended(cause: EmailSendingSuspensionCause): PolicyRejection {

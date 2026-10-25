@@ -28,7 +28,10 @@ const policyWith = ({
 }: { suspension?: EmailSendingSuspensionCause | null; suppressed?: string[] } = {}): EmailSendPolicy =>
     new EmailSendPolicy(
         { getEmailSendingSuspension: () => Promise.resolve(suspension) },
-        { isSuppressed: (_teamId: number, email: string) => Promise.resolve(suppressed.includes(email)) }
+        {
+            findSuppressed: (_teamId: number, emails: string[]) =>
+                Promise.resolve(emails.filter((email) => suppressed.includes(email))),
+        }
     )
 
 describe('EmailSendPolicy', () => {
