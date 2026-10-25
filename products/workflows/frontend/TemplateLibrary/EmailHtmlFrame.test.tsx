@@ -27,14 +27,17 @@ describe('EmailHtmlFrame', () => {
         expect(link?.textContent).toEqual('Go')
     })
 
-    it('keeps the doctype, so the email renders in the same mode', () => {
-        const html =
-            '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html><body><p>Hi</p></body></html>'
-        const { container } = render(<EmailHtmlFrame html={html} />)
+    it.each([
+        [
+            'a public and a system id',
+            '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">',
+        ],
+        ['a system id only', '<!DOCTYPE html SYSTEM "about:legacy-compat">'],
+        ['no ids', '<!DOCTYPE html>'],
+    ])('keeps a doctype with %s, so the email renders in the same mode', (_case, doctype) => {
+        const { container } = render(<EmailHtmlFrame html={`${doctype}<html><body><p>Hi</p></body></html>`} />)
 
-        expect(container.querySelector('iframe')?.getAttribute('srcdoc')).toMatch(
-            /^<!DOCTYPE html PUBLIC "-\/\/W3C\/\/DTD XHTML 1\.0 Transitional\/\/EN" "http:\/\/www\.w3\.org\/TR\/xhtml1\/DTD\/xhtml1-transitional\.dtd">/
-        )
+        expect(container.querySelector('iframe')?.getAttribute('srcdoc')?.startsWith(`${doctype}<html>`)).toBe(true)
     })
 
     it('lets links open a new tab but never runs scripts', () => {

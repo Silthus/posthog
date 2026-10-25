@@ -3,13 +3,7 @@ import { useMemo } from 'react'
 import { cn } from 'lib/utils/css-classes'
 
 function doctypeOf(parsed: Document): string {
-    const doctype = parsed.doctype
-    if (!doctype) {
-        return ''
-    }
-    const publicId = doctype.publicId ? ` PUBLIC "${doctype.publicId}"` : ''
-    const systemId = doctype.systemId ? `${doctype.publicId ? '' : ' SYSTEM'} "${doctype.systemId}"` : ''
-    return `<!DOCTYPE ${doctype.name}${publicId}${systemId}>`
+    return parsed.doctype ? new XMLSerializer().serializeToString(parsed.doctype) : ''
 }
 
 function withLinksInNewTab(html: string): string {
