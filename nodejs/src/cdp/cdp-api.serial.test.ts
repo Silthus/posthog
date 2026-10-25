@@ -2140,6 +2140,19 @@ describe('CDP API', () => {
                 .set(headers)
                 .send(payload)
 
+        const sendAccepted = (flowId: string, payload: Record<string, unknown>) =>
+            supertest(app)
+                .post(`/api/projects/${team.id}/hog_flows/${flowId}/transactional_email/send`)
+                .set({ Authorization: `Bearer ${mintToken(team.id, flowId)}` })
+                .send(payload)
+
+        const codeSend = {
+            content: { subject: 'Reset your password', html: '<p>Hi {{ variables.name }}</p>', text: 'Hi' },
+            from: { integrationId: 12, email: 'security@example.com', name: 'Example' },
+            replyTo: ['help@example.com'],
+            tracking: { captureEngagement: true },
+        }
+
         beforeEach(async () => {
             mockQueueInvocations = jest.fn().mockResolvedValue(undefined)
             api['hogflowQueue'] = { queueInvocations: mockQueueInvocations } as any
@@ -2252,6 +2265,74 @@ describe('CDP API', () => {
             })
         })
 
+        it.each([
+            ['a code send with rendered content', codeSend],
+            [
+                'a code send with html that has no text to derive',
+                { ...codeSend, content: { subject: 'Hi', html: '<img src="https://example.com/a.png" alt="Hi">' } },
+            ],
+            ['a code send for a local template', { tracking: { captureEngagement: false } }],
+        ])('stamps %s on the queued run', async (_desc, acceptedSend) => {
+            const res = await sendAccepted(hogFlow.id, { ...body, send: acceptedSend })
+
+            expect(res.status).toEqual(202)
+            const [invocation] = mockQueueInvocations.mock.calls[0][0]
+            expect(invocation.state.send).toEqual(acceptedSend)
+        })
+
+        it('queues a template send without an accepted send, even when the request carries one', async () => {
+            const res = await send(
+                hogFlow.id,
+                { Authorization: `Bearer ${mintToken(team.id, hogFlow.id)}` },
+                { ...body, send: codeSend }
+            )
+
+            expect(res.status).toEqual(202)
+            const [invocation] = mockQueueInvocations.mock.calls[0][0]
+            expect(invocation.state.send).toBeUndefined()
+        })
+
+        it('refuses a send on the accepted send route without the send', async () => {
+            const invalidBefore = await outcomeCount('invalid_request')
+
+            const res = await sendAccepted(hogFlow.id, body)
+
+            expect(res.status).toEqual(400)
+            expect(await outcomeCount('invalid_request')).toEqual(invalidBefore + 1)
+            expect(mockQueueInvocations).not.toHaveBeenCalled()
+        })
+
+        it.each([
+            ['content without a body', { ...codeSend, content: { subject: 'Hi', html: '', text: '' } }],
+            ['content with an empty subject', { ...codeSend, content: { subject: '', text: 'Hi' } }],
+            ['a sender without an integration', { ...codeSend, from: { email: 'security@example.com' } }],
+            ['no tracking choice', { content: codeSend.content }],
+        ])('refuses a code send with %s', async (_desc, acceptedSend) => {
+            const invalidBefore = await outcomeCount('invalid_request')
+
+            const res = await sendAccepted(hogFlow.id, { ...body, send: acceptedSend })
+
+            expect(res.status).toEqual(400)
+            expect(await outcomeCount('invalid_request')).toEqual(invalidBefore + 1)
+            expect(mockQueueInvocations).not.toHaveBeenCalled()
+        })
+
+        it.each([
+            ['jane&john@example.com', 202],
+            ['user@exämple.com', 202],
+            ['jane@example.com,john@example.com', 400],
+            ['Jane <jane@example.com>', 400],
+        ])('answers a send to %s by the bare-address pattern', async (to, expected) => {
+            const res = await send(
+                hogFlow.id,
+                { Authorization: `Bearer ${mintToken(team.id, hogFlow.id)}` },
+                { ...body, to }
+            )
+
+            expect(res.status).toEqual(expected)
+            expect(mockQueueInvocations).toHaveBeenCalledTimes(expected === 202 ? 1 : 0)
+        })
+
         it('refuses a send when the team is over its email quota', async () => {
             jest.spyOn(api['deps'].quotaLimiting, 'isTeamQuotaLimited').mockResolvedValue(true)
             const limitedBefore = await outcomeCount('quota_limited')
@@ -2274,6 +2355,23 @@ describe('CDP API', () => {
             expect(res.status).toEqual(400)
             expect(mockQueueInvocations).not.toHaveBeenCalled()
         })
+
+        it.each(['transactional_email', 'transactional_email/send'])(
+            'authenticates every send on %s',
+            async (route) => {
+                const post = (headers: Record<string, string>) =>
+                    supertest(app)
+                        .post(`/api/projects/${team.id}/hog_flows/${hogFlow.id}/${route}`)
+                        .set(headers)
+                        .send({ ...body, send: codeSend })
+
+                expect((await post({})).status).toEqual(401)
+                expect((await post({ Authorization: `Bearer ${mintToken(team.id + 1, hogFlow.id)}` })).status).toEqual(
+                    401
+                )
+                expect(mockQueueInvocations).not.toHaveBeenCalled()
+            }
+        )
 
         it.each([
             ['no token', () => ({})],

@@ -1,9 +1,41 @@
 import { Counter } from 'prom-client'
 import { z } from 'zod'
 
+import { BareEmailAddressSchema } from '~/cdp/schema/emailFields'
+
+export const AcceptedSendSchema = z
+    .object({
+        // Absent when the send uses a local template, whose own content renders as usual.
+        content: z
+            .object({
+                subject: z.string().min(1),
+                html: z.string().optional(),
+                // Absent when the HTML has no text to derive, such as a single image.
+                text: z.string().optional(),
+            })
+            .readonly()
+            .refine((content) => !!content.html || !!content.text, { message: 'content needs html or text' })
+            .optional(),
+        from: z
+            .object({
+                integrationId: z.number().int(),
+                email: z.string().optional(),
+                name: z.string().optional(),
+            })
+            .readonly()
+            .optional(),
+        replyTo: z.array(z.string()).readonly().optional(),
+        tracking: z.object({ captureEngagement: z.boolean() }).readonly(),
+    })
+    .readonly()
+
+// A code send accepted by the transactional email API, carried on the run so the worker delivers
+// exactly what the caller sent. It is part of the queued job format: change it only additively.
+export type AcceptedSend = z.infer<typeof AcceptedSendSchema>
+
 // What Django sends to run a transactional email's workflow once.
 export const TransactionalEmailRequestSchema = z.object({
-    to: z.string().email(),
+    to: BareEmailAddressSchema,
     // The person the send is tracked against. Django falls back to the recipient's address.
     distinct_id: z.string().min(1),
     // The caller's `message_data`, available to the template as `variables`.
@@ -11,6 +43,12 @@ export const TransactionalEmailRequestSchema = z.object({
     // The caller's `Idempotency-Key`. A repeat with the same key and request returns the first send.
     idempotency_key: z.string().min(1).max(255).optional(),
 })
+
+// What Django sends to deliver content it accepted on its send route. It has its own route, so a cdp-api that
+// can't deliver the content answers 404 and sends nothing, instead of dropping `send` and sending something else.
+export const AcceptedSendRequestSchema = TransactionalEmailRequestSchema.extend({ send: AcceptedSendSchema })
+
+export type TransactionalEmailRequest = z.infer<typeof TransactionalEmailRequestSchema> & { send?: AcceptedSend }
 
 export type TransactionalEmailOutcome =
     | 'queued'
