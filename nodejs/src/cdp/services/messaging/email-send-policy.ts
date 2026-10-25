@@ -2,14 +2,8 @@ import { HogFunctionType, IntegrationType } from '~/cdp/types'
 
 import { EmailSendingSuspensionCause, TeamWorkflowsConfigService } from '../managers/team-workflows-config.service'
 import { EmailSuppressionService } from './email-suppression.service'
-import { EmailValidationService, Undeliverable } from './email-validation.service'
 
-export type PolicyCode =
-    | 'sending_suspended'
-    | 'template_paused'
-    | 'sender_not_verified'
-    | 'invalid_recipient'
-    | 'recipient_suppressed'
+export type PolicyCode = 'sending_suspended' | 'template_paused' | 'sender_not_verified' | 'recipient_suppressed'
 
 type Rejection = {
     ok: false
@@ -36,8 +30,7 @@ const CONTACT_SUPPORT = 'Contact support to get sending re-enabled.'
 export class EmailSendPolicy {
     constructor(
         private teamWorkflowsConfigService: Pick<TeamWorkflowsConfigService, 'getEmailSendingSuspension'>,
-        private emailSuppressionService: Pick<EmailSuppressionService, 'findSuppressed'>,
-        private admissionAddressCheck: Pick<EmailValidationService, 'findUndeliverable'> | null = null
+        private emailSuppressionService: Pick<EmailSuppressionService, 'findSuppressed'>
     ) {}
 
     public async check(send: SendCandidate): Promise<PolicyDecision> {
@@ -53,20 +46,7 @@ export class EmailSendPolicy {
         if ('code' in sender) {
             return sender
         }
-        return (
-            (await this.recipientsUndeliverable(send.teamId, send.recipients)) ??
-            (await this.recipientsSuppressed(send.teamId, send.recipients)) ?? { ok: true, sender }
-        )
-    }
-
-    private async recipientsUndeliverable(teamId: number, recipients: string[]): Promise<PolicyRejection | null> {
-        const addresses = this.admissionAddressCheck
-        if (!addresses) {
-            return null
-        }
-        const verdicts = await Promise.all(recipients.map((email) => addresses.findUndeliverable(email, teamId)))
-        const undeliverable = verdicts.find((verdict) => verdict !== null)
-        return undeliverable ? invalidRecipient(undeliverable) : null
+        return (await this.recipientsSuppressed(send.teamId, send.recipients)) ?? { ok: true, sender }
     }
 
     private async recipientsSuppressed(teamId: number, recipients: string[]): Promise<PolicyRejection | null> {
@@ -160,20 +140,6 @@ function usableSender(sender: IntegrationType | null, teamId: number): Integrati
         )
     }
     return sender
-}
-
-function invalidRecipient(undeliverable: Undeliverable): PolicyRejection {
-    const why =
-        undeliverable.reason === 'invalid_syntax'
-            ? `\`${undeliverable.address}\` is not a valid email address.`
-            : `The domain \`${undeliverable.domain}\` has no mail servers, so an email to \`${undeliverable.address}\` would bounce.`
-    return {
-        ok: false,
-        code: 'invalid_recipient',
-        detail: undeliverable.message,
-        why,
-        fix: 'Check the address for a typo. If it is right, the recipient cannot receive email, so skip them.',
-    }
 }
 
 function senderNotVerified(detail: string, why: string, fix: string): PolicyRejection {

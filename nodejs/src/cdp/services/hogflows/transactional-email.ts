@@ -5,8 +5,9 @@ import { BareEmailAddressSchema } from '~/cdp/schema/emailFields'
 import { HogFlow } from '~/cdp/schema/hogflow'
 
 import { IntegrationManagerService } from '../managers/integration-manager.service'
-import { PolicyCode, SendCandidate } from '../messaging/email-send-policy'
+import { PolicyCode, PolicyRejection, SendCandidate } from '../messaging/email-send-policy'
 import { EmailSenderConfiguration, selectEmailSenderIntegrationId } from '../messaging/email-sender-selection'
+import { EmailValidationService, Undeliverable } from '../messaging/email-validation.service'
 import { emailPauseMetadata } from './hogflow-functions.service'
 
 export const AcceptedSendSchema = z
@@ -50,6 +51,10 @@ export const AcceptedSendRequestSchema = TransactionalEmailRequestSchema.extend(
 
 export type TransactionalEmailRequest = z.infer<typeof TransactionalEmailRequestSchema> & { send?: AcceptedSend }
 
+export type AdmissionRefusal = Pick<PolicyRejection, 'detail' | 'why' | 'fix'> & {
+    code: PolicyCode | 'invalid_recipient'
+}
+
 export type TransactionalEmailOutcome =
     | 'queued'
     | 'replayed'
@@ -62,7 +67,7 @@ export type TransactionalEmailOutcome =
     | 'not_found'
     | 'not_sendable'
     | 'quota_limited'
-    | PolicyCode
+    | AdmissionRefusal['code']
     | 'error'
 
 export const transactionalEmailRequestsTotal = new Counter({
@@ -84,6 +89,28 @@ export async function transactionalSendCandidate(
         workflowMetadata: emailPauseMetadata(hogFlow),
         sender: from ? await integrationManager.get(selectEmailSenderIntegrationId(invocationId, from)) : null,
         recipients: [to],
+    }
+}
+
+export async function undeliverableRecipient(
+    to: string,
+    teamId: number,
+    addressCheck: Pick<EmailValidationService, 'findUndeliverable'>
+): Promise<AdmissionRefusal | null> {
+    const undeliverable = await addressCheck.findUndeliverable(to, teamId)
+    return undeliverable ? invalidRecipient(undeliverable) : null
+}
+
+function invalidRecipient(undeliverable: Undeliverable): AdmissionRefusal {
+    const why =
+        undeliverable.reason === 'invalid_syntax'
+            ? `\`${undeliverable.address}\` is not a valid email address.`
+            : `The domain \`${undeliverable.domain}\` has no mail servers, so an email to \`${undeliverable.address}\` would bounce.`
+    return {
+        code: 'invalid_recipient',
+        detail: undeliverable.message,
+        why,
+        fix: 'Check the address for a typo. If it is right, the recipient cannot receive email, so skip them.',
     }
 }
 

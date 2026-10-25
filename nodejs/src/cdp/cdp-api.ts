@@ -56,19 +56,22 @@ import { WorkflowStepResumeSchema } from './services/hogflows/step-resume.servic
 import {
     AcceptedSend,
     AcceptedSendRequestSchema,
+    AdmissionRefusal,
     TransactionalEmailOutcome,
     TransactionalEmailRequest,
     TransactionalEmailRequestSchema,
     transactionalEmailRequestsTotal,
     transactionalSendCandidate,
+    undeliverableRecipient,
 } from './services/hogflows/transactional-email'
 import { InvocationResultsService } from './services/invocation-results.service'
 import { JobQueue } from './services/job-queue/job-queue.interface'
 import { GroupsManagerService } from './services/managers/groups-manager.service'
 import { HogFunctionManagerService } from './services/managers/hog-function-manager.service'
 import { EMAIL_QUEUE_PRIORITY } from './services/messaging/email-priority'
-import { EmailSendPolicy, PolicyRejection } from './services/messaging/email-send-policy'
+import { EmailSendPolicy } from './services/messaging/email-send-policy'
 import { EmailTrackingService } from './services/messaging/email-tracking.service'
+import { EmailValidationService } from './services/messaging/email-validation.service'
 import { EmailTrackingCodeSigner } from './services/messaging/helpers/tracking-code'
 import { RecipientTokensService } from './services/messaging/recipient-tokens.service'
 import { HogFunctionMonitoringService } from './services/monitoring/hog-function-monitoring.service'
@@ -213,6 +216,7 @@ export class CdpApi {
     private transactionalEmailJwt: ScopedServiceJwt
     private transactionalEmailIdempotencyKeys: IdempotencyKeys
     private transactionalEmailPolicy: EmailSendPolicy
+    private emailValidationService: EmailValidationService
     private hogFunctionMonitoringService: HogFunctionMonitoringService
     private resumeBatchJwt: ScopedServiceJwt
 
@@ -262,9 +266,9 @@ export class CdpApi {
         )
         this.transactionalEmailPolicy = new EmailSendPolicy(
             services.teamWorkflowsConfigService,
-            services.emailSuppressionService,
-            services.emailValidationService
+            services.emailSuppressionService
         )
+        this.emailValidationService = services.emailValidationService
         this.groupsManager = new GroupsManagerService(deps.teamManager, deps.groupRepository)
         this.batchExportHogFunctionService = new BatchExportHogFunctionService(
             config.SITE_URL,
@@ -1322,7 +1326,7 @@ export class CdpApi {
         invocationId: string,
         to: string,
         send: AcceptedSend
-    ): Promise<PolicyRejection | null> {
+    ): Promise<AdmissionRefusal | null> {
         const candidate = await transactionalSendCandidate(
             hogFlow,
             invocationId,
@@ -1331,7 +1335,10 @@ export class CdpApi {
             this.deps.integrationManager
         )
         const decision = await this.transactionalEmailPolicy.check(candidate)
-        return decision.ok ? null : decision
+        if (!decision.ok) {
+            return decision
+        }
+        return await undeliverableRecipient(to, hogFlow.team_id, this.emailValidationService)
     }
 
     private verifyScopedWorkflowJwt(
