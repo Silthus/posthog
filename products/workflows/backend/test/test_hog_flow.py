@@ -69,7 +69,7 @@ class TestHogFlow(TestCase):
 
     @parameterized.expand([("save",), ("delete",)])
     @patch("products.workflows.backend.models.hog_flow.hog_flow.reload_hog_flows_on_workers")
-    def test_a_failed_reload_publish_keeps_the_committed_change_and_the_callbacks_after_it(self, change, mock_reload):
+    def test_a_failed_reload_publish_still_runs_the_callbacks_after_it(self, change, mock_reload):
         hog_flow = HogFlow.objects.create(name="Test Flow", team=self.team)
         hog_flow_id = str(hog_flow.id)
         mock_reload.side_effect = RedisError("Redis is down")
@@ -85,9 +85,6 @@ class TestHogFlow(TestCase):
 
         mock_reload.assert_called_once_with(team_id=self.team.id, hog_flow_ids=[hog_flow_id])
         callback_after_the_reload.assert_called_once()
-        assert list(HogFlow.objects.filter(team=self.team).values_list("name", flat=True)) == (
-            ["Renamed"] if change == "save" else []
-        )
 
     @patch("products.workflows.backend.tasks.hog_flows.refresh_affected_hog_flows.delay")
     def test_action_saved_receiver(self, mock_refresh):

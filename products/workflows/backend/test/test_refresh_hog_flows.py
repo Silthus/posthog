@@ -155,7 +155,8 @@ class TestRefreshHogFlows(BaseTest):
         """Test handling of nonexistent team ID."""
 
         out = StringIO()
-        call_command("refresh_hog_flows", team_id=99999, stdout=out)
+        with self.captureOnCommitCallbacks(execute=True):
+            call_command("refresh_hog_flows", team_id=99999, stdout=out)
 
         assert mock_reload.call_count == 0
 
@@ -170,7 +171,8 @@ class TestRefreshHogFlows(BaseTest):
         out = StringIO()
         # Use a valid UUID format that doesn't exist
         nonexistent_uuid = "00000000-0000-0000-0000-000000000000"
-        call_command("refresh_hog_flows", hog_flow_id=nonexistent_uuid, stdout=out)
+        with self.captureOnCommitCallbacks(execute=True):
+            call_command("refresh_hog_flows", hog_flow_id=nonexistent_uuid, stdout=out)
 
         assert mock_reload.call_count == 0
 
@@ -228,8 +230,7 @@ class TestRefreshHogFlows(BaseTest):
             self.assertIn("Errors: 1", output)  # 1 failure
             self.assertIn("Check logs for details on 1 errors encountered", output)
 
-    @patch("products.workflows.backend.models.hog_flow.hog_flow.reload_hog_flows_on_workers")
-    def test_keeps_an_edit_made_to_a_workflow_while_the_run_is_in_progress(self, _mock_reload):
+    def test_keeps_an_edit_made_to_a_workflow_while_the_run_is_in_progress(self):
         first_saved: list[str] = []
         save = HogFlow.save
 
