@@ -59,4 +59,12 @@ describe('ReadOnlyTemplatePreview', () => {
 
         expect(await screen.findByText('No sender set')).toBeInTheDocument()
     })
+
+    it('says the sender could not load when the integrations request fails', async () => {
+        useMocks({ get: { '/api/projects/:team_id/integrations/': [500, { detail: 'Server error' }] } })
+
+        render(<ReadOnlyTemplatePreview email={email({ from: { integrationId: 5 } })} />)
+
+        expect(await screen.findByText("Couldn't load the sender. Refresh the page to try again.")).toBeInTheDocument()
+    })
 })

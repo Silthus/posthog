@@ -10,10 +10,14 @@ import type { EmailTemplate } from 'scenes/hog-functions/email-templater/types'
 import { EmailHtmlFrame } from './EmailHtmlFrame'
 
 function ReadOnlySender({ email }: { email: EmailTemplate }): JSX.Element {
-    const { integrations } = useValues(integrationsLogic)
+    const { integrations, integrationsLoading } = useValues(integrationsLogic)
 
     if (!integrations) {
-        return <LemonSkeleton className="h-4 w-48" />
+        return integrationsLoading ? (
+            <LemonSkeleton className="h-4 w-48" />
+        ) : (
+            <span className="text-secondary">Couldn't load the sender. Refresh the page to try again.</span>
+        )
     }
     const senders = integrations.filter((integration) => integration.kind === 'email')
     return <EmailSenderDetails email={email} senders={senders} placeholder="No sender set" />
