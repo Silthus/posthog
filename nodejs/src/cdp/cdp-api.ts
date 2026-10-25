@@ -34,7 +34,7 @@ import {
 import { HogTransformerService, createHogTransformerService } from './hog-transformations/hog-transformer.service'
 import { RerunJobManager } from './rerun/rerun-job.manager'
 import { RerunRequest } from './rerun/rerun-job.types'
-import { HogFlowAction } from './schema/hogflow'
+import { HogFlow, HogFlowAction } from './schema/hogflow'
 import { BatchExportHogFunctionService, NotFoundError, ParseError } from './services/batch-export-hog-function.service'
 import type { CyclotronV2JobProducer } from './services/cyclotron-v2'
 import { HogExecutorAsyncService, HogExecutorExecuteAsyncOptions } from './services/hog-executor-async.service'
@@ -54,17 +54,20 @@ import { matchesWaitUntilCondition } from './services/hogflows/hogflow-utils'
 import { IdempotencyKeys } from './services/hogflows/idempotency-keys'
 import { WorkflowStepResumeSchema } from './services/hogflows/step-resume.service'
 import {
+    AcceptedSend,
     AcceptedSendRequestSchema,
     TransactionalEmailOutcome,
     TransactionalEmailRequest,
     TransactionalEmailRequestSchema,
     transactionalEmailRequestsTotal,
+    transactionalSendCandidate,
 } from './services/hogflows/transactional-email'
 import { InvocationResultsService } from './services/invocation-results.service'
 import { JobQueue } from './services/job-queue/job-queue.interface'
 import { GroupsManagerService } from './services/managers/groups-manager.service'
 import { HogFunctionManagerService } from './services/managers/hog-function-manager.service'
 import { EMAIL_QUEUE_PRIORITY } from './services/messaging/email-priority'
+import { EmailSendPolicy, PolicyRejection } from './services/messaging/email-send-policy'
 import { EmailTrackingService } from './services/messaging/email-tracking.service'
 import { EmailTrackingCodeSigner } from './services/messaging/helpers/tracking-code'
 import { RecipientTokensService } from './services/messaging/recipient-tokens.service'
@@ -209,6 +212,7 @@ export class CdpApi {
     private stepResumeJwt: ScopedServiceJwt
     private transactionalEmailJwt: ScopedServiceJwt
     private transactionalEmailIdempotencyKeys: IdempotencyKeys
+    private transactionalEmailPolicy: EmailSendPolicy
     private hogFunctionMonitoringService: HogFunctionMonitoringService
     private resumeBatchJwt: ScopedServiceJwt
 
@@ -255,6 +259,11 @@ export class CdpApi {
             services.teamWorkflowsConfigService,
             new EmailTrackingCodeSigner(config.ENCRYPTION_SALT_KEYS, config.CDP_EMAIL_TRACKING_URL),
             services.emailSuppressionService
+        )
+        this.transactionalEmailPolicy = new EmailSendPolicy(
+            services.teamWorkflowsConfigService,
+            services.emailSuppressionService,
+            services.emailValidationService
         )
         this.groupsManager = new GroupsManagerService(deps.teamManager, deps.groupRepository)
         this.batchExportHogFunctionService = new BatchExportHogFunctionService(
@@ -1254,6 +1263,14 @@ export class CdpApi {
                     }
                 }
                 try {
+                    const refusal = send ? await this.refusalBySendChecks(hogFlow, invocation.id, to, send) : null
+                    if (refusal) {
+                        if (idempotencyKey) {
+                            await idempotencyKeys.release(team.id, idempotencyKey, invocation.id)
+                        }
+                        const { code, detail, why, fix } = refusal
+                        return reply(code, 400, { error: code, code, detail, why, fix })
+                    }
                     const { isLimited } = await checkHogFlowQuotaLimits(hogFlow, team.id, this.deps.quotaLimiting)
                     if (isLimited) {
                         if (idempotencyKey) {
@@ -1299,6 +1316,23 @@ export class CdpApi {
                 return reply('error', 500, { error: e instanceof Error ? e.message : String(e) })
             }
         }
+
+    private async refusalBySendChecks(
+        hogFlow: HogFlow,
+        invocationId: string,
+        to: string,
+        send: AcceptedSend
+    ): Promise<PolicyRejection | null> {
+        const candidate = await transactionalSendCandidate(
+            hogFlow,
+            invocationId,
+            to,
+            send,
+            this.deps.integrationManager
+        )
+        const decision = await this.transactionalEmailPolicy.check(candidate)
+        return decision.ok ? null : decision
+    }
 
     private verifyScopedWorkflowJwt(
         jwt: ScopedServiceJwt,
