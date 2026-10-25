@@ -13,6 +13,7 @@ import { formatInput } from '../hog-inputs.service'
 import { IntegrationManagerService } from '../managers/integration-manager.service'
 import { PolicyCode, PolicyRejection, SendCandidate } from '../messaging/email-send-policy'
 import { EmailSenderConfiguration, selectEmailSenderIntegrationId } from '../messaging/email-sender-selection'
+import { EmailSuppressionService } from '../messaging/email-suppression.service'
 import { EmailValidationService, Undeliverable } from '../messaging/email-validation.service'
 import { recipientsUnlessToIsMissing } from '../messaging/email.service'
 import { emailPauseMetadata } from './hogflow-functions.service'
@@ -60,6 +61,7 @@ export type TransactionalEmailRequest = z.infer<typeof TransactionalEmailRequest
 
 export type AdmissionRefusal = Pick<PolicyRejection, 'detail' | 'why' | 'fix'> & {
     code: PolicyCode | 'invalid_recipient'
+    attr: 'to' | 'from' | null
 }
 
 export type TransactionalEmailOutcome =
@@ -105,6 +107,40 @@ export async function transactionalSendCandidate(
     }
 }
 
+export async function policyRefusal(
+    rejection: PolicyRejection,
+    candidate: SendCandidate,
+    to: string,
+    send: AcceptedSend,
+    suppression: Pick<EmailSuppressionService, 'isSuppressed' | 'findSuppressed'>
+): Promise<AdmissionRefusal> {
+    const { code, detail, why, fix } = rejection
+    switch (code) {
+        case 'recipient_suppressed':
+            if (await suppression.isSuppressed(candidate.teamId, to)) {
+                return { code, detail, attr: 'to', why, fix }
+            }
+            return storedCopySuppressed(
+                detail,
+                await suppression.findSuppressed(candidate.teamId, candidate.recipients)
+            )
+        case 'sender_not_verified':
+            return { code, detail, attr: send.from ? 'from' : null, why, fix }
+        default:
+            return { code, detail, attr: null, why, fix }
+    }
+}
+
+function storedCopySuppressed(detail: string, copies: string[]): AdmissionRefusal {
+    return {
+        code: 'recipient_suppressed',
+        detail,
+        attr: null,
+        why: `The workflow's email step sends a cc or bcc to ${copies.join(', ')}. An earlier email to it bounced or was marked as spam, so PostHog sent nothing.`,
+        fix: "Remove the address from the cc or bcc of the workflow's email step, or remove it from the suppression list once it can receive email again.",
+    }
+}
+
 export async function undeliverableRecipient(
     to: string,
     teamId: number,
@@ -122,6 +158,7 @@ function invalidRecipient(undeliverable: Undeliverable): AdmissionRefusal {
     return {
         code: 'invalid_recipient',
         detail: undeliverable.message,
+        attr: 'to',
         why,
         fix: 'Check the address for a typo. If it is right, the recipient cannot receive email, so skip them.',
     }

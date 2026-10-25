@@ -2477,12 +2477,12 @@ describe('CDP API', () => {
                     .send({ ...payload, to: target.to })
 
             it.each([
-                ['invalid_recipient', domainWithoutMailServers, 'has no mail servers'],
-                ['recipient_suppressed', suppressedRecipient, 'bounced or was marked as spam'],
-                ['template_paused', pausedWorkflow, 'Email sending is paused for this email'],
-                ['sending_suspended', suspendedFreshProject, 'Email sending is suspended for this project'],
-                ['sender_not_verified', unverifiedSender, "The sender's domain is not verified"],
-            ])('refuses an accepted send that fails %s before it queues', async (code, setUp, why) => {
+                ['invalid_recipient', domainWithoutMailServers, 'to', 'has no mail servers'],
+                ['recipient_suppressed', suppressedRecipient, 'to', 'bounced or was marked as spam'],
+                ['template_paused', pausedWorkflow, null, 'Email sending is paused for this email'],
+                ['sending_suspended', suspendedFreshProject, null, 'Email sending is suspended for this project'],
+                ['sender_not_verified', unverifiedSender, null, "The sender's domain is not verified"],
+            ])('refuses an accepted send that fails %s before it queues', async (code, setUp, attr, why) => {
                 const target = await setUp()
                 const refusedBefore = await outcomeCount(code)
 
@@ -2493,6 +2493,7 @@ describe('CDP API', () => {
                     error: code,
                     code,
                     detail: expect.not.stringMatching(/^Skipping send/),
+                    attr,
                     why: expect.stringContaining(why),
                     fix: expect.any(String),
                 })
@@ -2584,6 +2585,8 @@ describe('CDP API', () => {
                     target: pausedWorkflow,
                     variables: {},
                     code: 'template_paused',
+                    why: expect.stringContaining('Email sending is paused for this email'),
+                    fixCopy: expect.any(String),
                     fix: (flowId: string) =>
                         reloadAfter(
                             flowId,
@@ -2596,6 +2599,9 @@ describe('CDP API', () => {
                     target: () => workflowCopying(storedCopy),
                     variables: storedCopy.variables,
                     code: 'recipient_suppressed',
+                    why: `The workflow's email step sends a cc or bcc to ${storedCopy.suppressed}. An earlier email to it bounced or was marked as spam, so PostHog sent nothing.`,
+                    fixCopy:
+                        "Remove the address from the cc or bcc of the workflow's email step, or remove it from the suppression list once it can receive email again.",
                     fix: (flowId: string) =>
                         reloadAfter(flowId, `UPDATE posthog_hogflow SET actions = $2 WHERE id = $1`, [
                             JSON.stringify(transactionalFlow('api', 'active').actions),
@@ -2603,7 +2609,7 @@ describe('CDP API', () => {
                 })),
             ])(
                 'refuses a keyed send when $refusal, then sends it on the same key once fixed',
-                async ({ target, variables, code, fix }) => {
+                async ({ target, variables, code, why, fixCopy, fix }) => {
                     const sendTo = await target()
                     const keyed = {
                         ...body,
@@ -2616,7 +2622,8 @@ describe('CDP API', () => {
                     await fix(sendTo.flowId)
                     const retried = await postTo('transactional_email/send', sendTo, keyed)
 
-                    expect([refused.status, refused.body.code]).toEqual([400, code])
+                    expect(refused.status).toEqual(400)
+                    expect(refused.body).toMatchObject({ code, attr: null, why, fix: fixCopy })
                     expect(retried.status).toEqual(202)
                     expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
                 }
@@ -2629,6 +2636,7 @@ describe('CDP API', () => {
                     senderId: SENDER_ID,
                     status: 202,
                     code: undefined,
+                    attr: undefined,
                     queued: 1,
                 },
                 {
@@ -2640,15 +2648,16 @@ describe('CDP API', () => {
                     senderId: SENDER_ID + 2,
                     status: 400,
                     code: 'sender_not_verified',
+                    attr: 'from',
                     queued: 0,
                 },
-            ])('$name', async ({ target, senderId, status, code, queued }) => {
+            ])('$name', async ({ target, senderId, status, code, attr, queued }) => {
                 const res = await postTo('transactional_email/send', await target(), {
                     ...body,
                     send: { ...codeSend, from: { ...codeSend.from, integrationId: senderId } },
                 })
 
-                expect([res.status, res.body.code]).toEqual([status, code])
+                expect([res.status, res.body.code, res.body.attr]).toEqual([status, code, attr])
                 expect(mockQueueInvocations).toHaveBeenCalledTimes(queued)
             })
         })

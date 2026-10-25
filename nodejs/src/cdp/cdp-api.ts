@@ -60,6 +60,7 @@ import {
     TransactionalEmailOutcome,
     TransactionalEmailRequest,
     TransactionalEmailRequestSchema,
+    policyRefusal,
     transactionalEmailRequestsTotal,
     transactionalSendCandidate,
     undeliverableRecipient,
@@ -70,6 +71,7 @@ import { GroupsManagerService } from './services/managers/groups-manager.service
 import { HogFunctionManagerService } from './services/managers/hog-function-manager.service'
 import { EMAIL_QUEUE_PRIORITY } from './services/messaging/email-priority'
 import { EmailSendPolicy } from './services/messaging/email-send-policy'
+import { EmailSuppressionService } from './services/messaging/email-suppression.service'
 import { EmailTrackingService } from './services/messaging/email-tracking.service'
 import { EmailValidationService } from './services/messaging/email-validation.service'
 import { EmailTrackingCodeSigner } from './services/messaging/helpers/tracking-code'
@@ -216,6 +218,7 @@ export class CdpApi {
     private transactionalEmailJwt: ScopedServiceJwt
     private transactionalEmailIdempotencyKeys: IdempotencyKeys
     private transactionalEmailPolicy: EmailSendPolicy
+    private emailSuppressionService: EmailSuppressionService
     private emailValidationService: EmailValidationService
     private hogFunctionMonitoringService: HogFunctionMonitoringService
     private resumeBatchJwt: ScopedServiceJwt
@@ -268,6 +271,7 @@ export class CdpApi {
             services.teamWorkflowsConfigService,
             services.emailSuppressionService
         )
+        this.emailSuppressionService = services.emailSuppressionService
         this.emailValidationService = services.emailValidationService
         this.groupsManager = new GroupsManagerService(deps.teamManager, deps.groupRepository)
         this.batchExportHogFunctionService = new BatchExportHogFunctionService(
@@ -1272,8 +1276,8 @@ export class CdpApi {
                         if (idempotencyKey) {
                             await idempotencyKeys.release(team.id, idempotencyKey, invocation.id)
                         }
-                        const { code, detail, why, fix } = refusal
-                        return reply(code, 400, { error: code, code, detail, why, fix })
+                        const { code, detail, attr, why, fix } = refusal
+                        return reply(code, 400, { error: code, code, detail, attr, why, fix })
                     }
                     const { isLimited } = await checkHogFlowQuotaLimits(hogFlow, team.id, this.deps.quotaLimiting)
                     if (isLimited) {
@@ -1336,7 +1340,7 @@ export class CdpApi {
         )
         const decision = await this.transactionalEmailPolicy.check(candidate)
         if (!decision.ok) {
-            return decision
+            return await policyRefusal(decision, candidate, to, send, this.emailSuppressionService)
         }
         return await undeliverableRecipient(to, invocation.hogFlow.team_id, this.emailValidationService)
     }
