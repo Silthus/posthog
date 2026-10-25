@@ -9,7 +9,7 @@ export type ParsedRemoteUrl = {
 }
 
 const GITHUB_SLUG_PATTERN = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/
-const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/i
+const COMMIT_SHA_PATTERN = /^([0-9a-f]{40}|[0-9a-f]{64})$/i
 
 function encodePathSegments(value: string): string {
     return value.split('/').map(encodeURIComponent).join('/')

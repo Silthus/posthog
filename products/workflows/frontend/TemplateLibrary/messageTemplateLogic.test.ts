@@ -483,6 +483,15 @@ describe('messageTemplateLogic', () => {
                 }),
             },
             {
+                description: 'a tag of hex digits keeps its name and links as a tag',
+                served: { ...CODE_MANAGED, source_ref: 'deadbeef' },
+                isCodeManaged: true,
+                templateSource: expect.objectContaining({
+                    ref: 'deadbeef',
+                    refUrl: 'https://github.com/example/app/tree/deadbeef',
+                }),
+            },
+            {
                 description: 'an unknown host stays plain text',
                 served: { ...CODE_MANAGED, source_repository: 'git.example.com/team/app' },
                 isCodeManaged: true,
