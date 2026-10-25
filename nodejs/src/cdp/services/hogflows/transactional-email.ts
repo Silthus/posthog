@@ -3,9 +3,13 @@ import { z } from 'zod'
 
 import { BareEmailAddressSchema } from '~/cdp/schema/emailFields'
 import { HogFlow, HogFlowAction } from '~/cdp/schema/hogflow'
-import { HogFunctionInvocationGlobals } from '~/cdp/types'
+import {
+    CyclotronJobInvocationHogFlow,
+    HogFunctionInvocationGlobals,
+    HogFunctionInvocationGlobalsWithInputs,
+} from '~/cdp/types'
 
-import { formatLiquidInput } from '../hog-inputs.service'
+import { formatInput } from '../hog-inputs.service'
 import { IntegrationManagerService } from '../managers/integration-manager.service'
 import { PolicyCode, PolicyRejection, SendCandidate } from '../messaging/email-send-policy'
 import { EmailSenderConfiguration, selectEmailSenderIntegrationId } from '../messaging/email-sender-selection'
@@ -80,20 +84,24 @@ export const transactionalEmailRequestsTotal = new Counter({
 })
 
 export async function transactionalSendCandidate(
-    hogFlow: HogFlow,
-    invocationId: string,
-    globals: HogFunctionInvocationGlobals,
+    invocation: CyclotronJobInvocationHogFlow,
+    triggerGlobals: HogFunctionInvocationGlobals,
     to: string,
     send: AcceptedSend | undefined,
     integrationManager: Pick<IntegrationManagerService, 'get'>
 ): Promise<SendCandidate> {
+    const { hogFlow } = invocation
     const step = emailStep(hogFlow)
     const from = send?.from ?? emailStepSender(step)
+    const stepGlobals = { ...triggerGlobals, variables: invocation.state.variables, inputs: {} }
     return {
         teamId: hogFlow.team_id,
         workflowMetadata: emailPauseMetadata(hogFlow),
-        sender: from ? await integrationManager.get(selectEmailSenderIntegrationId(invocationId, from)) : null,
-        recipients: recipientsUnlessToIsMissing({ to: { email: to }, ...renderedCopiesOrNone(step, globals) }),
+        sender: from ? await integrationManager.get(selectEmailSenderIntegrationId(invocation.id, from)) : null,
+        recipients: recipientsUnlessToIsMissing({
+            to: { email: to },
+            ...(await renderedCopiesOrNone(step, stepGlobals)),
+        }),
     }
 }
 
@@ -131,15 +139,26 @@ function emailStepSender(step: EmailStep | undefined): EmailSenderConfiguration 
     return typeof from?.integrationId === 'number' ? from : null
 }
 
-function renderedCopiesOrNone(step: EmailStep | undefined, globals: HogFunctionInvocationGlobals): Copies {
+async function renderedCopiesOrNone(
+    step: EmailStep | undefined,
+    globals: HogFunctionInvocationGlobalsWithInputs
+): Promise<Copies> {
     const email = step?.config.inputs?.email
-    const copies: Copies = { cc: email?.value?.cc, bcc: email?.value?.bcc }
-    if (email?.templating !== 'liquid') {
-        return copies
+    if (!email) {
+        return {}
     }
+    const copiesOnly = { ...email, value: copyFieldsOf(email.value), bytecode: copyFieldsOf(email.bytecode) }
     try {
-        return formatLiquidInput(copies, { ...globals, inputs: {} }, 'email')
+        return (await formatInput(copiesOnly, globals, 'email', { isEmailInput: true })) ?? {}
     } catch {
         return {}
     }
+}
+
+function copyFieldsOf(field: unknown): Record<keyof Copies, unknown> | undefined {
+    if (!field || typeof field !== 'object') {
+        return undefined
+    }
+    const { cc, bcc } = field as Record<string, unknown>
+    return { cc, bcc }
 }

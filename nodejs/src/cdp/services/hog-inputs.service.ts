@@ -76,32 +76,11 @@ export class HogInputsService {
             schemaTypes[schema.key] = schema.type
         }
 
-        const _formatInput = async (input: CyclotronInputType, key: string): Promise<any> => {
-            const templating = input.templating ?? 'hog'
-
-            if (templating === 'liquid') {
-                let value = input.value
-                // `design` is the email editor's state and is never sent. Its JSON-encoded strings escape quotes
-                // as \", which Liquid cannot parse. validation.py drops it the same way before it compiles hog.
-                if (EMAIL_INPUT_TYPES.includes(schemaTypes[key]) && value?.design !== undefined) {
-                    const { design: _design, ...rest } = value
-                    value = rest
-                }
-                const plainTextKeys = EMAIL_INPUT_TYPES.includes(schemaTypes[key])
-                    ? new Set(EMAIL_PLAIN_TEXT_FIELDS.map((field) => `${key}.${field}`))
-                    : undefined
-                return formatLiquidInput(value, newGlobals, key, liquidBudget, plainTextKeys)
-            }
-            if (templating === 'hog' && input?.bytecode) {
-                try {
-                    return await formatHogInput(input.bytecode, newGlobals, key)
-                } catch (error) {
-                    throw withBytecodeContract(error, input.bytecode_contract)
-                }
-            }
-
-            return input.value
-        }
+        const _formatInput = (input: CyclotronInputType, key: string): Promise<any> =>
+            formatInput(input, newGlobals, key, {
+                isEmailInput: EMAIL_INPUT_TYPES.includes(schemaTypes[key]),
+                liquidBudget,
+            })
 
         // Add unsubscribe url if we have an email input here
         const emailInputSchema = hogFunction.inputs_schema?.find((input) => EMAIL_INPUT_TYPES.includes(input.type))
@@ -300,6 +279,38 @@ export class HogInputsService {
 
         return returnInputs
     }
+}
+
+export const formatInput = async (
+    input: CyclotronInputType,
+    globals: HogFunctionInvocationGlobalsWithInputs,
+    key: string,
+    { isEmailInput, liquidBudget }: { isEmailInput: boolean; liquidBudget?: LiquidRenderBudget }
+): Promise<any> => {
+    const templating = input.templating ?? 'hog'
+
+    if (templating === 'liquid') {
+        let value = input.value
+        // `design` is the email editor's state and is never sent. Its JSON-encoded strings escape quotes
+        // as \", which Liquid cannot parse. validation.py drops it the same way before it compiles hog.
+        if (isEmailInput && value?.design !== undefined) {
+            const { design: _design, ...rest } = value
+            value = rest
+        }
+        const plainTextKeys = isEmailInput
+            ? new Set(EMAIL_PLAIN_TEXT_FIELDS.map((field) => `${key}.${field}`))
+            : undefined
+        return formatLiquidInput(value, globals, key, liquidBudget, plainTextKeys)
+    }
+    if (templating === 'hog' && input?.bytecode) {
+        try {
+            return await formatHogInput(input.bytecode, globals, key)
+        } catch (error) {
+            throw withBytecodeContract(error, input.bytecode_contract)
+        }
+    }
+
+    return input.value
 }
 
 export const formatHogInput = async (

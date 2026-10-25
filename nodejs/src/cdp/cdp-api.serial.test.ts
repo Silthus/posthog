@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken'
 import supertest from 'supertest'
 import express from 'ultimate-express'
 
+import { CyclotronInputType } from '~/cdp/schema/cyclotron'
 import { HogFlow } from '~/cdp/schema/hogflow'
 import { PosthogJwtAudience } from '~/cdp/utils/jwt-utils'
 import { ScopedServiceJwt } from '~/cdp/utils/scoped-service-jwt'
@@ -2397,7 +2398,7 @@ describe('CDP API', () => {
             type Target = { teamId: number; flowId: string; to: string }
             const templateFormSend = { tracking: { captureEngagement: false } }
 
-            const suppressedRecipient = async (): Promise<Target> => {
+            const suppress = async (address: string): Promise<void> => {
                 await hub.postgres.query(
                     PostgresUse.COMMON_WRITE,
                     `INSERT INTO posthog_messagesuppression
@@ -2405,9 +2406,13 @@ describe('CDP API', () => {
                          suppressed, suppressed_at, deleted, created_at, updated_at)
                      VALUES (gen_random_uuid(), $1, $2, 'MANUAL', 'Manually added', 0,
                          true, NOW(), false, NOW(), NOW())`,
-                    [team.id, 'bounced@example.com'],
+                    [team.id, address],
                     'suppress-recipient'
                 )
+            }
+
+            const suppressedRecipient = async (): Promise<Target> => {
+                await suppress('bounced@example.com')
                 return { teamId: team.id, flowId: hogFlow.id, to: 'bounced@example.com' }
             }
 
@@ -2502,27 +2507,66 @@ describe('CDP API', () => {
                 expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
             })
 
-            const workflowCopyingSuppressedAddress = async (copy: 'cc' | 'bcc'): Promise<Target> => {
-                await suppressedRecipient()
+            type StoredCopy = {
+                suppressed: string
+                email: CyclotronInputType
+                defaults?: HogFlow['variables']
+                variables: Record<string, string>
+            }
+
+            const liquidCopy = (copy: 'cc' | 'bcc', template: string): CyclotronInputType => ({
+                templating: 'liquid',
+                value: { from: { integrationId: SENDER_ID }, [copy]: template },
+            })
+
+            const opsVariableInHog = ['_H', 1, 32, 'ops', 32, 'variables', 1, 2]
+
+            const storedCopies: (StoredCopy & { refusal: string })[] = [
+                ...(['cc', 'bcc'] as const).map((copy) => ({
+                    refusal: `its workflow's ${copy} is suppressed`,
+                    suppressed: 'bounced@example.com',
+                    email: liquidCopy(copy, 'Ops <{{ variables.ops }}>'),
+                    variables: { ops: 'bounced@example.com' },
+                })),
+                {
+                    refusal: "its workflow's cc takes a display name from a variable",
+                    suppressed: 'bounced@example.com',
+                    email: liquidCopy('cc', '{{ variables.ops }}'),
+                    variables: { ops: 'Ops <bounced@example.com>' },
+                },
+                {
+                    refusal: "its workflow's cc takes an address with an apostrophe from a variable",
+                    suppressed: "o'brien@example.com",
+                    email: liquidCopy('cc', '{{ variables.ops }}'),
+                    variables: { ops: "o'brien@example.com" },
+                },
+                {
+                    refusal: "its workflow's cc takes a workflow variable's default",
+                    suppressed: 'bounced@example.com',
+                    email: liquidCopy('cc', '{{ variables.ops }}'),
+                    defaults: [{ key: 'ops', label: 'Ops', type: 'string', default: 'bounced@example.com' }],
+                    variables: {},
+                },
+                {
+                    refusal: "its workflow's bcc is a Hog template",
+                    suppressed: 'bounced@example.com',
+                    email: {
+                        templating: 'hog',
+                        value: { from: { integrationId: SENDER_ID }, bcc: '{variables.ops}' },
+                        bytecode: { from: { integrationId: SENDER_ID }, bcc: opsVariableInHog },
+                    },
+                    variables: { ops: 'bounced@example.com' },
+                },
+            ]
+
+            const workflowCopying = async ({ suppressed, email, defaults }: StoredCopy): Promise<Target> => {
+                await suppress(suppressed)
                 const flow = await insertHogFlow({
                     ...transactionalFlow('api', 'active'),
+                    variables: defaults,
                     actions: transactionalFlow('api', 'active').actions.map((action) =>
                         action.type === 'function_email'
-                            ? {
-                                  ...action,
-                                  config: {
-                                      ...action.config,
-                                      inputs: {
-                                          email: {
-                                              templating: 'liquid',
-                                              value: {
-                                                  from: { integrationId: SENDER_ID },
-                                                  [copy]: 'Ops <{{ variables.ops_address }}>',
-                                              },
-                                          },
-                                      },
-                                  },
-                              }
+                            ? { ...action, config: { ...action.config, inputs: { email } } }
                             : action
                     ),
                 })
@@ -2538,6 +2582,7 @@ describe('CDP API', () => {
                 {
                     refusal: 'its workflow paused sending',
                     target: pausedWorkflow,
+                    variables: {},
                     code: 'template_paused',
                     fix: (flowId: string) =>
                         reloadAfter(
@@ -2546,9 +2591,10 @@ describe('CDP API', () => {
                             []
                         ),
                 },
-                ...(['cc', 'bcc'] as const).map((copy) => ({
-                    refusal: `its workflow's ${copy} is suppressed`,
-                    target: () => workflowCopyingSuppressedAddress(copy),
+                ...storedCopies.map((storedCopy) => ({
+                    refusal: storedCopy.refusal,
+                    target: () => workflowCopying(storedCopy),
+                    variables: storedCopy.variables,
                     code: 'recipient_suppressed',
                     fix: (flowId: string) =>
                         reloadAfter(flowId, `UPDATE posthog_hogflow SET actions = $2 WHERE id = $1`, [
@@ -2557,11 +2603,11 @@ describe('CDP API', () => {
                 })),
             ])(
                 'refuses a keyed send when $refusal, then sends it on the same key once fixed',
-                async ({ target, code, fix }) => {
+                async ({ target, variables, code, fix }) => {
                     const sendTo = await target()
                     const keyed = {
                         ...body,
-                        variables: { ops_address: 'bounced@example.com' },
+                        variables,
                         send: templateFormSend,
                         idempotency_key: `key-${new UUIDT().toString()}`,
                     }

@@ -34,7 +34,7 @@ import {
 import { HogTransformerService, createHogTransformerService } from './hog-transformations/hog-transformer.service'
 import { RerunJobManager } from './rerun/rerun-job.manager'
 import { RerunRequest } from './rerun/rerun-job.types'
-import { HogFlow, HogFlowAction } from './schema/hogflow'
+import { HogFlowAction } from './schema/hogflow'
 import { BatchExportHogFunctionService, NotFoundError, ParseError } from './services/batch-export-hog-function.service'
 import type { CyclotronV2JobProducer } from './services/cyclotron-v2'
 import { HogExecutorAsyncService, HogExecutorExecuteAsyncOptions } from './services/hog-executor-async.service'
@@ -84,7 +84,7 @@ import {
 import { NativeDestinationExecutorService } from './services/native-destination-executor.service'
 import { SegmentDestinationExecutorService } from './services/segment-destination-executor.service'
 import { HOG_FUNCTION_TEMPLATES } from './templates'
-import { HogFunctionInvocationGlobals, HogFunctionType, MinimalLogEntry } from './types'
+import { CyclotronJobInvocationHogFlow, HogFunctionInvocationGlobals, HogFunctionType, MinimalLogEntry } from './types'
 import {
     convertToHogFunctionInvocationGlobals,
     isConvertibleClickHouseEvent,
@@ -1267,9 +1267,7 @@ export class CdpApi {
                     }
                 }
                 try {
-                    const refusal = send
-                        ? await this.refusalBySendChecks(hogFlow, invocation.id, triggerGlobals, to, send)
-                        : null
+                    const refusal = send ? await this.refusalBySendChecks(invocation, triggerGlobals, to, send) : null
                     if (refusal) {
                         if (idempotencyKey) {
                             await idempotencyKeys.release(team.id, idempotencyKey, invocation.id)
@@ -1324,16 +1322,14 @@ export class CdpApi {
         }
 
     private async refusalBySendChecks(
-        hogFlow: HogFlow,
-        invocationId: string,
-        globals: HogFunctionInvocationGlobals,
+        invocation: CyclotronJobInvocationHogFlow,
+        triggerGlobals: HogFunctionInvocationGlobals,
         to: string,
         send: AcceptedSend
     ): Promise<AdmissionRefusal | null> {
         const candidate = await transactionalSendCandidate(
-            hogFlow,
-            invocationId,
-            globals,
+            invocation,
+            triggerGlobals,
             to,
             send,
             this.deps.integrationManager
@@ -1342,7 +1338,7 @@ export class CdpApi {
         if (!decision.ok) {
             return decision
         }
-        return await undeliverableRecipient(to, hogFlow.team_id, this.emailValidationService)
+        return await undeliverableRecipient(to, invocation.hogFlow.team_id, this.emailValidationService)
     }
 
     private verifyScopedWorkflowJwt(
