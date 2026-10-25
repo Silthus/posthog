@@ -2502,24 +2502,79 @@ describe('CDP API', () => {
                 expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
             })
 
-            it('sends a keyed send that was refused once the refusal is fixed', async () => {
-                const target = await pausedWorkflow()
-                const keyed = { ...body, send: templateFormSend, idempotency_key: `key-${new UUIDT().toString()}` }
+            const workflowCopyingSuppressedAddress = async (copy: 'cc' | 'bcc'): Promise<Target> => {
+                await suppressedRecipient()
+                const flow = await insertHogFlow({
+                    ...transactionalFlow('api', 'active'),
+                    actions: transactionalFlow('api', 'active').actions.map((action) =>
+                        action.type === 'function_email'
+                            ? {
+                                  ...action,
+                                  config: {
+                                      ...action.config,
+                                      inputs: {
+                                          email: {
+                                              templating: 'liquid',
+                                              value: {
+                                                  from: { integrationId: SENDER_ID },
+                                                  [copy]: 'Ops <{{ variables.ops_address }}>',
+                                              },
+                                          },
+                                      },
+                                  },
+                              }
+                            : action
+                    ),
+                })
+                return { teamId: team.id, flowId: flow.id, to: body.to }
+            }
 
-                const refused = await postTo('transactional_email/send', target, keyed)
-                await hub.postgres.query(
-                    PostgresUse.COMMON_WRITE,
-                    `UPDATE posthog_hogflow SET email_sending_paused_at = NULL WHERE id = $1`,
-                    [target.flowId],
-                    'resume-sending'
-                )
-                api['hogFlowManager']['onHogFlowsReloaded'](team.id, [target.flowId])
-                const retried = await postTo('transactional_email/send', target, keyed)
+            const reloadAfter = async (flowId: string, sql: string, params: unknown[]): Promise<void> => {
+                await hub.postgres.query(PostgresUse.COMMON_WRITE, sql, [flowId, ...params], 'fix-refusal')
+                api['hogFlowManager']['onHogFlowsReloaded'](team.id, [flowId])
+            }
 
-                expect([refused.status, refused.body.code]).toEqual([400, 'template_paused'])
-                expect(retried.status).toEqual(202)
-                expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
-            })
+            it.each([
+                {
+                    refusal: 'its workflow paused sending',
+                    target: pausedWorkflow,
+                    code: 'template_paused',
+                    fix: (flowId: string) =>
+                        reloadAfter(
+                            flowId,
+                            `UPDATE posthog_hogflow SET email_sending_paused_at = NULL WHERE id = $1`,
+                            []
+                        ),
+                },
+                ...(['cc', 'bcc'] as const).map((copy) => ({
+                    refusal: `its workflow's ${copy} is suppressed`,
+                    target: () => workflowCopyingSuppressedAddress(copy),
+                    code: 'recipient_suppressed',
+                    fix: (flowId: string) =>
+                        reloadAfter(flowId, `UPDATE posthog_hogflow SET actions = $2 WHERE id = $1`, [
+                            JSON.stringify(transactionalFlow('api', 'active').actions),
+                        ]),
+                })),
+            ])(
+                'refuses a keyed send when $refusal, then sends it on the same key once fixed',
+                async ({ target, code, fix }) => {
+                    const sendTo = await target()
+                    const keyed = {
+                        ...body,
+                        variables: { ops_address: 'bounced@example.com' },
+                        send: templateFormSend,
+                        idempotency_key: `key-${new UUIDT().toString()}`,
+                    }
+
+                    const refused = await postTo('transactional_email/send', sendTo, keyed)
+                    await fix(sendTo.flowId)
+                    const retried = await postTo('transactional_email/send', sendTo, keyed)
+
+                    expect([refused.status, refused.body.code]).toEqual([400, code])
+                    expect(retried.status).toEqual(202)
+                    expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
+                }
+            )
 
             it.each([
                 {

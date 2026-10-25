@@ -1267,7 +1267,9 @@ export class CdpApi {
                     }
                 }
                 try {
-                    const refusal = send ? await this.refusalBySendChecks(hogFlow, invocation.id, to, send) : null
+                    const refusal = send
+                        ? await this.refusalBySendChecks(hogFlow, invocation.id, triggerGlobals, to, send)
+                        : null
                     if (refusal) {
                         if (idempotencyKey) {
                             await idempotencyKeys.release(team.id, idempotencyKey, invocation.id)
@@ -1324,12 +1326,14 @@ export class CdpApi {
     private async refusalBySendChecks(
         hogFlow: HogFlow,
         invocationId: string,
+        globals: HogFunctionInvocationGlobals,
         to: string,
         send: AcceptedSend
     ): Promise<AdmissionRefusal | null> {
         const candidate = await transactionalSendCandidate(
             hogFlow,
             invocationId,
+            globals,
             to,
             send,
             this.deps.integrationManager

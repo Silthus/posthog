@@ -2,12 +2,15 @@ import { Counter } from 'prom-client'
 import { z } from 'zod'
 
 import { BareEmailAddressSchema } from '~/cdp/schema/emailFields'
-import { HogFlow } from '~/cdp/schema/hogflow'
+import { HogFlow, HogFlowAction } from '~/cdp/schema/hogflow'
+import { HogFunctionInvocationGlobals } from '~/cdp/types'
 
+import { formatLiquidInput } from '../hog-inputs.service'
 import { IntegrationManagerService } from '../managers/integration-manager.service'
 import { PolicyCode, PolicyRejection, SendCandidate } from '../messaging/email-send-policy'
 import { EmailSenderConfiguration, selectEmailSenderIntegrationId } from '../messaging/email-sender-selection'
 import { EmailValidationService, Undeliverable } from '../messaging/email-validation.service'
+import { recipientsUnlessToIsMissing } from '../messaging/email.service'
 import { emailPauseMetadata } from './hogflow-functions.service'
 
 export const AcceptedSendSchema = z
@@ -79,16 +82,18 @@ export const transactionalEmailRequestsTotal = new Counter({
 export async function transactionalSendCandidate(
     hogFlow: HogFlow,
     invocationId: string,
+    globals: HogFunctionInvocationGlobals,
     to: string,
     send: AcceptedSend | undefined,
     integrationManager: Pick<IntegrationManagerService, 'get'>
 ): Promise<SendCandidate> {
-    const from = send?.from ?? emailStepSender(hogFlow)
+    const step = emailStep(hogFlow)
+    const from = send?.from ?? emailStepSender(step)
     return {
         teamId: hogFlow.team_id,
         workflowMetadata: emailPauseMetadata(hogFlow),
         sender: from ? await integrationManager.get(selectEmailSenderIntegrationId(invocationId, from)) : null,
-        recipients: [to],
+        recipients: recipientsUnlessToIsMissing({ to: { email: to }, ...renderedCopiesOrNone(step, globals) }),
     }
 }
 
@@ -114,8 +119,27 @@ function invalidRecipient(undeliverable: Undeliverable): AdmissionRefusal {
     }
 }
 
-function emailStepSender(hogFlow: HogFlow): EmailSenderConfiguration | null {
-    const step = hogFlow.actions.find((action) => action.type === 'function_email')
-    const from = step?.type === 'function_email' ? step.config.inputs?.email?.value?.from : undefined
+type EmailStep = Extract<HogFlowAction, { type: 'function_email' }>
+type Copies = { cc?: string; bcc?: string }
+
+function emailStep(hogFlow: HogFlow): EmailStep | undefined {
+    return hogFlow.actions.find((action): action is EmailStep => action.type === 'function_email')
+}
+
+function emailStepSender(step: EmailStep | undefined): EmailSenderConfiguration | null {
+    const from = step?.config.inputs?.email?.value?.from
     return typeof from?.integrationId === 'number' ? from : null
+}
+
+function renderedCopiesOrNone(step: EmailStep | undefined, globals: HogFunctionInvocationGlobals): Copies {
+    const email = step?.config.inputs?.email
+    const copies: Copies = { cc: email?.value?.cc, bcc: email?.value?.bcc }
+    if (email?.templating !== 'liquid') {
+        return copies
+    }
+    try {
+        return formatLiquidInput(copies, { ...globals, inputs: {} }, 'email')
+    } catch {
+        return {}
+    }
 }

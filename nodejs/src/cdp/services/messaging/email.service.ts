@@ -327,7 +327,9 @@ export function parseAddressList(value?: string): string[] | undefined {
     return result.length > 0 ? result : undefined
 }
 
-function recipientsUnlessToIsMissing(params: CyclotronInvocationQueueParametersEmailType): string[] {
+export function recipientsUnlessToIsMissing(
+    params: Pick<CyclotronInvocationQueueParametersEmailType, 'to' | 'cc' | 'bcc'>
+): string[] {
     const to = params.to?.email?.trim()
     if (!to) {
         return []
