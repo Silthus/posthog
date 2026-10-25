@@ -2191,36 +2191,66 @@ describe('CDP API', () => {
             let keyed: Record<string, unknown>
             const sendKeyed = (payload: Record<string, unknown> = keyed) =>
                 send(hogFlow.id, { Authorization: `Bearer ${mintToken(team.id, hogFlow.id)}` }, payload)
+            const sendKeyedOn = (route: 'transactional_email' | 'transactional_email/send', payload: object) =>
+                supertest(app)
+                    .post(`/api/projects/${team.id}/hog_flows/${hogFlow.id}/${route}`)
+                    .set({ Authorization: `Bearer ${mintToken(team.id, hogFlow.id)}` })
+                    .send({ ...payload, idempotency_key: keyed.idempotency_key })
+            const changedContent = { ...codeSend, content: { ...codeSend.content, subject: 'Your new code' } }
 
             beforeEach(() => {
-                // A fresh key per test, so no test reads a key another one left in Valkey.
                 keyed = { ...body, idempotency_key: `key-${new UUIDT().toString()}` }
             })
 
-            it('returns the first send for a retry and queues nothing new', async () => {
-                const first = await sendKeyed()
-                const retry = await sendKeyed()
+            it.each([
+                ['a template send', 'transactional_email', body],
+                ['a code send', 'transactional_email/send', { ...body, send: codeSend }],
+            ] as const)(
+                'returns the first send for a retry of %s and queues nothing new',
+                async (_desc, route, payload) => {
+                    const first = await sendKeyedOn(route, payload)
+                    const retry = await sendKeyedOn(route, payload)
 
-                expect(first.status).toEqual(202)
-                expect(first.body).toMatchObject({ replayed: false })
-                expect(retry.status).toEqual(202)
-                expect(retry.body).toEqual({
-                    status: 'queued',
-                    invocation_id: first.body.invocation_id,
-                    replayed: true,
-                })
-                expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
-            })
+                    expect(first.status).toEqual(202)
+                    expect(first.body).toMatchObject({ replayed: false })
+                    expect(retry.status).toEqual(202)
+                    expect(retry.body).toEqual({
+                        status: 'queued',
+                        invocation_id: first.body.invocation_id,
+                        replayed: true,
+                    })
+                    expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
+                }
+            )
 
-            it('rejects the key for a different request', async () => {
-                await sendKeyed()
+            it.each([
+                [
+                    'another recipient',
+                    ['transactional_email', body],
+                    ['transactional_email', { ...body, to: 'someone-else@example.com' }],
+                ],
+                [
+                    'changed content',
+                    ['transactional_email/send', { ...body, send: codeSend }],
+                    ['transactional_email/send', { ...body, send: changedContent }],
+                ],
+                [
+                    'the other route',
+                    ['transactional_email', body],
+                    ['transactional_email/send', { ...body, send: codeSend }],
+                ],
+            ] as const)(
+                'rejects the key for a request with %s',
+                async (_desc, [firstRoute, first], [route, payload]) => {
+                    await sendKeyedOn(firstRoute, first)
 
-                const res = await sendKeyed({ ...keyed, to: 'someone-else@example.com' })
+                    const res = await sendKeyedOn(route, payload)
 
-                expect(res.status).toEqual(422)
-                expect(res.body).toEqual({ error: 'idempotency_key_reused' })
-                expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
-            })
+                    expect(res.status).toEqual(422)
+                    expect(res.body).toEqual({ error: 'idempotency_key_reused' })
+                    expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
+                }
+            )
 
             it('tells a retry to wait while the first request is still queueing', async () => {
                 let finishQueueing: () => void = () => {}
@@ -2334,14 +2364,17 @@ describe('CDP API', () => {
         })
 
         it('refuses a send when the team is over its email quota', async () => {
-            jest.spyOn(api['deps'].quotaLimiting, 'isTeamQuotaLimited').mockResolvedValue(true)
+            const quotaLimited = jest.spyOn(api['deps'].quotaLimiting, 'isTeamQuotaLimited').mockResolvedValue(true)
             const limitedBefore = await outcomeCount('quota_limited')
+            try {
+                const res = await send(hogFlow.id, { Authorization: `Bearer ${mintToken(team.id, hogFlow.id)}` })
 
-            const res = await send(hogFlow.id, { Authorization: `Bearer ${mintToken(team.id, hogFlow.id)}` })
-
-            expect(res.status).toEqual(429)
-            expect(await outcomeCount('quota_limited')).toEqual(limitedBefore + 1)
-            expect(mockQueueInvocations).not.toHaveBeenCalled()
+                expect(res.status).toEqual(429)
+                expect(await outcomeCount('quota_limited')).toEqual(limitedBefore + 1)
+                expect(mockQueueInvocations).not.toHaveBeenCalled()
+            } finally {
+                quotaLimited.mockRestore()
+            }
         })
 
         it.each([
@@ -2354,6 +2387,23 @@ describe('CDP API', () => {
 
             expect(res.status).toEqual(400)
             expect(mockQueueInvocations).not.toHaveBeenCalled()
+        })
+
+        it.each([
+            ['transactional_email', body],
+            ['transactional_email/send', { ...body, send: codeSend }],
+        ])('sends on %s under a workflow created after the cached read missed it', async (route, payload) => {
+            const unseen = transactionalFlow('api', 'active')
+            expect(await api['hogFlowManager'].getHogFlow(unseen.id)).toBeNull()
+            await _insertHogFlow(hub.postgres, unseen)
+
+            const res = await supertest(app)
+                .post(`/api/projects/${team.id}/hog_flows/${unseen.id}/${route}`)
+                .set({ Authorization: `Bearer ${mintToken(team.id, unseen.id)}` })
+                .send(payload)
+
+            expect(res.status).toEqual(202)
+            expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
         })
 
         it.each(['transactional_email', 'transactional_email/send'])(
