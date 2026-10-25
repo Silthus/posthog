@@ -724,7 +724,6 @@ export class EmailService {
         if (
             distinctId &&
             !isTest &&
-            // A send can turn its capture off, never on: a team that turned capture off captures nothing.
             resolveEmailCaptureChoice(invocation) !== false &&
             (await this.teamWorkflowsConfigService.shouldCaptureEngagementEvents(invocation.teamId))
         ) {

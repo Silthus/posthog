@@ -56,8 +56,6 @@ export type TrackingInvocation = Pick<CyclotronJobInvocationHogFunction, 'functi
     // been republished — so the sending version has to travel with the message rather than being
     // looked up on arrival. Absent for hog function sends, which have no version.
     workflowVersion?: number
-    // A code send's own engagement capture choice. Absent for every other send, which follows the
-    // team-wide switch when its engagement arrives.
     captureEngagement?: boolean
 }
 
@@ -98,9 +96,6 @@ export type ParsedTrackingCode = {
 // layout and no version. It can't collide with a real payload because segment 0 is a UUID.
 const VERSIONED_PAYLOAD_MARKER = 'v2'
 
-// The v2 layout plus the send's capture choice, positioned before the greedy distinctId for the same
-// reason. Minted only for sends that carry a choice, so a tracking deployment that predates v3 never
-// receives one for a send it already handles.
 const CAPTURE_CHOICE_PAYLOAD_MARKER = 'v3'
 
 function parseCaptureChoice(segment: string | undefined): boolean | undefined {
@@ -115,9 +110,7 @@ const EMIT_VERSIONED_PAYLOAD = true
 const redirectSignaturePayload = (trackingCode: string, targetUrl: string): string =>
     JSON.stringify(['redirect', trackingCode, targetUrl])
 
-// Off until every tracking deployment reads v3. A parser that predates it takes the invocation id
-// for the team id, so a bounce on a code send would land on the wrong team.
-const EMIT_CAPTURE_CHOICE_PAYLOAD = false
+const EVERY_TRACKING_DEPLOYMENT_PARSES_CAPTURE_CHOICE = false
 
 // Generates, signs, verifies and renders email tracking codes. Signing keys and the public
 // tracking URL are read once in the constructor so callers can be injected with a configured
@@ -188,6 +181,7 @@ export class EmailTrackingCodeSigner {
             // Signed-only for the same reason as distinct_id below: `generate` always signs, and the
             // unsigned tag carrier never mints a version, so a version on an unsigned code is forged.
             const workflowVersion = isVersioned && format === 'signed' ? Number.parseInt(fields[6], 10) : Number.NaN
+            const signedCaptureChoice = format === 'signed' ? parseCaptureChoice(fields[7]) : undefined
             return {
                 functionId,
                 invocationId,
@@ -198,10 +192,7 @@ export class EmailTrackingCodeSigner {
                 // Empty for hog function sends, which have no version.
                 workflowVersion:
                     Number.isInteger(workflowVersion) && workflowVersion >= 1 ? workflowVersion : undefined,
-                // Signed-only like the version: a forged choice could switch capture on for a team that
-                // turned it off.
-                captureEngagement:
-                    carriesCaptureChoice && format === 'signed' ? parseCaptureChoice(fields[7]) : undefined,
+                captureEngagement: carriesCaptureChoice ? signedCaptureChoice : undefined,
                 // Only trust distinct_id from a signed code — the HMAC is its integrity guarantee. The
                 // legitimate unsigned tag never carries a distinct_id, so an unsigned code with one is
                 // forged; honoring it would let a crafted ph_id inject engagement events for any team.
@@ -223,7 +214,7 @@ export class EmailTrackingCodeSigner {
         invocation: TrackingInvocation,
         isTest = false,
         emitVersionedPayload = EMIT_VERSIONED_PAYLOAD,
-        emitCaptureChoice = EMIT_CAPTURE_CHOICE_PAYLOAD
+        emitCaptureChoice = EVERY_TRACKING_DEPLOYMENT_PARSES_CAPTURE_CHOICE
     ): string {
         const actionId = invocation.state?.actionId ?? ''
         const parentRunId = invocation.parentRunId ?? ''

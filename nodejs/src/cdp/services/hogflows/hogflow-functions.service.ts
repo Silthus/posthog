@@ -120,8 +120,6 @@ export class HogFlowFunctionsService {
         return values
     }
 
-    // `send` is laid over the inputs only when they are first rendered, so continuations reuse it. Its
-    // capture choice goes on every build, because the email service reads it from the function's metadata.
     async buildHogFunctionInvocation(
         invocation: CyclotronJobInvocationHogFlow,
         hogFunction: HogFunctionType,

@@ -455,8 +455,6 @@ describe('EmailTrackingService', () => {
                 distinctId?: string
                 captureEngagement?: boolean
             }): Promise<supertest.Response> => {
-                // The last two args opt into the versioned and capture-choice payloads, which `generate`
-                // won't emit by default until their rollouts finish (see EMIT_* in tracking-code.ts).
                 const trackingCode = signer.generate(
                     {
                         functionId,

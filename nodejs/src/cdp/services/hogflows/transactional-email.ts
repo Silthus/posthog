@@ -5,12 +5,10 @@ import { BareEmailAddressSchema } from '~/cdp/schema/emailFields'
 
 export const AcceptedSendSchema = z
     .object({
-        // Absent when the send uses a local template, whose own content renders as usual.
         content: z
             .object({
                 subject: z.string().min(1),
                 html: z.string().optional(),
-                // Absent when the HTML has no text to derive, such as a single image.
                 text: z.string().optional(),
             })
             .readonly()
@@ -29,8 +27,6 @@ export const AcceptedSendSchema = z
     })
     .readonly()
 
-// A code send accepted by the transactional email API, carried on the run so the worker delivers
-// exactly what the caller sent. It is part of the queued job format: change it only additively.
 export type AcceptedSend = z.infer<typeof AcceptedSendSchema>
 
 // What Django sends to run a transactional email's workflow once.
@@ -44,8 +40,6 @@ export const TransactionalEmailRequestSchema = z.object({
     idempotency_key: z.string().min(1).max(255).optional(),
 })
 
-// What Django sends to deliver content it accepted on its send route. It has its own route, so a cdp-api that
-// can't deliver the content answers 404 and sends nothing, instead of dropping `send` and sending something else.
 export const AcceptedSendRequestSchema = TransactionalEmailRequestSchema.extend({ send: AcceptedSendSchema })
 
 export type TransactionalEmailRequest = z.infer<typeof TransactionalEmailRequestSchema> & { send?: AcceptedSend }

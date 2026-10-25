@@ -3253,8 +3253,6 @@ describe('Hogflow Executor', () => {
             html: '<p>Test html</p>',
         })
 
-        // What Django stores for a rendered-content key: no sender and no content, so only the
-        // run's accepted send can make the step deliverable.
         const codeKeyStep = () => ({
             to: { email: 'recipient@example.com', name: 'Recipient' },
             from: { integrationId: null },
@@ -3321,8 +3319,6 @@ describe('Hogflow Executor', () => {
             expect(result.invocation.queueParameters).toEqual(expected())
         })
 
-        // A job queued with an accepted send can reach a worker that predates it, and a job queued
-        // without one can reach a code-key step. Neither may deliver the empty stored step.
         it.each([
             {
                 name: 'fails a code-key step without an accepted send',
@@ -3376,8 +3372,6 @@ describe('Hogflow Executor', () => {
             expect(emailSentMetrics).toHaveLength(1)
         })
 
-        // The email service reads a code send's capture choice from the function it runs, so the
-        // choice has to survive the hand-off from the workflow worker to the email queue.
         it.each([
             { captureEngagement: true, teamCaptures: true, captured: ['$workflows_email_sent'] },
             { captureEngagement: false, teamCaptures: true, captured: [] },

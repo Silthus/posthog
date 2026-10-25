@@ -403,7 +403,6 @@ export class EmailTrackingService {
         if (
             eventName &&
             distinctId &&
-            // A send can turn its capture off, never on: a team that turned capture off captures nothing.
             captureEngagement !== false &&
             (await this.teamWorkflowsConfigService.shouldCaptureEngagementEvents(teamId))
         ) {

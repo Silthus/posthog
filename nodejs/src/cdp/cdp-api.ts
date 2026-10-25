@@ -1191,7 +1191,6 @@ export class CdpApi {
                     distinct_id: distinctId,
                     timestamp: DateTime.now().toISO(),
                     url: '',
-                    // The email step's recipient reads this.
                     properties: { to },
                     elements_chain: '',
                 }
@@ -1215,16 +1214,12 @@ export class CdpApi {
                 if (send) {
                     invocation.state.send = send
                 }
-                // Straight to the email queue: the flow's only step is the email, so a hop through the
-                // workflow queue would only add latency to a password reset or a verification code.
                 invocation.queue = 'email'
                 invocation.queuePriority = EMAIL_QUEUE_PRIORITY.fast
 
                 const idempotencyKeys = this.transactionalEmailIdempotencyKeys
                 const fingerprint = IdempotencyKeys.fingerprint([hogFlow.id, to, distinctId, variables])
                 if (idempotencyKey) {
-                    // Checked before the quota, so a retry of a send that went out gets its answer even
-                    // when the team has hit its quota since.
                     const reservation = await idempotencyKeys.reserve(
                         team.id,
                         idempotencyKey,
@@ -1262,7 +1257,6 @@ export class CdpApi {
                         throw error
                     }
                 } catch (error) {
-                    // Nothing was queued, so the caller's retry with the same key must be able to send.
                     if (idempotencyKey) {
                         await idempotencyKeys.release(team.id, idempotencyKey, invocation.id)
                     }
@@ -1272,7 +1266,6 @@ export class CdpApi {
                     await idempotencyKeys.markQueued(team.id, idempotencyKey, fingerprint, invocation.id)
                 }
                 await this.invocationResultsService.invocationResultsRowsService.flush()
-                // The run skips the trigger pipeline that counts runs for event-triggered workflows.
                 this.hogFunctionMonitoringService.queueAppMetric(
                     {
                         team_id: team.id,
