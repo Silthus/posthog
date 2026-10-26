@@ -14,6 +14,8 @@ from posthog.models.organization import OrganizationMembership
 from posthog.models.personal_api_key import PersonalAPIKey
 from posthog.models.utils import hash_key_value
 
+from products.workflows.backend.models import SandboxSenderOrganizationBlock
+
 if TYPE_CHECKING:
     from rest_framework.response import _MonkeyPatchedResponse
 
@@ -113,6 +115,19 @@ class TestSandboxSenderAPI(APIBaseTest):
         assert response.status_code == status.HTTP_404_NOT_FOUND, response.json()
         assert not self._sandbox_rows().exists()
         assert self._provisioned_events() == []
+
+    def test_ensure_is_not_found_for_a_blocked_organization_until_the_block_is_removed(self) -> None:
+        block = SandboxSenderOrganizationBlock.objects.create(organization=self.organization, reason="Abuse report")
+
+        blocked = self._ensure()
+
+        assert blocked.status_code == status.HTTP_404_NOT_FOUND, blocked.json()
+        assert not self._sandbox_rows().exists()
+        assert self._provisioned_events() == []
+        block.delete()
+        unblocked = self._ensure()
+        assert unblocked.status_code == status.HTTP_200_OK, unblocked.json()
+        assert self._sandbox_rows().count() == 1
 
     @parameterized.expand(
         [
