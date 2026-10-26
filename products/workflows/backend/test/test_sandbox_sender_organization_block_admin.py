@@ -1,19 +1,31 @@
 from posthog.test.base import BaseTest
 
-from django.contrib.admin import AdminSite
-from django.test import RequestFactory
+from django.test import Client, override_settings
 
-from products.workflows.backend.admin.sandbox_sender_organization_block_admin import SandboxSenderOrganizationBlockAdmin
 from products.workflows.backend.models import SandboxSenderOrganizationBlock
 
+ADMIN_URL = "/admin/workflows/sandboxsenderorganizationblock/"
 
+
+@override_settings(STORAGES={"staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}})
 class TestSandboxSenderOrganizationBlockAdmin(BaseTest):
-    def test_a_block_added_in_admin_records_the_staff_user(self) -> None:
-        admin = SandboxSenderOrganizationBlockAdmin(SandboxSenderOrganizationBlock, AdminSite())
-        request = RequestFactory().post("/admin/workflows/sandboxsenderorganizationblock/add/")
-        request.user = self.user
-        block = SandboxSenderOrganizationBlock(organization=self.organization, reason="Abuse report")
+    def setUp(self) -> None:
+        super().setUp()
+        self.user.is_staff = True
+        self.user.save()
+        self.client = Client()
+        self.client.force_login(self.user)
 
-        admin.save_model(request, block, form=None, change=False)
+    def test_staff_add_a_block_with_its_author_and_delete_it(self) -> None:
+        added = self.client.post(
+            f"{ADMIN_URL}add/", data={"organization": str(self.organization.id), "reason": "Abuse report"}
+        )
 
-        assert SandboxSenderOrganizationBlock.objects.get(organization=self.organization).created_by == self.user
+        assert added.status_code == 302, added.content
+        block = SandboxSenderOrganizationBlock.objects.get(organization=self.organization)
+        assert (block.reason, block.created_by) == ("Abuse report", self.user)
+
+        deleted = self.client.post(f"{ADMIN_URL}{block.pk}/delete/", data={"post": "yes"})
+
+        assert deleted.status_code == 302, deleted.content
+        assert not SandboxSenderOrganizationBlock.objects.filter(organization=self.organization).exists()
