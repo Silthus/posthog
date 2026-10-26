@@ -12,14 +12,16 @@ import { resourceEditedLogic } from 'products/notifications/frontend/resourceEdi
 
 import { messageTemplateLogic } from './messageTemplateLogic'
 
-jest.mock('lib/lemon-ui/LemonToast', () => ({
+jest.mock('lib/lemon-ui/LemonToast/LemonToast', () => ({
+    ...jest.requireActual('lib/lemon-ui/LemonToast/LemonToast'),
     lemonToast: {
         success: jest.fn(),
         error: jest.fn(),
     },
 }))
+jest.mock('lib/lemon-ui/LemonToast', () => jest.requireMock('lib/lemon-ui/LemonToast/LemonToast'))
 
-const mockToast = require('lib/lemon-ui/LemonToast').lemonToast
+const mockToast = require('lib/lemon-ui/LemonToast/LemonToast').lemonToast
 
 describe('messageTemplateLogic', () => {
     let logic: ReturnType<typeof messageTemplateLogic.build>
@@ -112,10 +114,17 @@ describe('messageTemplateLogic', () => {
                 toast: 'Failed to save template. Please try again.',
                 withButton: false,
             },
-        ])('$description', async ({ status, toast, withButton }) => {
+            {
+                description: 'a refusal other than an upload claiming the template still shows the server message',
+                status: 403,
+                code: 'permission_denied',
+                toast: 'Save template failed: nope',
+                withButton: false,
+            },
+        ])('$description', async ({ status, code, toast, withButton }) => {
             useMocks({
                 patch: {
-                    '/api/environments/:team_id/messaging_templates/:id/': () => [status, { detail: 'nope' }],
+                    '/api/environments/:team_id/messaging_templates/:id/': () => [status, { code, detail: 'nope' }],
                 },
             })
 
@@ -725,6 +734,7 @@ describe('messageTemplateLogic', () => {
                 reloadStatus = status
                 await refuse(refusal)
 
+                expect(mockToast.error).not.toHaveBeenCalledWith(expect.stringContaining('managed by code'))
                 await expectLogic(logic).toMatchValues({
                     isCodeManaged: true,
                     hasDraft: false,

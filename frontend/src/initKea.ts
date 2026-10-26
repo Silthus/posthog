@@ -199,6 +199,10 @@ const FIELD_ERROR_SELF_HANDLED: Record<string, Set<string>> = {
 
 const HAS_DEPENDENTS_SELF_HANDLED = new Set(['deleteDataWarehouseSavedQuery'])
 
+const CODE_MANAGED_REFUSAL_SELF_HANDLED_BY_LOGIC_PATH: Record<string, string> = {
+    saveTemplate: 'products.workflows.frontend.messageTemplateLogic',
+}
+
 /*
 Write actions whose owning logic toasts the server message of a validation 400. The 400 is a
 response to user input, such as a malformed CSV, so it is not reported as an exception.
@@ -329,6 +333,9 @@ export function initKea({
                         error.code === 'has_dependents' && HAS_DEPENDENTS_SELF_HANDLED.has(String(actionKey))
                     const isSelfHandledFieldError =
                         error.status === 400 && !!FIELD_ERROR_SELF_HANDLED[String(actionKey)]?.has(error.attr)
+                    const isSelfHandledCodeManagedRefusal =
+                        error.code === 'immutable' &&
+                        isOwnedByLogic(CODE_MANAGED_REFUSAL_SELF_HANDLED_BY_LOGIC_PATH, actionKey, logic.pathString)
 
                     if (!errorMessage && error.status === 404) {
                         errorMessage = 'URL not found'
@@ -349,7 +356,8 @@ export function initKea({
                         isFeatureFlagDuplicateKey ||
                         isHasDependentsError ||
                         isSelfHandledFieldError ||
-                        isSelfHandledValidationError
+                        isSelfHandledValidationError ||
+                        isSelfHandledCodeManagedRefusal
                     ) {
                         // These are handled by their own dedicated toasts elsewhere.
                         errorMessage = null
