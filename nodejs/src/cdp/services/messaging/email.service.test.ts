@@ -256,6 +256,14 @@ describe('EmailService', () => {
                 )
                 return id
             }
+            const setOrganizationActive = async (isActive: boolean | null): Promise<void> => {
+                await hub.postgres.query(
+                    PostgresUse.COMMON_WRITE,
+                    'UPDATE posthog_organization SET is_active = $1 WHERE id = $2',
+                    [isActive, team.organization_id],
+                    'test:set-sandbox-organization-active'
+                )
+            }
             const createOtherOrganization = async (): Promise<string> => {
                 const id = await createOrganization(hub.postgres)
                 extraOrganizationIds.push(id)
@@ -563,6 +571,7 @@ describe('EmailService', () => {
                         'legacy',
                         'inactive',
                         'other organization',
+                        'deactivated organization',
                     ].map((recipient) => [isTest, recipient] as const)
                 )
             )('blocks all delivery for %s / %s', async (isTest, recipient) => {
@@ -581,6 +590,9 @@ describe('EmailService', () => {
                     blocked = [memberEmail('outside')]
                     await createMember(blocked[0], await createOtherOrganization())
                     params = { ...params, to: { email: blocked[0] } }
+                } else if (recipient === 'deactivated organization') {
+                    blocked = [memberEmail()]
+                    await setOrganizationActive(false)
                 } else {
                     blocked = [memberEmail()]
                     await hub.postgres.query(
@@ -621,6 +633,20 @@ describe('EmailService', () => {
                 )
                 expect(result.capturedPostHogEvents).toEqual([])
             })
+
+            it.each([null, true])(
+                'sends to a verified member of an organization that was never deactivated (is_active=%s)',
+                async (isActive) => {
+                    await setOrganizationActive(isActive)
+                    service = createSandboxService(true)
+
+                    const result = await service.executeSendEmail(invocation)
+
+                    expect(result.error).toBeUndefined()
+                    expect(result.skipped).not.toBe(true)
+                    expect(sendEmailSpy).toHaveBeenCalledTimes(1)
+                }
+            )
 
             it.each(
                 [false].flatMap((isTest) =>

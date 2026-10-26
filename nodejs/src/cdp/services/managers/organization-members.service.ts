@@ -56,7 +56,10 @@ export class OrganizationMembersService {
                     `SELECT membership.organization_id, users.email, users.is_email_verified
                      FROM posthog_organizationmembership AS membership
                      JOIN posthog_user AS users ON users.id = membership.user_id
-                     WHERE membership.organization_id = ANY($1::uuid[]) AND users.is_active = true`,
+                     JOIN posthog_organization AS organization ON organization.id = membership.organization_id
+                     WHERE membership.organization_id = ANY($1::uuid[])
+                       AND users.is_active = true
+                       AND organization.is_active IS NOT FALSE`,
                     [organizationIds],
                     'fetch-organization-email-members'
                 )
