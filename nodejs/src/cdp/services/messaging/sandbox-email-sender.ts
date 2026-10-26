@@ -61,6 +61,7 @@ type SandboxEmailOutcome =
               | 'check_failed'
               | 'cap_reached'
               | 'paused'
+              | 'organization_blocked'
           blockedRecipientCount: number
       }
 

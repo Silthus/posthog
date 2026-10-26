@@ -426,6 +426,9 @@ const SANDBOX_ADDRESS_BLOCK_COPY: Record<
     },
 }
 
+const SANDBOX_ORGANIZATION_BLOCKED_MESSAGE =
+    'Skipping send: the sandbox sender is turned off for this organization. Contact support to find out why.'
+
 const SANDBOX_PAUSE_SKIP_MESSAGES = {
     paused: 'Skipping send: the sandbox sender is paused right now. Verify your own domain to keep sending.',
     check_failed:
@@ -1095,15 +1098,16 @@ export class EmailService {
         const invocation = result.invocation
         let blockedRecipients: string[]
         let reason: Exclude<SandboxAddressBlockReason, 'cap_reached'>
+        let organizationBlocked = false
         try {
             if (!this.organizationMembers) {
                 throw new Error('Organization member checks are not configured')
             }
-            const blocked = await this.organizationMembers.getBlockedRecipients(
-                invocation.teamId,
-                recipients,
-                organization
-            )
+            const snapshot = organization ?? (await this.organizationMembers.getOrganizationSnapshot(invocation.teamId))
+            organizationBlocked = snapshot.sandboxSenderBlocked
+            const blocked = organizationBlocked
+                ? []
+                : await this.organizationMembers.getBlockedRecipients(invocation.teamId, recipients, snapshot)
             blockedRecipients = blocked.map(({ address }) => address)
             reason = blocked.every(({ unverifiedMember }) => unverifiedMember)
                 ? 'recipient_unverified'
@@ -1116,6 +1120,9 @@ export class EmailService {
                 error: error instanceof Error ? error.message : 'Unknown error',
             })
         }
+        if (organizationBlocked) {
+            return await this.skipBlockedSandboxOrganization(result, isTest)
+        }
         if (!blockedRecipients.length) {
             return true
         }
@@ -1126,6 +1133,21 @@ export class EmailService {
             type: 'blocked',
             reason,
             blockedRecipientCount: blockedRecipients.length,
+        })
+        return false
+    }
+
+    private async skipBlockedSandboxOrganization(
+        result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>,
+        isTest: boolean
+    ): Promise<false> {
+        createAddLogFunction(result.logs)('info', SANDBOX_ORGANIZATION_BLOCKED_MESSAGE)
+        result.skipped = true
+        result.invocation.state.vmState?.stack.push({ success: false })
+        await this.sandboxSender!.capture(result.invocation.teamId, isTest, {
+            type: 'blocked',
+            reason: 'organization_blocked',
+            blockedRecipientCount: 0,
         })
         return false
     }

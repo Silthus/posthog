@@ -80,6 +80,9 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
   Every sandbox send, including test sends, skips when that tenant's mirrored sending status is `DISABLED` or the pause lookup fails. A missing row allows sending, with SES enforcing its own state.
   The worker rechecks pauses after the daily-cap claim and returns the claim when that recheck blocks delivery.
   A committed state change reaches the workers through the `reload-sandbox-sender-state` message. Own-sender sends do not read this state.
+  Staff turn the sandbox sender off for one organization by adding a `SandboxSenderOrganizationBlock` row in the Django admin, and lift the block by deleting the row.
+  A blocked organization's sandbox sends skip with the reason `organization_blocked`, and its projects get no new sandbox sender.
+  The block rides on the organization snapshot, so it reaches the workers within one minute. Own-sender sends do not read it.
   Test sends run inline in the CDP API, so the API reads the same `SES_RATE_LIMITER_VALKEY_*` settings as the email worker. Without them, every sandbox test send is skipped.
   CDP API opens the SES Valkey pool only when sandbox delivery is enabled; otherwise its MX validation uses the existing local cache and DNS.
   The CDP API's SES webhook captures `workflows sandbox email delivered` for a delivery on `SES_SANDBOX_CONFIGURATION_SET`, test sends included. Without that setting on the CDP API, the event never fires.

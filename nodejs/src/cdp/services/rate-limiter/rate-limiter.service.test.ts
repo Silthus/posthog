@@ -459,8 +459,16 @@ describe('RateLimiterService', () => {
         )
 
         try {
-            const firstOrganization = { organizationId: organizations[1], expiresAt: Infinity }
-            const otherOrganization = { organizationId: organizations[3], expiresAt: Infinity }
+            const firstOrganization = {
+                organizationId: organizations[1],
+                sandboxSenderBlocked: false,
+                expiresAt: Infinity,
+            }
+            const otherOrganization = {
+                organizationId: organizations[3],
+                sandboxSenderBlocked: false,
+                expiresAt: Infinity,
+            }
             expect(await sender.claimDailyCaps(1, ['member@example.com'], firstOrganization)).toMatchObject({
                 type: 'granted',
             })

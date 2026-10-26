@@ -9,7 +9,11 @@ type OrganizationMemberSnapshot = {
 
 export type BlockedRecipient = { readonly address: string; readonly unverifiedMember: boolean }
 
-export type TeamOrganizationSnapshot = { readonly organizationId: string; readonly expiresAt: number }
+export type TeamOrganizationSnapshot = {
+    readonly organizationId: string
+    readonly sandboxSenderBlocked: boolean
+    readonly expiresAt: number
+}
 
 const MAX_SNAPSHOT_AGE_MS = 60_000
 const REFRESH_AGE_MS = MAX_SNAPSHOT_AGE_MS - 1_000
@@ -29,14 +33,29 @@ export class OrganizationMembersService {
             bufferMs: 0,
             loader: async (teamIds) => {
                 const expiresAt = this.now() + MAX_SNAPSHOT_AGE_MS
-                const { rows } = await postgres.query<{ id: number; organization_id: string }>(
+                const { rows } = await postgres.query<{
+                    id: number
+                    organization_id: string
+                    sandbox_sender_blocked: boolean
+                }>(
                     PostgresUse.COMMON_WRITE,
-                    'SELECT id, organization_id FROM posthog_team WHERE id = ANY($1::bigint[])',
+                    `SELECT team.id, team.organization_id, block.id IS NOT NULL AS sandbox_sender_blocked
+                     FROM posthog_team AS team
+                     LEFT JOIN workflows_sandboxsenderorganizationblock AS block
+                       ON block.organization_id = team.organization_id
+                     WHERE team.id = ANY($1::bigint[])`,
                     [teamIds.map(Number)],
                     'fetch-sandbox-team-organization'
                 )
                 return Object.fromEntries(
-                    rows.map((team) => [String(team.id), { organizationId: team.organization_id, expiresAt }])
+                    rows.map((team) => [
+                        String(team.id),
+                        {
+                            organizationId: team.organization_id,
+                            sandboxSenderBlocked: team.sandbox_sender_blocked === true,
+                            expiresAt,
+                        },
+                    ])
                 )
             },
         })

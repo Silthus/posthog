@@ -501,6 +501,53 @@ describe('EmailService', () => {
                 )
             })
 
+            it.each([false, true])(
+                'blocks every sandbox send of a blocked organization until the block is removed (isTest=%s)',
+                async (isTest) => {
+                    await hub.postgres.query(
+                        PostgresUse.COMMON_WRITE,
+                        `INSERT INTO workflows_sandboxsenderorganizationblock (organization_id, reason, created_at)
+                         VALUES ($1, 'Abuse report', now())`,
+                        [team.organization_id],
+                        'test:block-sandbox-organization'
+                    )
+                    service = createSandboxService(true)
+
+                    const blocked = await service.executeSendEmail(invocation, isTest)
+
+                    expect(sendEmailSpy).not.toHaveBeenCalled()
+                    expect(blocked).toMatchObject({ finished: true, skipped: true, metrics: [] })
+                    expect(blocked.invocation.state.vmState?.stack).toEqual([{ success: false }])
+                    expect(blocked.logs).toContainEqual(
+                        expect.objectContaining({
+                            level: 'info',
+                            message:
+                                'Skipping send: the sandbox sender is turned off for this organization. Contact support to find out why.',
+                        })
+                    )
+                    expect(capture).toHaveBeenCalledWith(
+                        expect.objectContaining({ id: team.id }),
+                        'workflows sandbox email blocked',
+                        { reason: 'organization_blocked', is_test: isTest, blocked_recipient_count: 0 }
+                    )
+
+                    await hub.postgres.query(
+                        PostgresUse.COMMON_WRITE,
+                        'DELETE FROM workflows_sandboxsenderorganizationblock WHERE organization_id = $1',
+                        [team.organization_id],
+                        'test:unblock-sandbox-organization'
+                    )
+                    service = createSandboxService(true)
+                    invocation.state.vmState = { stack: [] } as any
+
+                    const unblocked = await service.executeSendEmail(invocation, isTest)
+
+                    expect(unblocked.error).toBeUndefined()
+                    expect(unblocked.skipped).not.toBe(true)
+                    expect(sendEmailSpy).toHaveBeenCalledTimes(1)
+                }
+            )
+
             it.each([false, true])('blocks a non-member To address (isTest=%s)', async (isTest) => {
                 service = createSandboxService(true)
                 invocation.queueParameters = createSandboxParams({
