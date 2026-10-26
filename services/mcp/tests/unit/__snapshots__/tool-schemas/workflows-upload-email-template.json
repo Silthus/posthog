@@ -1,5 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
     "properties": {
         "html": {
             "description": "Email body as HTML, stored as sent. Supports Liquid, such as `{{ variables.first_name }}`.",
