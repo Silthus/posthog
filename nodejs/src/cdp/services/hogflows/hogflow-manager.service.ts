@@ -49,9 +49,16 @@ const HOG_FLOW_FIELDS = [
 
 export type HogFlowTeamInfo = Pick<HogFlow, 'id' | 'team_id' | 'version'>
 
+const meetsVersion = (flow: HogFlow | null, minimumVersion?: HogFlow['version']): flow is HogFlow =>
+    flow !== null && (minimumVersion === undefined || flow.version >= minimumVersion)
+
+const isOlderVersion = (incoming: HogFlow | null, cached: HogFlow | null): boolean =>
+    incoming !== null && cached !== null && incoming.version < cached.version
+
 export class HogFlowManagerService {
     private lazyLoader: LazyLoader<HogFlow>
     private lazyLoaderByTeam: LazyLoader<HogFlowTeamInfo[]>
+    private primaryReads = new Map<HogFlow['id'], Promise<HogFlow | null>>()
 
     constructor(
         private postgres: PostgresRouter,
@@ -82,6 +89,7 @@ export class HogFlowManagerService {
             name: 'hog_flow_manager',
             ...cacheOptions,
             loader: async (ids) => await this.fetchHogFlows(ids),
+            isStale: isOlderVersion,
         })
 
         this.pubSub.on<{ teamId: Team['id']; hogFlowIds: HogFlow['id'][] }>('reload-hog-flows', (message) => {
@@ -147,14 +155,40 @@ export class HogFlowManagerService {
         minimumVersion?: HogFlow['version']
     ): Promise<HogFlow | null> {
         const cached = await this.getHogFlow(id)
-        if (cached && (minimumVersion === undefined || cached.version >= minimumVersion)) {
+        if (meetsVersion(cached, minimumVersion)) {
             return cached
         }
-        const fromPrimary = (await this.fetchHogFlows([id], PostgresUse.COMMON_WRITE))[id] ?? null
-        if (fromPrimary) {
-            this.lazyLoader.markForRefresh(id)
+        return await this.readPrimaryMeeting(id, minimumVersion)
+    }
+
+    private async readPrimaryMeeting(id: HogFlow['id'], minimumVersion?: HogFlow['version']): Promise<HogFlow | null> {
+        const readInFlight = this.primaryReads.get(id)
+        if (readInFlight) {
+            const joined = await readInFlight
+            if (meetsVersion(joined, minimumVersion)) {
+                return joined
+            }
         }
-        return fromPrimary
+        return await this.readPrimary(id)
+    }
+
+    private readPrimary(id: HogFlow['id']): Promise<HogFlow | null> {
+        const readInFlight = this.primaryReads.get(id)
+        if (readInFlight) {
+            return readInFlight
+        }
+        const read = this.fetchHogFlows([id], PostgresUse.COMMON_WRITE)
+            .then((flows) => this.cachePrimaryCopy(flows[id] ?? null))
+            .finally(() => this.primaryReads.delete(id))
+        this.primaryReads.set(id, read)
+        return read
+    }
+
+    private cachePrimaryCopy(flow: HogFlow | null): HogFlow | null {
+        if (flow) {
+            this.lazyLoader.set(flow.id, flow)
+        }
+        return flow
     }
 
     public async getHogFlows(ids: HogFlow['id'][]): Promise<Record<HogFlow['id'], HogFlow | null>> {
