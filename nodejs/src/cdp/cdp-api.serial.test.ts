@@ -2511,10 +2511,7 @@ describe('CDP API', () => {
 
                 const res = await sendAccepted(hogFlow.id, { ...body, send: { ...templateSend, hogFlowVersion: 3 } })
 
-                expect([res.status, res.body]).toEqual([
-                    503,
-                    { error: 'workflow_version_behind', code: 'workflow_version_behind' },
-                ])
+                expect([res.status, res.body]).toEqual([503, { error: 'workflow_version_behind' }])
                 expect(await outcomeCount('workflow_version_behind')).toEqual(behindBefore + 1)
                 expect(mockQueueInvocations).not.toHaveBeenCalled()
             })

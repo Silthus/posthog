@@ -1246,10 +1246,7 @@ export class CdpApi {
                     return reply('not_found', 404, { error: 'Workflow not found' })
                 }
                 if (predatesGradedVersion(hogFlow, send)) {
-                    return reply('workflow_version_behind', 503, {
-                        error: 'workflow_version_behind',
-                        code: 'workflow_version_behind',
-                    })
+                    return reply('workflow_version_behind', 503, { error: 'workflow_version_behind' })
                 }
                 if (hogFlow.trigger?.type !== 'api') {
                     return reply('not_sendable', 400, { error: 'not_sendable' })
