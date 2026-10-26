@@ -7,6 +7,7 @@ import { logger } from '~/common/utils/logger'
 import { PluginsServerConfig } from '~/types'
 
 import { isRowScopedTrigger } from '../schema/hogflow'
+import { predatesGradedVersion } from '../services/hogflows/transactional-email'
 import { JobQueue } from '../services/job-queue/job-queue.interface'
 import {
     CyclotronJobInvocation,
@@ -103,8 +104,12 @@ export class CdpCyclotronWorkerHogFlow extends CdpCyclotronWorker {
                 }
 
                 const team = await this.deps.teamManager.getTeam(item.teamId)
-                const hogFlow = await this.hogFlowManager.getHogFlowCheckingPrimaryOnMiss(item.functionId)
-                if (!hogFlow || !team) {
+                const send = (item.state as CyclotronJobInvocationHogFlow['state'] | null)?.send
+                const hogFlow = await this.hogFlowManager.getHogFlowCheckingPrimaryOnMiss(
+                    item.functionId,
+                    send?.hogFlowVersion
+                )
+                if (!hogFlow || !team || predatesGradedVersion(hogFlow, send)) {
                     logger.error('⚠️', 'Error finding hog flow', {
                         id: item.functionId,
                     })

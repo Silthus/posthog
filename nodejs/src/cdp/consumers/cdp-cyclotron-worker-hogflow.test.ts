@@ -619,6 +619,31 @@ describe('CdpCyclotronWorkerHogFlow', () => {
             expect(jobQueue.dequeueInvocations).toHaveBeenLastCalledWith([])
         })
 
+        it.each([
+            ['newer than the cached copy runs the database version', 2, [2]],
+            ['missing runs the cached copy, as before the field', undefined, [1]],
+            ['newer than the database fails the job', 3, []],
+        ])('an accepted send whose graded workflow version is %s', async (_desc, hogFlowVersion, ranVersions) => {
+            const hogFlow = hogFlows[0]
+            await processor['hogFlowManager'].getHogFlow(hogFlow.id)
+            await hub.postgres.query(
+                PostgresUse.COMMON_WRITE,
+                `UPDATE posthog_hogflow SET version = 2 WHERE id = $1`,
+                [hogFlow.id],
+                'upload-without-reload'
+            )
+            const invocation = createSerializedHogFlowInvocation(hogFlow, {
+                event: { distinct_id: 'distinct_A_1', properties: {} } as any,
+                send: { tracking: { captureEngagement: false }, hogFlowVersion },
+            })
+
+            const results = await processor.processInvocations([invocation])
+
+            expect(
+                results.map((result) => (result.invocation as CyclotronJobInvocationHogFlow).hogFlow.version)
+            ).toEqual(ranVersions)
+        })
+
         it('terminates invocations as canceled when the workflow is disabled after being queued', async () => {
             const hogFlow = hogFlows[0]
 
