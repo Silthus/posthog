@@ -9,6 +9,7 @@ import { AgentSetupButton } from '../components/AgentSetupButton'
 import { BigAction } from '../components/BigAction'
 import { DnsHostLink } from '../components/DnsHostLink'
 import { DnsRecordRows, RECORD_KIND_LABEL } from '../components/DnsRecordRows'
+import { ShareRecordsMenu } from '../components/ShareRecordsMenu'
 import { StepHeading } from '../components/StepHeading'
 import { VerificationStepsStrip } from '../components/VerificationStepsStrip'
 import { emailDomainAutoConfigureLogic } from '../emailDomainAutoConfigureLogic'
@@ -79,6 +80,7 @@ function SecondaryActions(): JSX.Element {
         <div className="flex flex-wrap justify-center gap-1">
             <AgentSetupButton />
             <DnsHostLink />
+            <ShareRecordsMenu />
         </div>
     )
 }

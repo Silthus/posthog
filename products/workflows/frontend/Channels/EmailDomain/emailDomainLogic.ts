@@ -1,8 +1,13 @@
 import { MakeLogicType, actions, afterMount, connect, kea, key, listeners, path, props, selectors } from 'kea'
+import posthog from 'posthog-js'
+
+import { lemonToast } from '@posthog/lemon-ui'
 
 import { FEATURE_FLAGS } from 'lib/constants'
 import { FeatureFlagsSet, featureFlagLogic } from 'lib/logic/featureFlagLogic'
+import { copyToClipboard } from 'lib/utils/copyToClipboard'
 import { Scene } from 'scenes/sceneTypes'
+import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
 
 import { Breadcrumb } from '~/types'
@@ -14,13 +19,18 @@ import type {
 } from 'products/integrations/frontend/generated/api.schemas'
 
 import { workflowDataSuggestionsLogic } from '../../setupGuide/suggestions/workflowDataSuggestionsLogic'
+import { dnsRecordsAsText } from './dnsRecordsAsText'
 import { emailDomainAutoConfigureLogic } from './emailDomainAutoConfigureLogic'
 import { EmailDomainLogicProps } from './emailDomainLogicProps'
 import { emailDomainManualSetupLogic } from './emailDomainManualSetupLogic'
+import { emailDomainPageUrl } from './emailDomainPageUrl'
 import { emailDomainSenderLogic } from './emailDomainSenderLogic'
 import { emailDomainStatusLogic } from './emailDomainStatusLogic'
 
 export type EmailDomainPhase = 'domain' | 'loading' | 'unavailable' | 'settings' | 'verifying' | 'ready'
+
+/** `link` copies the domain page for a teammate in PostHog, `text` copies the records for a DNS owner outside it. */
+export type RecordsShareMethod = 'link' | 'text'
 
 export interface VerificationStep {
     key: 'domain_added' | 'records_found' | 'verified'
@@ -145,6 +155,7 @@ export interface emailDomainLogicValues {
     statusLoading: boolean // emailDomainStatusLogic
     statusUnavailable: boolean // emailDomainStatusLogic
     featureFlags: FeatureFlagsSet // featureFlagLogic
+    currentTeamId: number | null // teamLogic
     breadcrumbs: Breadcrumb[]
     offersDataSuggestions: boolean
     phase: EmailDomainPhase
@@ -170,6 +181,9 @@ export interface emailDomainLogicActions {
     }
     retry: () => {
         value: true
+    }
+    shareRecords: (method: RecordsShareMethod) => {
+        method: RecordsShareMethod
     }
 }
 
@@ -235,6 +249,8 @@ export const emailDomainLogic = kea<emailDomainLogicType>([
             ['returnedFromAutoConfigure'],
             featureFlagLogic,
             ['featureFlags'],
+            teamLogic,
+            ['currentTeamId'],
         ],
         actions: [
             emailDomainSenderLogic(props),
@@ -248,6 +264,7 @@ export const emailDomainLogic = kea<emailDomainLogicType>([
     actions({
         retry: true,
         preloadDataSuggestions: true,
+        shareRecords: (method: RecordsShareMethod) => ({ method }),
     }),
     selectors({
         phase: [
@@ -331,6 +348,22 @@ export const emailDomainLogic = kea<emailDomainLogicType>([
                 'dataSuggestions',
                 { pauseOnPageHidden: false }
             )
+        },
+        shareRecords: async ({ method }) => {
+            const { currentTeamId, integrationId, domain, records, phase } = values
+            if (!currentTeamId || !integrationId || !domain) {
+                return
+            }
+            const shared =
+                method === 'link'
+                    ? await copyToClipboard(emailDomainPageUrl(currentTeamId, integrationId), 'link', { silent: true })
+                    : await copyToClipboard(dnsRecordsAsText(domain, records), 'settings', { silent: true })
+            if (!shared) {
+                return
+            }
+            // pinned: analytics event name
+            posthog.capture('email domain records shared', { method, step: phase })
+            lemonToast.success(method === 'link' ? 'Copied the link to this page' : 'Copied the settings as text')
         },
         retry: () => {
             if (values.senderFailed) {
