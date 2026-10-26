@@ -142,9 +142,12 @@ export class HogFlowManagerService {
         return (await this.lazyLoader.get(id)) ?? null
     }
 
-    public async getHogFlowCheckingPrimaryOnMiss(id: HogFlow['id']): Promise<HogFlow | null> {
+    public async getHogFlowCheckingPrimaryOnMiss(
+        id: HogFlow['id'],
+        minimumVersion?: HogFlow['version']
+    ): Promise<HogFlow | null> {
         const cached = await this.getHogFlow(id)
-        if (cached) {
+        if (cached && (minimumVersion === undefined || cached.version >= minimumVersion)) {
             return cached
         }
         const fromPrimary = (await this.fetchHogFlows([id], PostgresUse.COMMON_WRITE))[id] ?? null

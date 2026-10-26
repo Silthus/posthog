@@ -60,6 +60,7 @@ import {
     TransactionalEmailRequest,
     TransactionalEmailRequestSchema,
     TransactionalEmailStageTimer,
+    predatesGradedVersion,
     transactionalEmailRequestsTotal,
 } from './services/hogflows/transactional-email'
 import { InvocationResultsService } from './services/invocation-results.service'
@@ -178,16 +179,17 @@ const transactionalEmailFingerprint = (
 ): string => {
     const templateRequest = [hogFlowId, to, distinct_id, variables]
     return IdempotencyKeys.fingerprint(
-        send ? [...templateRequest, ACCEPTED_SEND_FINGERPRINT_MARKER, withSenderTheCallerChose(send)] : templateRequest
+        send ? [...templateRequest, ACCEPTED_SEND_FINGERPRINT_MARKER, whatTheCallerSent(send)] : templateRequest
     )
 }
 
 type CallerChosenSender = Partial<NonNullable<AcceptedSend['from']>>
 
-const withSenderTheCallerChose = ({
+const whatTheCallerSent = ({
     from,
+    hogFlowVersion,
     ...send
-}: AcceptedSend): Omit<AcceptedSend, 'from'> & { from?: CallerChosenSender } => ({
+}: AcceptedSend): Omit<AcceptedSend, 'from' | 'hogFlowVersion'> & { from?: CallerChosenSender } => ({
     ...send,
     from: senderTheCallerChose(from),
 })
@@ -1236,9 +1238,15 @@ export class CdpApi {
                 if (!team) {
                     return reply('not_found', 404, { error: 'Team not found' })
                 }
-                const hogFlow = await this.hogFlowManager.getHogFlowCheckingPrimaryOnMiss(req.params.id)
+                const hogFlow = await this.hogFlowManager.getHogFlowCheckingPrimaryOnMiss(
+                    req.params.id,
+                    send?.hogFlowVersion
+                )
                 if (!hogFlow || hogFlow.team_id !== team.id) {
                     return reply('not_found', 404, { error: 'Workflow not found' })
+                }
+                if (predatesGradedVersion(hogFlow, send)) {
+                    return reply('workflow_version_behind', 503, { error: 'workflow_version_behind' })
                 }
                 if (hogFlow.trigger?.type !== 'api') {
                     return reply('not_sendable', 400, { error: 'not_sendable' })
