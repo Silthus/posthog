@@ -502,49 +502,58 @@ describe('EmailService', () => {
             })
 
             it.each([false, true])(
-                'blocks every sandbox send of a blocked organization until the block is removed (isTest=%s)',
+                'a running worker stops sandbox sends within a minute of a block and resumes within a minute of its removal (isTest=%s)',
                 async (isTest) => {
-                    await hub.postgres.query(
-                        PostgresUse.COMMON_WRITE,
-                        `INSERT INTO workflows_sandboxsenderorganizationblock (organization_id, reason, created_at)
-                         VALUES ($1, 'Abuse report', now())`,
-                        [team.organization_id],
-                        'test:block-sandbox-organization'
-                    )
-                    service = createSandboxService(true)
+                    const setBlocked = (blocked: boolean): Promise<unknown> =>
+                        hub.postgres.query(
+                            PostgresUse.COMMON_WRITE,
+                            blocked
+                                ? `INSERT INTO workflows_sandboxsenderorganizationblock (organization_id, reason, created_at)
+                                   VALUES ($1, 'Abuse report', now())`
+                                : 'DELETE FROM workflows_sandboxsenderorganizationblock WHERE organization_id = $1',
+                            [team.organization_id],
+                            'test:set-sandbox-organization-block'
+                        )
+                    const sendAt = (time: number) => {
+                        clock.mockReturnValue(time)
+                        invocation.state.vmState = { stack: [] } as any
+                        return service.executeSendEmail(invocation, isTest)
+                    }
+                    const now = Date.now()
+                    const clock = jest.spyOn(Date, 'now').mockReturnValue(now)
+                    try {
+                        service = createSandboxService(true)
+                        await sendAt(now)
+                        expect(sendEmailSpy).toHaveBeenCalledTimes(1)
 
-                    const blocked = await service.executeSendEmail(invocation, isTest)
+                        await setBlocked(true)
+                        const blocked = await sendAt(now + 61_000)
 
-                    expect(sendEmailSpy).not.toHaveBeenCalled()
-                    expect(blocked).toMatchObject({ finished: true, skipped: true, metrics: [] })
-                    expect(blocked.invocation.state.vmState?.stack).toEqual([{ success: false }])
-                    expect(blocked.logs).toContainEqual(
-                        expect.objectContaining({
-                            level: 'info',
-                            message:
-                                'Skipping send: the sandbox sender is turned off for this organization. Contact support to find out why.',
-                        })
-                    )
-                    expect(capture).toHaveBeenCalledWith(
-                        expect.objectContaining({ id: team.id }),
-                        'workflows sandbox email blocked',
-                        { reason: 'organization_blocked', is_test: isTest, blocked_recipient_count: 0 }
-                    )
+                        expect(sendEmailSpy).toHaveBeenCalledTimes(1)
+                        expect(blocked).toMatchObject({ finished: true, skipped: true, metrics: [] })
+                        expect(blocked.invocation.state.vmState?.stack).toEqual([{ success: false }])
+                        expect(blocked.logs).toContainEqual(
+                            expect.objectContaining({
+                                level: 'info',
+                                message:
+                                    'Skipping send: the sandbox sender is turned off for this organization. Contact support to find out why.',
+                            })
+                        )
+                        expect(capture).toHaveBeenCalledWith(
+                            expect.objectContaining({ id: team.id }),
+                            'workflows sandbox email blocked',
+                            { reason: 'organization_blocked', is_test: isTest, blocked_recipient_count: 0 }
+                        )
 
-                    await hub.postgres.query(
-                        PostgresUse.COMMON_WRITE,
-                        'DELETE FROM workflows_sandboxsenderorganizationblock WHERE organization_id = $1',
-                        [team.organization_id],
-                        'test:unblock-sandbox-organization'
-                    )
-                    service = createSandboxService(true)
-                    invocation.state.vmState = { stack: [] } as any
+                        await setBlocked(false)
+                        const unblocked = await sendAt(now + 122_000)
 
-                    const unblocked = await service.executeSendEmail(invocation, isTest)
-
-                    expect(unblocked.error).toBeUndefined()
-                    expect(unblocked.skipped).not.toBe(true)
-                    expect(sendEmailSpy).toHaveBeenCalledTimes(1)
+                        expect(unblocked.error).toBeUndefined()
+                        expect(unblocked.skipped).not.toBe(true)
+                        expect(sendEmailSpy).toHaveBeenCalledTimes(2)
+                    } finally {
+                        clock.mockRestore()
+                    }
                 }
             )
 
