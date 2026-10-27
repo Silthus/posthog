@@ -6731,7 +6731,7 @@ class TestHogFlowSendOnceVerified(APIBaseTest):
         flow = HogFlow.objects.get(pk=flow_id)
         verified = self._email_flow(self._sender(verified=True))
         flow.draft = {"actions": verified["actions"], "edges": [], "trigger": flow.trigger}
-        flow.draft_updated_at = timezone.now()
+        flow.draft_updated_at = flow.updated_at
         flow.save(update_fields=["draft", "draft_updated_at"])
 
         with patch(

@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
@@ -27,6 +27,8 @@ from products.workflows.backend.models import HogFlow
 from products.workflows.backend.services.email_sender_verification import EmailSenderVerification
 from products.workflows.backend.services.integration_usage import lock_unverified_senders
 from products.workflows.backend.tasks.waiting_workflows import enable_waiting_workflows_task
+
+ENABLED_AT = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
 
 
 class TestEmailSenderVerification(APIBaseTest):
@@ -407,7 +409,7 @@ class TestVerifiedSenderTakesWaitingWorkflowsLive(APIBaseTest):
                 {"id": "trigger_node", "name": "Trigger", "type": "trigger", "config": {"type": "event"}},
                 *email_steps,
             ],
-            enable_requested_at=timezone.now(),
+            enable_requested_at=ENABLED_AT,
             enable_requested_by=self.user,
         )
         return str(flow.id)
@@ -444,7 +446,7 @@ class TestVerifiedSenderTakesWaitingWorkflowsLive(APIBaseTest):
     ) -> None:
         sender = self._sender("example.com")
         other_senders = [self._sender("other.example.com")] if second_sender else []
-        enabled_at = timezone.now()
+        enabled_at = ENABLED_AT
         with time_machine.travel(enabled_at, tick=False):
             flow_id = self._waiting_flow(sender, *other_senders)
         if turned_off:
