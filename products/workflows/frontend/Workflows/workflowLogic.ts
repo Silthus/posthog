@@ -311,6 +311,7 @@ function applyWorkflowLifecycle(
 /** The email domain setup opened over the workflow, for one sender or for a new domain. */
 interface SenderDomainSetup {
     integrationId: number | null
+    filledEmptySenders: boolean
 }
 
 /** What a save was dispatched with, kept per save because a later save moves the shared state. */
@@ -324,6 +325,7 @@ interface SaveContext {
     // A status change made while the form had unsaved edits. The edits stay in the form, unsaved.
     keepsFormEdits: boolean
     enablesWorkflow: boolean
+    editVersion: number
 }
 
 /** The schedule editor state, kept across a status change so unsaved schedule edits survive it. */
@@ -448,6 +450,15 @@ export interface workflowLogicActions {
         value: true
     }
     enableFromSenderDomainSetup: () => {
+        value: true
+    }
+    fillEmptySendersFromDomainSetup: (integrationId: number) => {
+        integrationId: number
+    }
+    emptySendersFilledFromDomainSetup: () => {
+        value: true
+    }
+    flushAutoSave: () => {
         value: true
     }
     loadIntegrations: () => {
@@ -3440,6 +3451,9 @@ export const workflowLogic = kea<workflowLogicType>([
         openSenderDomainSetup: (integrationId: number | null) => ({ integrationId }),
         closeSenderDomainSetup: true,
         enableFromSenderDomainSetup: true,
+        fillEmptySendersFromDomainSetup: (integrationId: number) => ({ integrationId }),
+        emptySendersFilledFromDomainSetup: true,
+        flushAutoSave: true,
         dismissStartedSendingNotice: true,
         setStartedSendingNoticeDismissed: (noticeKey: string) => ({ noticeKey }),
         checkWaitingStatus: true,
@@ -3553,6 +3567,7 @@ export const workflowLogic = kea<workflowLogicType>([
                     const keepsFormEdits = cache.nextSaveKeepsFormEdits === true
                     const saveContext: SaveContext = {
                         initiatedByAutoSave,
+                        editVersion: values.workflowEditVersion,
                         // A status change keeps schedule edits unsaved, like the other edits in the form.
                         pendingSchedule: keepsFormEdits ? false : values.pendingSchedule,
                         moveToBroadcastIds: (cache.nextSaveMovesWorkflowIds ?? []) as string[],
@@ -3984,7 +3999,8 @@ export const workflowLogic = kea<workflowLogicType>([
         senderDomainSetup: [
             null as SenderDomainSetup | null,
             {
-                openSenderDomainSetup: (_, { integrationId }) => ({ integrationId }),
+                openSenderDomainSetup: (_, { integrationId }) => ({ integrationId, filledEmptySenders: false }),
+                emptySendersFilledFromDomainSetup: (setup) => setup && { ...setup, filledEmptySenders: true },
                 closeSenderDomainSetup: () => null,
                 enableFromSenderDomainSetup: () => null,
             },
@@ -4771,6 +4787,18 @@ export const workflowLogic = kea<workflowLogicType>([
             actions.loadIntegrations()
             actions.saveWorkflowPartial({ status: 'active' })
         },
+        fillEmptySendersFromDomainSetup: ({ integrationId }) => {
+            const { workflow, filled } = withEmailSender(values.workflow, integrationId)
+            if (!filled) {
+                return
+            }
+            actions.setWorkflowValues({ actions: workflow.actions })
+            actions.emptySendersFilledFromDomainSetup()
+            // pinned: analytics event name
+            posthog.capture('email sender preselected', { surface: 'workflow', reason: 'created_in_domain_setup' })
+            // Saved now rather than after the auto-save pause, so the setup can offer to enable the workflow.
+            actions.flushAutoSave()
+        },
         closeSenderDomainSetup: async () => {
             actions.loadIntegrations()
             if (!props.id || props.id === 'new') {
@@ -4825,9 +4853,6 @@ export const workflowLogic = kea<workflowLogicType>([
             if (values.startedSendingNoticeKey) {
                 actions.setStartedSendingNoticeDismissed(values.startedSendingNoticeKey)
             }
-        },
-        saveWorkflow: () => {
-            cache.saveEditVersion = values.workflowEditVersion
         },
         saveWorkflowFailure: () => {
             // Keep the queue aligned with the saves still in flight.
@@ -4972,7 +4997,7 @@ export const workflowLogic = kea<workflowLogicType>([
             // form on the merged view, or the reset would wipe the just-saved edits off the canvas.
             const editedDuringSave =
                 !!saveContext?.keepsFormEdits ||
-                (cache.saveEditVersion !== undefined && values.workflowEditVersion !== cache.saveEditVersion)
+                (!!saveContext && values.workflowEditVersion !== saveContext.editVersion)
             const editsDuringSave = editedDuringSave ? pickWorkflowEdits(values.workflow) : null
             const scheduleEdits: ScheduleEdits | null = saveContext?.keepsFormEdits
                 ? {
@@ -5097,7 +5122,9 @@ export const workflowLogic = kea<workflowLogicType>([
         },
         autoSaveWorkflow: async (_, breakpoint) => {
             await breakpoint(3000)
-
+            actions.flushAutoSave()
+        },
+        flushAutoSave: () => {
             // Active workflows auto-save too: their content edits route into the staged draft
             // (stage_draft in the saveWorkflow loader), so nothing deploys without an explicit publish.
             const shouldSkip =

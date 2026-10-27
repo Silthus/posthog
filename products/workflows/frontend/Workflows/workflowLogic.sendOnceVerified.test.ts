@@ -1,4 +1,5 @@
 import { expectLogic } from 'kea-test-utils'
+import posthog from 'posthog-js'
 
 import { FEATURE_FLAGS } from 'lib/constants'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
@@ -46,6 +47,9 @@ const emailStep = (from: Record<string, unknown>): HogFlow['actions'][number] =>
             },
         },
     }) as HogFlow['actions'][number]
+
+const senderOf = (workflow: Partial<HogFlow>, stepId: string): unknown =>
+    (workflow.actions?.find(({ id }) => id === stepId)?.config as any)?.inputs?.email?.value?.from
 
 const withEmailStep = (workflow: HogFlow, from: Record<string, unknown>): HogFlow => ({
     ...workflow,
@@ -458,7 +462,7 @@ describe('workflowLogic send once verified', () => {
         expect(logic.values.senderDomainNotice).toEqual({ stage: 'no_domain' })
 
         logic.actions.openSenderDomainSetup(null)
-        expect(logic.values.senderDomainSetup).toEqual({ integrationId: null })
+        expect(logic.values.senderDomainSetup).toEqual({ integrationId: null, filledEmptySenders: false })
 
         projectSenders = [PENDING_PROJECT_SENDER]
         await expectLogic(integrationsLogic, () => {
@@ -469,6 +473,109 @@ describe('workflowLogic send once verified', () => {
             stage: 'unverified',
             domains: ['example.com'],
             integrationId: 7,
+        })
+    })
+
+    describe('a sender created in the domain setup', () => {
+        const CREATED_SENDER_ID = 9
+
+        const withEmailSteps = (...senders: Record<string, unknown>[]): HogFlow => {
+            const workflow = makeWorkflow()
+            const steps = senders.map((from, index) => ({ ...emailStep(from), id: `email_${index}` }))
+            return { ...workflow, actions: [workflow.actions[0], ...steps, workflow.actions[1]] }
+        }
+
+        it('fills only the steps without a sender, and saves them with the unsaved edits', async () => {
+            await mountWith(withEmailSteps({}, { integrationId: 8 }, {}), { senders: [VERIFIED_PROJECT_SENDER] })
+            logic.actions.openSenderDomainSetup(null)
+            logic.actions.setWorkflowValue('name', 'Welcome, renamed')
+            const capture = jest.spyOn(posthog, 'capture')
+            useMocks({
+                patch: {
+                    '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => {
+                        const body = (await request.json()) as Partial<HogFlow>
+                        patchBodies.push(body)
+                        storedWorkflow = { ...storedWorkflow, ...body, updated_at: '2026-05-04T00:00:00.000Z' }
+                        return [200, storedWorkflow]
+                    },
+                },
+            })
+
+            await expectLogic(logic, () => {
+                logic.actions.fillEmptySendersFromDomainSetup(CREATED_SENDER_ID)
+            })
+                .toDispatchActions(['saveWorkflowSuccess'])
+                .toFinishAllListeners()
+
+            expect(patchBodies).toHaveLength(1)
+            expect(logic.values.senderDomainSetup?.filledEmptySenders).toBe(true)
+            expect(logic.values.hasUnsavedChanges).toBe(false)
+            expect(logic.values.workflow.name).toEqual('Welcome, renamed')
+            expect(['email_0', 'email_1', 'email_2'].map((id) => senderOf(logic.values.workflow, id))).toEqual([
+                { integrationId: CREATED_SENDER_ID },
+                { integrationId: 8 },
+                { integrationId: CREATED_SENDER_ID },
+            ])
+            expect(capture).toHaveBeenCalledWith('email sender preselected', {
+                surface: 'workflow',
+                reason: 'created_in_domain_setup',
+            })
+        })
+
+        it('keeps the fill when it saves behind an earlier save and its own save fails', async () => {
+            await mountWith(withEmailSteps({}), { senders: [VERIFIED_PROJECT_SENDER] })
+            logic.actions.openSenderDomainSetup(null)
+            let releaseFirstSave!: () => void
+            const firstSaveHeld = new Promise<void>((resolve) => {
+                releaseFirstSave = resolve
+            })
+            useMocks({
+                patch: {
+                    '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => {
+                        const body = (await request.json()) as Partial<HogFlow>
+                        patchBodies.push(body)
+                        if (patchBodies.length === 1) {
+                            await firstSaveHeld
+                        }
+                        if (patchBodies.length === 2) {
+                            return [500, { detail: 'Server error' }]
+                        }
+                        storedWorkflow = {
+                            ...storedWorkflow,
+                            ...body,
+                            updated_at: `2026-05-0${patchBodies.length + 3}`,
+                        }
+                        return [200, storedWorkflow]
+                    },
+                },
+            })
+            logic.actions.setWorkflowValue('name', 'Welcome, renamed')
+            logic.actions.flushAutoSave()
+            await expectLogic(logic).toDispatchActions(['saveWorkflow'])
+
+            logic.actions.fillEmptySendersFromDomainSetup(CREATED_SENDER_ID)
+            releaseFirstSave()
+            await expectLogic(logic).toDispatchActions(['saveWorkflowSuccess', 'saveWorkflowFailure'])
+
+            expect(senderOf(logic.values.workflow, 'email_0')).toEqual({ integrationId: CREATED_SENDER_ID })
+            expect(logic.values.hasUnsavedChanges).toBe(true)
+        })
+
+        it.each([
+            ['one sender', { integrationId: 8 }],
+            ['a sender rotation', { integrationIds: [8, 7] }],
+        ])('leaves a workflow whose steps all have %s alone', async (_name, from) => {
+            await mountWith(withEmailSteps(from), { senders: [VERIFIED_PROJECT_SENDER] })
+            logic.actions.openSenderDomainSetup(null)
+
+            await expectLogic(logic, () => {
+                logic.actions.fillEmptySendersFromDomainSetup(CREATED_SENDER_ID)
+            })
+                .toFinishAllListeners()
+                .toNotHaveDispatchedActions(['saveWorkflow'])
+                .toMatchValues({ hasUnsavedChanges: false })
+            expect(patchBodies).toEqual([])
+            expect(logic.values.senderDomainSetup?.filledEmptySenders).toBe(false)
         })
     })
 
