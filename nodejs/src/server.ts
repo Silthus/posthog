@@ -252,7 +252,8 @@ export class PluginServer implements NodeServer {
                             ? {
                                   emailValidationValkey: createSesRateLimiterValkeyPool(
                                       this.config,
-                                      'email-mx-validation'
+                                      'email-mx-validation',
+                                      { optional: true }
                                   ),
                               }
                             : {}),

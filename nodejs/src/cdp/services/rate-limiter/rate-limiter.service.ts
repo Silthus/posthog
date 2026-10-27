@@ -326,6 +326,8 @@ export interface RateLimiterConfig {
     name: string
 }
 
+export type IssuedClaim = { granted: true; claimId: string; returnBy: number }
+
 export interface ClaimRequest {
     key: string
     requested: number
@@ -448,7 +450,7 @@ export class RateLimiterService {
     // All bucket keys must share a hash tag because clustered Valkey rejects cross-slot Lua calls.
     public async claimAllOrNothing(
         buckets: ClaimRequest[]
-    ): Promise<{ granted: true } | { granted: false; deniedIndexes: number[] | null }> {
+    ): Promise<IssuedClaim | { granted: false; deniedIndexes: number[] | null }> {
         const endTimer = claimLatency.startTimer({ limiter: this.config.name })
         const keys = buckets.map((bucket) => bucket.key)
         const claimId = randomUUID()
@@ -473,7 +475,7 @@ export class RateLimiterService {
             )
             if (Array.isArray(result) && result.length === 1 && result[0] === 1) {
                 claimCounter.inc({ limiter: this.config.name, result: 'granted_full' })
-                return { granted: true }
+                return { granted: true, claimId, returnBy: deadline }
             }
             if (
                 Array.isArray(result) &&
@@ -577,7 +579,10 @@ export class RateLimiterService {
         }
     }
 
-    public async returnClaim(claimId: string, buckets: Pick<ClaimRequest, 'key' | 'requested'>[]): Promise<void> {
+    public async returnClaim(
+        claim: Pick<IssuedClaim, 'claimId' | 'returnBy'>,
+        buckets: Pick<ClaimRequest, 'key' | 'requested'>[]
+    ): Promise<void> {
         const keys = buckets.map((bucket) => bucket.key)
         try {
             await this.valkey.useClient(
@@ -587,9 +592,9 @@ export class RateLimiterService {
                         RETURN_CLAIM_LUA,
                         buckets.length + 1,
                         ...keys,
-                        `${keys[0]}/returned/${claimId}`,
+                        `${keys[0]}/returned/${claim.claimId}`,
                         ...buckets.map((bucket) => String(bucket.requested)),
-                        String(Date.now() + RETURN_WINDOW_MS),
+                        String(claim.returnBy),
                         String(2 * RETURN_WINDOW_MS)
                     )
             )
