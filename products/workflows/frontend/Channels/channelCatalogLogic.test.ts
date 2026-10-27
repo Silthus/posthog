@@ -111,6 +111,42 @@ describe('sandbox setup in the channel catalog', () => {
         expect(screen.getByText(/Couldn't refresh your channels/)).toBeInTheDocument()
     })
 
+    it('ignores a setup failure from an earlier visit after Channels opens again', async () => {
+        let failFirstRequest: () => void = () => {}
+        let requests = 0
+        const sandbox = { id: 9, kind: 'email', config: { provider: 'sandbox', verified: true } }
+        useMocks({
+            get: { '/api/projects/:team_id/integrations/': () => [200, { results: requests > 1 ? [sandbox] : [] }] },
+            post: {
+                '/api/projects/:team_id/integrations/email_sandbox_sender/': () => {
+                    requests++
+                    if (requests > 1) {
+                        return [200, sandbox]
+                    }
+                    return new Promise((resolve) => {
+                        failFirstRequest = () => resolve([500, { detail: 'Could not set up your sandbox sender.' }])
+                    })
+                },
+            },
+        })
+        featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER], {
+            [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,
+        })
+        logic = channelCatalogLogic()
+        logic.mount()
+        await waitFor(() => expect(requests).toBe(1))
+        logic.unmount()
+
+        logic = channelCatalogLogic()
+        logic.mount()
+        await waitFor(() => expect(integrationsLogic.values.sandboxEmailSender).not.toBeNull())
+        failFirstRequest()
+        await expectLogic(logic).toFinishAllListeners()
+
+        expect(requests).toBe(2)
+        expect(logic.values.sandboxSetupError).toBeNull()
+    })
+
     it.each([
         { when: 'the flag is on at mount', flagAtMount: true },
         { when: 'the flag arrives after mount', flagAtMount: false },
