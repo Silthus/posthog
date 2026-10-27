@@ -1,6 +1,6 @@
 import { useValues } from 'kea'
 import posthog from 'posthog-js'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { IconExternal } from '@posthog/icons'
 import { LemonButton, LemonModal, LemonSkeleton } from '@posthog/lemon-ui'
@@ -11,7 +11,7 @@ import { IntegrationType } from '~/types'
 
 import { BindEmailDomainLogics } from './BindEmailDomainLogics'
 import { AgentHandoffModal } from './components/AgentHandoffModal'
-import { emailDomainLogic } from './emailDomainLogic'
+import { EmailDomainPhase, emailDomainLogic } from './emailDomainLogic'
 import { DomainStep } from './steps/DomainStep'
 import { ReadyStep } from './steps/ReadyStep'
 import { SettingsStep } from './steps/SettingsStep'
@@ -27,6 +27,20 @@ export interface EmailDomainSetupModalProps {
 
 function ModalStep(): JSX.Element {
     const { phase } = useValues(emailDomainLogic)
+    const stepTop = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        stepTop.current?.scrollIntoView({ block: 'start' })
+    }, [phase])
+
+    return (
+        <div ref={stepTop}>
+            <CurrentModalStep phase={phase} />
+        </div>
+    )
+}
+
+function CurrentModalStep({ phase }: { phase: EmailDomainPhase }): JSX.Element {
     switch (phase) {
         case 'unavailable':
             return <UnavailableStep />
