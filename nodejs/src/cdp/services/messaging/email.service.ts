@@ -485,6 +485,18 @@ export class EmailService {
                 )
             }
 
+            // The sandbox sender has no delivery route in this worker yet, so a send through it
+            // must skip with a reason instead of falling through the provider switch as a success.
+            if (integration.config.provider === 'sandbox') {
+                const skipReason =
+                    "Skipping send: the sandbox sender can't send email yet. Choose a sender on your own verified domain in this email step."
+                addLog('warn', skipReason)
+                result.emailSendResult = { status: 'skipped', reason: skipReason }
+                result.skipped = true
+                result.invocation.state.vmState?.stack.push({ success: false })
+                return result
+            }
+
             const from = this.resolveFromSender(integration, params.from, addLog)
 
             // An empty `to` comes from the customer's data (a person without an email property, or no
