@@ -6726,6 +6726,29 @@ class TestHogFlowSendOnceVerified(APIBaseTest):
         assert response.json()["went_live_at"] is not None
         assert [event["activated_by"] for event in self._activated_events()] == ["user"]
 
+    def test_publishing_a_draft_to_a_verified_sender_takes_a_waiting_workflow_live(self):
+        flow_id = self._waiting_flow()
+        flow = HogFlow.objects.get(pk=flow_id)
+        verified = self._email_flow(self._sender(verified=True))
+        flow.draft = {"actions": verified["actions"], "edges": [], "trigger": flow.trigger}
+        flow.draft_updated_at = timezone.now()
+        flow.save(update_fields=["draft", "draft_updated_at"])
+
+        with patch(
+            "products.workflows.backend.presentation.views.hog_flow.get_hog_flow_in_flight_count",
+            return_value=MagicMock(status_code=200, json=lambda: {"count": 0, "by_action": {}, "position_unknown": 0}),
+        ):
+            preview = self.client.post(f"/api/projects/{self.team.id}/hog_flows/{flow_id}/publish", {})
+        assert preview.status_code == 200, preview.json()
+        response = self.client.post(
+            f"/api/projects/{self.team.id}/hog_flows/{flow_id}/publish",
+            {"confirm": True, "confirm_token": preview.json()["confirm_token"]},
+        )
+
+        assert response.status_code == 200, response.json()
+        assert response.json()["workflow"]["status"] == "active"
+        assert [event["activated_by"] for event in self._activated_events()] == ["user"]
+
     def test_an_edit_that_would_fail_activation_is_refused_on_a_waiting_workflow(self):
         flow_id = self._waiting_flow()
         edited = self._email_flow(self._sender(verified=True))
