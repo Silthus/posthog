@@ -1,7 +1,7 @@
 import { useValues } from 'kea'
 
 import { IconCheck, IconWarning } from '@posthog/icons'
-import { LemonCollapse } from '@posthog/lemon-ui'
+import { LemonCard, LemonCollapse } from '@posthog/lemon-ui'
 
 import { DnsRecordRows } from '../components/DnsRecordRows'
 import { NextWorkflowCard } from '../components/NextWorkflowCard'
@@ -19,7 +19,7 @@ export function ReadyStep(): JSX.Element {
     const host = hostName ?? 'your DNS host'
     return (
         <div className="flex flex-col gap-8">
-            <div className="rounded-xl border border-success bg-success-highlight p-6 @md:p-8">
+            <LemonCard hoverEffect={false} className="border-success bg-success-highlight @md:p-8">
                 <StepHeading
                     Hoggie={HedgehogRocket}
                     title={
@@ -33,7 +33,7 @@ export function ReadyStep(): JSX.Element {
                             : `The email provider verified this domain. ${foundCount} of ${records.length} settings are in place, so add the rest at ${host}.`
                     }
                 />
-            </div>
+            </LemonCard>
             <SenderCard />
             <LemonCollapse
                 defaultActiveKey={allRecordsFound ? undefined : 'records'}

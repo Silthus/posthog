@@ -11,7 +11,7 @@ import { FirstWorkflowChoices } from './FirstWorkflowChoices'
 export function NextWorkflowCard(): JSX.Element {
     const { domain, senderName, fromAddress, isFirstVerifiedSender } = useValues(emailDomainSenderLogic)
     return (
-        <section className="rounded-xl border border-accent bg-accent-highlight-secondary p-6 @md:p-8 flex flex-col gap-5">
+        <section className="flex flex-col gap-5">
             <div className="flex items-start gap-4">
                 <HedgehogMailbox className="w-20 shrink-0" />
                 <div className="flex flex-col gap-1 min-w-0">
