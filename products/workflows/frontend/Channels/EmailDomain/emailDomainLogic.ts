@@ -1,4 +1,5 @@
-import { MakeLogicType, actions, afterMount, connect, kea, key, listeners, path, props, selectors } from 'kea'
+import { MakeLogicType, actions, afterMount, connect, kea, key, listeners, path, props, reducers, selectors } from 'kea'
+import { subscriptions } from 'kea-subscriptions'
 
 import { organizationLogic } from 'scenes/organizationLogic'
 import { Scene } from 'scenes/sceneTypes'
@@ -20,6 +21,18 @@ import { emailDomainSenderLogic } from './emailDomainSenderLogic'
 import { emailDomainStatusLogic } from './emailDomainStatusLogic'
 
 export type EmailDomainPhase = 'domain' | 'loading' | 'unavailable' | 'settings' | 'verifying' | 'ready'
+
+export type EmailDomainSetupStep = Extract<EmailDomainPhase, 'domain' | 'settings' | 'verifying' | 'ready'>
+
+const SETUP_STEPS_IN_ORDER: EmailDomainSetupStep[] = ['domain', 'settings', 'verifying', 'ready']
+
+const isSetupStep = (phase: EmailDomainPhase): phase is EmailDomainSetupStep =>
+    (SETUP_STEPS_IN_ORDER as EmailDomainPhase[]).includes(phase)
+
+const furtherStepOf = (furthest: EmailDomainSetupStep, phase: EmailDomainPhase): EmailDomainSetupStep =>
+    isSetupStep(phase) && SETUP_STEPS_IN_ORDER.indexOf(phase) > SETUP_STEPS_IN_ORDER.indexOf(furthest)
+        ? phase
+        : furthest
 
 export interface VerificationStep {
     key: 'domain_added' | 'records_found' | 'verified'
@@ -144,6 +157,7 @@ export interface emailDomainLogicValues {
     statusLoading: boolean // emailDomainStatusLogic
     statusUnavailable: boolean // emailDomainStatusLogic
     currentOrganization: OrganizationType | null // organizationLogic
+    furthestStep: EmailDomainSetupStep
     breadcrumbs: Breadcrumb[]
     offersDataSuggestions: boolean
     phase: EmailDomainPhase
@@ -166,6 +180,9 @@ export interface emailDomainLogicActions {
     } // organizationLogic
     preloadDataSuggestions: () => {
         value: true
+    }
+    reachPhase: (phase: EmailDomainPhase) => {
+        phase: EmailDomainPhase
     }
     retry: () => {
         value: true
@@ -247,6 +264,15 @@ export const emailDomainLogic = kea<emailDomainLogicType>([
     actions({
         retry: true,
         preloadDataSuggestions: true,
+        reachPhase: (phase: EmailDomainPhase) => ({ phase }),
+    }),
+    reducers({
+        furthestStep: [
+            'domain' as EmailDomainSetupStep,
+            {
+                reachPhase: (furthest, { phase }) => furtherStepOf(furthest, phase),
+            },
+        ],
     }),
     selectors({
         phase: [
@@ -341,6 +367,9 @@ export const emailDomainLogic = kea<emailDomainLogicType>([
                 actions.recheck()
             }
         },
+    })),
+    subscriptions(({ actions }) => ({
+        phase: (phase: EmailDomainPhase) => actions.reachPhase(phase),
     })),
     afterMount(({ actions }) => {
         actions.preloadDataSuggestions()

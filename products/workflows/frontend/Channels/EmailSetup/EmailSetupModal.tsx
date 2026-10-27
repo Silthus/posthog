@@ -22,14 +22,21 @@ import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { EmailDomainSetupModal, EmailDomainSetupModalProps } from '../EmailDomain/EmailDomainSetupModal'
 import { DnsRecord, EmailSetupModalLogicProps, emailSetupModalLogic } from './emailSetupModalLogic'
 
-export type EmailSetupModalProps = EmailSetupModalLogicProps & { entry?: EmailDomainSetupModalProps['entry'] }
+export type EmailSetupModalProps = EmailSetupModalLogicProps &
+    Pick<EmailDomainSetupModalProps, 'onSenderCreated'> & { entry?: EmailDomainSetupModalProps['entry'] }
 
-export const EmailSetupModal = ({ entry, ...props }: EmailSetupModalProps): JSX.Element => {
+export const EmailSetupModal = ({ entry, onSenderCreated, ...props }: EmailSetupModalProps): JSX.Element => {
     const { featureFlags } = useValues(featureFlagLogic)
     // A verified sender keeps the settings form, which edits what the wizard does not: reply-to and the bounce subdomain.
     const editsVerifiedSender = props.integration?.config?.verified === true
     if (featureFlags[FEATURE_FLAGS.WORKFLOWS_EMAIL_DOMAIN_WIZARD] && !editsVerifiedSender) {
-        return <EmailDomainSetupModal {...props} entry={entry ?? (props.integration ? 'configure' : 'channels')} />
+        return (
+            <EmailDomainSetupModal
+                {...props}
+                entry={entry ?? (props.integration ? 'configure' : 'channels')}
+                onSenderCreated={onSenderCreated}
+            />
+        )
     }
     return <LegacyEmailSetupModal {...props} />
 }

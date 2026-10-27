@@ -1,6 +1,6 @@
 import { useValues } from 'kea'
 import posthog from 'posthog-js'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { IconExternal } from '@posthog/icons'
 import { LemonButton, LemonModal, LemonSkeleton } from '@posthog/lemon-ui'
@@ -9,6 +9,7 @@ import { urls } from 'scenes/urls'
 
 import { IntegrationType } from '~/types'
 
+import { EmailSetupSurface, captureEmailDomainSetupClosed } from '../EmailSetup/emailSetupModalLogic'
 import { BindEmailDomainLogics } from './BindEmailDomainLogics'
 import { AgentHandoffModal } from './components/AgentHandoffModal'
 import { emailDomainLogic } from './emailDomainLogic'
@@ -21,8 +22,10 @@ import { VerifyingStep } from './steps/VerifyingStep'
 export interface EmailDomainSetupModalProps {
     integration?: IntegrationType | null
     entry: 'channels' | 'broadcast' | 'configure'
+    surface: EmailSetupSurface
     onComplete: (integrationId?: number) => void
     onClose: (savedIntegrationId?: number) => void
+    onSenderCreated?: (integrationId: number) => void
 }
 
 function ModalStep(): JSX.Element {
@@ -70,13 +73,32 @@ function ModalSettings({
     )
 }
 
+function useReportSetupClosedOnUnmount(integrationId: number | null, surface: EmailSetupSurface): void {
+    const { furthestStep } = useValues(emailDomainLogic({ id: integrationId ? String(integrationId) : 'new' }))
+    const furthestStepRef = useRef(furthestStep)
+    furthestStepRef.current = furthestStep
+
+    useEffect(
+        () => () =>
+            captureEmailDomainSetupClosed({
+                furthestStep: furthestStepRef.current,
+                surface,
+                completed: furthestStepRef.current === 'ready',
+            }),
+        [surface]
+    )
+}
+
 export function EmailDomainSetupModal({
     integration,
     entry,
+    surface,
     onComplete,
     onClose,
+    onSenderCreated,
 }: EmailDomainSetupModalProps): JSX.Element {
     const [integrationId, setIntegrationId] = useState<number | null>(integration?.id ?? null)
+    useReportSetupClosedOnUnmount(integrationId, surface)
 
     useEffect(() => {
         // pinned: analytics event name
@@ -99,7 +121,13 @@ export function EmailDomainSetupModal({
                 />
             ) : (
                 <div className="@container">
-                    <DomainStep logicKey="modal" onCreated={(created) => setIntegrationId(created.id)} />
+                    <DomainStep
+                        logicKey="modal"
+                        onCreated={(created) => {
+                            setIntegrationId(created.id)
+                            onSenderCreated?.(created.id)
+                        }}
+                    />
                 </div>
             )}
         </LemonModal>
