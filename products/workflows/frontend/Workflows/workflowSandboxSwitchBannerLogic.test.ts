@@ -111,6 +111,7 @@ describe('workflowSandboxSwitchBannerLogic', () => {
     let successToast: jest.SpyInstance
     let savedWorkflow: HogFlow
     let integrationsPayload: unknown[]
+    let savedPatch: Partial<HogFlow> & { stage_draft?: boolean }
 
     const setSandboxFlag = (enabled: boolean): void => {
         featureFlagLogic.actions.setFeatureFlags(
@@ -154,10 +155,10 @@ describe('workflowSandboxSwitchBannerLogic', () => {
                 '/api/projects/:team_id/hog_function_templates/': () => new Promise(() => {}),
             },
             patch: {
-                '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => [
-                    200,
-                    { ...savedWorkflow, ...((await request.json()) as Partial<HogFlow>) },
-                ],
+                '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => {
+                    savedPatch = (await request.json()) as typeof savedPatch
+                    return [200, { ...savedWorkflow, ...savedPatch }]
+                },
             },
         })
         capture = jest.spyOn(posthog, 'capture').mockImplementation()
@@ -165,6 +166,7 @@ describe('workflowSandboxSwitchBannerLogic', () => {
     })
 
     afterEach(() => {
+        jest.useRealTimers()
         logic?.unmount()
         featureFlagLogic.actions.setFeatureFlags([], {})
         capture.mockRestore()
@@ -285,19 +287,31 @@ describe('workflowSandboxSwitchBannerLogic', () => {
     })
 
     it.each([
-        ['active', 'Updated 1\u00a0email step to hello@acme.example.com. Publish the changes to use this sender.'],
-        ['draft', 'Updated 1\u00a0email step to hello@acme.example.com.'],
-    ] as const)('explains what remains after switching a %s workflow', async (status, confirmation) => {
-        await mountWith({
-            steps: [emailStep('email_1', { integrationId: SANDBOX_SENDER_ID })],
-            integrations: [SANDBOX_SENDER, OWN_SENDER],
-            status,
-        })
+        [
+            'active',
+            true,
+            'Updated 1\u00a0email step to hello@acme.example.com. Publish the changes to use this sender.',
+        ],
+        ['draft', false, 'Updated 1\u00a0email step to hello@acme.example.com.'],
+    ] as const)(
+        'saves the switch for a workflow in %s status and explains what remains',
+        async (status, stagesDraft, confirmation) => {
+            await mountWith({
+                steps: [emailStep('email_1', { integrationId: SANDBOX_SENDER_ID })],
+                integrations: [SANDBOX_SENDER, OWN_SENDER],
+                status,
+            })
+            jest.useFakeTimers()
 
-        logic.actions.switchToOwnSender(OWN_SENDER_ID)
+            logic.actions.switchToOwnSender(OWN_SENDER_ID)
+            await jest.advanceTimersByTimeAsync(3500)
+            await expectLogic(workflowLogic({ id: WORKFLOW_ID })).toDispatchActions(['saveWorkflowSuccess'])
 
-        expect(successToast).toHaveBeenCalledWith(confirmation)
-    })
+            expect(senderOf(savedPatch as HogFlow, 'email_1')).toEqual({ integrationId: OWN_SENDER_ID })
+            expect(savedPatch.stage_draft === true).toBe(stagesDraft)
+            expect(successToast).toHaveBeenCalledWith(confirmation)
+        }
+    )
 
     it('lets the user pick the own sender when several are verified', async () => {
         await mountWith({
