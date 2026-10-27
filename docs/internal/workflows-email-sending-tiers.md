@@ -110,6 +110,8 @@ A reached allowance skips the send instead of delaying it. A limiter error, or a
 The worker checks members after the claim and gives the claim back when that check skips the send.
 An SES throttle response also gives the claim back before the delivery retry. Returns are deduplicated, and Valkey ignores a return that arrives more than five minutes after it was issued.
 Test sends run inline in the CDP API, so a sandbox-enabled CDP API opens the SES Valkey pool (`SES_RATE_LIMITER_VALKEY_*`) for the allowances. Without it, every sandbox test send skips.
+Django mirrors the tenant named by `SES_SANDBOX_TENANT_NAME` into `SandboxSenderTenantState` from the SES tenant-state webhook and the daily reconciliation, without emailing project admins. Set the same `SES_SANDBOX_TENANT_NAME` on Django web, Celery, and the worker.
+A committed state change reaches the workers through the `reload-sandbox-sender-state` message.
 Each delivered send emits a `workflows sandbox email sent` event.
 Test sends never record `email_sent`, so they do not count toward the sending tier.
 Live workflow sends still count as `email_sent`, which the sending tier reads, until sandbox sends get their own metric.
