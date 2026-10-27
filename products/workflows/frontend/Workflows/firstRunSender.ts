@@ -85,11 +85,11 @@ export async function withFirstRunSender(
         return { workflow, sender: null }
     }
     const sender = await resolveFirstRunSender(workflow.actions.some((action) => takesSandboxSender(action, workflow)))
-    const takesSender = (action: HogFlowAction): boolean =>
-        sender?.reason === 'sandbox_sender' ? takesSandboxSender(action, workflow) : takesOwnSender(action)
-    if (!sender || !workflow.actions.some(takesSender)) {
+    if (!sender) {
         return { workflow, sender: null }
     }
+    const takesSender = (action: HogFlowAction): boolean =>
+        sender.reason === 'sandbox_sender' ? takesSandboxSender(action, workflow) : takesOwnSender(action)
     return {
         workflow: {
             ...workflow,
