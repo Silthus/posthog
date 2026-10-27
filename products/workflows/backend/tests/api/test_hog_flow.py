@@ -6614,6 +6614,37 @@ class TestHogFlowSendOnceVerified(APIBaseTest):
             assert body["went_live_at"] == body["enable_requested_at"]
             assert [event["activated_by"] for event in self._activated_events()] == ["user"]
 
+    def test_the_detail_lists_unverified_senders_until_they_verify(self):
+        sender = self._sender(verified=False)
+        created = self._create(self._email_flow(sender))
+        assert created.status_code == 201, created.json()
+        detail_url = f"/api/projects/{self.team.id}/hog_flows/{created.json()['id']}"
+
+        assert created.json()["unverified_email_senders"] == [{"id": sender.id, "domain": "example.com"}]
+        assert self.client.get(detail_url).json()["unverified_email_senders"] == [
+            {"id": sender.id, "domain": "example.com"}
+        ]
+        listed = self.client.get(f"/api/projects/{self.team.id}/hog_flows").json()["results"]
+        assert "unverified_email_senders" not in listed[0]
+
+        sender.config = {**sender.config, "verified": True}
+        sender.save()
+
+        assert self.client.get(detail_url).json()["unverified_email_senders"] == []
+
+    @parameterized.expand([("a_string", "not an email object"), ("a_list", ["to", "from"])])
+    def test_a_malformed_email_step_reads_as_having_no_unverified_sender(self, _name, malformed_value):
+        flow_id = self._create_draft(self._sender(verified=False))
+        flow = HogFlow.objects.get(pk=flow_id)
+        actions = deepcopy(flow.actions)
+        actions[1]["config"]["inputs"]["email"]["value"] = malformed_value
+        HogFlow.objects.filter(pk=flow_id).update(actions=actions)
+
+        response = self.client.get(f"/api/projects/{self.team.id}/hog_flows/{flow_id}")
+
+        assert response.status_code == 200, response.json()
+        assert response.json()["unverified_email_senders"] == []
+
     def test_a_sender_rotation_waits_for_its_unverified_sender(self):
         verified, unverified = self._sender(verified=True), self._sender(verified=False)
         payload = self._email_flow(verified)
@@ -6627,6 +6658,7 @@ class TestHogFlowSendOnceVerified(APIBaseTest):
         with self._flag(True):
             response = self._set_status(created.json()["id"], "active")
 
+        assert created.json()["unverified_email_senders"] == [{"id": unverified.id, "domain": "example.com"}]
         assert response.json()["status"] == "waiting_for_domain"
 
     def test_enabling_a_waiting_workflow_again_once_its_sender_verified_activates_it_once(self):

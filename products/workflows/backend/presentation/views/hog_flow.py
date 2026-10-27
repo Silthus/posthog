@@ -3281,6 +3281,11 @@ class HogFlowSummarySerializer(HogFlowMinimalSerializer):
         read_only_fields = fields
 
 
+class HogFlowUnverifiedEmailSenderSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True, help_text="The email sender's integration id.")
+    domain = serializers.CharField(read_only=True, help_text="The sender's domain, which is not verified yet.")
+
+
 class HogFlowSerializer(HogFlowMinimalSerializer):
     origin_product = serializers.ChoiceField(
         choices=HogFlowOriginProduct.choices,
@@ -3468,6 +3473,14 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
         help_text=(
             "When the workflow last went live. Earlier than enable_requested_at, or null, while the workflow "
             "waits for its email sender's domain."
+        ),
+    )
+    unverified_email_senders = HogFlowUnverifiedEmailSenderSerializer(
+        many=True,
+        read_only=True,
+        help_text=(
+            "The email senders of this workflow whose domain is not verified yet. Enabling the workflow while "
+            "this list is not empty makes it wait for those domains. Not returned by the list endpoint."
         ),
     )
 
@@ -3665,6 +3678,7 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             "email_sending_resumed_at",
             "enable_requested_at",
             "went_live_at",
+            "unverified_email_senders",
             "last_run",
             "tags",
         ]
@@ -3692,6 +3706,7 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             "email_sending_resumed_at",
             "enable_requested_at",
             "went_live_at",
+            "unverified_email_senders",
             "last_run",
         ]
 

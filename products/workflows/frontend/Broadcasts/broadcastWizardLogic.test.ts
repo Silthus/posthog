@@ -67,6 +67,7 @@ function savedBroadcast(overrides: { name: string; subject: string; updatedAt: s
         email_sending_resumed_at: null,
         enable_requested_at: null,
         went_live_at: null,
+        unverified_email_senders: [],
     }
 }
 

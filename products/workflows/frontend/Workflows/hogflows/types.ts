@@ -6,7 +6,7 @@ import { EmailFieldErrors } from 'scenes/hog-functions/email-templater/types'
 
 import { AccessControlLevel, UserBasicType } from '~/types'
 
-import { HogFlowOriginProductEnumApi } from '../../generated/api.schemas'
+import { HogFlowOriginProductEnumApi, HogFlowUnverifiedEmailSenderApi } from '../../generated/api.schemas'
 import { CyclotronJobInputSchemaTypeSchema, HogFlowActionSchema, HogFlowTriggerSchema } from './steps/types'
 
 const HogFlowEdgeSchema = z.object({
@@ -112,6 +112,8 @@ export interface HogFlow extends z.infer<typeof HogFlowSchema> {
     enable_requested_at?: string | null
     // Later than enable_requested_at when the workflow went live after waiting for its email domain.
     went_live_at?: string | null
+    // Senders whose domain is not verified yet. Only a single-workflow read carries it, not the list.
+    unverified_email_senders?: HogFlowUnverifiedEmailSenderApi[]
     // Suggested changes waiting for a person. Only the list endpoint counts it.
     pending_suggestions?: number | null
     suggestions_enabled?: boolean | null
