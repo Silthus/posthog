@@ -303,10 +303,11 @@ class EmailIntegration:
 
             if verifies_this_sender:
                 set_default_email_sender_if_unset(self.integration.team_id, self.integration.id)
-            enable_waiting_workflows(team_id=self.integration.team_id, sender_ids=sender_ids)
 
         if sender_ids:
             self._reload_senders_on_workers(sender_ids)
+            # After the reload, so a workflow never goes live while workers still hold its sender as unverified.
+            enable_waiting_workflows(team_id=self.integration.team_id, sender_ids=sender_ids)
         if not verifies_this_sender:
             return
         self.integration.config["verified"] = True

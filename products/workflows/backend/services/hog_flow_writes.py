@@ -480,13 +480,24 @@ def _apply_status_request(instance: HogFlow, locked: HogFlow, validated_data: di
     """Route a requested status through the enable rule. Returns the fields left to save."""
     requested = validated_data.get("status", locked.status)
     if requested == locked.status:
-        return validated_data
+        return _go_live_after_waiting_edit(instance, locked, validated_data)
     if requested == HogFlowState.WAITING_FOR_DOMAIN:
         # Only the enable rule sets it. A client that sends it back read it before a change landed.
         raise WorkflowStale()
     if requested == HogFlowState.ACTIVE:
         return _apply_enable(instance, locked, validated_data, user_id)
     return validated_data
+
+
+def _go_live_after_waiting_edit(instance: HogFlow, locked: HogFlow, validated_data: dict) -> dict:
+    """An edit can drop or switch a waiting workflow's unverified sender, so check its senders again."""
+    if locked.status != HogFlowState.WAITING_FOR_DOMAIN:
+        return validated_data
+    if "actions" in validated_data:
+        instance.actions = validated_data["actions"]
+    if _go_live_once_senders_verified(instance, activated_by="user") is None:
+        return validated_data
+    return _without_status(validated_data)
 
 
 def update_workflow(
@@ -638,6 +649,7 @@ def edit_workflow_content(
         if route_to_draft:
             _write_draft(locked, locked, validated_data)
         else:
+            validated_data = _go_live_after_waiting_edit(locked, before_update, validated_data)
             # An email edit can't delete steps or change timing config, so only graph edits refresh redirects.
             if changes_graph:
                 _refresh_action_redirects(locked, before_update, validated_data.get("actions"))
@@ -647,7 +659,8 @@ def edit_workflow_content(
                 _append_revisions(team_id, user_id, locked, before_update)
 
     paused = 0
-    if changes_graph and not route_to_draft:
+    went_live = locked.status != before_update.status
+    if (changes_graph or went_live) and not route_to_draft:
         _reschedule_timing_edits(team_id, before_update, locked)
         paused = _pause_schedules_on_audience_change(before_update, locked)
     return WorkflowWriteResult(
@@ -719,6 +732,7 @@ def publish_draft(
         # The draft goes back through the normal serializer so publish revalidates strictly and
         # recompiles bytecode - a stored blob is never trusted to be execution-ready.
         validated_data = _keep_live_sensitivity(before_update, validate(to_edit_state(locked), dict(locked.draft)))
+        validated_data = _go_live_after_waiting_edit(locked, before_update, validated_data)
         _refresh_action_redirects(locked, before_update, validated_data.get("actions"))
         bump = _stage_revision_bump(locked, before_update, validated_data)
         # Validation recovered the draft's secrets (from the merged live+draft encrypted maps), and

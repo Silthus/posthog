@@ -4,6 +4,7 @@ from uuid import UUID
 from posthog.models.integration import Integration
 
 from products.cdp.backend.models.hog_function_template import HogFunctionTemplate
+from products.workflows.backend.facade.enums import ENABLED_HOG_FLOW_STATES
 from products.workflows.backend.models import HogFlow
 
 # Action configs are user-controlled JSON; cap traversal depth so a crafted deeply-nested
@@ -64,11 +65,11 @@ def _action_references_integration(action: dict, integration_id: int, template_c
 
 
 def get_active_hog_flows_using_integration(team_id: int, integration_id: int) -> list[HogFlow]:
-    """Active workflows whose live config references the given integration."""
+    """Active and waiting workflows whose live config references the given integration."""
     template_cache: _TemplateCache = {}
     return [
         flow
-        for flow in HogFlow.objects.filter(team_id=team_id, status=HogFlow.State.ACTIVE)
+        for flow in HogFlow.objects.filter(team_id=team_id, status__in=ENABLED_HOG_FLOW_STATES)
         if any(
             _action_references_integration(action, integration_id, template_cache) for action in (flow.actions or [])
         )

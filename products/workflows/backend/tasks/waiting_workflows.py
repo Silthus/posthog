@@ -62,9 +62,9 @@ def _send_events(team_id: int, change: StatusChange) -> None:
     events = change.events
     if not events:
         return
-    team = Team.objects.get(pk=team_id)
-    users = User.objects.in_bulk({event.user_id for event in events if event.user_id is not None})
     try:
+        team = Team.objects.get(pk=team_id)
+        users = User.objects.in_bulk({event.user_id for event in events if event.user_id is not None})
         with ph_scoped_capture() as capture:
             for event in events:
                 user = users.get(event.user_id) if event.user_id is not None else None

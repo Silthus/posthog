@@ -478,6 +478,42 @@ class TestVerifiedSenderTakesWaitingWorkflowsLive(APIBaseTest):
         assert properties["activated_by"] == "domain_verified"
         assert "source" not in properties
 
+    def test_verification_reloads_the_senders_on_workers_before_it_queues_the_go_live(self) -> None:
+        sender = self._sender("example.com")
+        self._waiting_flow(sender)
+        calls: list[str] = []
+
+        with (
+            patch(
+                "posthog.models.integration.email.reload_integrations_on_workers",
+                side_effect=lambda *args, **kwargs: calls.append("reload"),
+            ),
+            patch.object(enable_waiting_workflows_task, "delay", side_effect=lambda **kwargs: calls.append("queue")),
+            # Outside a test transaction, on_commit runs as soon as the outermost atomic block exits.
+            patch(
+                "products.workflows.backend.facade.api.transaction.on_commit", side_effect=lambda callback: callback()
+            ),
+        ):
+            EmailIntegration(sender).apply_verification({"status": "success", "dnsRecords": []})
+
+        assert calls == ["reload", "queue"]
+
+    def test_a_lookup_failure_after_go_live_does_not_retry_the_task(self) -> None:
+        sender = self._sender("example.com", verified=True)
+        flow_id = self._waiting_flow(sender)
+
+        with (
+            patch(
+                "products.workflows.backend.tasks.waiting_workflows.Team.objects.get",
+                side_effect=OperationalError("connection lost"),
+            ),
+            capture_logs() as logs,
+        ):
+            enable_waiting_workflows_task.apply(kwargs={"team_id": self.team.id, "sender_ids": [sender.id]})
+
+        assert self._workflow(flow_id)["status"] == "active"
+        assert "Failed to capture workflow usage event" in [log["event"] for log in logs]
+
     def test_a_go_live_that_cannot_be_queued_keeps_the_verification(self) -> None:
         sender = self._sender("example.com")
         flow_id = self._waiting_flow(sender)
