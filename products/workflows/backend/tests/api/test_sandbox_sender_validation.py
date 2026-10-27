@@ -15,6 +15,7 @@ from posthog.models.integration import Integration
 
 from products.cdp.backend.api.hog_function import HogFunctionInvocationSerializer
 from products.cdp.backend.models.hog_function_template import HogFunctionTemplate
+from products.cdp.backend.models.hog_functions.hog_function import HogFunction
 from products.workflows.backend.facade.api import ensure_sandbox_email_sender
 from products.workflows.backend.facade.workflows import get_workflow_edit_state
 from products.workflows.backend.models.hog_flow import HogFlow
@@ -117,6 +118,38 @@ class TestSandboxSenderValidation(APIBaseTest):
         assert response.status_code == 400, response.json()
         assert "sandbox sender" in response.json()["detail"].lower()
         assert "workflow email steps and test sends" in response.json()["detail"].lower()
+
+    @parameterized.expand([("disabled", {"enabled": False}), ("deleted", {"deleted": True})])
+    def test_stored_destination_with_the_sandbox_sender_can_still_be(self, _name: str, change: dict) -> None:
+        function = HogFunction.objects.create(
+            team=self.team,
+            name="Stored destination",
+            type="destination",
+            hog="return 1;",
+            inputs_schema=self.email_schema,
+            inputs={"email": {"value": self._email()}},
+            enabled=True,
+        )
+
+        response = self.client.patch(f"/api/projects/{self.team.id}/hog_functions/{function.id}/", change)
+
+        assert response.status_code == 200, response.json()
+
+    def test_destination_with_an_own_rotation_ignores_a_stale_sandbox_fallback(self) -> None:
+        own_sender = Integration.objects.create(
+            team=self.team,
+            kind="email",
+            config={"provider": "ses", "domain": "example.com", "email": "sender@example.com", "verified": True},
+        )
+        function = self._function()
+        function["inputs"]["email"]["value"]["from"] = {
+            "integrationId": self.sender.id,
+            "integrationIds": [own_sender.id],
+        }
+
+        response = self.client.post(f"/api/projects/{self.team.id}/hog_functions/", function)
+
+        assert response.status_code == 201, response.json()
 
     def test_generic_workflow_step_cannot_select_the_sandbox_sender_with_a_legacy_email_schema(self) -> None:
         template = HogFunctionTemplate.objects.get(template_id="template-email")

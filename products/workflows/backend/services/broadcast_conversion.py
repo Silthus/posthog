@@ -53,11 +53,14 @@ def _email_sender(email_step: dict) -> object:
 
 
 def _sender_ids(sender: object) -> set[str]:
-    """The integrations a `from` value sends from, as strings, since stored ids can be ints, floats or strings."""
+    """The integrations a `from` value sends from, as the worker picks them: a non-empty rotation replaces `integrationId`.
+
+    Ids are compared as strings, since stored ids can be ints, floats or strings.
+    """
     if not isinstance(sender, dict):
         return set()
     rotation = sender.get("integrationIds")
-    ids = [sender.get("integrationId"), *(rotation if isinstance(rotation, list) else [])]
+    ids = rotation if isinstance(rotation, list) and rotation else [sender.get("integrationId")]
     return {_integration_id_key(integration_id) for integration_id in ids if integration_id is not None}
 
 
