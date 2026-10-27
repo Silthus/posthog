@@ -151,15 +151,28 @@ class TestSandboxSenderValidation(APIBaseTest):
 
         assert response.status_code == 201, response.json()
 
-    def test_generic_workflow_step_cannot_select_the_sandbox_sender_with_a_legacy_email_schema(self) -> None:
+    @parameterized.expand([("created",), ("changed_from_an_email_step",)])
+    def test_generic_workflow_step_cannot_select_the_sandbox_sender_with_a_legacy_email_schema(
+        self, origin: str
+    ) -> None:
         template = HogFunctionTemplate.objects.get(template_id="template-email")
         template.inputs_schema = [{**self.email_schema[0], "type": "email"}]
         template.save()
         workflow = self._workflow()
+        created_id = None
+        if origin == "changed_from_an_email_step":
+            created = self.client.post(f"/api/projects/{self.team.id}/hog_flows", workflow)
+            assert created.status_code == 201, created.json()
+            created_id = created.json()["id"]
         workflow["actions"][1]["type"] = "function"
         workflow["actions"][1]["config"]["template_id"] = "template-email"
 
-        response = self.client.post(f"/api/projects/{self.team.id}/hog_flows", workflow)
+        if created_id is None:
+            response = self.client.post(f"/api/projects/{self.team.id}/hog_flows", workflow)
+        else:
+            response = self.client.patch(
+                f"/api/projects/{self.team.id}/hog_flows/{created_id}", {"actions": workflow["actions"]}
+            )
 
         assert response.status_code == 400, response.json()
         assert "workflow email steps and test sends" in response.json()["detail"].lower()

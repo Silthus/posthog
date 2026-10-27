@@ -2149,7 +2149,9 @@ class HogFlowActionSerializer(serializers.Serializer):
                     **self.context,
                     "workflow_action_type": data.get("type"),
                     "existing_email_values": [
-                        email for action_type, email in existing_emails if action_type == "function_email"
+                        email
+                        for action_type, email in existing_emails
+                        if action_type == "function_email" and data.get("type") == "function_email"
                     ],
                     # Request-scoped: a drip sequence's steps share senders, and the actions
                     # list validates one action at a time (mirrors _message_template_cache).
