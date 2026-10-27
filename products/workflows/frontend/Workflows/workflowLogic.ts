@@ -199,20 +199,24 @@ export function sanitizeWorkflow(
     workflow: HogFlow,
     hogFunctionTemplatesById: Record<string, HogFunctionTemplateType>
 ): HogFlow {
-    // Sanitize all function-like actions the same as we would a hog function
-    workflow.actions.forEach((action) => {
-        if (isFunctionAction(action) || isTriggerFunction(action)) {
-            const inputs = action.config.inputs
-            const template = hogFunctionTemplatesById[action.config.template_id]
-            if (template) {
-                action.config.inputs = sanitizeInputs({
-                    inputs_schema: template.inputs_schema,
-                    inputs: inputs,
-                })
-            }
-        }
-    })
-    return workflow
+    // Sanitize all function-like actions the same as we would a hog function. Copy, never mutate: the
+    // actions are shared with the saved baseline, which must keep the compiled inputs the server returns.
+    return { ...workflow, actions: workflow.actions.map((action) => sanitizeAction(action, hogFunctionTemplatesById)) }
+}
+
+function sanitizeAction(
+    action: HogFlowAction,
+    hogFunctionTemplatesById: Record<string, HogFunctionTemplateType>
+): HogFlowAction {
+    if (!isFunctionAction(action) && !isTriggerFunction(action)) {
+        return action
+    }
+    const template = hogFunctionTemplatesById[action.config.template_id]
+    if (!template) {
+        return action
+    }
+    const inputs = sanitizeInputs({ inputs_schema: template.inputs_schema, inputs: action.config.inputs })
+    return { ...action, config: { ...action.config, inputs } } as HogFlowAction
 }
 
 /**
