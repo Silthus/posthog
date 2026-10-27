@@ -28,7 +28,7 @@ export function StepIndicator({ phase }: { phase: EmailDomainPhase }): JSX.Eleme
                             className={clsx(
                                 'inline-flex items-center justify-center w-5 h-5 rounded-full border font-semibold',
                                 done && 'bg-success-highlight border-success text-success',
-                                current && 'bg-accent text-white border-accent',
+                                current && 'bg-accent text-primary-inverse border-accent',
                                 !done && !current && 'border-primary text-muted'
                             )}
                             aria-current={current ? 'step' : undefined}

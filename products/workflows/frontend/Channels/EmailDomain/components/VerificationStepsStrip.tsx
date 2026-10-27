@@ -33,7 +33,7 @@ export function VerificationStepsStrip({ steps }: { steps: VerificationStep[] })
                         <span className={clsx('font-medium', step.state === 'todo' && 'text-secondary')}>
                             {step.label}
                         </span>
-                        <span className="text-xs text-secondary">{step.detail}</span>
+                        <span className="text-xs text-secondary wrap-anywhere">{step.detail}</span>
                     </span>
                 </li>
             ))}

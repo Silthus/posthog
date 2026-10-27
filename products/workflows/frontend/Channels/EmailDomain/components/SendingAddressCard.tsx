@@ -132,7 +132,7 @@ function BouncePrefixField(props: EmailDomainWizardLogicProps): JSX.Element {
                 />
                 <span className="font-mono text-secondary break-all">.{sendingDomain}</span>
             </div>
-            <span className="text-xs text-secondary">Where bounced emails return to. Almost nobody changes this.</span>
+            <span className="text-xs text-secondary">Where bounced emails return to.</span>
             <label htmlFor="email-domain-reply-to" className="mt-3">
                 Default reply-to address <span className="text-secondary">(optional)</span>
             </label>
