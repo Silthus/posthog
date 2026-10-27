@@ -13,7 +13,7 @@ const PROBLEM_COPY: Record<DomainProblem, string> = {
 
 export function AnotherDomainInput(props: EmailDomainWizardLogicProps): JSX.Element {
     const logic = emailDomainWizardLogic(props)
-    const { customDomainInput, customDomain } = useValues(logic)
+    const { customDomainInput, customDomain, customDomainHint } = useValues(logic)
     const { setCustomDomainInput, useCustomDomain } = useActions(logic)
     const canUse = Boolean(customDomain.domain) && !customDomain.problem
     return (
@@ -27,7 +27,7 @@ export function AnotherDomainInput(props: EmailDomainWizardLogicProps): JSX.Elem
                     value={customDomainInput}
                     onChange={setCustomDomainInput}
                     onPressEnter={useCustomDomain}
-                    status={customDomain.problem ? 'danger' : undefined}
+                    status={customDomainHint ? 'danger' : undefined}
                 />
                 <LemonButton
                     type="secondary"
@@ -39,7 +39,7 @@ export function AnotherDomainInput(props: EmailDomainWizardLogicProps): JSX.Elem
                     Use
                 </LemonButton>
             </div>
-            {customDomain.problem && <span className="text-xs text-danger">{PROBLEM_COPY[customDomain.problem]}</span>}
+            {customDomainHint && <span className="text-xs text-danger">{PROBLEM_COPY[customDomainHint]}</span>}
         </div>
     )
 }

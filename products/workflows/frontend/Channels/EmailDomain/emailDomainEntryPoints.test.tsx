@@ -15,6 +15,7 @@ import { initKeaTests } from '~/test/init'
 import { EmailSetupModal } from '../EmailSetup/EmailSetupModal'
 import { MessageChannels } from '../MessageChannels'
 import { FakeEmailDomainBackend } from './__mocks__/fakeEmailDomainBackend'
+import { POLL_FAST_MS } from './emailDomainStatusLogic'
 
 const DOMAIN = 'mail.acme.com'
 const SENDER_ID = 42
@@ -144,6 +145,31 @@ describe('email domain setup entry points', () => {
 
         expect(router.values.location.pathname).toMatch(new RegExp(`${urls.workflowsEmailDomain(SENDER_ID)}$`))
         expect(integrationsLogic.values.setupModalOpen).toBe(false)
+    })
+
+    it('brings the next step heading into view when the setup modal moves on', async () => {
+        setWizardFlag(true)
+        const scrollIntoView = jest.spyOn(Element.prototype, 'scrollIntoView')
+        try {
+            backend.addSender({ email: `hello@${DOMAIN}` })
+            await renderInApp(<MessageChannels />)
+            fireEvent.click(screen.getByText(DOMAIN))
+            fireEvent.click(screen.getByText('Configure'))
+            await flush()
+            expect(screen.getByText('Add 8 settings at Cloudflare')).toBeInTheDocument()
+            scrollIntoView.mockClear()
+
+            backend.publishRecords(DOMAIN)
+            await act(async () => {
+                await jest.advanceTimersByTimeAsync(POLL_FAST_MS)
+            })
+
+            const heading = screen.getByText('Checking your settings…')
+            expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' })
+            expect(scrollIntoView.mock.contexts.at(-1)).toContainElement(heading)
+        } finally {
+            scrollIntoView.mockRestore()
+        }
     })
 
     it.each([

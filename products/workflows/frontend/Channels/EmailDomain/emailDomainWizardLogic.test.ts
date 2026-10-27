@@ -11,7 +11,7 @@ import { initKeaTests } from '~/test/init'
 import { PreflightStatus } from '~/types'
 
 import { FakeEmailDomainBackend } from './__mocks__/fakeEmailDomainBackend'
-import { emailDomainWizardLogic } from './emailDomainWizardLogic'
+import { DOMAIN_HINT_DELAY_MS, emailDomainWizardLogic } from './emailDomainWizardLogic'
 
 describe('emailDomainWizardLogic', () => {
     let backend: FakeEmailDomainBackend
@@ -60,8 +60,34 @@ describe('emailDomainWizardLogic', () => {
         logic.actions.setCustomDomainInput(input)
         logic.actions.useCustomDomain()
 
-        expect(logic.values.customDomain.problem).toBe(problem)
+        expect(logic.values.customDomainHint).toBe(problem)
         expect(logic.values.selectedDomain).toBeNull()
+    })
+
+    it('holds the domain hint while the person types and shows it once they pause', async () => {
+        jest.useFakeTimers()
+        try {
+            const logic = mountWizard()
+
+            const keystrokeGap = DOMAIN_HINT_DELAY_MS / 2
+            logic.actions.setCustomDomainInput('he')
+            await jest.advanceTimersByTimeAsync(keystrokeGap)
+            logic.actions.setCustomDomainInput('hed')
+            await jest.advanceTimersByTimeAsync(DOMAIN_HINT_DELAY_MS - 1)
+            expect(logic.values.customDomainHint).toBeNull()
+
+            await jest.advanceTimersByTimeAsync(1)
+            expect(logic.values.customDomainHint).toBe('invalid')
+
+            logic.actions.setCustomDomainInput('hedg')
+            expect(logic.values.customDomainHint).toBeNull()
+
+            logic.actions.setCustomDomainInput('')
+            await jest.advanceTimersByTimeAsync(DOMAIN_HINT_DELAY_MS)
+            expect(logic.values.customDomainHint).toBeNull()
+        } finally {
+            jest.useRealTimers()
+        }
     })
 
     it.each([

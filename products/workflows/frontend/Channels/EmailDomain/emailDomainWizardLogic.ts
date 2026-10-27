@@ -43,6 +43,7 @@ export interface CustomDomain {
 export const DEFAULT_SEND_PREFIX: string = 'mail'
 export const DEFAULT_LOCAL_PART: string = 'hello'
 export const DEFAULT_BOUNCE_PREFIX: string = 'feedback'
+export const DOMAIN_HINT_DELAY_MS = 800
 
 const EVENT_HOSTS_QUERY = hogql`SELECT properties.$host AS host, count() AS events
     FROM events
@@ -71,6 +72,8 @@ export interface emailDomainWizardLogicValues {
     createdSender: IntegrationConfigApi | null
     createdSenderLoading: boolean
     customDomain: CustomDomain
+    customDomainHint: DomainProblem | null
+    customDomainHintShown: boolean
     customDomainInput: string
     customPrefixOpen: boolean
     domainSender: IntegrationType | null
@@ -163,6 +166,9 @@ export interface emailDomainWizardLogicActions {
     setSubmitError: (error: string | null) => {
         error: string | null
     }
+    showCustomDomainHint: () => {
+        value: true
+    }
     useCustomDomain: () => {
         value: true
     }
@@ -180,6 +186,7 @@ export interface emailDomainWizardLogicMeta {
             eventHosts: EventHost[]
         ) => InferredDomain[]
         customDomain: (customDomainInput: string) => CustomDomain
+        customDomainHint: (customDomain: CustomDomain, customDomainHintShown: boolean) => DomainProblem | null
         selectedIsInferred: (selectedDomain: string | null, inferredDomains: InferredDomain[]) => boolean
         sendingDomain: (selectedDomain: string | null, sendPrefix: string) => string | null
         suggestedSenderName: (currentOrganization: OrganizationType | null, selectedDomain: string | null) => string
@@ -222,6 +229,7 @@ export const emailDomainWizardLogic = kea<emailDomainWizardLogicType>([
         clearDomain: true,
         setCustomDomainInput: (value: string) => ({ value }),
         useCustomDomain: true,
+        showCustomDomainHint: true,
         setSendPrefix: (prefix: string) => ({ prefix }),
         setCustomPrefixOpen: (open: boolean) => ({ open }),
         setBouncePrefix: (prefix: string) => ({ prefix }),
@@ -298,6 +306,14 @@ export const emailDomainWizardLogic = kea<emailDomainWizardLogicType>([
             {
                 setCustomDomainInput: (_, { value }) => value,
                 selectDomain: () => '',
+            },
+        ],
+        customDomainHintShown: [
+            false,
+            {
+                setCustomDomainInput: () => false,
+                showCustomDomainHint: () => true,
+                useCustomDomain: () => true,
             },
         ],
         // null until the person types a name, so the suggestion keeps following the picked domain.
@@ -381,6 +397,11 @@ export const emailDomainWizardLogic = kea<emailDomainWizardLogicType>([
                 return { domain, localPart, problem: domainProblemOf(domain) }
             },
         ],
+        customDomainHint: [
+            (s) => [s.customDomain, s.customDomainHintShown],
+            (customDomain: CustomDomain, customDomainHintShown: boolean): DomainProblem | null =>
+                customDomainHintShown ? customDomain.problem : null,
+        ],
         selectedIsInferred: [
             (s) => [s.selectedDomain, s.inferredDomains],
             (selectedDomain: string | null, inferredDomains: InferredDomain[]): boolean =>
@@ -420,6 +441,10 @@ export const emailDomainWizardLogic = kea<emailDomainWizardLogicType>([
         ],
     }),
     listeners(({ actions, values, props }) => ({
+        setCustomDomainInput: async (_, breakpoint) => {
+            await breakpoint(DOMAIN_HINT_DELAY_MS)
+            actions.showCustomDomainHint()
+        },
         useCustomDomain: () => {
             const { domain, localPart, problem } = values.customDomain
             if (!domain || problem) {
