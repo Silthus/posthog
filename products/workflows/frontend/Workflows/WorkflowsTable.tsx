@@ -1,4 +1,4 @@
-import { useActions, useValues } from 'kea'
+import { useActions, useMountedLogic, useValues } from 'kea'
 import { useMemo } from 'react'
 
 import {
@@ -47,6 +47,7 @@ import {
     workflowsLogic,
 } from './workflowsLogic'
 import { WorkflowStepMatches } from './WorkflowStepMatches'
+import { workflowsWaitingRefreshLogic } from './workflowsWaitingRefreshLogic'
 import { WorkflowTagsCell } from './WorkflowTagsCell'
 import { hasMessagingAction } from './workflowTypeFilters'
 
@@ -125,6 +126,7 @@ export function WorkflowsTable(): JSX.Element {
     const overviewTabEnabled = !!featureFlags[FEATURE_FLAGS.WORKFLOWS_OVERVIEW_TAB]
     const { suggestionsAvailable } = useValues(workflowSuggestionsAvailabilityLogic)
     const logic = workflowsLogic()
+    useMountedLogic(workflowsWaitingRefreshLogic)
     const {
         workflowsLoading,
         workflows,
