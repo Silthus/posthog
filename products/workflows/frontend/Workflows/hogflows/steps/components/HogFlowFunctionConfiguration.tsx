@@ -191,8 +191,13 @@ export function filterInputsSchemaForTrigger<T extends { key: string }>(
     return inputsSchema
 }
 
+export function allowsSandboxSender(actionType: string | undefined, originProduct: string | null | undefined): boolean {
+    return actionType === 'function_email' && originProduct !== 'broadcasts'
+}
+
 export function HogFlowFunctionConfiguration({
     templateId,
+    actionType,
     inputs,
     setInputs,
     mappings,
@@ -202,6 +207,7 @@ export function HogFlowFunctionConfiguration({
     emailFieldErrors,
 }: {
     templateId: string
+    actionType?: string
     inputs: Record<string, CyclotronJobInputType>
     mappings?: HogFunctionMappingType[]
     setInputs: (inputs: Record<string, CyclotronJobInputType>) => void
@@ -269,7 +275,7 @@ export function HogFlowFunctionConfiguration({
             // (into the staged draft on active workflows), so the editor needs no save step.
             emailLiveChanges
             emailSaveIndicator={<WorkflowAutoSaveIndicator />}
-            emailSandboxSenderAllowed={isEmailStep && workflow?.origin_product !== 'broadcasts'}
+            emailSandboxSenderAllowed={allowsSandboxSender(actionType, workflow?.origin_product)}
             configuration={{ inputs: inputs as Record<string, CyclotronJobInputType>, inputs_schema: schema }}
             showSource={false}
             sampleGlobalsWithInputs={sampleGlobals}

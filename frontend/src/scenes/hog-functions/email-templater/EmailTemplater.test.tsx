@@ -1,11 +1,12 @@
 import '@testing-library/jest-dom'
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useValues } from 'kea'
 
 import { NativeEmailIntegrationChoice } from './EmailTemplater'
 
 let mockSenderRotationEnabled = false
+const mockChooseSenders = jest.fn()
 
 jest.mock('lib/hooks/useFeatureFlag', () => ({
     useFeatureFlag: () => mockSenderRotationEnabled,
@@ -14,24 +15,42 @@ jest.mock('lib/hooks/useFeatureFlag', () => ({
 jest.mock('kea', () => ({
     ...jest.requireActual('kea'),
     useValues: jest.fn(),
-    useActions: () => ({ chooseSenders: jest.fn() }),
+    useActions: () => ({ chooseSenders: mockChooseSenders }),
 }))
 
 jest.mock('@posthog/lemon-ui', () => ({
     ...jest.requireActual('@posthog/lemon-ui'),
-    LemonInputSelect: ({ options }: { options: { key: string; label: string }[] }) => (
+    LemonInputSelect: ({
+        options,
+        value,
+        onChange,
+    }: {
+        options: { key: string; label: string; value: number }[]
+        value: number[]
+        onChange: (value: number[]) => void
+    }) => (
         <div data-attr="multiple-email-sender-select">
             {options.map((option) => (
-                <span key={option.key}>{option.label}</span>
+                <button key={option.key} onClick={() => onChange([...value, option.value])}>
+                    {option.label}
+                </button>
             ))}
         </div>
     ),
-    LemonSelect: ({ options }: { options: { options: { value: number; label: string }[] }[] }) => (
+    LemonSelect: ({
+        options,
+        onChange,
+    }: {
+        options: { options: { value: number; label: string }[] }[]
+        onChange: (value: number) => void
+    }) => (
         <div data-attr="single-email-sender-select">
             {options
                 .flatMap((section) => section.options)
                 .map((option) => (
-                    <span key={option.value}>{option.label}</span>
+                    <button key={option.value} onClick={() => onChange(option.value)}>
+                        {option.label}
+                    </button>
                 ))}
         </div>
     ),
@@ -86,6 +105,20 @@ describe('NativeEmailIntegrationChoice', () => {
             expect(screen.queryByText('Custom sender')).not.toBeInTheDocument()
         }
     )
+
+    it.each([
+        [false, [3]],
+        [true, [1, 3]],
+    ])('sends a pick through chooseSenders when the rotation flag is %s', (flagEnabled, expectedSenderIds) => {
+        mockSenderRotationEnabled = flagEnabled
+        mockPicker({ senderIntegrations: [ALICE, SANDBOX], sandboxSenderId: 3 })
+        mockChooseSenders.mockClear()
+
+        render(<NativeEmailIntegrationChoice label="From" value={{ integrationId: 1 }} onChange={jest.fn()} />)
+        fireEvent.click(screen.getByText(SANDBOX.display_name))
+
+        expect(mockChooseSenders).toHaveBeenCalledWith(expectedSenderIds)
+    })
 
     it('treats a step with no listed sender as having no email sender', () => {
         mockPicker({ senderIntegrations: [] })
