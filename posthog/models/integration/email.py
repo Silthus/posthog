@@ -216,6 +216,7 @@ class EmailIntegration:
             EmailDomainCheck,  # noqa: PLC0415 — keeps the workflows facade off the model import path
         )
 
+        self.ensure_user_managed()
         cache_key = f"email_domain_status:{self.integration.id}"
         if not refresh and isinstance(cached := self._cached_status(cache_key), str):
             entry = json.loads(cached)
