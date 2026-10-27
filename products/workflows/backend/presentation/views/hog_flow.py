@@ -5685,8 +5685,10 @@ class HogFlowViewSet(
     def _report_turned_on(self, result: WorkflowWriteResult, instance: Workflow) -> None:
         previous = result.previous.get("status")
         # A workflow that kept suggestions on while it was off needs its scout back when it is enabled again.
+        # Going live from waiting checks again, because the enable that started the wait may not have granted it.
         if (
-            previous not in ENABLED_HOG_FLOW_STATES
+            previous != HogFlowState.ACTIVE
+            and previous != instance.status
             and instance.status in ENABLED_HOG_FLOW_STATES
             and is_optimization_enabled(instance.id)
         ):
