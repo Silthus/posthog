@@ -14,9 +14,10 @@ export function WorkflowStartedSendingNotice(): JSX.Element | null {
 
 function StartedSendingBanner(): JSX.Element | null {
     const { dismissStartedSendingNotice } = useActions(workflowLogic)
-    const { emailSendingSuspended } = useValues(workflowsEmailSuspensionLogic)
+    const { suspensionStatus } = useValues(workflowsEmailSuspensionLogic)
 
-    if (emailSendingSuspended) {
+    // Say it started only once the project's sending status confirms it can send.
+    if (!suspensionStatus || suspensionStatus.email_sending_suspended) {
         return null
     }
 

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom'
 
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { BindLogic, Provider } from 'kea'
 
 import { FEATURE_FLAGS } from 'lib/constants'
@@ -39,15 +39,23 @@ describe('WorkflowStartedSendingNotice', () => {
     })
 
     it.each([
-        { name: 'shows once the workflow went live', suspended: false, shown: true },
-        { name: 'stays hidden while the project cannot send email', suspended: true, shown: false },
-    ])('$name', async ({ suspended, shown }) => {
+        { name: 'shows once the project can send email', status: 200, suspended: false, shown: true },
+        { name: 'stays hidden while the project cannot send email', status: 200, suspended: true, shown: false },
+        { name: 'stays hidden when the sending status fails to load', status: 500, suspended: false, shown: false },
+    ])('$name', async ({ status, suspended, shown }) => {
+        let releaseStatus!: () => void
+        const statusReleased = new Promise<void>((resolve) => {
+            releaseStatus = resolve
+        })
         useMocks({
             get: {
-                '/api/environments/:team_id/hog_flows/:id/': ({ params }) =>
-                    params.id === 'email_sending_suspension'
-                        ? [200, { email_sending_suspended: suspended }]
-                        : [200, WENT_LIVE_AFTER_WAITING],
+                '/api/environments/:team_id/hog_flows/:id/': async ({ params }) => {
+                    if (params.id !== 'email_sending_suspension') {
+                        return [200, WENT_LIVE_AFTER_WAITING]
+                    }
+                    await statusReleased
+                    return [status, { email_sending_suspended: suspended }]
+                },
                 '/api/projects/:team_id/hog_function_templates/': { results: [], count: 0 },
             },
         })
@@ -56,10 +64,8 @@ describe('WorkflowStartedSendingNotice', () => {
         featureFlagLogic.actions.setFeatureFlags([], { [FEATURE_FLAGS.WORKFLOWS_EMAIL_DOMAIN_WIZARD]: true })
         const logic = workflowLogic({ id: WORKFLOW_ID })
         logic.mount()
-        workflowsEmailSuspensionLogic.mount()
         await act(async () => {
             await logic.asyncActions.loadWorkflow()
-            await workflowsEmailSuspensionLogic.asyncActions.loadSuspensionStatus()
         })
 
         render(
@@ -69,9 +75,11 @@ describe('WorkflowStartedSendingNotice', () => {
                 </BindLogic>
             </Provider>
         )
+        expect(screen.queryByText('Started sending.')).not.toBeInTheDocument()
 
+        releaseStatus()
+        await waitFor(() => expect(workflowsEmailSuspensionLogic.values.suspensionStatusLoading).toBe(false))
         expect(screen.queryByText('Started sending.') !== null).toBe(shown)
-        workflowsEmailSuspensionLogic.unmount()
         logic.unmount()
     })
 })
