@@ -409,8 +409,13 @@ function sandboxRecipientsOf(params: CyclotronInvocationQueueParametersEmailType
 
 type SandboxRecipientBlockReason = Exclude<SandboxEmailBlockReason, 'switch_off'>
 
-const SANDBOX_UNAVAILABLE_LOG =
-    'Skipping send: the sandbox sender is unavailable right now. Verify your own domain to keep sending.'
+type SesRoute = {
+    tenantName: string
+    configurationSetName: string
+    unsubscribeHeaders: boolean
+    ccAddresses?: string[]
+    bccAddresses?: string[]
+}
 
 const SANDBOX_RECIPIENT_BLOCK_COPY: Record<
     SandboxRecipientBlockReason,
@@ -497,6 +502,7 @@ export class EmailService {
         let throttled: boolean = false
         let assetRow: MessageAssetRow | null = null
         let trackingEnabled = true
+        let deliveryParams: CyclotronInvocationQueueParametersEmailType | undefined
 
         try {
             // Team-level kill switches: staff suspend all workflow email for a team whose sender
@@ -587,7 +593,10 @@ export class EmailService {
                 return result
             }
             if (isSandbox && !this.sandboxSender?.canSend) {
-                this.skipSandboxSend(result, SANDBOX_UNAVAILABLE_LOG)
+                this.skipSandboxSend(
+                    result,
+                    'Skipping send: the sandbox sender is unavailable right now. Verify your own domain to keep sending.'
+                )
                 await this.sandboxSender?.captureBlocked(invocation.teamId, isTest, 'switch_off', 0)
                 return result
             }
@@ -621,6 +630,12 @@ export class EmailService {
             const recipients = isSandbox ? sandboxRecipientsOf(params) : []
             if (isSandbox && !(await this.checkSandboxRecipients(result, recipients, isTest))) {
                 return result
+            }
+            if (isSandbox && (params.from.email || params.from.name || params.replyTo)) {
+                addLog(
+                    'info',
+                    'Ignoring custom sender and Reply-To settings: the sandbox sender uses a fixed identity.'
+                )
             }
 
             // Single choke point for the suppression check — every send path lands here regardless
@@ -674,7 +689,7 @@ export class EmailService {
 
             // Like suppression, the tracking decision lives at this choke point so every send path
             // (workflow action or email destination hog function) resolves it the same way.
-            trackingEnabled = await this.resolveTrackingEnabled(result.invocation, deliverableParams)
+            trackingEnabled = !isSandbox && (await this.resolveTrackingEnabled(result.invocation, deliverableParams))
 
             // User-configured per-workflow pacing. Claimed last, after every skip gate, so a
             // suspended or suppressed send never spends a token. Test sends bypass it. When the
@@ -786,11 +801,25 @@ export class EmailService {
                 case 'ses':
                     await this.sendEmailWithSES(result, sendParams, from, trackingEnabled, isTest)
                     break
-                case 'sandbox':
-                    if (await this.checkSandboxRecipients(result, recipients, isTest)) {
-                        this.skipSandboxSend(result, SANDBOX_UNAVAILABLE_LOG)
+                case 'sandbox': {
+                    deliveryParams = await this.sandboxSender!.withIdentificationFooter(
+                        sendParams,
+                        from.name,
+                        invocation.teamId
+                    )
+                    const route = this.sandboxSesRoute(deliveryParams)
+                    const deliveryRecipients = [
+                        deliveryParams.to.email.trim(),
+                        ...(route.ccAddresses ?? []),
+                        ...(route.bccAddresses ?? []),
+                    ]
+                    if (!(await this.checkSandboxRecipients(result, deliveryRecipients, isTest))) {
+                        return result
                     }
-                    return result
+                    await this.sendEmailWithSES(result, deliveryParams, from, false, isTest, route)
+                    await this.sandboxSender!.captureSent(invocation.teamId, isTest, deliveryRecipients.length)
+                    break
+                }
 
                 case 'unsupported':
                     throw new Error('Email delivery mode not supported')
@@ -801,7 +830,7 @@ export class EmailService {
             // "View email" chip, so suppressing it for skipped captures keeps the chip
             // from 404-ing on click.
             if (!isTest && this.messageAssetsService) {
-                assetRow = this.messageAssetsService.buildRowForEmail(invocation, sendParams)
+                assetRow = this.messageAssetsService.buildRowForEmail(invocation, deliveryParams ?? sendParams)
             }
             const viewEmailToken = assetRow ? ` [Email:${invocation.id}:${invocation.state.actionId ?? ''}]` : ''
             addLog('info', `Email sent to ${sendParams.to.email} from ${from.name} <${from.email}>${viewEmailToken}`)
@@ -1112,6 +1141,33 @@ export class EmailService {
     // The tracked and untracked configuration sets share the same delivery/bounce/complaint event
     // destination (suppression and the Metrics tab depend on those events); they differ only in
     // ESP-level open/click tracking.
+    private teamSesRoute(
+        invocation: CyclotronJobInvocationHogFunction,
+        trackingEnabled: boolean,
+        params: CyclotronInvocationQueueParametersEmailType
+    ): SesRoute {
+        return {
+            tenantName: `team-${invocation.teamId}`,
+            configurationSetName: this.resolveConfigurationSetName(trackingEnabled, invocation),
+            unsubscribeHeaders: true,
+            ccAddresses: parseAddressList(params.cc),
+            bccAddresses: parseAddressList(params.bcc),
+        }
+    }
+
+    // The sandbox shares one SES identity, so every send uses its fixed tenant and configuration
+    // set, and no recipient gets an unsubscribe link: only members of the sending organization
+    // receive it. CC and BCC are parsed once so the final member check covers exactly this list.
+    private sandboxSesRoute(params: CyclotronInvocationQueueParametersEmailType): SesRoute {
+        return {
+            tenantName: this.sandboxSender!.config.tenantName,
+            configurationSetName: this.sandboxSender!.config.configurationSetName,
+            unsubscribeHeaders: false,
+            ccAddresses: sandboxAddressList(params.cc),
+            bccAddresses: sandboxAddressList(params.bcc),
+        }
+    }
+
     private resolveConfigurationSetName(
         trackingEnabled: boolean,
         invocation: CyclotronJobInvocationHogFunction
@@ -1144,6 +1200,10 @@ export class EmailService {
 
         if (!integration.config.email || !integration.config.name) {
             throw new Error('The selected email integration is not configured correctly')
+        }
+
+        if (integration.config.provider === 'sandbox') {
+            return { email: this.sandboxSender?.config.fromAddress ?? '', name: integration.config.name }
         }
 
         // Overrides arrive already rendered by the templating engine, so a template that
@@ -1249,7 +1309,8 @@ export class EmailService {
         params: CyclotronInvocationQueueParametersEmailType,
         from: { email: string; name: string },
         trackingEnabled: boolean,
-        isTest = false
+        isTest = false,
+        route: SesRoute = this.teamSesRoute(result.invocation, trackingEnabled, params)
     ): Promise<void> {
         if (!this.sesV2Client) {
             throw new Error('SES is not configured - set SES_REGION and AWS credentials')
@@ -1302,7 +1363,7 @@ export class EmailService {
                     },
                 },
             },
-            ConfigurationSetName: this.resolveConfigurationSetName(trackingEnabled, result.invocation),
+            ConfigurationSetName: route.configurationSetName,
             // Short unsigned tag kept as a backwards-compat carrier for in-flight messages and
             // environments where the configuration set isn't yet emitting original headers.
             EmailTags: [
@@ -1324,7 +1385,7 @@ export class EmailService {
         // this class only shield our internal metrics, a separate concern from SES-side
         // attribution; test volume is far below the representative volume AWS needs for a
         // reputation finding.
-        sendEmailParams.TenantName = `team-${result.invocation.teamId}`
+        sendEmailParams.TenantName = route.tenantName
 
         // Authoritative tracking-code carrier: a custom MIME header. Header values aren't
         // 256-char-bounded the way SES tag values are, so they safely carry the signed code
@@ -1334,26 +1395,26 @@ export class EmailService {
 
         const isTransactionalEmail = result.invocation.hogFunction?.metadata?.message_category_type === 'transactional'
         if (sendEmailParams.Content?.Simple) {
-            const unsubscribeHeaders = !isTransactionalEmail
-                ? this.generateUnsubscribeHeaders(
-                      { team_id: result.invocation.teamId, identifier: unquoteMailbox(params.to.email) },
-                      preferencesTokenSourceForInvocation(result.invocation)
-                  )
-                : []
+            const unsubscribeHeaders =
+                route.unsubscribeHeaders && !isTransactionalEmail
+                    ? this.generateUnsubscribeHeaders(
+                          { team_id: result.invocation.teamId, identifier: unquoteMailbox(params.to.email) },
+                          preferencesTokenSourceForInvocation(result.invocation)
+                      )
+                    : []
             sendEmailParams.Content.Simple.Headers = [...unsubscribeHeaders, trackingHeader, AUTO_SUBMITTED_HEADER]
         }
 
         const replyToAddresses = parseAddressList(params.replyTo)
-        const ccAddresses = parseAddressList(params.cc)
-        const bccAddresses = parseAddressList(params.bcc)
+        const { ccAddresses, bccAddresses } = route
 
         if (replyToAddresses) {
             sendEmailParams.ReplyToAddresses = replyToAddresses
         }
-        if (ccAddresses) {
+        if (ccAddresses?.length) {
             sendEmailParams.Destination!.CcAddresses = ccAddresses
         }
-        if (bccAddresses) {
+        if (bccAddresses?.length) {
             sendEmailParams.Destination!.BccAddresses = bccAddresses
         }
 
