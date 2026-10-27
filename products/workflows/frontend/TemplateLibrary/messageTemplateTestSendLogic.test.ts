@@ -256,7 +256,7 @@ describe('messageTemplateTestSendLogic', () => {
             })
         })
 
-        it('loads the member suggestions when the flag lands on an open modal', async () => {
+        it('loads the member suggestions once when the flag lands on an open modal', async () => {
             featureFlagLogic.actions.setFeatureFlags([], {})
             await loadIntegrations([SANDBOX_SENDER])
             await expectLogic(logic, () => {
@@ -273,6 +273,13 @@ describe('messageTemplateTestSendLogic', () => {
                 senderIntegrationId: 7,
                 recipientSuggestions: expect.arrayContaining(['john.doe@posthog.com']),
             })
+
+            await expectLogic(logic, () => {
+                featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER, 'some-other-flag'], {
+                    [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,
+                    'some-other-flag': true,
+                })
+            }).toNotHaveDispatchedActions([membersLogic.actionTypes.loadAllMembers])
         })
 
         it('sends a sandbox test without the template Reply-To and custom From, which the sandbox sender ignores', async () => {
