@@ -7,6 +7,7 @@ import { HogFlow } from './hogflows/types'
 import { workflowLogic } from './workflowLogic'
 
 const WORKFLOW_ID = 'wf-send-once-verified-1'
+const WEBHOOK_TEMPLATE = { id: 'template-webhook', inputs_schema: [{ key: 'url', type: 'string', templating: true }] }
 
 const makeWorkflow = (overrides: Partial<HogFlow> = {}): HogFlow => ({
     id: WORKFLOW_ID,
@@ -70,7 +71,7 @@ describe('workflowLogic send once verified', () => {
                     retrieveCount += 1
                     return [200, storedWorkflow]
                 },
-                '/api/projects/:team_id/hog_function_templates/': { results: [], count: 0 },
+                '/api/projects/:team_id/hog_function_templates/': { results: [WEBHOOK_TEMPLATE], count: 1 },
             },
             patch: {
                 '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => {
@@ -91,12 +92,32 @@ describe('workflowLogic send once verified', () => {
             status: 'waiting_for_domain',
             enable_requested_at: '2026-05-02T10:00:00Z',
         })
-        const wentLive: HogFlow = {
-            ...waiting,
+        const wentLiveLifecycle: Partial<HogFlow> = {
             status: 'active',
             went_live_at: '2026-05-03T08:30:00Z',
             updated_at: '2026-05-03T08:30:00Z',
         }
+        const wentLive: HogFlow = { ...waiting, ...wentLiveLifecycle }
+        const [trigger, exit] = waiting.actions
+        const waitingWithWebhook = makeWorkflow({
+            ...waiting,
+            actions: [
+                trigger,
+                {
+                    id: 'webhook_node',
+                    type: 'function',
+                    name: 'Webhook',
+                    description: '',
+                    created_at: 0,
+                    updated_at: 0,
+                    config: {
+                        template_id: WEBHOOK_TEMPLATE.id,
+                        inputs: { url: { value: 'https://example.com/hook', bytecode: ['_H', 1], order: 0 } },
+                    },
+                },
+                exit,
+            ] as HogFlow['actions'],
+        })
 
         const mountWaiting = async (): Promise<void> => {
             jest.useFakeTimers({ advanceTimers: true })
@@ -150,7 +171,10 @@ describe('workflowLogic send once verified', () => {
             ])
         })
 
-        it('keeps an edit whose auto-save lands after the workflow went live, and saves it to the live copy', async () => {
+        it.each<{ name: string; workflow: HogFlow }>([
+            { name: 'a workflow without function steps', workflow: waiting },
+            { name: 'a workflow with a function step', workflow: waitingWithWebhook },
+        ])('keeps an edit whose auto-save lands after the workflow went live, for $name', async ({ workflow }) => {
             useMocks({
                 patch: {
                     '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => {
@@ -164,8 +188,10 @@ describe('workflowLogic send once verified', () => {
                     },
                 },
             })
-            await mountWaiting()
-            storedWorkflow = wentLive
+            jest.useFakeTimers({ advanceTimers: true })
+            await mountWith(workflow)
+            await expectLogic(logic).toDispatchActions(['loadHogFunctionTemplatesByIdSuccess'])
+            storedWorkflow = { ...workflow, ...wentLiveLifecycle }
 
             logic.actions.setWorkflowValue('name', 'Renamed while waiting')
             await jest.advanceTimersByTimeAsync(3_000)
