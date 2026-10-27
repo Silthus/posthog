@@ -258,8 +258,11 @@ describe('EmailService', () => {
             const createSandboxService = (
                 enabled: boolean,
                 membersPostgres: PostgresRouter = hub.postgres,
-                routeSettings: Partial<SandboxEmailSenderConfig> = {}
+                routeSettings: Partial<SandboxEmailSenderConfig> = {},
+                teamEmailRateLimiter: RateLimiterService | null = null
             ): EmailService => {
+                const workflowsConfig = new TeamWorkflowsConfigService(hub.postgres, hub.pubSub)
+                jest.spyOn(workflowsConfig, 'getEmailSendingTier').mockResolvedValue(0)
                 const sandboxService = new EmailService(
                     {
                         sesAccessKeyId: hub.SES_ACCESS_KEY_ID,
@@ -268,9 +271,12 @@ describe('EmailService', () => {
                         sesEndpoint: hub.SES_ENDPOINT,
                         sesTrackedConfigurationSet: hub.SES_TRACKED_CONFIGURATION_SET,
                         sesUntrackedConfigurationSet: hub.SES_UNTRACKED_CONFIGURATION_SET,
+                        teamEmailCapMode: 'enforce',
+                        teamEmailTierHourlyCaps: [1],
+                        teamEmailTierDailyCaps: [1],
                     },
                     hub.integrationManager,
-                    new TeamWorkflowsConfigService(hub.postgres, hub.pubSub),
+                    workflowsConfig,
                     hub.ENCRYPTION_SALT_KEYS,
                     hub.SITE_URL,
                     new EmailTrackingCodeSigner(hub.ENCRYPTION_SALT_KEYS, hub.CDP_EMAIL_TRACKING_URL),
@@ -278,7 +284,7 @@ describe('EmailService', () => {
                     new RecipientsManagerService(hub.postgres),
                     undefined,
                     null,
-                    null,
+                    teamEmailRateLimiter,
                     new SandboxEmailSender(
                         {
                             enabled,
@@ -429,6 +435,21 @@ describe('EmailService', () => {
                     expect(capture).not.toHaveBeenCalled()
                 }
             )
+
+            it('never spends the team sending budget on a sandbox send', async () => {
+                const claimAllOrNothingPair = jest
+                    .fn()
+                    .mockResolvedValue({ granted: false, deniedIndex: 0, retryAfterMs: 60_000, reserved: false })
+                service = createSandboxService(true, hub.postgres, {}, {
+                    claimAllOrNothingPair,
+                } as unknown as RateLimiterService)
+
+                const result = await service.executeSendEmail(invocation)
+
+                expectSkipped(result)
+                expect(result.logs).toContainEqual(expect.objectContaining({ level: 'info', message: UNAVAILABLE_LOG }))
+                expect(claimAllOrNothingPair).not.toHaveBeenCalled()
+            })
 
             it.each([
                 ['a display name', 'Example colleague', false],

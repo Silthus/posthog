@@ -83,5 +83,6 @@ Every To, CC, and BCC address must belong to an active member of the team's acti
 Membership snapshots expire within one minute, and the worker checks recipients again right before delivery.
 A failed or stale membership check skips the send and lists the blocked addresses in the run log.
 The blocked event fires at most once an hour per team, reason, and send kind (workflow or test).
+Sandbox sends never spend the team's tier budget, because they reach only its own members.
 The sandbox route is not built yet, so a send that passes every check still skips as unavailable.
 Keep the switch off in production until the sandbox caps are deployed.
