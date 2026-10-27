@@ -1079,10 +1079,9 @@ export class EmailService {
             if (!this.organizationMembers) {
                 throw new Error('Organization member checks are not configured')
             }
-            organizationBlocked = await this.organizationMembers.isSandboxSenderBlocked(teamId)
-            const blocked = organizationBlocked
-                ? []
-                : await this.organizationMembers.getBlockedRecipients(teamId, recipients)
+            const check = await this.organizationMembers.checkRecipients(teamId, recipients)
+            organizationBlocked = check.organizationBlocked
+            const blocked = check.organizationBlocked ? [] : check.blockedRecipients
             blockedRecipients = blocked.map(({ address }) => address)
             reason = blocked.every(({ unverifiedMember }) => unverifiedMember)
                 ? 'recipient_unverified'

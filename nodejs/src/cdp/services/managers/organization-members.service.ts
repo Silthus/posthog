@@ -10,6 +10,10 @@ type OrganizationMemberSnapshot = {
 
 export type BlockedRecipient = { readonly address: string; readonly unverifiedMember: boolean }
 
+export type RecipientCheck =
+    | { readonly organizationBlocked: true }
+    | { readonly organizationBlocked: false; readonly blockedRecipients: BlockedRecipient[] }
+
 const MAX_SNAPSHOT_AGE_MS = 60_000
 const REFRESH_AGE_MS = MAX_SNAPSHOT_AGE_MS - 1_000
 
@@ -78,15 +82,15 @@ export class OrganizationMembersService {
         })
     }
 
-    public async getBlockedRecipients(teamId: number, recipients: string[]): Promise<BlockedRecipient[]> {
+    public async checkRecipients(teamId: number, recipients: string[]): Promise<RecipientCheck> {
         const snapshot = await this.getFreshSnapshot(String(teamId))
-        return recipients
+        if (snapshot.sandboxSenderBlocked) {
+            return { organizationBlocked: true }
+        }
+        const blockedRecipients = recipients
             .filter((email) => !snapshot.verifiedEmails.has(normalizeEmail(email)))
             .map((address) => ({ address, unverifiedMember: snapshot.unverifiedEmails.has(normalizeEmail(address)) }))
-    }
-
-    public async isSandboxSenderBlocked(teamId: number): Promise<boolean> {
-        return (await this.getFreshSnapshot(String(teamId))).sandboxSenderBlocked
+        return { organizationBlocked: false, blockedRecipients }
     }
 
     // A snapshot older than a minute never decides a send: it is reloaded once, and a reload that
