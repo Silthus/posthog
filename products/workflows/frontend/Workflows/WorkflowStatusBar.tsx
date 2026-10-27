@@ -9,6 +9,7 @@ import { urls } from 'scenes/urls'
 
 import type { HogFlowEditorLayout } from './hogflows/hogFlowEditorLogic'
 import { WorkflowLogicProps, workflowLogic } from './workflowLogic'
+import { WorkflowSenderDomainNotice } from './WorkflowSenderDomainNotice'
 
 type WorkflowStatusBarProps = WorkflowLogicProps & {
     editorLayout: HogFlowEditorLayout
@@ -34,6 +35,7 @@ export function WorkflowStatusBar({
         isAutoSavePending,
         autoSaveEnabled,
         lastSavedAt,
+        senderDomainNotice,
     } = useValues(logic)
     const { setAutoSaveEnabled } = useActions(logic)
     const showSaving = useDebouncedValue(isAutoSavePending || workflowLoading, 1000)
@@ -94,9 +96,14 @@ export function WorkflowStatusBar({
                     ) : (
                         <LemonTag>Draft</LemonTag>
                     ))}
-                {showWorkflowStatus && statusExplanation && (
-                    <span className="text-xs text-secondary truncate">{statusExplanation}</span>
-                )}
+                {showWorkflowStatus &&
+                    (senderDomainNotice ? (
+                        <WorkflowSenderDomainNotice notice={senderDomainNotice} />
+                    ) : (
+                        statusExplanation && (
+                            <span className="text-xs text-secondary truncate">{statusExplanation}</span>
+                        )
+                    ))}
                 {commands}
             </div>
             {/* Interactive controls sit right-anchored with variable-width text leftmost, so the
