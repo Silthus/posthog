@@ -29,6 +29,8 @@ SES_TENANT_CONFIGURATION_SETS: list[str] = [
     if cs.strip()
 ]
 
+SES_SANDBOX_TENANT_NAME: str = os.getenv("SES_SANDBOX_TENANT_NAME", "").strip()
+
 # SNS topics allowed to deliver SES tenant reputation events (EventBridge -> SNS -> webhook).
 # Empty (the default) leaves the webhook inert: the SNS signature proves a message came from AWS,
 # but only the allowlist proves it came from *our* topic.
