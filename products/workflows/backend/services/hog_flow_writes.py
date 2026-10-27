@@ -112,13 +112,11 @@ def _request_enable(flow: HogFlow, *, user_id: Optional[int]) -> None:
         flow.went_live_at = now
 
 
-def _apply_enable(target: HogFlow, locked: HogFlow, data: dict, user_id: Optional[int]) -> dict:
-    """Apply a person's Enable to ``target``, the row ``locked`` holds, and return the fields left to save.
-    An active or archived workflow keeps its status."""
-    if locked.status not in (HogFlowState.ACTIVE, HogFlowState.ARCHIVED):
-        if "actions" in data:
-            target.actions = data["actions"]
-        _request_enable(target, user_id=user_id)
+def _apply_enable(target: HogFlow, data: dict, user_id: Optional[int]) -> dict:
+    """Apply a person's Enable to ``target`` and return the fields left to save."""
+    if "actions" in data:
+        target.actions = data["actions"]
+    _request_enable(target, user_id=user_id)
     return _without_status(data)
 
 
@@ -485,7 +483,7 @@ def _apply_status_request(instance: HogFlow, locked: HogFlow, validated_data: di
         # Only the enable rule sets it. A client that sends it back read it before a change landed.
         raise WorkflowStale()
     if requested == HogFlowState.ACTIVE:
-        return _apply_enable(instance, locked, validated_data, user_id)
+        return _apply_enable(instance, validated_data, user_id)
     return validated_data
 
 
