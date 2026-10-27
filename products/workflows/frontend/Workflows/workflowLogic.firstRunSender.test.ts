@@ -301,6 +301,8 @@ describe('workflow first-run sender', () => {
         senders: Partial<IntegrationType>[]
         flag: boolean
         originProduct?: 'broadcasts'
+        flagArrivesAfterOpen?: boolean
+        setupFails?: boolean
         expectedFrom: Record<string, unknown>
         expectedEnsureCalls: number
     }>([
@@ -338,6 +340,24 @@ describe('workflow first-run sender', () => {
             expectedEnsureCalls: 0,
         },
         {
+            name: 'an inserted email step gets the sandbox sender when the flag arrives after the editor opened',
+            step: emailAction('function_email'),
+            senders: [],
+            flag: true,
+            flagArrivesAfterOpen: true,
+            expectedFrom: { integrationId: SANDBOX.id },
+            expectedEnsureCalls: 1,
+        },
+        {
+            name: 'an inserted email step stays empty when the sandbox sender cannot be set up',
+            step: emailAction('function_email'),
+            senders: [],
+            flag: true,
+            setupFails: true,
+            expectedFrom: {},
+            expectedEnsureCalls: 1,
+        },
+        {
             name: 'flag off sets nothing up and leaves an inserted email step empty',
             step: emailAction('function_email'),
             senders: [],
@@ -345,26 +365,43 @@ describe('workflow first-run sender', () => {
             expectedFrom: {},
             expectedEnsureCalls: 0,
         },
-    ])('$name', async ({ step, senders, flag, originProduct, expectedFrom, expectedEnsureCalls }) => {
-        integrations = senders
-        setSandboxFlag(flag)
-        const workflow = workflowLogic({ id: 'new' })
-        workflow.mount()
-        await expectLogic(workflow).toDispatchActions(['loadWorkflowSuccess'])
-        if (originProduct) {
-            workflow.actions.setWorkflowInfo({ origin_product: originProduct })
+    ])(
+        '$name',
+        async ({
+            step,
+            senders,
+            flag,
+            originProduct,
+            flagArrivesAfterOpen,
+            setupFails,
+            expectedFrom,
+            expectedEnsureCalls,
+        }) => {
+            integrations = senders
+            ensureFails = setupFails ? 1 : 0
+            setSandboxFlag(flagArrivesAfterOpen ? false : flag)
+            const workflow = workflowLogic({ id: 'new' })
+            workflow.mount()
+            await expectLogic(workflow).toDispatchActions(['loadWorkflowSuccess'])
+            if (originProduct) {
+                workflow.actions.setWorkflowInfo({ origin_product: originProduct })
+            }
+            const editor = hogFlowEditorLogic({ id: 'new' })
+            editor.mount()
+            await expectLogic(editor).toFinishAllListeners()
+            if (flagArrivesAfterOpen) {
+                setSandboxFlag(flag)
+                await expectLogic(editor).toFinishAllListeners()
+            }
+
+            editor.actions.setNodeToBeAdded({ ...step, id: undefined } as any)
+            editor.actions.onDrop(undefined, NEW_WORKFLOW.edges[0])
+
+            const inserted = workflow.values.workflow.actions.find((action) => action.type === step.type)
+            expect((inserted?.config as any)?.inputs?.email?.value?.from).toEqual(expectedFrom)
+            expect(ensureCalls).toBe(expectedEnsureCalls)
+            editor.unmount()
+            workflow.unmount()
         }
-        const editor = hogFlowEditorLogic({ id: 'new' })
-        editor.mount()
-        await expectLogic(editor).toFinishAllListeners()
-
-        editor.actions.setNodeToBeAdded({ ...step, id: undefined } as any)
-        editor.actions.onDrop(undefined, NEW_WORKFLOW.edges[0])
-
-        const inserted = workflow.values.workflow.actions.find((action) => action.type === step.type)
-        expect((inserted?.config as any)?.inputs?.email?.value?.from).toEqual(expectedFrom)
-        expect(ensureCalls).toBe(expectedEnsureCalls)
-        editor.unmount()
-        workflow.unmount()
-    })
+    )
 })

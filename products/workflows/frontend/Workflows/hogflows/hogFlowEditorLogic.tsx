@@ -2074,6 +2074,13 @@ export interface hogFlowEditorLogicActions {
               }
         payload?: any
     } // workflowLogic
+    setFeatureFlags: (
+        flags: string[],
+        variants: Record<string, boolean | string>
+    ) => {
+        flags: string[]
+        variants: Record<string, boolean | string>
+    } // featureFlagLogic
     setWorkflowAction: (
         actionId: string,
         action: HogFlowAction
@@ -2317,6 +2324,8 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
             ['setWorkflowInfo', 'setWorkflowAction', 'setWorkflowActionEdges', 'loadWorkflowSuccess'],
             optOutCategoriesLogic(),
             ['loadCategories'],
+            featureFlagLogic,
+            ['setFeatureFlags'],
         ],
     })),
     actions({
@@ -2730,6 +2739,9 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
 
             prepareFirstRunSender: async () => {
                 await prepareSandboxSender().catch(() => undefined)
+            },
+            setFeatureFlags: () => {
+                actions.prepareFirstRunSender()
             },
             onNodesDelete: ({ deleted }) => {
                 if (deleted.some((node) => node.id === values.selectedNodeId)) {
