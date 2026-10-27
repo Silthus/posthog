@@ -63,7 +63,7 @@ function sandboxSenderEnabled(): boolean {
 async function loadAllIntegrations(): Promise<IntegrationType[]> {
     await integrationsLogic.asyncActions.loadIntegrations()
     const integrations = integrationsLogic.values.integrations
-    if (!integrations) {
+    if (!integrations || integrationsLogic.values.integrationsLoadFailed) {
         throw new Error('The sender list could not load.')
     }
     return integrations

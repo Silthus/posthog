@@ -2,6 +2,7 @@ import { expectLogic } from 'kea-test-utils'
 import posthog from 'posthog-js'
 
 import { FEATURE_FLAGS } from 'lib/constants'
+import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 
 import { useMocks } from '~/mocks/jest'
@@ -263,10 +264,19 @@ describe('workflow first-run sender', () => {
         logic.unmount()
     })
 
-    it('opens the editor without a sender when the sender list cannot load', async () => {
+    it.each([
+        ['nothing is cached', false],
+        ['an earlier list is cached', true],
+    ])('opens the editor without a sender when the sender list cannot load and %s', async (_case, cached) => {
+        integrations = [OWN_VERIFIED]
+        const unmountIntegrations = cached ? integrationsLogic.mount() : () => undefined
+        if (cached) {
+            await expectLogic(integrationsLogic).toDispatchActions(['loadIntegrationsSuccess'])
+        }
         useMocks({ get: { '/api/projects/:team_id/integrations/': () => [500, { detail: 'Unavailable' }] } })
 
         const logic = await loadTemplate()
+        unmountIntegrations()
 
         expect(emailValueOf(logic)?.from).toEqual({})
         expect(ensureCalls).toBe(0)
