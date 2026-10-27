@@ -7,6 +7,7 @@ import { logger } from '~/common/utils/logger'
 import { captureTeamEvent } from '~/common/utils/posthog'
 import { TeamManager } from '~/common/utils/team-manager'
 
+import { SandboxSenderStateService } from '../managers/sandbox-sender-state.service'
 import { ClaimRequest, IssuedClaim, RateLimiterService } from '../rate-limiter/rate-limiter.service'
 import { maybeAddPreheaderToEmail } from './helpers/preheader'
 
@@ -40,6 +41,7 @@ export type SandboxEmailBlockReason =
     | 'recipient_unverified'
     | 'check_failed'
     | 'cap_reached'
+    | 'paused'
 
 export type SandboxDailyCapGrant = { type: 'granted'; claim: IssuedClaim; buckets: ClaimRequest[] }
 
@@ -168,7 +170,8 @@ export class SandboxEmailSender {
         public readonly config: SandboxEmailSenderConfig,
         private teamManager: TeamManager,
         private blockedEventRedis: Pick<RedisV2, 'useClient'>,
-        private dailyCapLimiter: RateLimiterService | null
+        private dailyCapLimiter: RateLimiterService | null,
+        private senderState: Pick<SandboxSenderStateService, 'isPaused'>
     ) {
         this.config = {
             ...config,
@@ -183,6 +186,15 @@ export class SandboxEmailSender {
             })
         }
         this.canSend = config.enabled && !emptySettings.length
+    }
+
+    public async pauseGate(): Promise<'open' | 'paused' | 'check_failed'> {
+        try {
+            return (await this.senderState.isPaused(this.config.tenantName)) ? 'paused' : 'open'
+        } catch (error) {
+            logger.warn('Could not check the sandbox sender pause state', { error })
+            return 'check_failed'
+        }
     }
 
     public async claimDailyCaps(teamId: number, recipients: string[]): Promise<SandboxDailyCapClaim> {

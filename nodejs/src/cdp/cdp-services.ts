@@ -34,6 +34,7 @@ import { IntegrationManagerService } from './services/managers/integration-manag
 import { OrganizationMembersService } from './services/managers/organization-members.service'
 import { PersonsManagerService } from './services/managers/persons-manager.service'
 import { RecipientsManagerService } from './services/managers/recipients-manager.service'
+import { SandboxSenderStateService } from './services/managers/sandbox-sender-state.service'
 import { TeamWorkflowsConfigService } from './services/managers/team-workflows-config.service'
 import { EmailSuppressionService } from './services/messaging/email-suppression.service'
 import { EmailValidationService } from './services/messaging/email-validation.service'
@@ -499,7 +500,8 @@ export function createCdpCoreServices(
             },
             deps.teamManager,
             redis,
-            sandboxEmailRateLimiter
+            sandboxEmailRateLimiter,
+            new SandboxSenderStateService(deps.postgres, deps.pubSub)
         ),
         new OrganizationMembersService(deps.postgres)
     )
