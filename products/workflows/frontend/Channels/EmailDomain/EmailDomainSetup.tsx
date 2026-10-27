@@ -6,7 +6,7 @@ import { LemonSkeleton } from '@posthog/lemon-ui'
 import { urls } from 'scenes/urls'
 
 import { AgentHandoffModal } from './components/AgentHandoffModal'
-import { SendOnceVerifiedCard } from './components/SendOnceVerifiedCard'
+import { SendOnceVerifiedChoices } from './components/SendOnceVerifiedChoices'
 import { StepIndicator } from './components/StepIndicator'
 import { emailDomainLogic } from './emailDomainLogic'
 import { emailDomainStatusLogic } from './emailDomainStatusLogic'
@@ -43,7 +43,7 @@ function CurrentStep(): JSX.Element {
             return (
                 <>
                     <VerifyingStep />
-                    {status?.status !== 'failed' && <SendOnceVerifiedCard />}
+                    {status?.status !== 'failed' && <SendOnceVerifiedChoices />}
                 </>
             )
         case 'ready':
