@@ -56,7 +56,7 @@ export interface channelCatalogLogicActions {
     retrySandboxSenderSetup: () => {
         value: true
     }
-    setUpSandboxSender: () => any
+    setUpSandboxSender: (_?: any) => any
     setUpSandboxSenderFailure: (
         error: string,
         errorObject?: any
@@ -122,14 +122,18 @@ export const channelCatalogLogic = kea<channelCatalogLogicType>([
         sandboxProvisionError: [
             null as string | null,
             {
-                setUpSandboxSender: async (): Promise<string | null> => {
+                setUpSandboxSender: async (_, breakpoint): Promise<string | null> => {
+                    let failure: string | null = null
                     try {
                         await integrationsEmailSandboxSenderCreate(String(values.currentProjectId))
                     } catch (error) {
-                        return (error instanceof ApiError && error.detail) || 'Could not set up the sandbox sender.'
+                        failure = (error instanceof ApiError && error.detail) || 'Could not set up the sandbox sender.'
                     }
-                    actions.loadIntegrations()
-                    return null
+                    breakpoint()
+                    if (!failure) {
+                        actions.loadIntegrations()
+                    }
+                    return failure
                 },
             },
         ],

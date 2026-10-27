@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom'
 
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { expectLogic } from 'kea-test-utils'
 import { createElement } from 'react'
 
@@ -13,6 +13,7 @@ import { initKeaTests } from '~/test/init'
 
 import { ChannelCatalog } from './ChannelCatalog'
 import { channelCatalogLogic } from './channelCatalogLogic'
+import { MessageChannels } from './MessageChannels'
 
 describe('sandbox setup in the channel catalog', () => {
     let logic: ReturnType<typeof channelCatalogLogic.build>
@@ -23,10 +24,19 @@ describe('sandbox setup in the channel catalog', () => {
         logic?.unmount()
     })
 
-    it.each([404, 500])('starts setup on mount and exposes a %s request for retry', async (failureStatus) => {
+    it.each([404, 500])('starts setup on mount and recovers from a %s through Try again', async (failureStatus) => {
         let status = failureStatus
         let requests = 0
-        const sandbox = { id: 9, kind: 'email', config: { provider: 'sandbox', verified: true } }
+        const sandbox = {
+            id: 9,
+            kind: 'email',
+            config: {
+                provider: 'sandbox',
+                verified: true,
+                name: 'Acme via PostHog',
+                email: 'hello@sandbox.example.com',
+            },
+        }
         useMocks({
             get: { '/api/projects/:team_id/integrations/': () => [200, { results: status === 200 ? [sandbox] : [] }] },
             post: {
@@ -45,13 +55,14 @@ describe('sandbox setup in the channel catalog', () => {
         logic.mount()
         await waitFor(() => expect(requests).toBe(1))
         await expectLogic(integrationsLogic).toFinishAllListeners()
-        expect(logic.values.sandboxSetupError).toBe('Could not set up your sandbox sender.')
+        render(createElement(MessageChannels))
+        expect(await screen.findByText('Could not set up your sandbox sender.')).toBeInTheDocument()
 
         status = 200
-        await expectLogic(logic, () => logic.actions.retrySandboxSenderSetup()).toFinishAllListeners()
-        await waitFor(() => expect(requests).toBe(2))
-        await expectLogic(integrationsLogic).toFinishAllListeners()
-        expect(logic.values.sandboxSetupError).toBeNull()
+        fireEvent.click(screen.getAllByText('Try again')[0])
+        expect(await screen.findByText('Acme via PostHog <hello@sandbox.example.com>')).toBeInTheDocument()
+        expect(requests).toBe(2)
+        expect(screen.queryByText('Could not set up your sandbox sender.')).not.toBeInTheDocument()
     })
 
     it('keeps a channel load failure separate from sandbox setup and reloads on retry', async () => {
