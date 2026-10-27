@@ -427,6 +427,38 @@ describe('EmailDomainScene', () => {
         }
     )
 
+    it('opens the DNS records by itself once automatic checks stop with a setting missing', async () => {
+        seedSender()
+        backend.publishRecords(DOMAIN, (record) => record.kind !== 'verification')
+        await open(urls.workflowsEmailDomain(SENDER_ID))
+        expect(screen.queryByText('Proves you own the domain')).not.toBeInTheDocument()
+
+        await flush(31 * 60_000)
+        expect(screen.getByText('One setting is still missing')).toBeInTheDocument()
+        expect(screen.getByText('Proves you own the domain')).toBeInTheDocument()
+    })
+
+    it.each<[string, (fake: FakeEmailDomainBackend) => void]>([
+        ['verifying', (fake) => fake.publishRecords(DOMAIN)],
+        ['ready', (fake) => fake.verifyDomain(DOMAIN)],
+    ])('reports a suggestion clicked on the %s step with its placement', async (placement, reachStep) => {
+        const capture = jest.spyOn(posthog, 'capture')
+        turnOnSuggestions(true)
+        seedSender()
+        reachStep(backend)
+        backend.suggestWorkflows([SUGGESTED_WORKFLOW])
+        await open(urls.workflowsEmailDomain(SENDER_ID))
+
+        click('workflows-data-suggestion-ai')
+
+        expect(capture.mock.calls.filter(([event]) => event === 'workflows data suggestion clicked')).toEqual([
+            [
+                'workflows data suggestion clicked',
+                expect.objectContaining({ surface: 'email_domain_wizard', placement }),
+            ],
+        ])
+    })
+
     it('falls back to the generic manual setup when host detection fails', async () => {
         seedSender()
         backend.fail('domain_connect_check', { status: 500, body: { detail: 'DNS lookup timed out' } })
