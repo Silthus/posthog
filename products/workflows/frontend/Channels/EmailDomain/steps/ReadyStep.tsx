@@ -1,4 +1,5 @@
 import { useValues } from 'kea'
+import { ReactNode } from 'react'
 
 import { IconCheck, IconWarning } from '@posthog/icons'
 import { LemonCollapse } from '@posthog/lemon-ui'
@@ -12,7 +13,8 @@ import { emailDomainSenderLogic } from '../emailDomainSenderLogic'
 import { emailDomainStatusLogic } from '../emailDomainStatusLogic'
 import { HedgehogRocket } from '../hoggies'
 
-export function ReadyStep(): JSX.Element {
+/** `next` replaces the first workflow suggestions, for a setup opened from a workflow. */
+export function ReadyStep({ next = <NextWorkflowCard /> }: { next?: ReactNode }): JSX.Element {
     const { domain } = useValues(emailDomainSenderLogic)
     const { records, foundCount, allRecordsFound } = useValues(emailDomainStatusLogic)
     const { hostName } = useValues(emailDomainAutoConfigureLogic)
@@ -64,7 +66,7 @@ export function ReadyStep(): JSX.Element {
                     },
                 ]}
             />
-            <NextWorkflowCard />
+            {next}
         </div>
     )
 }

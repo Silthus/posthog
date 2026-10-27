@@ -31,6 +31,7 @@ import { workflowBackTo } from './workflowBackTo'
 import { workflowLogic } from './workflowLogic'
 import { WorkflowSceneLogicProps } from './workflowSceneLogic'
 import { WorkflowScenePanel } from './WorkflowScenePanel'
+import { WorkflowSenderDomainSetupModal } from './WorkflowSenderDomainSetupModal'
 
 export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.Element => {
     const {
@@ -63,6 +64,7 @@ export const WorkflowSceneHeader = (props: WorkflowSceneLogicProps = {}): JSX.El
     return (
         <>
             <SaveAsTemplateModal {...props} editTemplateId={editTemplateId} />
+            <WorkflowSenderDomainSetupModal />
             <EnableWorkflowPrompt
                 domains={enablePromptDomains}
                 onConfirm={confirmEnablePrompt}
