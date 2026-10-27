@@ -19,6 +19,7 @@ import { WorkflowStatusBar } from './WorkflowStatusBar'
 const WORKFLOW_ID = 'wf-domain-setup-1'
 const DOMAIN = 'mail.acme.com'
 const SENDER_ID = 42
+const POLL_MS = 10_000
 
 const workflowWith = (overrides: Partial<HogFlow>, from: Record<string, unknown>): HogFlow =>
     ({
@@ -98,6 +99,9 @@ const flush = async (ms = 0): Promise<void> => {
         await jest.advanceTimersByTimeAsync(ms)
     })
 }
+
+const emailSenderOf = (workflow: Partial<HogFlow>, stepId: string): unknown =>
+    (workflow.actions?.find(({ id }) => id === stepId)?.config as any)?.inputs?.email?.value?.from
 
 describe('the email domain setup opened from a workflow', () => {
     let backend: FakeEmailDomainBackend
@@ -259,5 +263,30 @@ describe('the email domain setup opened from a workflow', () => {
         expect(screen.getByText(`${DOMAIN} is verified. Turn the workflow on to start sending.`)).toBeInTheDocument()
         expect(element('email-domain-workflow-enable')).toHaveTextContent('Enable workflow')
         expect(document.querySelector('[data-attr="email-domain-create-blank-workflow"]')).toBeNull()
+    })
+
+    it('fills the empty sender with the one created in the setup, so the fresh workflow enables in one step', async () => {
+        await openFromStatusBar(workflowWith({}, {}), 'workflow-sender-domain-set-up')
+
+        fireEvent.change(document.getElementById('email-domain-another-domain') as HTMLInputElement, {
+            target: { value: 'acme.com' },
+        })
+        fireEvent.click(element('email-domain-use-custom-domain'))
+        fireEvent.click(element('email-domain-continue'))
+        await flush()
+
+        expect(savedBodies.map((body) => emailSenderOf(body, 'email_node'))).toEqual([{ integrationId: SENDER_ID }])
+
+        backend.publishRecords(DOMAIN)
+        await flush(POLL_MS)
+        const fillNotice = `Your workflow now sends from hello@${DOMAIN}.`
+        expect(screen.getByText((_, node) => node?.tagName === 'P' && node.textContent === fillNotice)).toBeVisible()
+        expect(element('email-domain-workflow-enable')).toHaveTextContent('Enable and send once verified')
+
+        fireEvent.click(element('email-domain-workflow-enable'))
+        await flush()
+
+        expect(savedBodies.map((body) => body.status)).toEqual([undefined, 'active'])
+        expect(emailSenderOf(storedWorkflow, 'email_node')).toEqual({ integrationId: SENDER_ID })
     })
 })
