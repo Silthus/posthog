@@ -82,4 +82,5 @@ It overrides root clipping and visibility styles and keeps the template's typogr
 A template whose HTML cannot keep the footer fails the send.
 The visible footer is best effort across email clients and template CSS; the signed tracking header still attributes the message.
 Each delivered send emits a `workflows sandbox email sent` event.
-Keep the switch off in production until the sandbox caps are deployed.
+Successful sandbox sends still count as `email_sent`, which the sending tier reads, until sandbox sends get their own metric.
+Keep the switch off in production until the sandbox caps and that metric are deployed.
