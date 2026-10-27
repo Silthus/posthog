@@ -934,10 +934,11 @@ export class CdpApi {
             )
             options.isTest = true
             const result = await this.hogFlowExecutor.executeCurrentAction(invocation, { hogExecutorOptions: options })
+            const emailWasSkipped = result.emailSendResult?.status === 'skipped'
 
             res.json({
                 nextActionId: result.skipped ? null : result.invocation.state.currentAction?.id,
-                status: result.error ? 'error' : result.skipped ? 'skipped' : 'success',
+                status: result.error ? 'error' : result.skipped || emailWasSkipped ? 'skipped' : 'success',
                 errors: result.error ? [result.error] : [],
                 logs: [...result.logs, ...logs],
                 variables: result.invocation.state.variables ?? {},

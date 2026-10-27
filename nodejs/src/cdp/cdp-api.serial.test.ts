@@ -2788,9 +2788,9 @@ describe('CDP API', () => {
         })
 
         it.each([
-            { status: 'accepted' },
-            { status: 'skipped', reason: 'The recipient has no reachable mail servers.' },
-        ])('returns the inline email outcome %j without routing to the email queue', async (emailSendResult) => {
+            [{ status: 'accepted' }, 'success'],
+            [{ status: 'skipped', reason: 'The recipient has no reachable mail servers.' }, 'skipped'],
+        ])('returns inline email outcome %j as %s, not via the email queue', async (emailSendResult, testStatus) => {
             emailSpy.mockImplementation((invocation: any) =>
                 Promise.resolve({
                     invocation,
@@ -2811,7 +2811,7 @@ describe('CDP API', () => {
             })
 
             expect(res.status).toBe(200)
-            expect(res.body.status).toBe('success')
+            expect(res.body.status).toBe(testStatus)
             expect(res.body.emailSendResult).toEqual(emailSendResult)
             expect(res.body.errors).toEqual([])
             // EmailService was called inline — proving the test endpoint forced inline delivery
