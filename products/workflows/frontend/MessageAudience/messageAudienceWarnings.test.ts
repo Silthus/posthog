@@ -61,6 +61,18 @@ describe('loadMessageAudienceWarnings', () => {
             ],
         })),
         {
+            case: 'an unverified own sender beside the sandbox sender',
+            destination: 'broadcast',
+            senders: [sandbox, unverified],
+            expected: ["Verify the sender's domain before sending"],
+        },
+        {
+            case: 'a verified own sender beside the sandbox sender',
+            destination: 'broadcast',
+            senders: [sandbox, verified],
+            expected: [],
+        },
+        {
             case: 'unverified senders on the first of several pages',
             destination: 'broadcast',
             senders: [unverified],
