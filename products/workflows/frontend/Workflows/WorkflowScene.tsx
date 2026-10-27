@@ -49,6 +49,7 @@ import { WorkflowInvocations } from './WorkflowInvocations'
 import { WorkflowLogicProps, workflowLogic } from './workflowLogic'
 import { WorkflowMetrics } from './WorkflowMetrics'
 import { WorkflowRevisions } from './WorkflowRevisions'
+import { WorkflowSandboxSwitchBanner } from './WorkflowSandboxSwitchBanner'
 import { WorkflowSceneHeader } from './WorkflowSceneHeader'
 import { WorkflowSceneLogicProps, WorkflowTab, workflowSceneLogic } from './workflowSceneLogic'
 import { TRIGGER_PREFILL_PARAM } from './workflowTriggerPrefill'
@@ -251,6 +252,7 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
                 <WorkflowEmailPauseBanner />
                 {isSavedWorkflow && <WorkflowBroadcastMoveBanner id={props.id!} />}
                 {!isSavedWorkflow && <WorkflowAiEmailDraftStatus {...workflowProps} />}
+                <WorkflowSandboxSwitchBanner {...workflowProps} />
                 {suggestionsAvailable && isSavedWorkflow && <WorkflowSuggestionsNotice id={props.id!} />}
                 {/* Only show Logs and Metrics tabs if the workflow has already been created */}
                 {!props.id || props.id === 'new' ? (
