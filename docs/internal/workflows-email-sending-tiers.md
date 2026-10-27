@@ -76,7 +76,6 @@ Membership snapshots expire within one minute, and the worker checks recipients 
 A failed or stale membership check skips the send and lists the blocked addresses in the run log.
 The blocked event fires at most once an hour per team, reason, and send kind (workflow or test).
 A send that passes every check goes out through the fixed SES tenant, configuration set, and From address, whatever the step's custom sender and Reply-To say.
-Django reads the same `SES_SANDBOX_FROM_ADDRESS` for the address it stores and shows, and the address must belong to the shared SES identity.
 Sandbox sends skip the team's tier budget, click and open tracking, and unsubscribe headers, because they reach only members of the sending organization.
 The worker parses and normalizes the HTML, then appends a footer that names the sender and the organization ID.
 It overrides root clipping and visibility styles and keeps the template's typography, so malformed markup may render differently from an own-domain send.
