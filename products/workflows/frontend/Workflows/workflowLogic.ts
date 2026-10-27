@@ -88,6 +88,7 @@ import {
 } from './hogflows/types'
 import { openPublishConfirmDialog } from './PublishImpactDialog'
 import { ResourceSaveQueue } from './resourceSaveQueue'
+import { SenderDomainNotice, senderDomainNotice } from './senderDomainNotice'
 import { unverifiedSenderDomains } from './unverifiedSenderDomains'
 import { checkWaitingStatusWhileVisible } from './waitingStatusCheck'
 import { prepareWorkflowDuplicate } from './workflowDuplication'
@@ -351,6 +352,7 @@ export interface workflowLogicValues {
     dismissedStartedSendingNotices: Record<string, true>
     enablePromptDomains: string[] | null
     enablePromptOpen: boolean
+    senderDomainNotice: SenderDomainNotice | null
     showStartedSendingNotice: boolean
     isWaitingForDomain: boolean
     startedSendingNoticeKey: string | null
@@ -3105,6 +3107,12 @@ export interface workflowLogicMeta {
         logicProps: (arg: WorkflowLogicProps) => WorkflowLogicProps
         unverifiedSenderDomains: (originalWorkflow: HogFlow | null, featureFlags: FeatureFlagsSet) => string[]
         enablePromptDomains: (enablePromptOpen: boolean, unverifiedSenderDomains: string[]) => string[] | null
+        senderDomainNotice: (
+            workflow: HogFlow,
+            originalWorkflow: HogFlow | null,
+            integrations: IntegrationType[] | null,
+            featureFlags: FeatureFlagsSet
+        ) => SenderDomainNotice | null
         startedSendingNoticeKey: (originalWorkflow: HogFlow | null) => string | null
         isWaitingForDomain: (originalWorkflow: HogFlow | null) => boolean
         showStartedSendingNotice: (
@@ -3972,6 +3980,21 @@ export const workflowLogic = kea<workflowLogicType>([
             (s) => [s.enablePromptOpen, s.unverifiedSenderDomains],
             (enablePromptOpen: boolean, unverifiedSenderDomains: string[]): string[] | null =>
                 enablePromptOpen ? unverifiedSenderDomains : null,
+        ],
+        senderDomainNotice: [
+            (s) => [s.workflow, s.originalWorkflow, s.integrations, s.featureFlags],
+            (
+                workflow: HogFlow,
+                originalWorkflow: HogFlow | null,
+                integrations: IntegrationType[] | null,
+                featureFlags: FeatureFlagsSet
+            ): SenderDomainNotice | null => {
+                if (!featureFlags[FEATURE_FLAGS.WORKFLOWS_EMAIL_DOMAIN_WIZARD] || !originalWorkflow) {
+                    return null
+                }
+                const emailSenders = integrations?.filter(({ kind }) => kind === 'email') ?? null
+                return senderDomainNotice(workflow, originalWorkflow, emailSenders)
+            },
         ],
         isWaitingForDomain: [
             (s) => [s.originalWorkflow],
