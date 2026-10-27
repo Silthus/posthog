@@ -5,6 +5,8 @@ from unittest.mock import Mock
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
+from parameterized import parameterized
+
 from posthog.api.search import ENTITY_MAP, SEARCHABLE_ENTITIES, class_queryset, search_entities
 from posthog.helpers.full_text_search import build_search_vector, process_query
 from posthog.models import OrganizationMembership, Team, User
@@ -247,9 +249,10 @@ class TestSearch(APIBaseTest):
         self.assertEqual(results[0]["type"], "early_access_feature")
         self.assertEqual(results[0]["extra_fields"]["name"], "second feature")
 
-    def test_hog_flows(self):
+    @parameterized.expand([("draft",), ("active",), ("waiting_for_domain",)])
+    def test_hog_flows(self, status):
         create_workflow_for_test(team_id=self.team.id, name="first workflow")
-        create_workflow_for_test(team_id=self.team.id, name="second workflow")
+        create_workflow_for_test(team_id=self.team.id, name="second workflow", status=status)
         create_workflow_for_test(team_id=self.team.id, name="third workflow")
 
         response = self.client.get("/api/projects/@current/search?q=sec&entities=hog_flow")

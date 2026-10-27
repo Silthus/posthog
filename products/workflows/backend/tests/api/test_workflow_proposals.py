@@ -15,6 +15,7 @@ from parameterized import parameterized
 from posthog.constants import AvailableFeature
 from posthog.models import Team, User
 from posthog.models.activity_logging.activity_log import ActivityLog
+from posthog.models.integration import Integration
 from posthog.models.messaging import MessagingRecord, get_email_hash
 from posthog.models.organization import OrganizationMembership
 from posthog.models.personal_api_key import PersonalAPIKey
@@ -678,6 +679,68 @@ class TestWorkflowProposals(APIBaseTest):
 
         self._toggle(second, False)
         assert self._suggestions_scout() is None
+
+    def _turned_off_flow_sending_from(self, sender: Integration) -> str:
+        flow_id = self._create_active_flow()
+        with self.captureOnCommitCallbacks(execute=True):
+            turned_off = self.client.patch(f"/api/projects/{self.team.id}/hog_flows/{flow_id}", {"status": "draft"})
+        assert turned_off.status_code == 200, turned_off.json()
+        assert self._suggestions_scout() is None
+        flow = HogFlow.objects.get(pk=flow_id)
+        email_step = next(action for action in flow.actions if action["type"] == "function_email")
+        email_step["config"]["inputs"]["email"]["value"]["from"] = {"integrationId": sender.id}
+        flow.save()
+        return flow_id
+
+    def _enable(self, flow_id: str, headers: dict | None = None) -> dict:
+        with patch("posthoganalytics.feature_enabled", return_value=True):
+            response = self.client.patch(
+                f"/api/projects/{self.team.id}/hog_flows/{flow_id}", {"status": "active"}, headers=headers or {}
+            )
+        assert response.status_code == 200, response.json()
+        return response.json()
+
+    def _email_sender(self, *, verified: bool) -> Integration:
+        return Integration.objects.create(
+            team=self.team,
+            kind="email",
+            config={"email": "hi@example.com", "domain": "example.com", "verified": verified},
+        )
+
+    def test_enabling_a_workflow_that_waits_for_its_email_domain_restarts_its_suggestions_scout(self, _mock_flag):
+        flow_id = self._turned_off_flow_sending_from(self._email_sender(verified=False))
+
+        assert self._enable(flow_id)["status"] == "waiting_for_domain"
+
+        assert self._suggestions_scout() is not None
+
+    def test_a_waiting_workflow_that_goes_live_restarts_a_scout_its_enable_could_not_grant(self, _mock_flag):
+        sender = self._email_sender(verified=False)
+        flow_id = self._turned_off_flow_sending_from(sender)
+        key = generate_random_token_personal()
+        PersonalAPIKey.objects.create(
+            label="enable", user=self.user, secure_value=hash_key_value(key), scopes=["hog_flow:write"]
+        )
+        self.client.logout()
+        assert self._enable(flow_id, {"authorization": f"Bearer {key}"})["status"] == "waiting_for_domain"
+        assert self._suggestions_scout() is None
+        sender.config = {**sender.config, "verified": True}
+        sender.save()
+        self.client.force_login(self.user)
+
+        assert self._enable(flow_id)["status"] == "active"
+
+        assert self._suggestions_scout() is not None
+
+    def test_suggestions_scout_keeps_running_while_its_workflow_waits_for_its_email_domain(self, _mock_flag):
+        flow = HogFlow.objects.get(pk=self._create_active_flow())
+        assert self._suggestions_scout() is not None
+
+        flow.status = HogFlow.State.WAITING_FOR_DOMAIN
+        with self.captureOnCommitCallbacks(execute=True):
+            flow.save()
+
+        assert self._suggestions_scout() is not None
 
     @parameterized.expand(
         [

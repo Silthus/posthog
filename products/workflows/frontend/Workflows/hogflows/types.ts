@@ -22,7 +22,7 @@ export const HogFlowSchema = z.object({
     version: z.number(),
     name: z.string(),
     description: z.string().optional(),
-    status: z.enum(['active', 'draft', 'archived']),
+    status: z.enum(['active', 'draft', 'waiting_for_domain', 'archived']),
     trigger: HogFlowTriggerSchema.optional(),
     // Optional masking config for the trigger, allows HogFlows to be rate limited per distinct ID or other property
     trigger_masking: z
@@ -109,6 +109,9 @@ export interface HogFlow extends z.infer<typeof HogFlowSchema> {
     // True when only PostHog can lift the pause: staff placed it, or it re-tripped soon after a resume.
     email_sending_pause_requires_support?: boolean
     email_sending_resumed_at?: string | null
+    enable_requested_at?: string | null
+    // Later than enable_requested_at when the workflow went live after waiting for its email domain.
+    went_live_at?: string | null
     // Suggested changes waiting for a person. Only the list endpoint counts it.
     pending_suggestions?: number | null
     suggestions_enabled?: boolean | null

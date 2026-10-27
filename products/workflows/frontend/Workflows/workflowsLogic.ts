@@ -17,9 +17,9 @@ import { hogFlowsPartialUpdate } from '../generated/api'
 import type { HogFlow } from './hogflows/types'
 import { prepareWorkflowDuplicate } from './workflowDuplication'
 
-export type WorkflowStatusFilter = 'all' | 'active' | 'draft' | 'archived'
+export type WorkflowStatusFilter = 'all' | 'active' | 'waiting_for_domain' | 'draft' | 'archived'
 
-const WORKFLOW_STATUS_FILTERS: WorkflowStatusFilter[] = ['all', 'active', 'draft', 'archived']
+const WORKFLOW_STATUS_FILTERS: WorkflowStatusFilter[] = ['all', 'active', 'waiting_for_domain', 'draft', 'archived']
 
 export type WorkflowTypeFilter = 'all' | 'messaging' | 'automation' | 'loop'
 
@@ -381,8 +381,8 @@ export const workflowsLogic = kea<workflowsLogicType>([
                     return response
                 },
                 toggleWorkflowStatus: async ({ workflow }) => {
-                    await api.hogFlows.updateHogFlow(workflow.id, {
-                        status: workflow.status === 'active' ? 'draft' : 'active',
+                    await hogFlowsPartialUpdate(String(ApiConfig.getCurrentTeamId()), workflow.id, {
+                        status: workflow.status === 'draft' ? 'active' : 'draft',
                     })
                     // Reload instead of patching in place: the new status may no longer match the
                     // active status filter, so the row has to be re-fetched through the server query.
