@@ -1165,6 +1165,38 @@ describe('EmailService', () => {
             })
         })
 
+        describe('sandbox sender', () => {
+            it.each([
+                ['a workflow send', false],
+                ['a test send', true],
+            ])('skips %s with a reason instead of reporting success', async (_name, isTest) => {
+                await insertIntegration(hub.postgres, team.id, {
+                    id: getIntegrationId(2),
+                    kind: 'email',
+                    config: {
+                        email: 'hello@sandbox.example.com',
+                        name: 'Acme via PostHog',
+                        domain: 'sandbox.example.com',
+                        verified: true,
+                        provider: 'sandbox',
+                    },
+                })
+                invocation.queueParameters = createEmailParams({ from: { integrationId: 2 } })
+                sendEmailSpy.mockResolvedValue({ MessageId: 'test-message-id' })
+
+                const result = await service.executeSendEmail(invocation, isTest)
+
+                expect(sendEmailSpy).not.toHaveBeenCalled()
+                expect(result.skipped).toBe(true)
+                expect(result.emailSendResult).toEqual({
+                    status: 'skipped',
+                    reason: "Skipping send: the sandbox sender can't send email yet. Choose a sender on your own verified domain in this email step.",
+                })
+                expect(result.metrics.map((m) => m.metric_name)).not.toContain('email_sent')
+                expect(invocation.state.vmState?.stack).toEqual([{ success: false }])
+            })
+        })
+
         describe('team suspension enforcement at send time', () => {
             // Guards both suspension switches: while a team is suspended, no send path may
             // reach SES — including editor test sends, which count against the tenant too.
