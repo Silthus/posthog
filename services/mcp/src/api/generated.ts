@@ -19984,6 +19984,7 @@ export namespace Schemas {
     /**
      * * `draft` - Draft
      * * `active` - Active
+     * * `waiting_for_domain` - Waiting For Domain
      * * `archived` - Archived
      */
     export type HogFlowStateEnum = typeof HogFlowStateEnum[keyof typeof HogFlowStateEnum];
@@ -19992,6 +19993,7 @@ export namespace Schemas {
     export const HogFlowStateEnum = {
       Draft: 'draft',
       Active: 'active',
+      WaitingForDomain: 'waiting_for_domain',
       Archived: 'archived',
     } as const;
 
@@ -20004,6 +20006,7 @@ export namespace Schemas {
        *
        * * `draft` - Draft
        * * `active` - Active
+       * * `waiting_for_domain` - Waiting For Domain
        * * `archived` - Archived */
       readonly status: HogFlowStateEnum;
     }
@@ -58708,10 +58711,11 @@ export namespace Schemas {
          */
       tags?: string[];
       readonly version: number;
-      /** draft (no execution), active (live), archived (disabled).
+      /** draft (no execution), active (live), archived (disabled). Send active to enable: the response carries waiting_for_domain instead when an email sender's domain is not verified yet, and the workflow goes live once it is. waiting_for_domain is never accepted as input.
        *
        * * `draft` - Draft
        * * `active` - Active
+       * * `waiting_for_domain` - Waiting For Domain
        * * `archived` - Archived */
       status?: HogFlowStateEnum;
       /** Product surface that owns this workflow (e.g. `loops` for Desktop loops). Set only when creating a workflow. Filter the list with `?origin_product=`.
@@ -58788,6 +58792,16 @@ export namespace Schemas {
          * @nullable
          */
       readonly email_sending_resumed_at: string | null;
+      /**
+         * When someone last enabled the workflow. Null if it was never enabled.
+         * @nullable
+         */
+      readonly enable_requested_at: string | null;
+      /**
+         * When the workflow last went live. Earlier than enable_requested_at, or null, while the workflow waits for its email sender's domain.
+         * @nullable
+         */
+      readonly went_live_at: string | null;
       /** Newest task this loop workflow created, as its last run. Null when the workflow is not a loop or has not run. */
       readonly last_run: HogFlowLastRun | null;
     }
@@ -59328,10 +59342,11 @@ export namespace Schemas {
          */
       tags?: string[];
       readonly version: number;
-      /** draft (no execution), active (live), archived (disabled).
+      /** draft (no execution), active (live), archived (disabled). Send active to enable: the response carries waiting_for_domain instead when an email sender's domain is not verified yet, and the workflow goes live once it is. waiting_for_domain is never accepted as input.
        *
        * * `draft` - Draft
        * * `active` - Active
+       * * `waiting_for_domain` - Waiting For Domain
        * * `archived` - Archived */
       status?: HogFlowStateEnum;
       /** Product surface that owns this workflow. This value cannot change after creation.
@@ -59401,6 +59416,16 @@ export namespace Schemas {
          * @nullable
          */
       readonly email_sending_resumed_at: string | null;
+      /**
+         * When someone last enabled the workflow. Null if it was never enabled.
+         * @nullable
+         */
+      readonly enable_requested_at: string | null;
+      /**
+         * When the workflow last went live. Earlier than enable_requested_at, or null, while the workflow waits for its email sender's domain.
+         * @nullable
+         */
+      readonly went_live_at: string | null;
       /** Newest task this loop workflow created, as its last run. Null when the workflow is not a loop or has not run. */
       readonly last_run: HogFlowLastRun | null;
     }
@@ -87395,10 +87420,11 @@ export namespace Schemas {
          */
       tags?: string[];
       readonly version?: number;
-      /** draft (no execution), active (live), archived (disabled).
+      /** draft (no execution), active (live), archived (disabled). Send active to enable: the response carries waiting_for_domain instead when an email sender's domain is not verified yet, and the workflow goes live once it is. waiting_for_domain is never accepted as input.
        *
        * * `draft` - Draft
        * * `active` - Active
+       * * `waiting_for_domain` - Waiting For Domain
        * * `archived` - Archived */
       status?: HogFlowStateEnum;
       /** Product surface that owns this workflow. This value cannot change after creation.
@@ -87468,6 +87494,16 @@ export namespace Schemas {
          * @nullable
          */
       readonly email_sending_resumed_at?: string | null;
+      /**
+         * When someone last enabled the workflow. Null if it was never enabled.
+         * @nullable
+         */
+      readonly enable_requested_at?: string | null;
+      /**
+         * When the workflow last went live. Earlier than enable_requested_at, or null, while the workflow waits for its email sender's domain.
+         * @nullable
+         */
+      readonly went_live_at?: string | null;
       /** Newest task this loop workflow created, as its last run. Null when the workflow is not a loop or has not run. */
       readonly last_run?: HogFlowLastRun | null;
     }
@@ -133869,6 +133905,7 @@ export namespace Schemas {
     /**
      * * `draft` - Draft
      * * `active` - Active
+     * * `waiting_for_domain` - Waiting For Domain
      * * `archived` - Archived
      */
     status?: HogFlowsListStatus;
@@ -133903,6 +133940,7 @@ export namespace Schemas {
       Active: 'active',
       Archived: 'archived',
       Draft: 'draft',
+      WaitingForDomain: 'waiting_for_domain',
     } as const;
 
     export type HogFlowsAssetsRetrieveParams = {

@@ -2,6 +2,7 @@ from collections.abc import Collection, Iterable
 from typing import Any
 from uuid import UUID
 
+from django.db import transaction
 from django.db.models import F
 
 from posthog.helpers.full_text_search import build_rank
@@ -277,6 +278,15 @@ def get_active_workflows_using_integration(*, team_id: int, integration_id: int)
         WorkflowSummary(id=str(flow.id), name=flow.name or "", status=flow.status)
         for flow in get_active_hog_flows_using_integration(team_id=team_id, integration_id=integration_id)
     ]
+
+
+def enable_waiting_workflows(*, team_id: int, sender_ids: Iterable[int]) -> None:
+    # Deferred because the tasks package imports core tasks that import this facade.
+    from products.workflows.backend.tasks.waiting_workflows import queue_enable_waiting_workflows  # noqa: PLC0415
+
+    ids = sorted(set(sender_ids))
+    if ids:
+        transaction.on_commit(lambda: queue_enable_waiting_workflows(team_id=team_id, sender_ids=ids))
 
 
 def get_active_workflows_using_realtime_cohort(

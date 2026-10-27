@@ -3313,7 +3313,11 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
     status = serializers.ChoiceField(
         choices=HogFlowState.choices,
         required=False,
-        help_text="draft (no execution), active (live), archived (disabled).",
+        help_text=(
+            "draft (no execution), active (live), archived (disabled). Send active to enable: the response "
+            "carries waiting_for_domain instead when an email sender's domain is not verified yet, and the "
+            "workflow goes live once it is. waiting_for_domain is never accepted as input."
+        ),
     )
     trigger_masking = HogFlowMaskingSerializer(
         required=False,
@@ -3452,6 +3456,29 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             "immediately re-trip on the feedback that caused the pause. Null if never paused."
         ),
     )
+    enable_requested_at = serializers.DateTimeField(
+        read_only=True,
+        allow_null=True,
+        help_text="When someone last enabled the workflow. Null if it was never enabled.",
+    )
+    went_live_at = serializers.DateTimeField(
+        read_only=True,
+        allow_null=True,
+        help_text=(
+            "When the workflow last went live. Earlier than enable_requested_at, or null, while the workflow "
+            "waits for its email sender's domain."
+        ),
+    )
+
+    def validate_status(self, value: str) -> str:
+        instance = cast(Optional[WorkflowEditState], self.instance)
+        if value == HogFlowState.WAITING_FOR_DOMAIN and (
+            instance is None or instance.status != HogFlowState.WAITING_FOR_DOMAIN
+        ):
+            raise serializers.ValidationError(
+                "Send active to enable the workflow. It waits for its email sender's domain on its own."
+            )
+        return value
 
     def _stages_draft(self) -> bool:
         # stage_draft rides the raw request body rather than being a serializer field, mirroring
@@ -3554,7 +3581,8 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
         status = data.get("status")
         if status is None and instance:
             status = instance.status
-        if status != "active":
+        # A waiting workflow goes live without another validation, so each edit to it validates like an activation.
+        if status not in (HogFlowState.ACTIVE, HogFlowState.WAITING_FOR_DOMAIN):
             self.context["is_draft"] = True
         elif (
             instance is not None
@@ -3634,6 +3662,8 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             "email_sending_paused_by",
             "email_sending_pause_requires_support",
             "email_sending_resumed_at",
+            "enable_requested_at",
+            "went_live_at",
             "last_run",
             "tags",
         ]
@@ -3659,6 +3689,8 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             "email_sending_paused_by",
             "email_sending_pause_requires_support",
             "email_sending_resumed_at",
+            "enable_requested_at",
+            "went_live_at",
             "last_run",
         ]
 
@@ -5655,12 +5687,15 @@ class HogFlowViewSet(
         ):
             self._sync_suggestions_scout(self.request)
 
-        # PostHog capture for hog_flow activated (draft -> active)
-        if result.previous.get("status") == HogFlowState.DRAFT and serializer.instance.status == HogFlowState.ACTIVE:
+        if (
+            result.previous.get("status") in (HogFlowState.DRAFT, HogFlowState.WAITING_FOR_DOMAIN)
+            and serializer.instance.status == HogFlowState.ACTIVE
+        ):
             self._report_workflow_action(
                 "hog_flow_activated",
                 serializer.instance,
                 {
+                    "activated_by": "user",
                     "edges_count": len(serializer.instance.edges or []),
                     "actions_count": len(serializer.instance.actions or []),
                 },

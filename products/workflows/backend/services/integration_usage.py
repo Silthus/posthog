@@ -1,4 +1,7 @@
 from typing import Any
+from uuid import UUID
+
+from posthog.models.integration import Integration
 
 from products.cdp.backend.models.hog_function_template import HogFunctionTemplate
 from products.workflows.backend.models import HogFlow
@@ -70,3 +73,55 @@ def get_active_hog_flows_using_integration(team_id: int, integration_id: int) ->
             _action_references_integration(action, integration_id, template_cache) for action in (flow.actions or [])
         )
     ]
+
+
+def _as_sender_id(value: object) -> int | None:
+    try:
+        return int(value) if isinstance(value, int | str) else None
+    except ValueError:
+        return None
+
+
+def _dict_at(node: object, *keys: str) -> dict[str, object]:
+    for key in keys:
+        node = node.get(key) if isinstance(node, dict) else None
+    return node if isinstance(node, dict) else {}
+
+
+def _email_sender_ids(action: dict) -> frozenset[int]:
+    # Same rule as the sender selection in Node: a non-empty rotation replaces the single sender.
+    sender = _dict_at(action, "config", "inputs", "email", "value", "from")
+    rotation = sender.get("integrationIds")
+    configured = rotation if isinstance(rotation, list) and rotation else [sender.get("integrationId")]
+    return frozenset(sender_id for value in configured if (sender_id := _as_sender_id(value)) is not None)
+
+
+def email_senders_of(flow: HogFlow) -> frozenset[int]:
+    """The email integrations the workflow's live email steps send from."""
+    return frozenset().union(
+        *(
+            _email_sender_ids(action)
+            for action in flow.actions or []
+            if isinstance(action, dict) and action.get("type") == "function_email"
+        )
+    )
+
+
+def lock_unverified_senders(*, team_id: int, sender_ids: frozenset[int]) -> frozenset[int]:
+    """The senders among ``sender_ids`` that exist and are not verified yet. A sender that no longer exists
+    can never verify, so it does not hold a workflow back. Locks the senders until the caller's transaction
+    ends, so a verification of them waits for the caller's status write and then finds it."""
+    if not sender_ids:
+        return frozenset()
+    senders = Integration.objects.filter(team_id=team_id, kind="email", id__in=sender_ids).only("id", "config")
+    return frozenset(
+        sender.id for sender in senders.order_by("id").select_for_update() if not (sender.config or {}).get("verified")
+    )
+
+
+def waiting_flows_using(*, team_id: int, sender_ids: frozenset[int]) -> list[UUID]:
+    """The waiting workflows of the team that send email from any of ``sender_ids``."""
+    if not sender_ids:
+        return []
+    waiting = HogFlow.objects.filter(team_id=team_id, status=HogFlow.State.WAITING_FOR_DOMAIN).only("id", "actions")
+    return [flow.id for flow in waiting.iterator() if email_senders_of(flow) & sender_ids]
