@@ -14,6 +14,7 @@ jest.mock('lib/hooks/useFeatureFlag', () => ({
 jest.mock('kea', () => ({
     ...jest.requireActual('kea'),
     useValues: jest.fn(),
+    useActions: () => ({ chooseSenders: jest.fn() }),
 }))
 
 jest.mock('@posthog/lemon-ui', () => ({
@@ -48,18 +49,23 @@ const SANDBOX = {
 describe('NativeEmailIntegrationChoice', () => {
     afterEach(cleanup)
 
-    beforeEach(() => {
+    function mockPicker(values: Record<string, unknown>): void {
         jest.mocked(useValues).mockReturnValue({
             integrationsLoading: false,
-            integrations: [ALICE, BOB, SANDBOX],
+            senderIntegrations: [ALICE, BOB],
+            sandboxSenderId: undefined,
+            isSandboxSenderSelected: false,
+            logicProps: {},
+            ...values,
         })
-    })
+    }
 
     it.each([
         [false, 'single-email-sender-select'],
         [true, 'multiple-email-sender-select'],
     ])('renders the expected sender picker when the rotation flag is %s', (flagEnabled, expectedPicker) => {
         mockSenderRotationEnabled = flagEnabled
+        mockPicker({})
 
         render(<NativeEmailIntegrationChoice label="From" value={{ integrationId: 1 }} onChange={jest.fn()} />)
 
@@ -68,19 +74,21 @@ describe('NativeEmailIntegrationChoice', () => {
     })
 
     it.each([false, true])(
-        'leaves the sandbox sender out of the picker when the rotation flag is %s',
+        'offers the sandbox sender the step lists, with its members-only note once selected, when the rotation flag is %s',
         (flagEnabled) => {
             mockSenderRotationEnabled = flagEnabled
+            mockPicker({ senderIntegrations: [ALICE, SANDBOX], sandboxSenderId: 3, isSandboxSenderSelected: true })
 
-            render(<NativeEmailIntegrationChoice label="From" value={{ integrationId: 1 }} onChange={jest.fn()} />)
+            render(<NativeEmailIntegrationChoice label="From" value={{ integrationId: 3 }} onChange={jest.fn()} />)
 
-            expect(screen.getByText(ALICE.display_name)).toBeInTheDocument()
-            expect(screen.queryByText(SANDBOX.display_name)).not.toBeInTheDocument()
+            expect(screen.getByText(SANDBOX.display_name)).toBeInTheDocument()
+            expect(screen.getByText('Delivers only to verified members of your organization.')).toBeInTheDocument()
+            expect(screen.queryByText('Custom sender')).not.toBeInTheDocument()
         }
     )
 
-    it('treats a project with only the sandbox sender as having no email sender', () => {
-        jest.mocked(useValues).mockReturnValue({ integrationsLoading: false, integrations: [SANDBOX] })
+    it('treats a step with no listed sender as having no email sender', () => {
+        mockPicker({ senderIntegrations: [] })
 
         render(<NativeEmailIntegrationChoice label="From" value={{}} onChange={jest.fn()} />)
 
