@@ -1591,7 +1591,7 @@ class IntegrationViewSet(
 
         if flows_using_integration:
             flow_names = _concat_names_or_ids(flows_using_integration)
-            used_by.append(f"active workflows: {flow_names}")
+            used_by.append(f"enabled workflows: {flow_names}")
 
         if functions_using_integration:
             function_names = _concat_names_or_ids(functions_using_integration)
