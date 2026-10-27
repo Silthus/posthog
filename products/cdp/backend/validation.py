@@ -83,9 +83,11 @@ FROM_OVERRIDE_EMAIL_REGEX = re.compile(r'^[^\s@"<>,;]+@[^\s@"<>,;]+\.[^\s@"<>,;]
 
 def _sender_integration_ids(from_value: dict) -> set[int]:
     rotation = from_value.get("integrationIds")
+    # Mirrors selectEmailSenderIntegrationId in the worker: a non-empty rotation replaces integrationId.
+    configured = rotation if isinstance(rotation, list) and rotation else [from_value.get("integrationId")]
     return {
         int(integration_id)
-        for integration_id in [from_value.get("integrationId"), *(rotation if isinstance(rotation, list) else [])]
+        for integration_id in configured
         if isinstance(integration_id, (int, float))
         and not isinstance(integration_id, bool)
         and (not isinstance(integration_id, float) or integration_id.is_integer())
@@ -127,6 +129,13 @@ def validate_sandbox_email_sender(email_value: object, context: dict[str, Any]) 
         raise serializers.ValidationError(
             {"input": "The sandbox sender cannot be used in broadcasts. Select a sender on your own verified domain."}
         )
+    for stored in context.get("existing_email_values") or []:
+        if (
+            isinstance(stored, dict)
+            and email_value["from"] == stored.get("from")
+            and (email_value.get("replyTo") or "") == (stored.get("replyTo") or "")
+        ):
+            return
     is_test_send = getattr(context.get("view"), "action", None) == "invocations"
     if context.get("workflow_action_type") != "function_email" and not is_test_send:
         raise serializers.ValidationError(
@@ -135,13 +144,6 @@ def validate_sandbox_email_sender(email_value: object, context: dict[str, Any]) 
                 "Select a sender on your own verified domain for destinations."
             }
         )
-    for stored in context.get("existing_email_values") or []:
-        if (
-            isinstance(stored, dict)
-            and email_value["from"] == stored.get("from")
-            and (email_value.get("replyTo") or "") == (stored.get("replyTo") or "")
-        ):
-            return
     if len(integration_ids) != 1:
         raise serializers.ValidationError(
             {

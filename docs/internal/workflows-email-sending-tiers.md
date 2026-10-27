@@ -22,10 +22,13 @@ The `workflows-sandbox-sender` flag enables a PostHog-managed email integration 
 The endpoint requires `integration:write` and project membership. Repeated requests keep the same integration and refresh its display name from the organization name.
 Set `WORKFLOWS_SANDBOX_SENDER_DOMAIN`, `SES_SANDBOX_FROM_ADDRESS`, and `SES_SANDBOX_TENANT_NAME` in Django; any empty value leaves the endpoint unavailable.
 The worker sends from the same `SES_SANDBOX_FROM_ADDRESS`, so set it once for Django and the worker. The address the UI shows is then the address the worker sends from.
+Until the worker has a sandbox delivery route, it skips every send through the managed integration and logs the reason. The workflow email step does not offer it.
 Users cannot edit, verify, or remove the managed integration, or register their own integration on the shared domain.
 The managed integration is excluded from project SES tenant migration, identity cleanup, and the reputation page's domain breakdown.
 Deploy the schema, recipient restrictions, daily caps, and tenant pause checks first. Configure the shared SES route, then enable `WORKFLOWS_SANDBOX_SENDER_ENABLED` on the worker and CDP API. Enable `workflows-sandbox-sender` last so provisioning and sender selection follow delivery readiness.
 The sandbox sender is available only in workflow email steps and test sends. Broadcasts, destinations, sender rotation, custom From values, and Reply-To overrides are rejected. Unchanged stored sender settings remain editable after the flag turns off.
+When a project has a verified own sender, a workflow with email steps on the sandbox sender shows a banner that moves all of those steps to the own sender in one click.
+The switch saves as a draft change. An active workflow keeps sending from the sandbox sender until someone publishes.
 
 ### Sending tiers
 
@@ -52,7 +55,6 @@ None of them are wired there yet; the charts change is part of turning the rollo
 
 In order: staff suspension or an AWS-paused tenant drops to tier 0; a dirty 7-day window, a workflow auto-pause, or a HIGH tenant reputation impact demotes one tier (at most once per cooldown, anchored on the last rate demotion); a tier above 0 with zero sends for the decay period drops one step per period; promotion needs the dwell served, real use of the tier (at least the use ratio of the daily cap on the minimum number of separate days, counted only after the tier anchor), a clean 30-day window, and a clean tenant reputation.
 Rates only count on a meaningful denominator; below the complaint floor, the absolute complaint backstop still applies, including in windows with no sends.
-Sandbox sender sends never count as sends: the sweep subtracts `email_sandbox_sent` from `email_sent` per day, floored at zero. Their bounces and complaints still count.
 Pinned teams never move automatically.
 
 While the tier is enforced, the sweep notifies teams it moved: a rate demotion sends an in-app notification plus an email to project admins, and an earned promotion sends an in-app notification only.
@@ -71,19 +73,6 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
 
 - The batch audience cap is decided when the batch is dispatched. Adding an email step to the workflow while a batch is queued does not re-cap it; the send-time buckets still cap every email at execution. This is why enforcement requires the worker caps to be deployed (see the rollout order).
 - Test-panel sends bypass the team buckets on purpose, matching the per-workflow rate limit.
-- Sandbox sender sends bypass the team buckets without spending their tokens. Sandbox limits run independently.
-  The worker holds every sandbox send, test sends included, to a daily cap per project (`WORKFLOWS_SANDBOX_DAILY_TEAM_CAP`, one token per recipient copy) and per recipient address within that organization (`WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP`). These are continuously refilling token buckets, not calendar-day counters; an idle bucket starts full and refills its capacity over 24 hours.
-  A reached cap skips the send instead of delaying it. A limiter error or an empty or invalid cap value skips every sandbox send.
-  Cap keys and the final membership check share one organization snapshot, valid for at most one minute. A stalled claim or member lookup that outlives that snapshot skips the send and returns the claim.
-  SES throttle responses return the sandbox claim before the existing delivery retry. Returns are deduplicated, and Valkey ignores a return command that arrives more than five minutes after it was issued.
-  The SES tenant-state webhook and daily reconciliation mirror `SES_SANDBOX_TENANT_NAME` into `SandboxSenderTenantState` without emailing project admins.
-  Every sandbox send, including test sends, skips when that tenant's mirrored sending status is `DISABLED` or the pause lookup fails. A missing row allows sending, with SES enforcing its own state.
-  The worker rechecks pauses after the daily-cap claim and returns the claim when that recheck blocks delivery.
-  A committed state change reaches the workers through the `reload-sandbox-sender-state` message. Own-sender sends do not read this state.
-  Test sends run inline in the CDP API, so the API reads the same `SES_RATE_LIMITER_VALKEY_*` settings as the email worker. Without them, every sandbox test send is skipped.
-  CDP API opens the SES Valkey pool only when sandbox delivery is enabled; otherwise its MX validation uses the existing local cache and DNS.
-  The CDP API's SES webhook captures `workflows sandbox email delivered` for a delivery on `SES_SANDBOX_CONFIGURATION_SET`, test sends included. Without that setting on the CDP API, the event never fires.
-  Deploy membership checks, daily caps, and the shared pause gate first. Configure the SES identity and Valkey pool, enable `WORKFLOWS_SANDBOX_SENDER_ENABLED`, then enable the UI flag.
 - The buckets are token buckets: a full idle bucket plus refill allows up to roughly twice the stated cap in the very first period. The bucket TTLs exceed the refill periods so this does not recur from idling.
 - A denied send parks until every short bucket has refilled enough to cover it, instead of retrying on a fixed few-minute cadence.
   The computed wait is capped at one hour and then jittered 1x to 2x, so a parked send can wait just under two hours between attempts.
@@ -93,11 +82,3 @@ Decay, suspension drops, admin recomputes, and the backfill stay silent.
   A send denied because the limiter itself failed keeps the shorter token bucket cadence, at most 5 to 10 minutes.
 - Gmail provides no per-message feedback loop, so complaint rates (ours and AWS's) cannot see Gmail complaints at all.
 - The `HOGFLOW_BATCH_TRIGGER_ELEVATED_TEAM_IDS` allowlist elevates a team to the top tier in Django only: the UI, the admin, and the batch audience cap show top-tier numbers, but the worker's send-time buckets read the stored tier. An allowlisted team below the top tier is therefore throttled at its stored tier while being told otherwise, and its shadow-mode delay counts overstate real impact. Before enforcing, pin each allowlisted team at the top tier from the Django admin and empty the allowlist, rather than plumbing the list into the worker.
-
-### Sandbox delivery
-
-Sandbox email uses a fixed SES tenant, configuration set, and From address. Set `SES_SANDBOX_TENANT_NAME`, `SES_SANDBOX_CONFIGURATION_SET`, and `SES_SANDBOX_FROM_ADDRESS` on the worker. Set the same `SES_SANDBOX_TENANT_NAME` and `SES_SANDBOX_FROM_ADDRESS` on Django web and Celery so webhooks and reconciliation mirror the shared tenant; while either is empty, the provisioning endpoint stays unavailable. Django stores and shows that From address, and it must belong to the shared SES identity.
-Sandbox sends disable click tracking and unsubscribe headers because the complete stack restricts them to verified organization members for internal testing. Marketing delivery to external audiences requires a verified sender.
-Every To, CC, and BCC address must belong to an active organization member with a verified email address. Membership snapshots expire within one minute, and the worker checks recipients again immediately before delivery. A failed or stale membership check skips the send and explains the blocked addresses in the run log.
-HTML is parsed and normalized before the identification footer is appended. Root clipping and visibility styles are overridden while template typography is preserved; malformed markup may render differently from an own-domain send. Preview text is parsed separately so escaped template values remain readable.
-The visible footer is best effort across email clients and arbitrary template CSS. Signed message tracking headers retain sender attribution independently of the template.

@@ -161,6 +161,7 @@ class TestSandboxSenderAPI(APIBaseTest):
                 {"config": {"email": "x@sandbox.example.com", "name": "Other", "provider": "sandbox"}},
             ),
             ("delete", "delete", "", None),
+            ("check the domain status", "get", "email/status/", None),
         ]
     )
     def test_users_cannot_change_the_sandbox_sender(

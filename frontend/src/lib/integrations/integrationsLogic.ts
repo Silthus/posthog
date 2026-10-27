@@ -28,7 +28,6 @@ import { EmailIntegrationDomainGroupedType, IntegrationKind, IntegrationType } f
 
 import {
     integrationsCreate,
-    integrationsEmailSandboxSenderCreate,
     integrationsGithubAvailableInstallationsRetrieve,
     integrationsGithubReposRetrieve,
     integrationsGithubLinkExistingCreate,
@@ -49,26 +48,7 @@ import type { AvailableSetupTaskIdsEnumApi } from '../../generated/core/api.sche
 import type { PreflightStatus, UserBasicType } from '../../types'
 import { ICONS, getIntegrationNameFromKind, isSandboxEmailSender } from './utils'
 
-export type SandboxEmailSenderProvisionResult = 'provisioned' | 'unavailable' | 'failed'
-
 const INTEGRATIONS_POLL_INTERVAL_MS = 30_000
-const SANDBOX_ENSURE_TIMEOUT_MS = 15_000
-
-async function requestSandboxEmailSender(
-    projectId: string
-): Promise<{ result: SandboxEmailSenderProvisionResult; error: string | null }> {
-    try {
-        await integrationsEmailSandboxSenderCreate(projectId, {
-            signal: AbortSignal.timeout(SANDBOX_ENSURE_TIMEOUT_MS),
-        })
-        return { result: 'provisioned', error: null }
-    } catch (error) {
-        return {
-            result: error instanceof ApiError && error.status === 404 ? 'unavailable' : 'failed',
-            error: error instanceof ApiError ? error.detail : null,
-        }
-    }
-}
 
 function toastApiError(e: unknown): void {
     const detail = e instanceof ApiError ? e.detail : null
@@ -215,10 +195,6 @@ export interface integrationsLogicValues {
     requestedAccessKinds: IntegrationKind[]
     sandboxEmailSender: IntegrationType | null
     sandboxEmailSenderEnabled: boolean
-    sandboxEmailSenderProvisionError: string | null
-    sandboxEmailSenderProvisionResult: SandboxEmailSenderProvisionResult | null
-    sandboxEmailSenderProvisionResultLoading: boolean
-    sandboxEmailSenderSetupError: string | null
     selectedIntegration: IntegrationType | null
     setupModalOpen: boolean
     setupModalType: ChannelType | null
@@ -243,13 +219,6 @@ export interface integrationsLogicActions {
         kind: string
         missingScopes: string[]
     } // eventUsageLogic
-    setFeatureFlags: (
-        flags: string[],
-        variants: Record<string, boolean | string>
-    ) => {
-        flags: string[]
-        variants: Record<string, boolean | string>
-    } // featureFlagLogic
     markTaskAsCompleted: (taskIdOrIds: AvailableSetupTaskIdsEnumApi | AvailableSetupTaskIdsEnumApi[]) => {
         taskIdOrIds: AvailableSetupTaskIdsEnumApi | AvailableSetupTaskIdsEnumApi[]
     } // globalSetupLogic
@@ -271,9 +240,6 @@ export interface integrationsLogicActions {
     }
     deleteIntegration: (id: number) => {
         id: number
-    }
-    ensureSandboxEmailSender: () => {
-        value: true
     }
     handleOauthCallback: (
         kind: IntegrationKind,
@@ -595,24 +561,6 @@ export interface integrationsLogicActions {
         channelType: 'apns' | 'email' | 'firebase' | 'slack' | 'twilio' | undefined
         integration: IntegrationType | undefined
     }
-    provisionMissingSandboxEmailSender: () => {
-        value: true
-    }
-    provisionSandboxEmailSender: () => any
-    provisionSandboxEmailSenderFailure: (
-        error: string,
-        errorObject?: any
-    ) => {
-        error: string
-        errorObject?: any
-    }
-    provisionSandboxEmailSenderSuccess: (
-        sandboxEmailSenderProvisionResult: SandboxEmailSenderProvisionResult | null,
-        payload?: any
-    ) => {
-        sandboxEmailSenderProvisionResult: SandboxEmailSenderProvisionResult | null
-        payload?: any
-    }
     requestIntegrationAccess: ({ kind }: { kind: IntegrationKind }) => {
         kind: IntegrationKind
     }
@@ -726,9 +674,6 @@ export interface integrationsLogicActions {
             kind: IntegrationKind
         }
     }
-    retrySandboxEmailSender: () => {
-        value: true
-    }
     setAccessRequestReason: (reason: string) => {
         reason: string
     }
@@ -743,9 +688,6 @@ export interface integrationsLogicActions {
         failed: boolean
         projectId: number | string
         response: GitHubAvailableInstallationsResponseApi | null
-    }
-    setSandboxEmailSenderProvisionError: (error: string | null) => {
-        error: string | null
     }
     startPolling: () => {
         value: true
@@ -838,11 +780,6 @@ export interface integrationsLogicMeta {
             githubRepositoriesTotal: Record<number, number>
         ) => (integrationId: number) => number | null
         sandboxEmailSenderEnabled: (featureFlags: FeatureFlagsSet) => boolean
-        sandboxEmailSenderSetupError: (
-            sandboxEmailSenderEnabled: boolean,
-            sandboxEmailSenderProvisionResult: SandboxEmailSenderProvisionResult | null,
-            sandboxEmailSenderProvisionError: string | null
-        ) => string | null
         sandboxEmailSender: (
             integrations: IntegrationType[] | null,
             sandboxEmailSenderEnabled: boolean
@@ -878,8 +815,6 @@ export const integrationsLogic = kea<integrationsLogicType>([
             ['reportIntegrationConnectRejected', 'reportIntegrationScopeShortfallShown'],
             teamLogic,
             ['loadCurrentTeamSuccess'],
-            featureFlagLogic,
-            ['setFeatureFlags'],
         ],
     })),
 
@@ -891,10 +826,6 @@ export const integrationsLogic = kea<integrationsLogicType>([
             callback,
         }),
         deleteIntegration: (id: number) => ({ id }),
-        ensureSandboxEmailSender: true,
-        retrySandboxEmailSender: true,
-        setSandboxEmailSenderProvisionError: (error: string | null) => ({ error }),
-        provisionMissingSandboxEmailSender: true,
         invalidateGithubSuggestions: true,
         setGithubDisconnecting: (disconnecting: boolean) => ({ disconnecting }),
         loadGithubAvailableInstallations: true,
@@ -947,23 +878,6 @@ export const integrationsLogic = kea<integrationsLogicType>([
                 loadIntegrationsSuccess: () => false,
                 clearIntegrations: () => false,
                 loadIntegrationsFailure: () => true,
-            },
-        ],
-        sandboxEmailSenderProvisionError: [
-            null as string | null,
-            {
-                clearIntegrations: () => null,
-                provisionSandboxEmailSender: () => null,
-                retrySandboxEmailSender: () => null,
-                setSandboxEmailSenderProvisionError: (_, { error }) => error,
-            },
-        ],
-        sandboxEmailSenderProvisionResult: [
-            null as SandboxEmailSenderProvisionResult | null,
-            {
-                clearIntegrations: () => null,
-                ensureSandboxEmailSender: (state) => (state === 'failed' ? null : state),
-                retrySandboxEmailSender: () => null,
             },
         ],
         githubDisconnecting: [false, { setGithubDisconnecting: (_, { disconnecting }) => disconnecting }],
@@ -1105,7 +1019,7 @@ export const integrationsLogic = kea<integrationsLogicType>([
             },
         ],
     }),
-    loaders(({ actions, asyncActions, values, cache }) => ({
+    loaders(({ actions, values, cache }) => ({
         integrations: [
             null as IntegrationType[] | null,
             {
@@ -1228,45 +1142,6 @@ export const integrationsLogic = kea<integrationsLogicType>([
                 },
             },
         ],
-        sandboxEmailSenderProvisionResult: [
-            null as SandboxEmailSenderProvisionResult | null,
-            {
-                provisionSandboxEmailSender: async (): Promise<SandboxEmailSenderProvisionResult | null> => {
-                    const projectId = values.currentProjectId
-                    if (!cache.sandboxProvisionRequest || cache.sandboxProvisionRequest.projectId !== projectId) {
-                        const promise = requestSandboxEmailSender(String(projectId))
-                            .then(async (result): Promise<Awaited<ReturnType<typeof requestSandboxEmailSender>>> => {
-                                if (values.currentProjectId === projectId && result.result === 'provisioned') {
-                                    await asyncActions.loadIntegrations()
-                                    if (
-                                        values.currentProjectId === projectId &&
-                                        !values.integrations?.some(isSandboxEmailSender)
-                                    ) {
-                                        return {
-                                            result: 'failed',
-                                            error: 'Could not load the sandbox sender after setup. Try again.',
-                                        }
-                                    }
-                                }
-                                return result
-                            })
-                            .finally(() => {
-                                if (cache.sandboxProvisionRequest?.promise === promise) {
-                                    cache.sandboxProvisionRequest = undefined
-                                }
-                            })
-                        cache.sandboxProvisionRequest = { projectId, promise }
-                    }
-                    const result: Awaited<ReturnType<typeof requestSandboxEmailSender>> =
-                        await cache.sandboxProvisionRequest.promise
-                    if (values.currentProjectId !== projectId) {
-                        return values.sandboxEmailSenderProvisionResult
-                    }
-                    actions.setSandboxEmailSenderProvisionError(result.error)
-                    return result.result
-                },
-            },
-        ],
         accessRequest: [
             null as IntegrationKind | null,
             {
@@ -1295,7 +1170,6 @@ export const integrationsLogic = kea<integrationsLogicType>([
             cache.githubProjectGeneration = (cache.githubProjectGeneration ?? 0) + 1
             actions.linkExistingGithubInstallationSuccess(null)
             cache.githubConnectionFingerprint = undefined
-            cache.sandboxEmailSenderWanted = false
             // Clear only on a project switch: same-project team refreshes keep the connected integrations.
             actions.clearIntegrations()
             actions.invalidateGithubSuggestions()
@@ -1321,38 +1195,7 @@ export const integrationsLogic = kea<integrationsLogicType>([
                 }
             }
         },
-        retrySandboxEmailSender: () => actions.ensureSandboxEmailSender(),
-        ensureSandboxEmailSender: () => {
-            cache.sandboxEmailSenderWanted = true
-            if (values.integrations) {
-                actions.provisionMissingSandboxEmailSender()
-            }
-        },
-        provisionMissingSandboxEmailSender: () => {
-            if (
-                !values.sandboxEmailSenderEnabled ||
-                values.sandboxEmailSender ||
-                values.sandboxEmailSenderProvisionResult ||
-                values.sandboxEmailSenderProvisionResultLoading
-            ) {
-                return
-            }
-            actions.provisionSandboxEmailSender()
-        },
-        setFeatureFlags: () => {
-            if (cache.sandboxEmailSenderWanted && values.integrations) {
-                actions.provisionMissingSandboxEmailSender()
-            }
-        },
-        provisionSandboxEmailSenderSuccess: () => {
-            if (cache.sandboxEmailSenderWanted && values.integrations) {
-                actions.provisionMissingSandboxEmailSender()
-            }
-        },
         loadIntegrationsSuccess: ({ integrations }) => {
-            if (cache.sandboxEmailSenderWanted) {
-                actions.provisionMissingSandboxEmailSender()
-            }
             const fingerprint = JSON.stringify(
                 integrations
                     ?.filter((row) => row.kind === 'github')
@@ -1713,17 +1556,6 @@ export const integrationsLogic = kea<integrationsLogicType>([
         sandboxEmailSenderEnabled: [
             (s) => [s.featureFlags],
             (featureFlags: FeatureFlagsSet): boolean => !!featureFlags[FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER],
-        ],
-        sandboxEmailSenderSetupError: [
-            (s) => [
-                s.sandboxEmailSenderEnabled,
-                s.sandboxEmailSenderProvisionResult,
-                s.sandboxEmailSenderProvisionError,
-            ],
-            (enabled: boolean, result: string | null, provisionError: string | null): string | null =>
-                enabled && (result === 'failed' || result === 'unavailable')
-                    ? provisionError || 'Could not set up the sandbox sender.'
-                    : null,
         ],
         sandboxEmailSender: [
             (s) => [s.integrations, s.sandboxEmailSenderEnabled],

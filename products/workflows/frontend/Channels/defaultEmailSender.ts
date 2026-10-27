@@ -2,7 +2,7 @@ import { isSandboxEmailSender } from 'lib/integrations/utils'
 
 import { IntegrationType } from '~/types'
 
-export type DefaultEmailSenderReason = 'project_default' | 'only_verified_sender' | 'sandbox_sender'
+export type DefaultEmailSenderReason = 'project_default' | 'only_verified_sender'
 
 export interface DefaultEmailSender {
     integrationId: number

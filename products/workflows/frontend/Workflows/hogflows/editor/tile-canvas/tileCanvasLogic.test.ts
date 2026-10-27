@@ -1,8 +1,6 @@
 import { expectLogic } from 'kea-test-utils'
 import posthog from 'posthog-js'
 
-import { lemonToast } from '@posthog/lemon-ui'
-
 import { loadAppMetricsTotals } from 'lib/components/AppMetrics/appMetricsLogic'
 
 import { useMocks } from '~/mocks/jest'
@@ -218,7 +216,7 @@ describe('tileCanvasLogic', () => {
             logic.mount()
         })
 
-        const sources = [
+        it.each([
             {
                 source: 'palette',
                 add: (): void => {
@@ -239,28 +237,12 @@ describe('tileCanvasLogic', () => {
                 source: 'quick add',
                 add: (): void => logic.actions.addStepAt(delayStep, logic.values.workflow.edges[0]),
             },
-        ]
-
-        it.each(sources)('counts a step added from the $source', ({ source, add }) => {
+        ])('counts a step added from the $source', ({ source, add }) => {
             const capture = jest.spyOn(posthog, 'capture')
 
             add()
 
             expect(capture).toHaveBeenCalledWith('workflows tile canvas step added', { source, step_type: 'delay' })
-        })
-
-        it.each(sources)('asks to wait instead of adding from the $source while an email is added', ({ add }) => {
-            hogFlowEditorLogic().actions.setEmailInsertionPending(true)
-            const capture = jest.spyOn(posthog, 'capture')
-            const toast = jest.spyOn(lemonToast, 'info').mockImplementation()
-
-            add()
-
-            expect(capture).not.toHaveBeenCalledWith('workflows tile canvas step added', expect.anything())
-            expect(toast).toHaveBeenCalledWith('An email step is still being added. Try again in a moment.')
-            expect(logic.values.nodeToBeAdded).toBeNull()
-            capture.mockRestore()
-            toast.mockRestore()
         })
 
         it.each(['startMovingNode', 'startCopyingNode'] as const)(

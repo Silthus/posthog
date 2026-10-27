@@ -269,7 +269,6 @@ export type MinimalAppMetric = {
         | 'email_blocked'
         | 'email_unsubscribed'
         | 'email_untracked'
-        | 'email_sandbox_sent'
         | 'push_sent'
         | 'push_failed'
         | 'push_skipped'
@@ -363,6 +362,7 @@ export type CyclotronJobInvocationResult<T extends CyclotronJobInvocation = Cycl
      * flag nor an error, so nothing else on the result tells the two apart.
      */
     deliveredToRecipient?: boolean
+    emailSendResult?: { status: 'accepted' | 'skipped' | 'failed'; reason?: string }
     // The run was canceled rather than succeeding or failing. Only meaningful with
     // finished=true and no error: the job row and the lifecycle row both flip to
     // 'canceled'.

@@ -105,6 +105,12 @@ class TestBroadcastConversionAPI(APIBaseTest):
             ("sandbox sender stored as a string", {"integrationId": "sandbox"}, str, False),
             ("sandbox sender in a rotation", {"integrationIds": ["own", "sandbox"]}, int, False),
             ("own sender", {"integrationId": "own"}, int, True),
+            (
+                "own rotation with a stale sandbox fallback",
+                {"integrationId": "sandbox", "integrationIds": ["own"]},
+                int,
+                True,
+            ),
         ]
     )
     def test_a_workflow_sending_through_the_sandbox_sender_does_not_become_a_broadcast(

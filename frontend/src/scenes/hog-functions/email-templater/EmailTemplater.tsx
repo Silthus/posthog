@@ -5,8 +5,17 @@ import { ReactNode, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import EmailEditor, { EditorRef } from 'react-email-editor'
 
-import { IconCollapse, IconExpand, IconPlus, IconX } from '@posthog/icons'
-import { LemonButton, LemonCard, LemonLabel, LemonModal, LemonSegmentedButton } from '@posthog/lemon-ui'
+import { IconCollapse, IconExpand, IconExternal, IconPlus, IconX } from '@posthog/icons'
+import {
+    LemonButton,
+    LemonCard,
+    LemonInputSelect,
+    LemonLabel,
+    LemonModal,
+    LemonSegmentedButton,
+    LemonSelect,
+    LemonTag,
+} from '@posthog/lemon-ui'
 
 import {
     CyclotronJobTemplateSuggestionsButton,
@@ -16,14 +25,19 @@ import {
     insertTemplateReference,
     templateReferenceForOption,
 } from 'lib/components/CyclotronJob/cyclotronJobTemplateSuggestionsLogic'
+import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
+import { integrationsLogic } from 'lib/integrations/integrationsLogic'
+import { SANDBOX_EMAIL_SENDER_NOTE } from 'lib/integrations/utils'
 import { LemonField } from 'lib/lemon-ui/LemonField'
 import { LemonInput } from 'lib/lemon-ui/LemonInput/LemonInput'
 import { LemonTextArea } from 'lib/lemon-ui/LemonTextArea'
 import { CodeEditorInline } from 'lib/monaco/CodeEditorInline'
 import { CodeEditorResizeable } from 'lib/monaco/CodeEditorResizable'
 import { sceneAgentPanelLogic } from 'scenes/max/sceneAgentPanelLogic'
+import { urls } from 'scenes/urls'
 
 import { sceneLayoutLogic } from '~/layout/scenes/sceneLayoutLogic'
+import { IntegrationType } from '~/types'
 
 import 'products/workflows/frontend/TemplateLibrary/MessageTemplatesGrid.scss'
 import { MessageTemplateCard } from 'products/workflows/frontend/TemplateLibrary/MessageTemplateCard'
@@ -33,9 +47,8 @@ import { previewLinkTargetCustomJs } from './custom-tools/previewLinkTarget'
 import { unsubscribeLinkToolCustomJs } from './custom-tools/unsubscribeLinkTool'
 import { EmailSenderSummary } from './EmailSenderSummary'
 import { EMAIL_TYPE_SUPPORTED_FIELDS, EmailTemplaterLogicProps, emailTemplaterLogic } from './emailTemplaterLogic'
-import { LiquidSupportedText } from './LiquidSupportedText'
-import { NativeEmailIntegrationChoice } from './NativeEmailIntegrationChoice'
-import { EmailFieldErrors } from './types'
+import { selectedSenderIds } from './selectSenders'
+import { EmailFieldErrors, EmailTemplateFrom, MAX_WORKFLOW_EMAIL_SENDERS } from './types'
 
 export type EmailEditorMode = 'full' | 'preview'
 
@@ -254,6 +267,240 @@ function DestinationEmailTemplaterForm({
                 )}
             </Form>
         </>
+    )
+}
+
+export function NativeEmailIntegrationChoice({
+    label,
+    onChange,
+    value,
+}: {
+    /** Rendered inside the sender row so it aligns with the select rather than spanning the override rows. */
+    label: ReactNode
+    onChange: (value: EmailTemplateFrom) => void
+    value?: EmailTemplateFrom
+}): JSX.Element {
+    const { integrationsLoading } = useValues(integrationsLogic)
+    const { logicProps, senderIntegrations, sandboxSenderId, isSandboxSenderSelected } = useValues(emailTemplaterLogic)
+    const { chooseSenders } = useActions(emailTemplaterLogic)
+    const senderRotationEnabled = useFeatureFlag('WORKFLOWS_EMAIL_SENDER_ROTATION')
+
+    // Presence of the override keys is what reveals the inputs, so a saved override is
+    // visible again on reopen without any separate reveal state.
+    const overridesVisible = !isSandboxSenderSelected && (value?.email !== undefined || value?.name !== undefined)
+
+    const onChangeIntegration = (integrationId: number): void => {
+        if (integrationId === -1) {
+            window.open(urls.workflows('channels'), '_blank')
+            return
+        }
+        chooseSenders([integrationId])
+    }
+
+    const senderLabel = (integration: IntegrationType): JSX.Element => (
+        <>
+            <span translate="no">{integration.display_name}</span>
+            {integration.id === sandboxSenderId && (
+                <LemonTag type="highlight" className="ml-2 align-middle">
+                    Sandbox
+                </LemonTag>
+            )}
+        </>
+    )
+
+    if (!integrationsLoading && senderIntegrations.length === 0) {
+        return (
+            <div className="flex gap-2 justify-between items-center">
+                {label}
+                <div className="flex gap-2 items-center">
+                    <span className="text-muted">No email senders configured yet</span>
+                    <LemonButton
+                        size="small"
+                        type="tertiary"
+                        to={urls.workflows('channels')}
+                        targetBlank
+                        className="m-1"
+                        icon={<IconExternal />}
+                    >
+                        Connect email sender
+                    </LemonButton>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="flex flex-col">
+            <div className="flex gap-2 items-center">
+                {label}
+                {senderRotationEnabled ? (
+                    <div className="flex flex-col flex-1">
+                        <LemonInputSelect<number>
+                            className="m-1 flex-1"
+                            mode="multiple"
+                            placeholder="Choose email senders"
+                            loading={integrationsLoading}
+                            options={senderIntegrations.map((integration) => ({
+                                key: String(integration.id),
+                                label: integration.display_name,
+                                labelComponent: senderLabel(integration),
+                                value: integration.id,
+                            }))}
+                            value={selectedSenderIds(value)}
+                            size="small"
+                            fullWidth
+                            autoWidth={false}
+                            onChange={chooseSenders}
+                            data-attr="workflow-email-sender-select"
+                            action={{
+                                children: 'Add new email sender',
+                                icon: <IconExternal />,
+                                onClick: () => window.open(urls.workflows('channels'), '_blank'),
+                            }}
+                        />
+                        <span className="px-2 pb-1 text-xs text-muted">
+                            {isSandboxSenderSelected
+                                ? SANDBOX_EMAIL_SENDER_NOTE
+                                : `Choose up to ${MAX_WORKFLOW_EMAIL_SENDERS} senders. Each workflow run uses one sender from this list.`}
+                        </span>
+                    </div>
+                ) : (
+                    <div className="flex flex-col flex-1 min-w-0">
+                        <LemonSelect
+                            className="m-1 flex-1"
+                            type="tertiary"
+                            placeholder="Choose email sender"
+                            loading={integrationsLoading}
+                            options={[
+                                {
+                                    title: 'Email senders',
+                                    options: senderIntegrations.map((integration) => ({
+                                        label: integration.display_name,
+                                        labelInMenu: senderLabel(integration),
+                                        value: integration.id,
+                                    })),
+                                },
+                                {
+                                    options: [
+                                        {
+                                            label: 'Add new email sender',
+                                            icon: <IconExternal />,
+                                            value: -1,
+                                        },
+                                    ],
+                                },
+                            ]}
+                            value={value?.integrationId}
+                            size="small"
+                            fullWidth
+                            onChange={onChangeIntegration}
+                            data-attr="workflow-email-sender-select"
+                        />
+                        {isSandboxSenderSelected && (
+                            <span className="px-2 pb-1 text-xs text-muted">{SANDBOX_EMAIL_SENDER_NOTE}</span>
+                        )}
+                    </div>
+                )}
+                {!overridesVisible && !isSandboxSenderSelected && (
+                    <LemonButton
+                        size="xsmall"
+                        type="secondary"
+                        icon={<IconPlus />}
+                        className="mr-2 shrink-0"
+                        data-attr="email-from-custom-sender"
+                        onClick={() => onChange({ ...value, email: '', name: '' })}
+                        tooltip="Set a custom sender address or name, with template support"
+                    >
+                        Custom sender
+                    </LemonButton>
+                )}
+            </div>
+            {overridesVisible && (
+                <>
+                    <div className="flex gap-2 items-center border-t">
+                        <LemonLabel
+                            className="min-w-30 shrink-0"
+                            info="The address to send from. Templates are supported, so the address can come from the triggering event. It must be on every selected sender's verified domain. Leave empty to use the sender's address."
+                        >
+                            Custom address
+                        </LemonLabel>
+                        <LiquidSupportedText
+                            value={value?.email ?? ''}
+                            onChange={(email) => onChange({ ...value, email })}
+                            globals={logicProps.variables}
+                        />
+                        <LemonButton
+                            size="xsmall"
+                            type="tertiary"
+                            icon={<IconX />}
+                            className="mr-2"
+                            data-attr="email-from-custom-sender-remove"
+                            onClick={() => onChange({ ...value, email: undefined, name: undefined })}
+                            tooltip="Remove custom sender"
+                        />
+                    </div>
+                    <div className="flex gap-2 items-center border-t">
+                        <LemonLabel
+                            className="min-w-30 shrink-0"
+                            info="The sender name shown in the recipient's inbox. Templates are supported. Leave empty to use the sender's name."
+                        >
+                            Custom name
+                        </LemonLabel>
+                        <LiquidSupportedText
+                            value={value?.name ?? ''}
+                            onChange={(name) => onChange({ ...value, name })}
+                            globals={logicProps.variables}
+                        />
+                    </div>
+                </>
+            )}
+        </div>
+    )
+}
+
+function LiquidSupportedText({
+    value,
+    onChange,
+    globals,
+}: {
+    value: string
+    onChange: (value?: string) => void
+    globals: any
+}): JSX.Element {
+    const { templatingEngine } = useValues(emailTemplaterLogic)
+    const { setTemplatingEngine } = useActions(emailTemplaterLogic)
+    const { onEditorMount, cursorOffset } = useTemplateEditorCursor()
+
+    const templating = templatingEngine ?? 'hog'
+
+    return (
+        <span className="flex grow group relative justify-between">
+            <span className="absolute top-0 right-2 z-20 p-px opacity-0 transition-opacity group-hover:opacity-100">
+                <CyclotronJobTemplateSuggestionsButton
+                    templating={templatingEngine}
+                    setTemplatingEngine={setTemplatingEngine}
+                    value={value}
+                    onOptionSelect={(option) => {
+                        onChange?.(
+                            insertTemplateReference(
+                                value || '',
+                                templateReferenceForOption(option, templating),
+                                cursorOffset()
+                            )
+                        )
+                    }}
+                />
+            </span>
+            <CodeEditorInline
+                embedded
+                className="flex-1"
+                globals={globals}
+                value={value}
+                language={templating === 'hog' ? 'hogTemplate' : 'liquid'}
+                onChange={onChange}
+                onMount={onEditorMount}
+            />
+        </span>
     )
 }
 
