@@ -8,7 +8,8 @@ import { TeamManager } from '~/common/utils/team-manager'
 import { Hub } from '~/types'
 
 import { SandboxEmailSender } from '../messaging/sandbox-email-sender'
-import { RateLimiterService } from './rate-limiter.service'
+import { createSesRateLimiterValkeyPool } from './rate-limiter-valkey-pool'
+import { ClaimRequest, IssuedClaim, RateLimiterService } from './rate-limiter.service'
 
 const KEY = `@posthog-test/ses-rate-limiter/${randomUUID()}/bucket`
 
@@ -473,9 +474,31 @@ describe('RateLimiterService', () => {
             }
             const replayingLimiter = new RateLimiterService(replayingRedis, { name: 'ses-rate-limiter' })
 
-            expect(await replayingLimiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
-            expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
+            expect(await replayingLimiter.claimAllOrNothing([bucket])).toMatchObject({ granted: true })
+            expect(await limiter.claimAllOrNothing([bucket])).toMatchObject({ granted: true })
             expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: false, deniedIndexes: [0] })
+        })
+
+        it('fails closed through an optional pool whose Valkey is unreachable', async () => {
+            const unreachableValkey = createSesRateLimiterValkeyPool(
+                {
+                    SES_RATE_LIMITER_VALKEY_HOST: '127.0.0.1',
+                    SES_RATE_LIMITER_VALKEY_PORT: 1,
+                    SES_RATE_LIMITER_VALKEY_PASSWORD: '',
+                    SES_RATE_LIMITER_VALKEY_TLS: false,
+                    REDIS_POOL_MIN_SIZE: 1,
+                    REDIS_POOL_MAX_SIZE: 2,
+                },
+                'unreachable-test',
+                { optional: true }
+            )!
+            const unreachable = new RateLimiterService(unreachableValkey, { name: 'sandbox-email' })
+
+            expect(
+                await unreachable.claimAllOrNothing([
+                    { key: `${KEY}/optional-pool`, requested: 1, capacity: 1, refillPerSecond: 0 },
+                ])
+            ).toEqual({ granted: false, deniedIndexes: null })
         })
 
         it('reports a limiter error without naming a denied bucket', async () => {
@@ -496,28 +519,31 @@ describe('RateLimiterService', () => {
     })
 
     describe('returnClaim', () => {
+        const grantedClaim = async (bucket: ClaimRequest): Promise<IssuedClaim> => {
+            const claim = await limiter.claimAllOrNothing([bucket])
+            if (!claim.granted) {
+                throw new Error('Expected the claim to be granted.')
+            }
+            return claim
+        }
+
         it('gives a claim back once, even when the return is replayed', async () => {
             const bucket = { key: `${KEY}/return`, requested: 1, capacity: 2, refillPerSecond: 0 }
-            expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
-            expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
+            const claim = await grantedClaim(bucket)
+            await grantedClaim(bucket)
 
-            await limiter.returnClaim('claim-1', [bucket])
-            await limiter.returnClaim('claim-1', [bucket])
+            await limiter.returnClaim(claim, [bucket])
+            await limiter.returnClaim(claim, [bucket])
 
-            expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
+            expect(await limiter.claimAllOrNothing([bucket])).toMatchObject({ granted: true })
             expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: false, deniedIndexes: [0] })
         })
 
-        it('ignores a return that reaches Valkey after its window', async () => {
+        it('ignores the return of a claim issued longer ago than its window', async () => {
             const bucket = { key: `${KEY}/late-return`, requested: 1, capacity: 1, refillPerSecond: 0 }
-            expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
+            const claim = await grantedClaim(bucket)
 
-            const issuedLongAgo = jest.spyOn(Date, 'now').mockReturnValue(Date.now() - 60 * 60 * 1000)
-            try {
-                await limiter.returnClaim('claim-1', [bucket])
-            } finally {
-                issuedLongAgo.mockRestore()
-            }
+            await limiter.returnClaim({ ...claim, returnBy: Date.now() - 1000 }, [bucket])
 
             expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: false, deniedIndexes: [0] })
         })

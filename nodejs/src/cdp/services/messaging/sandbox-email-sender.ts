@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'crypto'
+import { createHash } from 'crypto'
 import { type DefaultTreeAdapterMap, defaultTreeAdapter, parse, parseFragment, serialize } from 'parse5'
 
 import { CyclotronInvocationQueueParametersEmailType } from '~/cdp/schema/cyclotron'
@@ -7,7 +7,7 @@ import { logger } from '~/common/utils/logger'
 import { captureTeamEvent } from '~/common/utils/posthog'
 import { TeamManager } from '~/common/utils/team-manager'
 
-import { ClaimRequest, RateLimiterService } from '../rate-limiter/rate-limiter.service'
+import { ClaimRequest, IssuedClaim, RateLimiterService } from '../rate-limiter/rate-limiter.service'
 import { maybeAddPreheaderToEmail } from './helpers/preheader'
 
 const SECONDS_PER_DAY = 86400
@@ -41,7 +41,7 @@ export type SandboxEmailBlockReason =
     | 'check_failed'
     | 'cap_reached'
 
-export type SandboxDailyCapGrant = { type: 'granted'; claimId: string; buckets: ClaimRequest[] }
+export type SandboxDailyCapGrant = { type: 'granted'; claim: IssuedClaim; buckets: ClaimRequest[] }
 
 export type SandboxDailyCapClaim =
     | SandboxDailyCapGrant
@@ -206,7 +206,7 @@ export class SandboxEmailSender {
         ]
         const claim = await this.dailyCapLimiter.claimAllOrNothing(buckets)
         if (claim.granted) {
-            return { type: 'granted', claimId: randomUUID(), buckets }
+            return { type: 'granted', claim, buckets }
         }
         if (claim.deniedIndexes === null) {
             return { type: 'check_failed' }
@@ -218,7 +218,7 @@ export class SandboxEmailSender {
     }
 
     public async returnDailyCaps(grant: SandboxDailyCapGrant): Promise<void> {
-        await this.dailyCapLimiter?.returnClaim(grant.claimId, grant.buckets)
+        await this.dailyCapLimiter?.returnClaim(grant.claim, grant.buckets)
     }
 
     public async withIdentificationFooter(
