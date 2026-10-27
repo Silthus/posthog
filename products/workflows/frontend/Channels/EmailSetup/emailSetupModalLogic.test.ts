@@ -53,37 +53,39 @@ describe('emailSetupModalLogic', () => {
         })
     })
 
+    const closedEvents = (capture: jest.SpyInstance): unknown[][] =>
+        capture.mock.calls.filter(([event]) => event === 'email domain setup closed')
+
     it.each([
         { scenario: 'a new sender', integration: null, verifyStatus: 'pending', furthestStep: 'details' },
         { scenario: 'an unverified sender', integration: SENDER, verifyStatus: 'pending', furthestStep: 'dns_records' },
         { scenario: 'a verified sender', integration: SENDER, verifyStatus: 'success', furthestStep: 'verified' },
     ] as const)(
-        'reports the furthest step when $scenario is closed early',
+        'reports the furthest step when the modal for $scenario goes away unsaved',
         async ({ integration, verifyStatus: status, furthestStep }) => {
             verifyStatus = status
             const capture = jest.spyOn(posthog, 'capture').mockImplementation(() => undefined)
-            const onClose = jest.fn()
             const logic = emailSetupModalLogic({
                 integration,
                 surface: 'onboarding_wizard',
                 onComplete: () => {},
-                onClose,
+                onClose: () => {},
             })
             logic.mount()
             await expectLogic(logic).toFinishAllListeners()
 
-            logic.actions.closeModal()
+            logic.unmount()
 
-            expect(capture).toHaveBeenCalledWith('email domain setup closed', {
-                furthest_step: furthestStep,
-                surface: 'onboarding_wizard',
-                completed: false,
-            })
-            expect(onClose).toHaveBeenCalledWith(integration?.id)
+            expect(closedEvents(capture)).toEqual([
+                [
+                    'email domain setup closed',
+                    { furthest_step: furthestStep, surface: 'onboarding_wizard', completed: false },
+                ],
+            ])
         }
     )
 
-    it('reports a completed setup when the sender is saved', async () => {
+    it('reports a completed setup once when the saved sender modal goes away', async () => {
         const capture = jest.spyOn(posthog, 'capture').mockImplementation(() => undefined)
         const onComplete = jest.fn()
         const logic = emailSetupModalLogic({ integration: SENDER, surface: 'channels', onComplete, onClose: () => {} })
@@ -92,12 +94,11 @@ describe('emailSetupModalLogic', () => {
 
         logic.actions.submitEmailSender()
         await expectLogic(logic).toFinishAllListeners()
+        logic.unmount()
 
-        expect(capture).toHaveBeenCalledWith('email domain setup closed', {
-            furthest_step: 'dns_records',
-            surface: 'channels',
-            completed: true,
-        })
         expect(onComplete).toHaveBeenCalledWith(SENDER.id)
+        expect(closedEvents(capture)).toEqual([
+            ['email domain setup closed', { furthest_step: 'dns_records', surface: 'channels', completed: true }],
+        ])
     })
 })
