@@ -69,11 +69,14 @@ describe('emailDomainWizardLogic', () => {
         try {
             const logic = mountWizard()
 
+            const keystrokeGap = DOMAIN_HINT_DELAY_MS / 2
+            logic.actions.setCustomDomainInput('he')
+            await jest.advanceTimersByTimeAsync(keystrokeGap)
             logic.actions.setCustomDomainInput('hed')
+            await jest.advanceTimersByTimeAsync(DOMAIN_HINT_DELAY_MS - 1)
             expect(logic.values.customDomainHint).toBeNull()
 
-            jest.advanceTimersByTime(DOMAIN_HINT_DELAY_MS)
-            await expectLogic(logic).toDispatchActions(['showCustomDomainHint'])
+            await jest.advanceTimersByTimeAsync(1)
             expect(logic.values.customDomainHint).toBe('invalid')
 
             logic.actions.setCustomDomainInput('hedg')
