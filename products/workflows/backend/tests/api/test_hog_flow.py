@@ -6661,18 +6661,17 @@ class TestHogFlowSendOnceVerified(APIBaseTest):
         assert response.status_code == 400, response.json()
         assert not HogFlow.objects.filter(team=self.team, status="waiting_for_domain").exists()
 
-    def test_enable_leaves_an_archived_workflow_alone(self):
-        flow_id = self._create_draft(self._sender(verified=True))
+    @parameterized.expand([("verified_sender", True, "active"), ("unverified_sender", False, "waiting_for_domain")])
+    def test_enabling_an_archived_workflow_applies_the_enable_rule(self, _name, verified, expected_status):
+        flow_id = self._create_draft(self._sender(verified=verified))
         assert self._set_status(flow_id, "archived").status_code == 200
-        self.mock_report.reset_mock()
 
         with self._flag(True):
             response = self._set_status(flow_id, "active")
 
         assert response.status_code == 200, response.json()
-        assert response.json()["status"] == "archived"
-        assert response.json()["enable_requested_at"] is None
-        assert self._activated_events() == []
+        assert response.json()["status"] == expected_status
+        assert response.json()["enable_requested_at"] is not None
 
     @parameterized.expand([("switched_to_a_verified_sender", True), ("kept_an_unverified_sender", False)])
     def test_editing_a_waiting_workflow_saves_in_place_and_goes_live_once_its_senders_are_verified(
