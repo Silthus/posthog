@@ -2048,6 +2048,7 @@ describe('EmailService', () => {
 
             const normal = await service.executeSendEmail(invocation)
             expect(normal.metrics.map((m) => m.metric_name)).toContain('email_sent')
+            expect(normal.metrics.map((m) => m.metric_name)).not.toContain('email_sandbox_sent')
 
             const testSend = await service.executeSendEmail(invocation, true)
             expect(testSend.metrics).toEqual([])
