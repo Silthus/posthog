@@ -2,13 +2,21 @@ import { useActions, useValues } from 'kea'
 
 import { LemonBanner } from '@posthog/lemon-ui'
 
+import { workflowsEmailSuspensionLogic } from '../workflowsEmailSuspensionLogic'
 import { workflowLogic } from './workflowLogic'
 
 export function WorkflowStartedSendingNotice(): JSX.Element | null {
     const { showStartedSendingNotice } = useValues(workflowLogic)
-    const { dismissStartedSendingNotice } = useActions(workflowLogic)
 
-    if (!showStartedSendingNotice) {
+    // Mount the project's sending status only when a notice is due, so other editor visits skip the request.
+    return showStartedSendingNotice ? <StartedSendingBanner /> : null
+}
+
+function StartedSendingBanner(): JSX.Element | null {
+    const { dismissStartedSendingNotice } = useActions(workflowLogic)
+    const { emailSendingSuspended } = useValues(workflowsEmailSuspensionLogic)
+
+    if (emailSendingSuspended) {
         return null
     }
 

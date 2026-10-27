@@ -3952,8 +3952,9 @@ export const workflowLogic = kea<workflowLogicType>([
         },
         dismissedStartedSendingNotices: [
             {} as Record<string, true>,
-            // pinned: storage key, renaming it shows every dismissed notice again
-            { persist: true, storageKey: 'workflows-started-sending-notices-dismissed' },
+            // pinned: the storage key derives from the logic path, which carries the workflow id. Each workflow
+            // keeps its own entry, so two tabs dismissing different workflows don't overwrite each other.
+            { persist: true },
             {
                 setStartedSendingNoticeDismissed: (state, { noticeKey }) => ({ ...state, [noticeKey]: true }),
             },
@@ -4642,10 +4643,11 @@ export const workflowLogic = kea<workflowLogicType>([
         loadWorkflowFailure: () => {
             actions.replayDeferredResourceEdited()
         },
-        enableWorkflow: async () => {
+        enableWorkflow: async (_, breakpoint) => {
             if (!values.workflowHasActionErrors && values.unverifiedSenderDomains.length > 0 && props.id) {
                 // The domain may have verified in another tab since this page loaded.
                 const fresh = await api.hogFlows.getHogFlow(props.id).catch(() => null)
+                breakpoint()
                 if (fresh) {
                     applyWorkflowLifecycle(cache, actions, { unverified_email_senders: fresh.unverified_email_senders })
                 }

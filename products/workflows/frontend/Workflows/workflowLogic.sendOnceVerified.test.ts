@@ -52,6 +52,12 @@ const makeWorkflow = (overrides: Partial<HogFlow> = {}): HogFlow => ({
     ...overrides,
 })
 
+async function waitForHeldReads(heldReads: unknown[], count: number): Promise<void> {
+    while (heldReads.length < count) {
+        await new Promise((resolve) => setImmediate(resolve))
+    }
+}
+
 describe('workflowLogic send once verified', () => {
     let logic: ReturnType<typeof workflowLogic.build>
     let patchBodies: Record<string, any>[]
@@ -196,6 +202,31 @@ describe('workflowLogic send once verified', () => {
             .toDispatchActions(['saveWorkflowSuccess'])
             .toNotHaveDispatchedActions(['openEnablePrompt'])
         expect(patchBodies.map((body) => body.status)).toEqual(['active'])
+    })
+
+    it('acts only on the last Enable click when the domain read of an earlier one lands late', async () => {
+        await mountWith(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }))
+        const heldReads: (() => void)[] = []
+        useMocks({
+            get: {
+                '/api/environments/:team_id/hog_flows/:id/': async () => {
+                    await new Promise<void>((resolve) => heldReads.push(resolve))
+                    return [200, storedWorkflow]
+                },
+            },
+        })
+        logic.actions.enableWorkflow()
+        logic.actions.enableWorkflow()
+        await waitForHeldReads(heldReads, 2)
+
+        heldReads[0]()
+        await new Promise((resolve) => setImmediate(resolve))
+        expect(logic.values.enablePromptOpen).toBe(false)
+
+        heldReads[1]()
+        await expectLogic(logic).toDispatchActions(['openEnablePrompt'])
+        expect(logic.values.enablePromptDomains).toEqual(['example.com'])
+        expect(patchBodies).toEqual([])
     })
 
     it('shows the started sending notice once after a waited go-live, until it is dismissed', async () => {
@@ -363,7 +394,8 @@ describe('workflowLogic send once verified', () => {
             })
             jest.useFakeTimers({ advanceTimers: true })
             await mountWith(workflow)
-            await expectLogic(logic).toDispatchActions(['loadHogFunctionTemplatesByIdSuccess'])
+            await expectLogic(logic).toFinishAllListeners()
+            expect(logic.values.hogFunctionTemplatesById).toHaveProperty(WEBHOOK_TEMPLATE.id)
             storedWorkflow = { ...workflow, ...wentLiveLifecycle }
 
             logic.actions.setWorkflowValue('name', 'Renamed while waiting')
