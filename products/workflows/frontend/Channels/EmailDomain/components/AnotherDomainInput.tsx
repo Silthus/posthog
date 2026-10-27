@@ -1,7 +1,7 @@
 import { useActions, useValues } from 'kea'
 
 import { IconArrowRight } from '@posthog/icons'
-import { LemonButton, LemonInput } from '@posthog/lemon-ui'
+import { LemonButton, LemonInput, LemonLabel } from '@posthog/lemon-ui'
 
 import { DomainProblem } from '../domainInput'
 import { EmailDomainWizardLogicProps, emailDomainWizardLogic } from '../emailDomainWizardLogic'
@@ -18,9 +18,7 @@ export function AnotherDomainInput(props: EmailDomainWizardLogicProps): JSX.Elem
     const canUse = Boolean(customDomain.domain) && !customDomain.problem
     return (
         <div className="flex flex-col gap-1.5">
-            <label className="text-sm text-secondary" htmlFor="email-domain-another-domain">
-                Another domain
-            </label>
+            <LemonLabel htmlFor="email-domain-another-domain">Another domain</LemonLabel>
             <div className="flex gap-2">
                 <LemonInput
                     id="email-domain-another-domain"

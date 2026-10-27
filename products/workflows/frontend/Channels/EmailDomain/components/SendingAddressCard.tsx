@@ -1,6 +1,6 @@
 import { useActions, useValues } from 'kea'
 
-import { LemonButton, LemonInput, LemonSegmentedButton } from '@posthog/lemon-ui'
+import { LemonButton, LemonCard, LemonInput, LemonLabel, LemonSegmentedButton } from '@posthog/lemon-ui'
 
 import { DEFAULT_LOCAL_PART, EmailDomainWizardLogicProps, emailDomainWizardLogic } from '../emailDomainWizardLogic'
 
@@ -36,7 +36,7 @@ function SendPrefixPicker(props: EmailDomainWizardLogicProps): JSX.Element {
     }
     return (
         <div className="flex flex-col gap-2">
-            <span className="text-sm">Sending subdomain</span>
+            <LemonLabel>Sending subdomain</LemonLabel>
             <LemonSegmentedButton
                 size="small"
                 value={custom ? CUSTOM_PREFIX : sendPrefix}
@@ -71,7 +71,7 @@ function SenderIdentityFields(props: EmailDomainWizardLogicProps): JSX.Element {
     return (
         <div className="grid grid-cols-1 @md:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5 text-sm">
-                <label htmlFor="email-domain-sender-name-input">Name</label>
+                <LemonLabel htmlFor="email-domain-sender-name-input">Name</LemonLabel>
                 <LemonInput
                     id="email-domain-sender-name-input"
                     value={senderName}
@@ -81,7 +81,7 @@ function SenderIdentityFields(props: EmailDomainWizardLogicProps): JSX.Element {
                 <span className="text-xs text-secondary">Shown as the sender in the inbox.</span>
             </div>
             <div className="flex flex-col gap-1.5 text-sm">
-                <label htmlFor="email-domain-local-part">Email address</label>
+                <LemonLabel htmlFor="email-domain-local-part">Email address</LemonLabel>
                 <LemonInput
                     id="email-domain-local-part"
                     className="font-mono"
@@ -116,7 +116,7 @@ function BouncePrefixField(props: EmailDomainWizardLogicProps): JSX.Element {
     }
     return (
         <div className="flex flex-col gap-1.5 text-sm">
-            <label htmlFor="email-domain-bounce-prefix">Bounce subdomain</label>
+            <LemonLabel htmlFor="email-domain-bounce-prefix">Bounce subdomain</LemonLabel>
             <div className="flex items-center gap-2 flex-wrap">
                 <LemonInput
                     id="email-domain-bounce-prefix"
@@ -133,9 +133,9 @@ function BouncePrefixField(props: EmailDomainWizardLogicProps): JSX.Element {
                 <span className="font-mono text-secondary break-all">.{sendingDomain}</span>
             </div>
             <span className="text-xs text-secondary">Where bounced emails return to.</span>
-            <label htmlFor="email-domain-reply-to" className="mt-3">
-                Default reply-to address <span className="text-secondary">(optional)</span>
-            </label>
+            <LemonLabel htmlFor="email-domain-reply-to" className="mt-3" showOptional>
+                Default reply-to address
+            </LemonLabel>
             <LemonInput
                 id="email-domain-reply-to"
                 className="max-w-80"
@@ -155,7 +155,7 @@ export function SendingAddressCard(props: EmailDomainWizardLogicProps): JSX.Elem
     const { fromAddress, senderName, suggestedSenderName } = useValues(emailDomainWizardLogic(props))
     const fromName = senderName.trim() || suggestedSenderName
     return (
-        <section className="rounded-lg border bg-accent-highlight-secondary p-5 flex flex-col gap-4">
+        <LemonCard hoverEffect={false} className="bg-accent-highlight-secondary p-5 flex flex-col gap-4">
             <div className="flex flex-col gap-1">
                 <span className="text-sm text-secondary">Emails will come from</span>
                 <span className="text-xl @md:text-2xl font-semibold break-all">
@@ -168,6 +168,6 @@ export function SendingAddressCard(props: EmailDomainWizardLogicProps): JSX.Elem
             <SendPrefixPicker {...props} />
             <SenderIdentityFields {...props} />
             <BouncePrefixField {...props} />
-        </section>
+        </LemonCard>
     )
 }

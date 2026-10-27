@@ -1,7 +1,7 @@
 import { useActions, useValues } from 'kea'
 
 import { IconCheck, IconSend } from '@posthog/icons'
-import { LemonButton, LemonInput } from '@posthog/lemon-ui'
+import { LemonButton, LemonCard, LemonInput, LemonLabel } from '@posthog/lemon-ui'
 
 import { emailDomainSenderLogic } from '../emailDomainSenderLogic'
 
@@ -11,9 +11,7 @@ function SenderNameField(): JSX.Element {
     const canSave = senderNameChanged && Boolean(senderName.trim()) && !senderSaving
     return (
         <div className="flex flex-col gap-1">
-            <label className="text-sm" htmlFor="email-domain-sender-name">
-                Name
-            </label>
+            <LemonLabel htmlFor="email-domain-sender-name">Name</LemonLabel>
             <div className="flex gap-2">
                 <LemonInput
                     id="email-domain-sender-name"
@@ -60,7 +58,7 @@ function TestEmailButton(): JSX.Element {
 export function SenderCard(): JSX.Element {
     const { senderName, fromAddress, isFirstVerifiedSender } = useValues(emailDomainSenderLogic)
     return (
-        <section className="rounded-lg border bg-surface-primary p-5 flex flex-col gap-4">
+        <LemonCard hoverEffect={false} className="p-5 flex flex-col gap-4">
             <div className="flex flex-col gap-0.5">
                 <h2 className="m-0 text-lg font-semibold">
                     {isFirstVerifiedSender ? 'Your first sender' : 'Your sender'}
@@ -70,9 +68,7 @@ export function SenderCard(): JSX.Element {
             <div className="grid gap-3 @md:grid-cols-2">
                 <SenderNameField />
                 <div className="flex flex-col gap-1">
-                    <label className="text-sm" htmlFor="email-domain-sender-address">
-                        Address
-                    </label>
+                    <LemonLabel htmlFor="email-domain-sender-address">Address</LemonLabel>
                     <LemonInput
                         id="email-domain-sender-address"
                         className="font-mono"
@@ -88,6 +84,6 @@ export function SenderCard(): JSX.Element {
                 </span>
                 <TestEmailButton />
             </div>
-        </section>
+        </LemonCard>
     )
 }
