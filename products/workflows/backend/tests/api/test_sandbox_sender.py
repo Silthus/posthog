@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 SANDBOX_SETTINGS = {
     "WORKFLOWS_SANDBOX_SENDER_DOMAIN": "sandbox.example.com",
     "SES_SANDBOX_FROM_ADDRESS": "hello@sandbox.example.com",
+    "SES_SANDBOX_TENANT_NAME": "posthog-sandbox",
 }
 
 
@@ -98,6 +99,7 @@ class TestSandboxSenderAPI(APIBaseTest):
             ("flag off", {}, False),
             ("domain unset", {"WORKFLOWS_SANDBOX_SENDER_DOMAIN": ""}, True),
             ("from address unset", {"SES_SANDBOX_FROM_ADDRESS": ""}, True),
+            ("tenant name unset", {"SES_SANDBOX_TENANT_NAME": ""}, True),
         ]
     )
     def test_ensure_is_not_found_while_the_sandbox_sender_is_unavailable(
