@@ -17,6 +17,7 @@ import { workflowLogic } from '../../../workflowLogic'
 import { hogFlowEditorTestLogic } from '../../panel/testing/hogFlowEditorTestLogic'
 import { isGithubEventTriggerConfig } from '../../registry/triggers/githubTriggerFilters'
 import { isSlackMessageTriggerConfig } from '../../registry/triggers/slackTriggerFilters'
+import type { HogFlowAction } from '../../types'
 import { CustomerTaskWorkflowReferenceInput } from './CustomerTaskWorkflowReferenceInput'
 import { HogFlowFunctionMappings } from './HogFlowFunctionMappings'
 import { WorkflowAutoSaveIndicator } from './WorkflowAutoSaveIndicator'
@@ -191,7 +192,10 @@ export function filterInputsSchemaForTrigger<T extends { key: string }>(
     return inputsSchema
 }
 
-export function allowsSandboxSender(actionType: string | undefined, originProduct: string | null | undefined): boolean {
+export function allowsSandboxSender(
+    actionType: HogFlowAction['type'],
+    originProduct: string | null | undefined
+): boolean {
     return actionType === 'function_email' && originProduct !== 'broadcasts'
 }
 
@@ -207,7 +211,7 @@ export function HogFlowFunctionConfiguration({
     emailFieldErrors,
 }: {
     templateId: string
-    actionType?: string
+    actionType: HogFlowAction['type']
     inputs: Record<string, CyclotronJobInputType>
     mappings?: HogFunctionMappingType[]
     setInputs: (inputs: Record<string, CyclotronJobInputType>) => void
