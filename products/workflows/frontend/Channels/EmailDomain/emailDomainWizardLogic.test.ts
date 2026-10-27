@@ -81,6 +81,10 @@ describe('emailDomainWizardLogic', () => {
 
             logic.actions.setCustomDomainInput('hedg')
             expect(logic.values.customDomainHint).toBeNull()
+
+            logic.actions.setCustomDomainInput('')
+            await jest.advanceTimersByTimeAsync(DOMAIN_HINT_DELAY_MS)
+            expect(logic.values.customDomainHint).toBeNull()
         } finally {
             jest.useRealTimers()
         }

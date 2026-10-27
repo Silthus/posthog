@@ -441,11 +441,9 @@ export const emailDomainWizardLogic = kea<emailDomainWizardLogicType>([
         ],
     }),
     listeners(({ actions, values, props }) => ({
-        setCustomDomainInput: async ({ value }, breakpoint) => {
+        setCustomDomainInput: async (_, breakpoint) => {
             await breakpoint(DOMAIN_HINT_DELAY_MS)
-            if (value) {
-                actions.showCustomDomainHint()
-            }
+            actions.showCustomDomainHint()
         },
         useCustomDomain: () => {
             const { domain, localPart, problem } = values.customDomain
