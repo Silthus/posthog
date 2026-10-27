@@ -1,9 +1,11 @@
-import api, { ApiConfig } from 'lib/api'
+import { ApiConfig } from 'lib/api'
 import { FEATURE_FLAGS } from 'lib/constants'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { isSandboxEmailSender } from 'lib/integrations/utils'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { teamLogic } from 'scenes/teamLogic'
+
+import type { IntegrationType } from '~/types'
 
 import { integrationsEmailSandboxSenderCreate } from 'products/integrations/frontend/generated/api'
 
@@ -58,15 +60,24 @@ function sandboxSenderEnabled(): boolean {
     return !!featureFlagLogic.findMounted()?.values.featureFlags[FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]
 }
 
+async function loadAllIntegrations(): Promise<IntegrationType[]> {
+    await integrationsLogic.asyncActions.loadIntegrations()
+    const integrations = integrationsLogic.values.integrations
+    if (!integrations) {
+        throw new Error('The sender list could not load.')
+    }
+    return integrations
+}
+
 async function provisionSandboxSender(): Promise<number> {
     const sandbox = await integrationsEmailSandboxSenderCreate(String(ApiConfig.getCurrentProjectId()))
-    integrationsLogic.findMounted()?.actions.loadIntegrations()
+    await integrationsLogic.asyncActions.loadIntegrations()
     return sandbox.id
 }
 
 async function resolveFirstRunSender(allowSandbox: boolean): Promise<DefaultEmailSender | null> {
     const team = teamLogic.findMounted()?.values.currentTeam
-    const integrations = (await api.integrations.list()).results
+    const integrations = await loadAllIntegrations()
     const ownSender = resolveDefaultEmailSender(
         integrations,
         team && 'workflows_config' in team ? team.workflows_config?.default_email_integration_id : null
@@ -84,7 +95,10 @@ export async function withFirstRunSender(
     if (!workflow.actions.some(takesOwnSender)) {
         return { workflow, sender: null }
     }
-    const sender = await resolveFirstRunSender(workflow.actions.some((action) => takesSandboxSender(action, workflow)))
+    const unmountIntegrations = integrationsLogic.mount()
+    const sender = await resolveFirstRunSender(
+        workflow.actions.some((action) => takesSandboxSender(action, workflow))
+    ).finally(unmountIntegrations)
     if (!sender) {
         return { workflow, sender: null }
     }

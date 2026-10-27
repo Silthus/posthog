@@ -235,6 +235,34 @@ describe('workflow first-run sender', () => {
         logic.unmount()
     })
 
+    it('finds a verified own sender on a later page of the sender list', async () => {
+        const unverifiedOwn = (id: number): Partial<IntegrationType> => ({
+            id,
+            kind: 'email',
+            config: { provider: 'ses', verified: false, email: `own${id}@example.com` },
+        })
+        useMocks({
+            get: {
+                '/api/projects/:team_id/integrations/': ({ request }) =>
+                    new URL(request.url).searchParams.get('offset') === '100'
+                        ? [200, { results: [OWN_VERIFIED], next: null }]
+                        : [
+                              200,
+                              {
+                                  results: Array.from({ length: 100 }, (_, index) => unverifiedOwn(100 + index)),
+                                  next: 'next-page',
+                              },
+                          ],
+            },
+        })
+
+        const logic = await loadTemplate()
+
+        expect(emailValueOf(logic)?.from).toEqual({ integrationId: OWN_VERIFIED.id })
+        expect(ensureCalls).toBe(0)
+        logic.unmount()
+    })
+
     it('opens the editor without a sender when the sender list cannot load', async () => {
         useMocks({ get: { '/api/projects/:team_id/integrations/': () => [500, { detail: 'Unavailable' }] } })
 
