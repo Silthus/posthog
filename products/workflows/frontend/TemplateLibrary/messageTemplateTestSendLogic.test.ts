@@ -129,7 +129,21 @@ describe('messageTemplateTestSendLogic', () => {
             post: {
                 '/api/environments/:team_id/hog_flows/:id/invocations/': () => [
                     200,
-                    { status: 'skipped', logs: [{ message: 'Recipient has opted out.' }] },
+                    {
+                        status: 'skipped',
+                        nextActionId: 'exit',
+                        emailSendResult: {
+                            status: 'skipped',
+                            reason: 'Skipping send: recipient(s) on the suppression list — recipient@example.com',
+                        },
+                        logs: [
+                            { message: '[Action:send_test_email] Executing action' },
+                            {
+                                message:
+                                    '[Action:send_test_email] Skipping send: recipient(s) on the suppression list — recipient@example.com',
+                            },
+                        ],
+                    },
                 ],
             },
         })
@@ -144,7 +158,9 @@ describe('messageTemplateTestSendLogic', () => {
         expect(mockToast.warning).toHaveBeenCalledWith('Test email skipped, see details below')
         expect(mockToast.error).not.toHaveBeenCalled()
         expect(logic.values.isModalOpen).toBe(true)
-        expect(logic.values.testSendResult?.status).toBe('skipped')
+        expect(logic.values.testSendSkipMessage).toBe(
+            'Skipping send: recipient(s) on the suppression list — recipient@example.com'
+        )
     })
 
     it('keeps the modal open and surfaces the error when the send fails', async () => {
