@@ -6665,6 +6665,7 @@ class TestHogFlowSendOnceVerified(APIBaseTest):
     def test_enabling_an_archived_workflow_applies_the_enable_rule(self, _name, verified, expected_status):
         flow_id = self._create_draft(self._sender(verified=verified))
         assert self._set_status(flow_id, "archived").status_code == 200
+        self.mock_report.reset_mock()
 
         with self._flag(True):
             response = self._set_status(flow_id, "active")
@@ -6672,6 +6673,8 @@ class TestHogFlowSendOnceVerified(APIBaseTest):
         assert response.status_code == 200, response.json()
         assert response.json()["status"] == expected_status
         assert response.json()["enable_requested_at"] is not None
+        expected_events = ["user"] if expected_status == "active" else []
+        assert [event["activated_by"] for event in self._activated_events()] == expected_events
 
     @parameterized.expand([("switched_to_a_verified_sender", True), ("kept_an_unverified_sender", False)])
     def test_editing_a_waiting_workflow_saves_in_place_and_goes_live_once_its_senders_are_verified(

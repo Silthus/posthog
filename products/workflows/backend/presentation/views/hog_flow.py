@@ -5693,7 +5693,7 @@ class HogFlowViewSet(
             and is_optimization_enabled(instance.id)
         ):
             self._sync_suggestions_scout(self.request)
-        if previous in (HogFlowState.DRAFT, HogFlowState.WAITING_FOR_DOMAIN) and instance.status == HogFlowState.ACTIVE:
+        if previous != HogFlowState.ACTIVE and instance.status == HogFlowState.ACTIVE:
             self._report_workflow_action(
                 "hog_flow_activated",
                 instance,

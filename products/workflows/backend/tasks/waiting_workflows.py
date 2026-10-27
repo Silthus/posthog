@@ -16,6 +16,8 @@ from products.workflows.backend.facade.contracts import StatusChange
 logger = get_logger(__name__)
 
 ENABLE_WAITING_MAX_RETRIES = 5
+# The CDP workers cache an integration for up to five minutes, so a go-live after a failed reload waits longer.
+WORKER_SENDER_CACHE_SECONDS = 6 * 60
 
 enable_waiting_failed_total = Counter(
     "workflows_enable_waiting_failed_total",
@@ -50,9 +52,12 @@ def enable_waiting_workflows_task(self, team_id: int, sender_ids: list[int]) -> 
 
 
 # Runs after the verification committed, so a broker failure must not fail the request that verified the domain.
-def queue_enable_waiting_workflows(*, team_id: int, sender_ids: list[int]) -> None:
+def queue_enable_waiting_workflows(*, team_id: int, sender_ids: list[int], workers_reloaded: bool) -> None:
+    countdown = 0 if workers_reloaded else WORKER_SENDER_CACHE_SECONDS
     try:
-        enable_waiting_workflows_task.delay(team_id=team_id, sender_ids=sender_ids)
+        enable_waiting_workflows_task.apply_async(
+            kwargs={"team_id": team_id, "sender_ids": sender_ids}, countdown=countdown
+        )
     except Exception:
         logger.exception("workflows.enable_waiting.failed", team_id=team_id, sender_ids=sender_ids)
         enable_waiting_failed_total.inc()

@@ -26,7 +26,10 @@ from products.workflows.backend.facade.tasks import refresh_new_email_senders, r
 from products.workflows.backend.models import HogFlow
 from products.workflows.backend.services.email_sender_verification import EmailSenderVerification
 from products.workflows.backend.services.integration_usage import lock_unverified_senders
-from products.workflows.backend.tasks.waiting_workflows import enable_waiting_workflows_task
+from products.workflows.backend.tasks.waiting_workflows import (
+    WORKER_SENDER_CACHE_SECONDS,
+    enable_waiting_workflows_task,
+)
 
 ENABLED_AT = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
 
@@ -480,17 +483,31 @@ class TestVerifiedSenderTakesWaitingWorkflowsLive(APIBaseTest):
         assert properties["activated_by"] == "domain_verified"
         assert "source" not in properties
 
-    def test_verification_reloads_the_senders_on_workers_before_it_queues_the_go_live(self) -> None:
+    @parameterized.expand(
+        [
+            ("reload_succeeds", None, 0),
+            ("reload_fails", RedisError("publish failed"), WORKER_SENDER_CACHE_SECONDS),
+        ]
+    )
+    def test_verification_reloads_the_senders_on_workers_before_it_queues_the_go_live(
+        self, _name: str, reload_error: Exception | None, expected_countdown: int
+    ) -> None:
         sender = self._sender("example.com")
         self._waiting_flow(sender)
-        calls: list[str] = []
+        calls: list[object] = []
+
+        def reload(*args: Any, **kwargs: Any) -> None:
+            calls.append("reload")
+            if reload_error:
+                raise reload_error
 
         with (
-            patch(
-                "posthog.models.integration.email.reload_integrations_on_workers",
-                side_effect=lambda *args, **kwargs: calls.append("reload"),
+            patch("posthog.models.integration.email.reload_integrations_on_workers", side_effect=reload),
+            patch.object(
+                enable_waiting_workflows_task,
+                "apply_async",
+                side_effect=lambda **kwargs: calls.append(("queue", kwargs["countdown"])),
             ),
-            patch.object(enable_waiting_workflows_task, "delay", side_effect=lambda **kwargs: calls.append("queue")),
             # Outside a test transaction, on_commit runs as soon as the outermost atomic block exits.
             patch(
                 "products.workflows.backend.facade.api.transaction.on_commit", side_effect=lambda callback: callback()
@@ -498,7 +515,7 @@ class TestVerifiedSenderTakesWaitingWorkflowsLive(APIBaseTest):
         ):
             EmailIntegration(sender).apply_verification({"status": "success", "dnsRecords": []})
 
-        assert calls == ["reload", "queue"]
+        assert calls == ["reload", ("queue", expected_countdown)]
 
     def test_a_lookup_failure_after_go_live_does_not_retry_the_task(self) -> None:
         sender = self._sender("example.com", verified=True)
@@ -522,7 +539,7 @@ class TestVerifiedSenderTakesWaitingWorkflowsLive(APIBaseTest):
         failures_before = REGISTRY.get_sample_value("workflows_enable_waiting_failed_total") or 0
 
         with (
-            patch.object(enable_waiting_workflows_task, "delay", side_effect=OSError("broker unreachable")),
+            patch.object(enable_waiting_workflows_task, "apply_async", side_effect=OSError("broker unreachable")),
             capture_logs() as logs,
         ):
             for callback in self._verify(sender):
