@@ -10,7 +10,7 @@ from parameterized import parameterized
 from rest_framework import status
 
 from posthog.models.integration import Integration
-from posthog.models.organization import OrganizationMembership
+from posthog.models.organization import Organization, OrganizationMembership
 from posthog.models.personal_api_key import PersonalAPIKey
 from posthog.models.utils import hash_key_value
 
@@ -117,6 +117,8 @@ class TestSandboxSenderAPI(APIBaseTest):
         assert self._provisioned_events() == []
 
     def test_ensure_is_not_found_for_a_blocked_organization_until_the_block_is_removed(self) -> None:
+        other_organization = Organization.objects.create(name="Other organization")
+        SandboxSenderOrganizationBlock.objects.create(organization=other_organization, reason="Abuse report")
         block = SandboxSenderOrganizationBlock.objects.create(organization=self.organization, reason="Abuse report")
 
         blocked = self._ensure()
