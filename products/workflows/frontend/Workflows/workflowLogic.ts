@@ -88,6 +88,7 @@ import {
 } from './hogflows/types'
 import { openPublishConfirmDialog } from './PublishImpactDialog'
 import { ResourceSaveQueue } from './resourceSaveQueue'
+import { unverifiedSenderDomains } from './unverifiedSenderDomains'
 import { checkWaitingStatusWhileVisible } from './waitingStatusCheck'
 import { prepareWorkflowDuplicate } from './workflowDuplication'
 import { prefilledEmailContent, prefilledWorkflow, withEmailSender, withPrefilledEmail } from './workflowEmailPrefill'
@@ -259,7 +260,7 @@ function pickWorkflowEdits(workflow: HogFlow): Partial<HogFlow> {
     return result as Partial<HogFlow>
 }
 
-const WORKFLOW_LIFECYCLE_FIELDS = ['status', 'enable_requested_at', 'went_live_at'] as const
+const WORKFLOW_LIFECYCLE_FIELDS = ['status', 'enable_requested_at', 'went_live_at', 'unverified_email_senders'] as const
 
 function lifecycleUpdate(latest: HogFlow, fresh: HogFlow): Partial<HogFlow> | null {
     const update: Record<string, unknown> = {}
@@ -347,7 +348,13 @@ export interface workflowLogicValues {
     aiEmailDraftLoading: boolean
     aiEmailDraftStatus: AiEmailDraftStatusProps | null
     autoSaveBlockedByValidation: boolean
+    dismissedStartedSendingNotices: Record<string, true>
+    enablePromptDomains: string[] | null
+    enablePromptOpen: boolean
+    showStartedSendingNotice: boolean
     isWaitingForDomain: boolean
+    startedSendingNoticeKey: string | null
+    unverifiedSenderDomains: string[]
     autoSaveEnabled: boolean
     currentSchedule: HogFlowSchedule | null
     discardDisabledReason: string | undefined
@@ -424,7 +431,7 @@ export interface workflowLogicActions {
     autoSaveWorkflow: () => {
         value: true
     }
-    checkWaitingStatus: () => {
+    cancelEnablePrompt: () => {
         value: true
     }
     clearAutoSavePending: () => {
@@ -436,7 +443,25 @@ export interface workflowLogicActions {
     confirmPublishDraft: (confirmToken: string) => {
         confirmToken: string
     }
+    confirmEnablePrompt: () => {
+        value: true
+    }
+    enableWorkflow: () => {
+        value: true
+    }
     confirmResumeEmailSending: () => {
+        value: true
+    }
+    dismissStartedSendingNotice: () => {
+        value: true
+    }
+    openEnablePrompt: () => {
+        value: true
+    }
+    setStartedSendingNoticeDismissed: (noticeKey: string) => {
+        noticeKey: string
+    }
+    checkWaitingStatus: () => {
         value: true
     }
     setWorkflowLifecycle: (lifecycle: Partial<HogFlow>) => {
@@ -3078,7 +3103,16 @@ export interface workflowLogicMeta {
             aiEmailDraft: AiEmailDraftResult | null
         ) => AiEmailDraftStatusProps | null
         logicProps: (arg: WorkflowLogicProps) => WorkflowLogicProps
+        unverifiedSenderDomains: (originalWorkflow: HogFlow | null, featureFlags: FeatureFlagsSet) => string[]
+        enablePromptDomains: (enablePromptOpen: boolean, unverifiedSenderDomains: string[]) => string[] | null
+        startedSendingNoticeKey: (originalWorkflow: HogFlow | null) => string | null
         isWaitingForDomain: (originalWorkflow: HogFlow | null) => boolean
+        showStartedSendingNotice: (
+            startedSendingNoticeKey: string | null,
+            dismissedStartedSendingNotices: Record<string, true>,
+            emailSendingPaused: boolean,
+            featureFlags: FeatureFlagsSet
+        ) => boolean
         workflowUserAccessLevel: (originalWorkflow: HogFlow | null) => AccessControlLevel | null
         currentSchedule: (schedules: HogFlowSchedule[]) => HogFlowSchedule | null
         pendingSchedule: (
@@ -3355,6 +3389,12 @@ export const workflowLogic = kea<workflowLogicType>([
         setSchedules: (schedules: HogFlowSchedule[]) => ({ schedules }),
         restoreScheduleEdits: (edits: ScheduleEdits) => ({ edits }),
         saveWorkflowPartial: (workflow: Partial<HogFlow>) => ({ workflow }),
+        enableWorkflow: true,
+        openEnablePrompt: true,
+        confirmEnablePrompt: true,
+        cancelEnablePrompt: true,
+        dismissStartedSendingNotice: true,
+        setStartedSendingNoticeDismissed: (noticeKey: string) => ({ noticeKey }),
         checkWaitingStatus: true,
         setWorkflowLifecycle: (lifecycle: Partial<HogFlow>) => ({ lifecycle }),
         markSaveAttempted: (actionIds: string[]) => ({ actionIds }),
@@ -3894,17 +3934,73 @@ export const workflowLogic = kea<workflowLogicType>([
                 setResumeEmailSendingPending: (_, { pending }) => pending,
             },
         ],
+        enablePromptOpen: [
+            false,
+            {
+                openEnablePrompt: () => true,
+                cancelEnablePrompt: () => false,
+                // Stays open while the enable saves, so its loading confirm blocks a second enable.
+                saveWorkflowSuccess: () => false,
+                saveWorkflowFailure: () => false,
+            },
+        ],
         originalWorkflow: {
             setWorkflowLifecycle: (state, { lifecycle }) => (state ? { ...state, ...lifecycle } : state),
         },
         workflow: {
             setWorkflowLifecycle: (state, { lifecycle }) => ({ ...state, ...lifecycle }),
         },
+        dismissedStartedSendingNotices: [
+            {} as Record<string, true>,
+            // pinned: the storage key derives from the logic path, which carries the workflow id. Each workflow
+            // keeps its own entry, so two tabs dismissing different workflows don't overwrite each other.
+            { persist: true },
+            {
+                setStartedSendingNoticeDismissed: (state, { noticeKey }) => ({ ...state, [noticeKey]: true }),
+            },
+        ],
     }),
     selectors({
+        unverifiedSenderDomains: [
+            (s) => [s.originalWorkflow, s.featureFlags],
+            (originalWorkflow: HogFlow | null, featureFlags: FeatureFlagsSet): string[] =>
+                featureFlags[FEATURE_FLAGS.WORKFLOWS_EMAIL_DOMAIN_WIZARD]
+                    ? unverifiedSenderDomains(originalWorkflow)
+                    : [],
+        ],
+        enablePromptDomains: [
+            (s) => [s.enablePromptOpen, s.unverifiedSenderDomains],
+            (enablePromptOpen: boolean, unverifiedSenderDomains: string[]): string[] | null =>
+                enablePromptOpen ? unverifiedSenderDomains : null,
+        ],
         isWaitingForDomain: [
             (s) => [s.originalWorkflow],
             (originalWorkflow: HogFlow | null): boolean => originalWorkflow?.status === 'waiting_for_domain',
+        ],
+        startedSendingNoticeKey: [
+            (s) => [s.originalWorkflow],
+            (originalWorkflow: HogFlow | null): string | null => {
+                const { status, enable_requested_at, went_live_at } = originalWorkflow ?? {}
+                const wentLiveAfterWaiting =
+                    status === 'active' &&
+                    !!enable_requested_at &&
+                    !!went_live_at &&
+                    dayjs(went_live_at).isAfter(dayjs(enable_requested_at))
+                return wentLiveAfterWaiting ? `${originalWorkflow?.id}:${went_live_at}` : null
+            },
+        ],
+        showStartedSendingNotice: [
+            (s) => [s.startedSendingNoticeKey, s.dismissedStartedSendingNotices, s.emailSendingPaused, s.featureFlags],
+            (
+                noticeKey: string | null,
+                dismissed: Record<string, true>,
+                emailSendingPaused: boolean,
+                featureFlags: FeatureFlagsSet
+            ): boolean =>
+                !!featureFlags[FEATURE_FLAGS.WORKFLOWS_EMAIL_DOMAIN_WIZARD] &&
+                !emailSendingPaused &&
+                !!noticeKey &&
+                !dismissed[noticeKey],
         ],
         aiEmailDraftStatus: [
             (s) => [s.aiEmailDraftLoading, s.aiEmailDraftApplied, s.aiEmailDraft],
@@ -4547,6 +4643,25 @@ export const workflowLogic = kea<workflowLogicType>([
         loadWorkflowFailure: () => {
             actions.replayDeferredResourceEdited()
         },
+        enableWorkflow: async (_, breakpoint) => {
+            if (!values.workflowHasActionErrors && values.unverifiedSenderDomains.length > 0 && props.id) {
+                // The domain may have verified in another tab since this page loaded.
+                const fresh = await api.hogFlows.getHogFlow(props.id).catch(() => null)
+                breakpoint()
+                if (fresh) {
+                    applyWorkflowLifecycle(cache, actions, { unverified_email_senders: fresh.unverified_email_senders })
+                }
+            }
+            const asksFirst = !values.workflowHasActionErrors && values.unverifiedSenderDomains.length > 0
+            if (asksFirst) {
+                actions.openEnablePrompt()
+            } else {
+                actions.saveWorkflowPartial({ status: 'active' })
+            }
+        },
+        confirmEnablePrompt: () => {
+            actions.saveWorkflowPartial({ status: 'active' })
+        },
         checkWaitingStatus: async () => {
             const latest = (cache.lastSavedWorkflow as HogFlow | undefined) ?? values.originalWorkflow
             if (!props.id || !latest || !values.isWaitingForDomain || values.workflowLoading) {
@@ -4569,6 +4684,11 @@ export const workflowLogic = kea<workflowLogicType>([
             const lifecycle = lifecycleUpdate(latest, fresh)
             if (lifecycle) {
                 applyWorkflowLifecycle(cache, actions, lifecycle)
+            }
+        },
+        dismissStartedSendingNotice: () => {
+            if (values.startedSendingNoticeKey) {
+                actions.setStartedSendingNoticeDismissed(values.startedSendingNoticeKey)
             }
         },
         saveWorkflow: () => {

@@ -1,5 +1,8 @@
 import { expectLogic } from 'kea-test-utils'
 
+import { FEATURE_FLAGS } from 'lib/constants'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
+
 import { useMocks } from '~/mocks/jest'
 import { initKeaTests } from '~/test/init'
 
@@ -7,6 +10,7 @@ import { HogFlow } from './hogflows/types'
 import { workflowLogic } from './workflowLogic'
 
 const WORKFLOW_ID = 'wf-send-once-verified-1'
+const UNVERIFIED_SENDER = { id: 7, domain: 'example.com' }
 const WEBHOOK_TEMPLATE = { id: 'template-webhook', inputs_schema: [{ key: 'url', type: 'string', templating: true }] }
 
 const makeWorkflow = (overrides: Partial<HogFlow> = {}): HogFlow => ({
@@ -44,8 +48,15 @@ const makeWorkflow = (overrides: Partial<HogFlow> = {}): HogFlow => ({
     trigger: { type: 'event', filters: {} } as HogFlow['trigger'],
     created_at: '2026-05-01T00:00:00.000Z',
     updated_at: '2026-05-01T00:00:00.000Z',
+    unverified_email_senders: [],
     ...overrides,
 })
+
+async function waitForHeldReads(heldReads: unknown[], count: number): Promise<void> {
+    while (heldReads.length < count) {
+        await new Promise((resolve) => setImmediate(resolve))
+    }
+}
 
 describe('workflowLogic send once verified', () => {
     let logic: ReturnType<typeof workflowLogic.build>
@@ -53,9 +64,11 @@ describe('workflowLogic send once verified', () => {
     let storedWorkflow: HogFlow
     let retrieveCount: number
 
-    const mountWith = async (workflow: HogFlow): Promise<void> => {
+    const mountWith = async (workflow: HogFlow, { flagOn = true }: { flagOn?: boolean } = {}): Promise<void> => {
         storedWorkflow = workflow
         initKeaTests()
+        featureFlagLogic.mount()
+        featureFlagLogic.actions.setFeatureFlags([], { [FEATURE_FLAGS.WORKFLOWS_EMAIL_DOMAIN_WIZARD]: flagOn })
         logic = workflowLogic({ id: WORKFLOW_ID })
         logic.mount()
         await expectLogic(logic).toDispatchActions(['loadWorkflowSuccess'])
@@ -87,15 +100,205 @@ describe('workflowLogic send once verified', () => {
         jest.useRealTimers()
     })
 
+    it('asks before enabling a workflow with an unverified sender, naming the domain', async () => {
+        await mountWith(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }))
+
+        await expectLogic(logic, () => {
+            logic.actions.enableWorkflow()
+        })
+            .toDispatchActions(['openEnablePrompt'])
+            .toNotHaveDispatchedActions(['saveWorkflow'])
+            .toMatchValues({ enablePromptDomains: ['example.com'] })
+        expect(patchBodies).toEqual([])
+    })
+
+    it('saves the usual active status once the person confirms, and shows the waiting status', async () => {
+        await mountWith(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }))
+        await expectLogic(logic, () => {
+            logic.actions.enableWorkflow()
+        }).toDispatchActions(['openEnablePrompt'])
+
+        await expectLogic(logic, () => {
+            logic.actions.confirmEnablePrompt()
+        })
+            .toDispatchActions(['saveWorkflowSuccess'])
+            .toMatchValues({ enablePromptDomains: null })
+        expect(patchBodies.map((body) => body.status)).toEqual(['active'])
+        expect(logic.values.originalWorkflow?.status).toEqual('waiting_for_domain')
+    })
+
+    it.each([
+        ['succeeds', 200, 'saveWorkflowSuccess'],
+        ['fails', 500, 'saveWorkflowFailure'],
+    ])('keeps the prompt open and loading until the enable save %s', async (_name, responseCode, settledAction) => {
+        await mountWith(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }))
+        let releaseSave!: () => void
+        const saveReleased = new Promise<void>((resolve) => {
+            releaseSave = resolve
+        })
+        useMocks({
+            patch: {
+                '/api/environments/:team_id/hog_flows/:id/': async ({ request }) => {
+                    patchBodies.push((await request.json()) as Record<string, any>)
+                    await saveReleased
+                    return [responseCode, { ...storedWorkflow, status: 'waiting_for_domain' }]
+                },
+            },
+        })
+        await expectLogic(logic, () => {
+            logic.actions.enableWorkflow()
+        }).toDispatchActions(['openEnablePrompt'])
+
+        await expectLogic(logic, () => {
+            logic.actions.confirmEnablePrompt()
+        })
+            .toDispatchActions(['saveWorkflow'])
+            .toMatchValues({ enablePromptDomains: ['example.com'], workflowLoading: true })
+
+        releaseSave()
+        await expectLogic(logic)
+            .toDispatchActions([settledAction])
+            .toMatchValues({ enablePromptDomains: null, workflowLoading: false })
+        expect(patchBodies.map((body) => body.status)).toEqual(['active'])
+    })
+
+    it('leaves the workflow off when the person cancels', async () => {
+        await mountWith(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }))
+        await expectLogic(logic, () => {
+            logic.actions.enableWorkflow()
+        }).toDispatchActions(['openEnablePrompt'])
+
+        await expectLogic(logic, () => {
+            logic.actions.cancelEnablePrompt()
+        })
+            .toDispatchActions(['cancelEnablePrompt'])
+            .toNotHaveDispatchedActions(['saveWorkflow'])
+            .toMatchValues({ enablePromptDomains: null })
+        expect(patchBodies).toEqual([])
+        expect(logic.values.originalWorkflow?.status).toEqual('draft')
+    })
+
+    it.each([
+        ['the flag is off', [UNVERIFIED_SENDER], false],
+        ['every sender is verified', [], true],
+    ])('enables without asking when %s', async (_name, senders, flagOn) => {
+        await mountWith(makeWorkflow({ unverified_email_senders: senders }), { flagOn })
+
+        await expectLogic(logic, () => {
+            logic.actions.enableWorkflow()
+        })
+            .toDispatchActions(['saveWorkflowSuccess'])
+            .toMatchValues({ enablePromptDomains: null })
+        expect(patchBodies.map((body) => body.status)).toEqual(['active'])
+    })
+
+    it('enables without asking when the domain verified after the page loaded', async () => {
+        await mountWith(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }))
+        storedWorkflow = makeWorkflow({ unverified_email_senders: [] })
+
+        await expectLogic(logic, () => {
+            logic.actions.enableWorkflow()
+        })
+            .toDispatchActions(['saveWorkflowSuccess'])
+            .toNotHaveDispatchedActions(['openEnablePrompt'])
+        expect(patchBodies.map((body) => body.status)).toEqual(['active'])
+    })
+
+    it('acts only on the last Enable click when the domain read of an earlier one lands late', async () => {
+        await mountWith(makeWorkflow({ unverified_email_senders: [UNVERIFIED_SENDER] }))
+        const heldReads: (() => void)[] = []
+        useMocks({
+            get: {
+                '/api/environments/:team_id/hog_flows/:id/': async () => {
+                    await new Promise<void>((resolve) => heldReads.push(resolve))
+                    return [200, storedWorkflow]
+                },
+            },
+        })
+        logic.actions.enableWorkflow()
+        logic.actions.enableWorkflow()
+        await waitForHeldReads(heldReads, 2)
+
+        heldReads[0]()
+        await new Promise((resolve) => setImmediate(resolve))
+        expect(logic.values.enablePromptOpen).toBe(false)
+
+        heldReads[1]()
+        await expectLogic(logic).toDispatchActions(['openEnablePrompt'])
+        expect(logic.values.enablePromptDomains).toEqual(['example.com'])
+        expect(patchBodies).toEqual([])
+    })
+
+    it('shows the started sending notice once after a waited go-live, until it is dismissed', async () => {
+        const wentLive = makeWorkflow({
+            status: 'active',
+            enable_requested_at: '2026-05-02T10:00:00Z',
+            went_live_at: '2026-05-03T08:30:00Z',
+        })
+        await mountWith(wentLive)
+        expect(logic.values.showStartedSendingNotice).toBe(true)
+
+        logic.actions.dismissStartedSendingNotice()
+        expect(logic.values.showStartedSendingNotice).toBe(false)
+
+        logic.unmount()
+        await mountWith(wentLive)
+        expect(logic.values.showStartedSendingNotice).toBe(false)
+
+        logic.unmount()
+        await mountWith({ ...wentLive, went_live_at: '2026-05-09T08:30:00Z' })
+        expect(logic.values.showStartedSendingNotice).toBe(true)
+    })
+
+    it.each([
+        [
+            'a direct enable',
+            { status: 'active', enable_requested_at: '2026-05-02T10:00:00Z', went_live_at: '2026-05-02T10:00:00Z' },
+        ],
+        ['a workflow still waiting', { status: 'waiting_for_domain', enable_requested_at: '2026-05-02T10:00:00Z' }],
+        [
+            'a workflow whose email sending is paused',
+            {
+                status: 'active',
+                enable_requested_at: '2026-05-02T10:00:00Z',
+                went_live_at: '2026-05-03T08:30:00Z',
+                email_sending_paused_at: '2026-05-01T09:00:00Z',
+            },
+        ],
+        [
+            'a workflow turned off after it went live',
+            { status: 'draft', enable_requested_at: '2026-05-02T10:00:00Z', went_live_at: '2026-05-03T08:30:00Z' },
+        ],
+    ] as [string, Partial<HogFlow>][])('shows no started sending notice for %s', async (_name, overrides) => {
+        await mountWith(makeWorkflow(overrides))
+
+        expect(logic.values.showStartedSendingNotice).toBe(false)
+    })
+
+    it('shows no started sending notice with the flag off', async () => {
+        await mountWith(
+            makeWorkflow({
+                status: 'active',
+                enable_requested_at: '2026-05-02T10:00:00Z',
+                went_live_at: '2026-05-03T08:30:00Z',
+            }),
+            { flagOn: false }
+        )
+
+        expect(logic.values.showStartedSendingNotice).toBe(false)
+    })
+
     describe('while the workflow waits for its domain', () => {
         const waiting = makeWorkflow({
             status: 'waiting_for_domain',
             enable_requested_at: '2026-05-02T10:00:00Z',
+            unverified_email_senders: [UNVERIFIED_SENDER],
         })
         const wentLiveLifecycle: Partial<HogFlow> = {
             status: 'active',
             went_live_at: '2026-05-03T08:30:00Z',
             updated_at: '2026-05-03T08:30:00Z',
+            unverified_email_senders: [],
         }
         const wentLive: HogFlow = { ...waiting, ...wentLiveLifecycle }
         const [trigger, exit] = waiting.actions
@@ -135,6 +338,7 @@ describe('workflowLogic send once verified', () => {
             await expectLogic(logic).toFinishAllListeners()
 
             expect(logic.values.originalWorkflow?.status).toEqual('active')
+            expect(logic.values.showStartedSendingNotice).toBe(true)
             expect(logic.values.workflow.name).toEqual('Renamed while waiting')
             expect(logic.values.hasUnsavedChanges).toBe(true)
 
@@ -190,7 +394,8 @@ describe('workflowLogic send once verified', () => {
             })
             jest.useFakeTimers({ advanceTimers: true })
             await mountWith(workflow)
-            await expectLogic(logic).toDispatchActions(['loadHogFunctionTemplatesByIdSuccess'])
+            await expectLogic(logic).toFinishAllListeners()
+            expect(logic.values.hogFunctionTemplatesById).toHaveProperty(WEBHOOK_TEMPLATE.id)
             storedWorkflow = { ...workflow, ...wentLiveLifecycle }
 
             logic.actions.setWorkflowValue('name', 'Renamed while waiting')

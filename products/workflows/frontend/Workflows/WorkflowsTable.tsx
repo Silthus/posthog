@@ -34,6 +34,7 @@ import { AccessControlLevel, AccessControlResourceType } from '~/types'
 import { AutomationEmptyState } from '../setupGuide/AutomationEmptyState'
 import { AutomationSuggestionBanner } from '../setupGuide/AutomationSuggestionBanner'
 import { MessagingSetupReminderBanner } from '../setupGuide/MessagingSetupReminderBanner'
+import { EnableWorkflowPrompt } from './EnableWorkflowPrompt'
 import { getHogFlowStep } from './hogflows/steps/HogFlowSteps'
 import { HogFlow } from './hogflows/types'
 import { workflowSuggestionsAvailabilityLogic } from './suggestions/workflowSuggestionsAvailabilityLogic'
@@ -137,6 +138,8 @@ export function WorkflowsTable(): JSX.Element {
         selectedArchivedCount,
         localWorkflowTags,
         tags: allTags,
+        enablePrompt,
+        enablePromptSaving,
     } = useValues(logic)
     // Only an unfiltered Automations tab is truly empty. With a search or filter, the plain message fits.
     const showAutomationEmptyState =
@@ -162,6 +165,8 @@ export function WorkflowsTable(): JSX.Element {
         updateWorkflowTags,
         setTagsFilter,
         loadTagsIfNeeded,
+        confirmEnablePrompt,
+        cancelEnablePrompt,
     } = useActions(logic)
 
     useOnMountEffect(() => {
@@ -546,6 +551,12 @@ export function WorkflowsTable(): JSX.Element {
                     emptyState={showAutomationEmptyState ? <AutomationEmptyState /> : 'No workflows matching filters'}
                 />
                 <AutomationSuggestionBanner />
+                <EnableWorkflowPrompt
+                    domains={enablePrompt?.domains ?? null}
+                    onConfirm={confirmEnablePrompt}
+                    onCancel={cancelEnablePrompt}
+                    loading={enablePromptSaving}
+                />
             </>
         </div>
     )
