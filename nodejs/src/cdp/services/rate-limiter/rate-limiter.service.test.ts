@@ -2,14 +2,14 @@ import { randomUUID } from 'crypto'
 import { register } from 'prom-client'
 
 import { deleteKeysWithPrefix } from '~/common/redis/_tests/redis'
-import { RedisClient, RedisClientPipeline, RedisV2 } from '~/common/redis/redis-v2'
+import { RedisV2, createRedisV2PoolFromConfig } from '~/common/redis/redis-v2'
 import { closeHub, createHub } from '~/common/utils/db/hub'
-import { createRedisPoolFromConfig } from '~/common/utils/db/redis'
 import { TeamManager } from '~/common/utils/team-manager'
-import { Hub, RedisPool } from '~/types'
+import { Hub } from '~/types'
 
 import { SandboxEmailSender } from '../messaging/sandbox-email-sender'
-import { RateLimiterService } from './rate-limiter.service'
+import { createSesRateLimiterValkeyPool } from './rate-limiter-valkey-pool'
+import { ClaimRequest, IssuedClaim, RateLimiterService } from './rate-limiter.service'
 
 const KEY = `@posthog-test/ses-rate-limiter/${randomUUID()}/bucket`
 
@@ -18,14 +18,13 @@ describe('RateLimiterService', () => {
 
     let hub: Hub
     let redis: RedisV2
-    let redisPool: RedisPool
     let limiter: RateLimiterService
 
     beforeEach(async () => {
         hub = await createHub()
         // Reuse the local CDP Redis for tests — same wire protocol, same atomicity.
         // In production this points at the dedicated SES rate-limiter Valkey.
-        redisPool = createRedisPoolFromConfig({
+        redis = createRedisV2PoolFromConfig({
             connection: hub.CDP_REDIS_HOST
                 ? {
                       url: hub.CDP_REDIS_HOST,
@@ -35,29 +34,11 @@ describe('RateLimiterService', () => {
             poolMinSize: hub.REDIS_POOL_MIN_SIZE,
             poolMaxSize: hub.REDIS_POOL_MAX_SIZE,
         })
-        redis = {
-            useClient: async (_options, callback) => {
-                const client = await redisPool.acquire()
-                try {
-                    return await callback(client as RedisClient)
-                } finally {
-                    await redisPool.release(client)
-                }
-            },
-            usePipeline: async (options, callback) =>
-                redis.useClient(options, async (client) => {
-                    const pipeline = client.pipeline() as RedisClientPipeline
-                    callback(pipeline)
-                    return pipeline.exec()
-                }),
-        }
         limiter = new RateLimiterService(redis, { name: 'ses-rate-limiter' })
         await deleteKeysWithPrefix(redis, KEY)
     })
 
     afterEach(async () => {
-        await redisPool.drain()
-        await redisPool.clear()
         await closeHub(hub)
     })
 
@@ -438,10 +419,9 @@ describe('RateLimiterService', () => {
 
     it('shares recipient allowances across projects in an organization while keeping project allowances separate', async () => {
         const organizations = { 1: randomUUID(), 3: randomUUID() }
-        const manager = {
-            getTeam: jest.fn((id: number) =>
-                Promise.resolve({ organization_id: id === 3 ? organizations[3] : organizations[1] })
-            ),
+        const teamManager = {
+            getTeam: (id: number) =>
+                Promise.resolve({ organization_id: id === 3 ? organizations[3] : organizations[1] }),
         } as unknown as TeamManager
         const sender = new SandboxEmailSender(
             {
@@ -452,39 +432,21 @@ describe('RateLimiterService', () => {
                 dailyTeamCap: '1',
                 dailyRecipientCap: '1',
             },
-            manager,
+            teamManager,
+            redis,
             limiter,
-            null,
-            { isPaused: jest.fn().mockResolvedValue(false) }
+            { isPaused: () => Promise.resolve(false) }
         )
 
         try {
-            const firstOrganization = {
-                organizationId: organizations[1],
-                sandboxSenderBlocked: false,
-                expiresAt: Infinity,
-            }
-            const otherOrganization = {
-                organizationId: organizations[3],
-                sandboxSenderBlocked: false,
-                expiresAt: Infinity,
-            }
-            expect(await sender.claimDailyCaps(1, ['member@example.com'], firstOrganization)).toMatchObject({
-                type: 'granted',
-            })
-            expect(await sender.claimDailyCaps(2, ['member@example.com'], firstOrganization)).toEqual({
+            expect(await sender.claimDailyCaps(1, ['member@example.com'])).toMatchObject({ type: 'granted' })
+            expect(await sender.claimDailyCaps(2, ['member@example.com'])).toEqual({
                 type: 'recipient_cap_reached',
                 addresses: ['member@example.com'],
             })
-            expect(await sender.claimDailyCaps(2, ['other@example.com'], firstOrganization)).toMatchObject({
-                type: 'granted',
-            })
-            expect(await sender.claimDailyCaps(3, ['member@example.com'], otherOrganization)).toMatchObject({
-                type: 'granted',
-            })
-            expect(await sender.claimDailyCaps(2, ['third@example.com'], firstOrganization)).toEqual({
-                type: 'project_cap_reached',
-            })
+            expect(await sender.claimDailyCaps(2, ['other@example.com'])).toMatchObject({ type: 'granted' })
+            expect(await sender.claimDailyCaps(3, ['member@example.com'])).toMatchObject({ type: 'granted' })
+            expect(await sender.claimDailyCaps(2, ['third@example.com'])).toEqual({ type: 'project_cap_reached' })
         } finally {
             for (const organizationId of Object.values(organizations)) {
                 await deleteKeysWithPrefix(redis, `@posthog/workflows-sandbox-daily/{${organizationId}}`)
@@ -492,54 +454,97 @@ describe('RateLimiterService', () => {
         }
     })
 
-    it('spends an unanswered claim once when the same EVAL is replayed', async () => {
-        const bucket = { key: `${KEY}/claim-replay`, requested: 1, capacity: 2, refillPerSecond: 0 }
-        const replayingRedis: RedisV2 = {
-            ...redis,
-            useClient: async (options, callback) =>
-                redis.useClient(options, async (client) => {
-                    const evaluate = client.eval.bind(client)
-                    const replay = jest.spyOn(client, 'eval').mockImplementation(async (...args) => {
-                        await evaluate(...args)
-                        return evaluate(...args)
-                    })
-                    try {
-                        return await callback(client)
-                    } finally {
-                        replay.mockRestore()
-                    }
-                }),
-        }
-        const replayingLimiter = new RateLimiterService(replayingRedis, { name: 'ses-rate-limiter' })
+    describe('claimAllOrNothing', () => {
+        it('spends an unanswered claim once when the same EVAL is replayed', async () => {
+            const bucket = { key: `${KEY}/claim-replay`, requested: 1, capacity: 2, refillPerSecond: 0 }
+            const replayingRedis: RedisV2 = {
+                ...redis,
+                useClient: async (options, callback) =>
+                    redis.useClient(options, async (client) => {
+                        const evaluate = client.eval.bind(client)
+                        const replay = jest.spyOn(client, 'eval').mockImplementation(async (...args) => {
+                            await evaluate(...args)
+                            return evaluate(...args)
+                        })
+                        try {
+                            return await callback(client)
+                        } finally {
+                            replay.mockRestore()
+                        }
+                    }),
+            }
+            const replayingLimiter = new RateLimiterService(replayingRedis, { name: 'ses-rate-limiter' })
 
-        expect(await replayingLimiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
-        expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
-        expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: false, deniedIndexes: [0] })
-    })
-
-    describe('returnClaim', () => {
-        it('gives a claim back once, even when the return is replayed', async () => {
-            const bucket = { key: `${KEY}/return`, requested: 1, capacity: 2, refillPerSecond: 0 }
-            expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
-            expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
-
-            await limiter.returnClaim('claim-1', [bucket])
-            await limiter.returnClaim('claim-1', [bucket])
-
-            expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
+            expect(await replayingLimiter.claimAllOrNothing([bucket])).toMatchObject({ granted: true })
+            expect(await limiter.claimAllOrNothing([bucket])).toMatchObject({ granted: true })
             expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: false, deniedIndexes: [0] })
         })
 
-        it('ignores a return that reaches Valkey after its window', async () => {
-            const bucket = { key: `${KEY}/late-return`, requested: 1, capacity: 1, refillPerSecond: 0 }
-            expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: true })
+        it('fails closed through an optional pool whose Valkey is unreachable', async () => {
+            const unreachableValkey = createSesRateLimiterValkeyPool(
+                {
+                    SES_RATE_LIMITER_VALKEY_HOST: '127.0.0.1',
+                    SES_RATE_LIMITER_VALKEY_PORT: 1,
+                    SES_RATE_LIMITER_VALKEY_PASSWORD: '',
+                    SES_RATE_LIMITER_VALKEY_TLS: false,
+                    REDIS_POOL_MIN_SIZE: 1,
+                    REDIS_POOL_MAX_SIZE: 2,
+                },
+                'unreachable-test',
+                { optional: true }
+            )!
+            const unreachable = new RateLimiterService(unreachableValkey, { name: 'sandbox-email' })
 
-            const issuedLongAgo = jest.spyOn(Date, 'now').mockReturnValue(Date.now() - 60 * 60 * 1000)
-            try {
-                await limiter.returnClaim('claim-1', [bucket])
-            } finally {
-                issuedLongAgo.mockRestore()
+            expect(
+                await unreachable.claimAllOrNothing([
+                    { key: `${KEY}/optional-pool`, requested: 1, capacity: 1, refillPerSecond: 0 },
+                ])
+            ).toEqual({ granted: false, deniedIndexes: null })
+        })
+
+        it('reports a limiter error without naming a denied bucket', async () => {
+            const unreachable = new RateLimiterService(
+                {
+                    useClient: () => Promise.reject(new Error('Connection is closed.')),
+                    usePipeline: () => Promise.reject(new Error('Connection is closed.')),
+                },
+                { name: 'ses-rate-limiter' }
+            )
+
+            expect(
+                await unreachable.claimAllOrNothing([
+                    { key: `${KEY}/unreachable`, requested: 1, capacity: 1, refillPerSecond: 0 },
+                ])
+            ).toEqual({ granted: false, deniedIndexes: null })
+        })
+    })
+
+    describe('returnClaim', () => {
+        const grantedClaim = async (bucket: ClaimRequest): Promise<IssuedClaim> => {
+            const claim = await limiter.claimAllOrNothing([bucket])
+            if (!claim.granted) {
+                throw new Error('Expected the claim to be granted.')
             }
+            return claim
+        }
+
+        it('gives a claim back once, even when the return is replayed', async () => {
+            const bucket = { key: `${KEY}/return`, requested: 1, capacity: 2, refillPerSecond: 0 }
+            const claim = await grantedClaim(bucket)
+            await grantedClaim(bucket)
+
+            await limiter.returnClaim(claim, [bucket])
+            await limiter.returnClaim(claim, [bucket])
+
+            expect(await limiter.claimAllOrNothing([bucket])).toMatchObject({ granted: true })
+            expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: false, deniedIndexes: [0] })
+        })
+
+        it('ignores the return of a claim issued longer ago than its window', async () => {
+            const bucket = { key: `${KEY}/late-return`, requested: 1, capacity: 1, refillPerSecond: 0 }
+            const claim = await grantedClaim(bucket)
+
+            await limiter.returnClaim({ ...claim, returnBy: Date.now() - 1000 }, [bucket])
 
             expect(await limiter.claimAllOrNothing([bucket])).toEqual({ granted: false, deniedIndexes: [0] })
         })

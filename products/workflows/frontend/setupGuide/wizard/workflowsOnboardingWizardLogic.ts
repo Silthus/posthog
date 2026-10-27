@@ -257,7 +257,7 @@ export const workflowsOnboardingWizardLogic = kea<workflowsOnboardingWizardLogic
             workflowsSetupGuideLogic,
             ['steps as guideSteps'],
             integrationsLogic,
-            ['userManagedIntegrations as integrations'],
+            ['integrations'],
             featureFlagLogic,
             ['featureFlags'],
             workflowTemplatesLogic,

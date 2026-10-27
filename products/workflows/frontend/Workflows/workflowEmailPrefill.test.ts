@@ -1,5 +1,5 @@
 import { draftMessage } from '../MessageAudience/messageDrafts'
-import { prefilledWorkflow } from './workflowEmailPrefill'
+import { prefilledWorkflow, withEmailSender } from './workflowEmailPrefill'
 import { NEW_WORKFLOW } from './workflowLogic'
 import type { WorkflowTriggerConfig } from './workflowTriggerPrefill'
 
@@ -30,5 +30,15 @@ describe('workflowEmailPrefill', () => {
             subject: 'Sorry about the error you ran into',
         })
         expect(workflow.trigger_masking).toEqual(masking)
+    })
+
+    it('keeps a sender the email step already has and fills the ones without', () => {
+        const workflow = prefilledWorkflow(NEW_WORKFLOW, EVENT_TRIGGER, draftMessage({ kind: 'issue_hit' }))
+        const filled = withEmailSender(workflow, 5)
+        const refilled = withEmailSender(filled.workflow, 9)
+
+        expect(filled.filled).toBe(true)
+        expect((filled.workflow.actions[1].config as any).inputs.email.value.from).toEqual({ integrationId: 5 })
+        expect(refilled).toEqual({ workflow: filled.workflow, filled: false })
     })
 })

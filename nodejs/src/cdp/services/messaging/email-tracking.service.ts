@@ -600,7 +600,7 @@ export class EmailTrackingService {
         for (const { teamId, isTest, recipientCount } of deliveries) {
             const parsedTeamId = Number(teamId)
             if (Number.isSafeInteger(parsedTeamId) && parsedTeamId > 0) {
-                await this.sandboxEmailSender.capture(parsedTeamId, isTest, { type: 'delivered', recipientCount })
+                await this.sandboxEmailSender.captureDelivered(parsedTeamId, isTest, recipientCount)
             }
         }
     }

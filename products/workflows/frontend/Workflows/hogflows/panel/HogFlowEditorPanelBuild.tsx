@@ -29,14 +29,9 @@ function HogFlowEditorToolbarNode({
     children?: React.ReactNode
 }): JSX.Element | null {
     const { hideDropzones, setNodeToBeAdded, showDropzones } = useActions(hogFlowEditorLogic)
-    const { emailInsertionPending } = useValues(hogFlowEditorLogic)
     const dragPreviewRef = useRef<HTMLDivElement>(null)
 
     const onDragStart = (event: React.DragEvent): void => {
-        if (emailInsertionPending) {
-            event.preventDefault()
-            return
-        }
         setNodeToBeAdded(action)
         showDropzones()
         event.dataTransfer.setData('application/reactflow', action.type)
@@ -58,13 +53,11 @@ function HogFlowEditorToolbarNode({
     return (
         <>
             <div
-                draggable={!onActionSelect && !emailInsertionPending}
+                draggable={!onActionSelect}
                 onDragStart={onActionSelect ? undefined : onDragStart}
                 onDragEnd={onActionSelect ? undefined : onDragEnd}
             >
                 <LemonButton
-                    loading={emailInsertionPending && action.type === 'function_email'}
-                    disabledReason={emailInsertionPending ? 'Preparing the email sender…' : undefined}
                     icon={<span style={{ color: step.color }}>{step.icon}</span>}
                     sideIcon={onActionSelect ? undefined : <IconDrag />}
                     fullWidth

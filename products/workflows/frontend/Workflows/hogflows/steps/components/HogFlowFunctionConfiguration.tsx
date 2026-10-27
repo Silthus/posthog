@@ -269,7 +269,6 @@ export function HogFlowFunctionConfiguration({
             // (into the staged draft on active workflows), so the editor needs no save step.
             emailLiveChanges
             emailSaveIndicator={<WorkflowAutoSaveIndicator />}
-            emailSandboxSenderAllowed={isEmailStep && workflow?.origin_product !== 'broadcasts'}
             configuration={{ inputs: inputs as Record<string, CyclotronJobInputType>, inputs_schema: schema }}
             showSource={false}
             sampleGlobalsWithInputs={sampleGlobals}

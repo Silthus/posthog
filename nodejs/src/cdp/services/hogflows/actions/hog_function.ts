@@ -187,6 +187,10 @@ export class HogFunctionHandler implements ActionHandler {
 
         const functionResult = await this.executeHogFunction(invocation, action, hogExecutorOptions)
 
+        if (functionResult.emailSendResult) {
+            result.emailSendResult = functionResult.emailSendResult
+        }
+
         // Add all logs
         functionResult.logs.forEach((log: MinimalLogEntry) => {
             result.logs.push({
@@ -239,10 +243,6 @@ export class HogFunctionHandler implements ActionHandler {
                 action.config.template_id,
                 functionResult.invocation.state.globals?.inputs
             )
-        }
-
-        if (hogExecutorOptions?.isTest && functionResult.skipped) {
-            result.skipped = true
         }
 
         // Add billable_invocation metric only if the function actually executed (not skipped)
@@ -456,6 +456,7 @@ export class HogFunctionHandler implements ActionHandler {
             return {
                 finished: true,
                 skipped: true,
+                emailSendResult: action.type === 'function_email' ? { status: 'skipped', reason: message } : undefined,
                 invocation: hogFunctionInvocation,
                 logs: [{ level: 'info', timestamp: DateTime.now(), message }],
                 metrics,
@@ -477,6 +478,7 @@ export class HogFunctionHandler implements ActionHandler {
             return {
                 finished: true,
                 skipped: true,
+                emailSendResult: { status: 'skipped', reason: emailSkipReason },
                 invocation: hogFunctionInvocation,
                 logs: [{ level: 'info', timestamp: DateTime.now(), message: emailSkipReason }],
                 metrics: [

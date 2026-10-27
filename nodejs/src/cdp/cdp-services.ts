@@ -172,11 +172,11 @@ export type CdpCoreServicesConfig = Pick<
         | 'SES_TRACKED_CONFIGURATION_SET'
         | 'SES_UNTRACKED_CONFIGURATION_SET'
         | 'WORKFLOWS_SANDBOX_SENDER_ENABLED'
-        | 'WORKFLOWS_SANDBOX_DAILY_TEAM_CAP'
-        | 'WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP'
         | 'SES_SANDBOX_TENANT_NAME'
         | 'SES_SANDBOX_CONFIGURATION_SET'
         | 'SES_SANDBOX_FROM_ADDRESS'
+        | 'WORKFLOWS_SANDBOX_DAILY_TEAM_CAP'
+        | 'WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP'
         | 'EMAIL_SUPPRESSION_TRANSIENT_BOUNCE_THRESHOLD'
         | 'EMAIL_TEAM_SENDING_CAP_MODE'
         | 'EMAIL_TEAM_SENDING_CAP_HOURLY_BY_TIER'
@@ -477,8 +477,8 @@ export function createCdpCoreServices(
             dailyRecipientCap: config.WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP,
         },
         deps.teamManager,
-        sandboxEmailRateLimiter,
         redis,
+        sandboxEmailRateLimiter,
         new SandboxSenderStateService(deps.postgres, deps.pubSub)
     )
     const emailService = new EmailService(

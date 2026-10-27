@@ -45,10 +45,20 @@ from posthog.api.github_callback.types import (
     github_app_install_url,
     is_valid_github_installation_id,
 )
+from posthog.api.integration_email_status_serializers import (
+    EmailDomainConnectCheckQuerySerializer,
+    EmailDomainConnectCheckSerializer,
+    EmailDomainDnsHostSerializer,
+    EmailDomainStatusQuerySerializer,
+    EmailDomainStatusSerializer,
+    EmailDomainVerificationSerializer,
+)
+from posthog.api.mixins import ValidatedRequest, validated_request
 from posthog.api.routing import TeamAndOrgViewSetMixin
 from posthog.api.shared import UserBasicSerializer
 from posthog.api.utils import action
-from posthog.auth import SessionAuthentication
+from posthog.auth import OAuthAccessTokenAuthentication, PersonalAPIKeyAuthentication, SessionAuthentication
+from posthog.dns_hosts import lookup_dns_host
 from posthog.domain_connect import discover_domain_connect, extract_root_domain_and_host, get_available_providers
 from posthog.egress.github.transport import GitHubRateLimitError
 from posthog.egress.limiter.policies import Priority
@@ -120,6 +130,7 @@ from posthog.permissions import (
     TeamMemberStrictManagementPermission,
     TimeSensitiveActionPermission,
 )
+from posthog.ph_client import feature_enabled_or_false
 from posthog.rate_limit import GitHubRepositoryRefreshThrottle
 from posthog.tasks.email import send_integration_access_request
 from posthog.utils import absolute_uri, is_relative_url
@@ -130,11 +141,9 @@ from products.cdp.backend.services.integration_usage import get_enabled_hog_func
 from products.slack_app.backend.services.slack_auth import SLACK_AUTH_FAILURE_CODES
 from products.tasks.backend.facade.api import get_in_progress_runs_for_github_integration
 from products.tasks.backend.facade.contracts import InProgressGithubRunsDTO
-from products.workflows.backend.facade.api import (
-    SandboxSenderUnavailable,
-    ensure_sandbox_email_sender,
-    get_active_workflows_using_integration,
-)
+from products.workflows.backend.facade.api import get_active_workflows_using_integration, lookup_existing_email_tools
+from products.workflows.backend.facade.contracts import EmailProviderUnavailableError
+from products.workflows.backend.facade.enums import EmailDomainSetupMethod
 
 logger = structlog.get_logger(__name__)
 
@@ -149,6 +158,13 @@ stripe_marketplace_install_counter = Counter(
 )
 
 GITHUB_REPOSITORY_NAME_RE = re.compile(r"[A-Za-z0-9_.\-]+")
+
+
+class EmailProviderUnavailable(APIException):
+    # A stable code lets the setup page keep polling through an outage instead of treating it as a broken sender.
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_code = "email_provider_unavailable"
+    default_detail = "Couldn't reach the email provider to check this domain. Try again in a moment."
 
 
 class SlackIntegrationInactiveError(APIException):
@@ -319,6 +335,12 @@ class NativeEmailIntegrationSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         help_text="Reply-to address for emails from this sender when the email step sets none. Blank clears it.",
+    )
+    setup_method = serializers.ChoiceField(
+        choices=EmailDomainSetupMethod.choices,
+        required=False,
+        help_text="How the DNS records are being published: `auto` through Domain Connect, `manual` by hand. "
+        "Reported on the verification event.",
     )
 
     def validate_email(self, value: str) -> str:
@@ -1492,6 +1514,7 @@ class IntegrationViewSet(
         "anthropic_managed_agents",
         "anthropic_managed_agent_environments",
         "anthropic_managed_agent_vaults",
+        "email_status",
     ]
     scope_object_write_actions = [
         "create",
@@ -1503,7 +1526,7 @@ class IntegrationViewSet(
         "github_prepare_callback",
         "github_link_existing",
         "github_oauth_authorize",
-        "email_sandbox_sender",
+        "email_verify",
         # Side-effecting POST (emails admins) — a read-only token must not be able to trigger it.
         "request_access",
     ]
@@ -1542,13 +1565,7 @@ class IntegrationViewSet(
         ]
         # Adding an integration only requires project membership. Every edit and removal uses the
         # viewset permission class, including the creator exception for Google account removal.
-        if self.action in (
-            "create",
-            "github_link_existing",
-            "github_oauth_authorize",
-            "request_access",
-            "email_sandbox_sender",
-        ):
+        if self.action in ("create", "github_link_existing", "github_oauth_authorize", "request_access"):
             return base_permissions
         if self.action == "refresh_github_repos":
             return [*base_permissions, TeamMemberLightManagementPermission()]
@@ -1560,9 +1577,6 @@ class IntegrationViewSet(
         return super().get_throttles()
 
     def perform_destroy(self, instance: Integration) -> None:
-        if instance.kind == "email":
-            EmailIntegration(instance).ensure_user_managed()
-
         flows_using_integration = get_active_workflows_using_integration(
             team_id=instance.team_id, integration_id=instance.id
         )
@@ -2666,55 +2680,112 @@ class IntegrationViewSet(
 
     @extend_schema(
         request=None,
-        responses={200: IntegrationSerializer, 404: OpenApiResponse(description="No sandbox sender for this project.")},
+        responses={200: EmailDomainVerificationSerializer},
+        summary="Verify an email sending domain",
+        description="Ask SES to check the domain's DNS records again. When SES has verified the domain, mark "
+        "the domain's senders as verified so they can send. Call it once email/status reports status verified.",
     )
-    @action(methods=["POST"], detail=False, url_path="email_sandbox_sender")
-    def email_sandbox_sender(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        try:
-            sandbox_sender = ensure_sandbox_email_sender(self.team_id)
-        except SandboxSenderUnavailable:
-            raise NotFound("The sandbox sender is not available for this project.")
-        if sandbox_sender.created:
-            report_user_action(
-                cast(User, request.user), "workflows sandbox sender provisioned", team=self.team, request=request
-            )
-        integration = self.get_queryset().get(id=sandbox_sender.integration_id)
-        return Response(IntegrationSerializer(integration, context=self.get_serializer_context()).data)
-
     @action(methods=["POST"], detail=True, url_path="email/verify")
     def email_verify(self, request, **kwargs):
-        email = EmailIntegration(self.get_object())
-        verification_result = email.verify()
+        instance = self.get_object()
+        email = EmailIntegration(instance)
+        verification_result = email.verify(
+            on_domain_verified=lambda: self._report_email_domain_verified(request, instance)
+        )
         return Response(verification_result)
+
+    @validated_request(
+        query_serializer=EmailDomainStatusQuerySerializer,
+        responses={
+            200: EmailDomainStatusSerializer,
+            503: OpenApiResponse(
+                description="The email provider could not be reached. The error code is email_provider_unavailable. "
+                "Nothing changed, so poll again."
+            ),
+        },
+        summary="Get email sending domain status",
+        description="Read the setup progress of an email sender's domain from SES and public DNS without "
+        "changing either. Poll this until status is verified, then call email/verify once so the sender can send.",
+    )
+    @action(methods=["GET"], detail=True, url_path="email/status")
+    def email_status(self, request: ValidatedRequest, **kwargs: Any) -> Response:
+        if not any(
+            feature_enabled_or_false(
+                flag,
+                str(cast(User, request.user).distinct_id),
+                groups={"organization": str(self.team.organization_id), "project": str(self.team.uuid)},
+                group_properties={
+                    "organization": {"id": str(self.team.organization_id)},
+                    "project": {"id": str(self.team.uuid)},
+                },
+                send_feature_flag_events=False,
+            )
+            for flag in ("workflows-email-domain-wizard", "workflows-email-domain-agent-setup")
+        ):
+            raise NotFound()
+        instance = self.get_object()
+        if instance.kind != "email":
+            raise ValidationError("email/status is only supported for email integrations")
+        try:
+            report = EmailIntegration(instance).status(
+                refresh=request.validated_query_data["refresh"],
+            )
+        except EmailProviderUnavailableError as error:
+            raise EmailProviderUnavailable() from error
+        return Response(EmailDomainStatusSerializer(report).data)
+
+    def _report_email_domain_verified(self, request: Request, instance: Integration) -> None:
+        report_user_action(
+            request.user,
+            "email domain verified",
+            {
+                "method": self._email_domain_setup_method(request, instance),
+                "seconds_since_created": int((timezone.now() - instance.created_at).total_seconds()),
+            },
+            team=self.team,
+        )
+
+    @staticmethod
+    def _email_domain_setup_method(request: Request, instance: Integration) -> str:
+        if isinstance(request.successful_authenticator, PersonalAPIKeyAuthentication | OAuthAccessTokenAuthentication):
+            return "agent"
+        return instance.config.get("setup_method", "manual")
 
     @extend_schema(responses={200: IntegrationSerializer})
     @action(methods=["PATCH"], detail=True, url_path="email")
     def email_update(self, request, **kwargs) -> Response:
-        email = EmailIntegration(self.get_object())
-        email.ensure_user_managed()
+        instance = self.get_object()
+        config = request.data.get("config", {})
 
-        serializer = NativeEmailIntegrationSerializer(data=request.data.get("config", {}))
+        serializer = NativeEmailIntegrationSerializer(data=config)
         serializer.is_valid(raise_exception=True)
 
-        email.update_native_integration(serializer.validated_data, email.integration.team_id)
+        email = EmailIntegration(instance)
+        email.update_native_integration(serializer.validated_data, instance.team_id)
 
         return Response(IntegrationSerializer(email.integration).data)
 
+    @validated_request(
+        query_serializer=EmailDomainConnectCheckQuerySerializer,
+        responses={200: EmailDomainConnectCheckSerializer},
+    )
     # nosemgrep: api-path-underscore -- shipped public API path, a rename breaks clients
     @action(methods=["GET"], detail=False, url_path="domain-connect/check")
-    def domain_connect_check(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        domain = request.query_params.get("domain", "")
-        if not domain:
-            raise ValidationError("domain query parameter is required")
-
+    def domain_connect_check(self, request: ValidatedRequest, *args: Any, **kwargs: Any) -> Response:
         # Extract root domain so subdomains (e.g. ph.example.com) resolve correctly
-        domain_parts = extract_root_domain_and_host(domain)
+        domain_parts = extract_root_domain_and_host(request.validated_query_data["domain"])
         result = discover_domain_connect(domain_parts.root_domain)
+        include_email_setup = request.validated_query_data["include_email_setup"]
+        dns_host = lookup_dns_host(domain_parts.root_domain) if include_email_setup else None
         return Response(
             {
                 "supported": result is not None,
                 "provider_name": result["provider_name"] if result else None,
                 "available_providers": get_available_providers() if result is None else [],
+                "dns_host": EmailDomainDnsHostSerializer(dns_host).data if dns_host else None,
+                "existing_email_tools": lookup_existing_email_tools(domain_parts.root_domain)
+                if include_email_setup
+                else [],
             }
         )
 
@@ -2747,7 +2818,11 @@ class IntegrationViewSet(
             if not integration_id:
                 raise ValidationError("integration_id is required for email context")
             try:
-                resolved = resolve_email_context(integration_id, self.team_id)
+                resolved = resolve_email_context(
+                    integration_id,
+                    self.team_id,
+                    on_domain_verified=lambda instance: self._report_email_domain_verified(request, instance),
+                )
             except ValueError as e:
                 capture_exception(e, {"integration_id": integration_id, "team_id": self.team_id, "context": context})
                 raise ValidationError(
@@ -2803,7 +2878,15 @@ class IntegrationViewSet(
             )
             raise ValidationError("Error generating apply URL. Please try again later or contact support.")
 
+        if context == "email" and integration_id:
+            self._record_email_setup_method(integration_id, "auto")
         return Response({"url": url})
+
+    def _record_email_setup_method(self, integration_id: int, setup_method: str) -> None:
+        with transaction.atomic():
+            instance = Integration.objects.select_for_update().get(id=integration_id, team_id=self.team_id)
+            instance.config["setup_method"] = setup_method
+            instance.save(update_fields=["config"])
 
     # Defined last: a method named `list` shadows the builtin for the annotations of every method
     # declared after it in this class body.

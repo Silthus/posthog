@@ -27,13 +27,13 @@ export function BroadcastContentStep(): JSX.Element {
     const { broadcast, email, name, stepValidationErrors, selectedSender, emailSettings, aiEmailDraftStatus } =
         useValues(broadcastWizardLogic)
     const { setEmail, setEmailSettings } = useActions(broadcastWizardLogic)
-    const { integrations, integrationsLoading, ownEmailIntegrations } = useValues(integrationsLogic)
+    const { integrations, integrationsLoading } = useValues(integrationsLogic)
     const { loadIntegrations } = useActions(integrationsLogic)
     const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
     // null: closed. 'new': set up a sender. An integration: finish verifying that one.
     const [senderSetup, setSenderSetup] = useState<'new' | IntegrationType | null>(null)
 
-    const hasSenders = ownEmailIntegrations.length > 0
+    const hasSenders = !!integrations?.some((integration) => integration.kind === 'email')
     const senderUnverified = !!selectedSender && selectedSender.config?.verified !== true
     // A deleted sender would otherwise show as its bare id, so the picker leaves it out.
     const missingSenderIds = integrations ? getMissingSenderIds(email.from, integrations) : []
@@ -118,6 +118,7 @@ export function BroadcastContentStep(): JSX.Element {
             {senderSetup ? (
                 <EmailSetupModal
                     integration={senderSetup === 'new' ? undefined : senderSetup}
+                    entry="broadcast"
                     onClose={closeSenderSetup}
                     onComplete={closeSenderSetup}
                 />

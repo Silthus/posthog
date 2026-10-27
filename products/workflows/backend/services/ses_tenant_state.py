@@ -63,13 +63,6 @@ def _announce_state_change(team_id: int) -> None:
         logger.exception("Failed to announce SES tenant state change to workers", team_id=team_id)
 
 
-def _announce_sandbox_state_change(tenant_name: str) -> None:
-    try:
-        reload_sandbox_sender_state_on_workers(tenant_name)
-    except Exception:
-        logger.exception("Failed to announce sandbox SES tenant state change to workers", tenant_name=tenant_name)
-
-
 def _apply_sandbox_tenant_state(state: SandboxSenderTenantState, tenant: TenantSendingState) -> None:
     previous_status = state.sending_status
     state.synced_at = timezone.now()
@@ -87,7 +80,7 @@ def _apply_sandbox_tenant_state(state: SandboxSenderTenantState, tenant: TenantS
         to_status=tenant.sending_status,
     )
     tenant_name = state.tenant_name
-    transaction.on_commit(lambda: _announce_sandbox_state_change(tenant_name))
+    transaction.on_commit(lambda: reload_sandbox_sender_state_on_workers(tenant_name), robust=True)
 
 
 def sync_sandbox_tenant_state(provider: SESProvider | None = None) -> None:

@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'crypto'
+import { createHash } from 'crypto'
 import { type DefaultTreeAdapterMap, defaultTreeAdapter, parse, parseFragment, serialize } from 'parse5'
 
 import { CyclotronInvocationQueueParametersEmailType } from '~/cdp/schema/cyclotron'
@@ -7,9 +7,8 @@ import { logger } from '~/common/utils/logger'
 import { captureTeamEvent } from '~/common/utils/posthog'
 import { TeamManager } from '~/common/utils/team-manager'
 
-import { TeamOrganizationSnapshot } from '../managers/organization-members.service'
 import { SandboxSenderStateService } from '../managers/sandbox-sender-state.service'
-import { ClaimRequest, RateLimiterService } from '../rate-limiter/rate-limiter.service'
+import { ClaimRequest, IssuedClaim, RateLimiterService } from '../rate-limiter/rate-limiter.service'
 import { maybeAddPreheaderToEmail } from './helpers/preheader'
 
 const SECONDS_PER_DAY = 86400
@@ -36,45 +35,22 @@ function emptyRouteSettings(config: SandboxEmailSenderConfig): string[] {
         .map((setting) => ROUTE_SETTING_NAMES[setting])
 }
 
-export type SandboxDailyCapGrant = {
-    type: 'granted'
-    claimId: string
-    buckets: ClaimRequest[]
-    organization: TeamOrganizationSnapshot
-}
+export type SandboxEmailBlockReason =
+    | 'switch_off'
+    | 'recipient_not_member'
+    | 'recipient_unverified'
+    | 'check_failed'
+    | 'cap_reached'
+    | 'paused'
+    | 'organization_blocked'
+
+export type SandboxDailyCapGrant = { type: 'granted'; claim: IssuedClaim; buckets: ClaimRequest[] }
 
 export type SandboxDailyCapClaim =
     | SandboxDailyCapGrant
     | { type: 'project_cap_reached' }
     | { type: 'recipient_cap_reached'; addresses: string[] }
     | { type: 'check_failed' }
-
-type SandboxEmailOutcome =
-    | { type: 'sent'; recipientCount: number }
-    | { type: 'delivered'; recipientCount: number }
-    | {
-          type: 'blocked'
-          reason:
-              | 'switch_off'
-              | 'recipient_not_member'
-              | 'recipient_unverified'
-              | 'check_failed'
-              | 'cap_reached'
-              | 'paused'
-              | 'organization_blocked'
-          blockedRecipientCount: number
-      }
-
-function outcomeProperties(outcome: SandboxEmailOutcome, isTest: boolean): Record<string, unknown> {
-    switch (outcome.type) {
-        case 'sent':
-            return { recipient_count: outcome.recipientCount, source: isTest ? 'test' : 'workflow' }
-        case 'blocked':
-            return { reason: outcome.reason, blocked_recipient_count: outcome.blockedRecipientCount }
-        case 'delivered':
-            return { recipient_count: outcome.recipientCount }
-    }
-}
 
 function dailyBucket(key: string, requested: number, capacity: number): ClaimRequest {
     return { key, requested, capacity, refillPerSecond: capacity / SECONDS_PER_DAY, ttlSeconds: DAILY_CAP_TTL_SECONDS }
@@ -85,7 +61,7 @@ function parseDailyCap(value: string): number | null {
     return cap !== null && Number.isSafeInteger(cap) && cap > 0 ? cap : null
 }
 
-// The organization hash tag keeps shared recipient and project claims in one Valkey cluster slot.
+// The organization hash tag keeps the project and recipient buckets in one Valkey cluster slot.
 function dailyCapKeyPrefix(organizationId: string): string {
     return `@posthog/workflows-sandbox-daily/{${organizationId}}`
 }
@@ -98,13 +74,14 @@ function distinctAddresses(recipients: string[]): string[] {
     const addresses = new Map<string, string>()
     for (const recipient of recipients) {
         const trimmed = recipient.trim()
-        const normalized = trimmed.toLowerCase()
-        if (!addresses.has(normalized)) {
-            addresses.set(normalized, trimmed)
+        if (!addresses.has(trimmed.toLowerCase())) {
+            addresses.set(trimmed.toLowerCase(), trimmed)
         }
     }
     return [...addresses.values()]
 }
+
+const BLOCKED_EVENT_WINDOW_SECONDS = 3600
 
 function htmlBody(document: DefaultTreeAdapterMap['document']): DefaultTreeAdapterMap['element'] | undefined {
     const root = document.childNodes.find(defaultTreeAdapter.isElementNode)
@@ -193,8 +170,8 @@ export class SandboxEmailSender {
     constructor(
         public readonly config: SandboxEmailSenderConfig,
         private teamManager: TeamManager,
+        private blockedEventRedis: Pick<RedisV2, 'useClient'>,
         private dailyCapLimiter: RateLimiterService | null,
-        private blockedEventRedis: Pick<RedisV2, 'useClient'> | null,
         private senderState: Pick<SandboxSenderStateService, 'isPaused'>
     ) {
         this.config = {
@@ -221,21 +198,18 @@ export class SandboxEmailSender {
         }
     }
 
-    public async claimDailyCaps(
-        teamId: number,
-        recipients: string[],
-        organization: TeamOrganizationSnapshot
-    ): Promise<SandboxDailyCapClaim> {
+    public async claimDailyCaps(teamId: number, recipients: string[]): Promise<SandboxDailyCapClaim> {
         const dailyTeamCap = parseDailyCap(this.config.dailyTeamCap)
         const dailyRecipientCap = parseDailyCap(this.config.dailyRecipientCap)
         if (!this.dailyCapLimiter || dailyTeamCap === null || dailyRecipientCap === null) {
             logger.error('Sandbox email daily caps are not configured correctly', { teamId })
             return { type: 'check_failed' }
         }
-        if (Date.now() >= organization.expiresAt) {
+        const team = await this.teamManager.getTeam(teamId)
+        if (!team) {
             return { type: 'check_failed' }
         }
-        const prefix = dailyCapKeyPrefix(organization.organizationId)
+        const prefix = dailyCapKeyPrefix(team.organization_id)
         const addresses = distinctAddresses(recipients)
         const buckets = [
             dailyBucket(`${prefix}/project/${teamId}`, recipients.length, dailyTeamCap),
@@ -245,7 +219,7 @@ export class SandboxEmailSender {
         ]
         const claim = await this.dailyCapLimiter.claimAllOrNothing(buckets)
         if (claim.granted) {
-            return { type: 'granted', claimId: randomUUID(), buckets, organization }
+            return { type: 'granted', claim, buckets }
         }
         if (claim.deniedIndexes === null) {
             return { type: 'check_failed' }
@@ -257,7 +231,7 @@ export class SandboxEmailSender {
     }
 
     public async returnDailyCaps(grant: SandboxDailyCapGrant): Promise<void> {
-        await this.dailyCapLimiter?.returnClaim(grant.claimId, grant.buckets)
+        await this.dailyCapLimiter?.returnClaim(grant.claim, grant.buckets)
     }
 
     public async withIdentificationFooter(
@@ -285,33 +259,70 @@ export class SandboxEmailSender {
         }
     }
 
-    public async capture(teamId: number, isTest: boolean, outcome: SandboxEmailOutcome): Promise<void> {
+    public async captureSent(teamId: number, isTest: boolean, recipientCount: number): Promise<void> {
+        await this.captureEvent(teamId, 'workflows sandbox email sent', {
+            recipient_count: recipientCount,
+            source: isTest ? 'test' : 'workflow',
+            is_test: isTest,
+        })
+    }
+
+    public async captureDelivered(teamId: number, isTest: boolean, recipientCount: number): Promise<void> {
+        await this.captureEvent(teamId, 'workflows sandbox email delivered', {
+            recipient_count: recipientCount,
+            is_test: isTest,
+        })
+    }
+
+    public async captureBlocked(
+        teamId: number,
+        isTest: boolean,
+        reason: SandboxEmailBlockReason,
+        blockedRecipientCount: number
+    ): Promise<void> {
+        await this.captureEvent(
+            teamId,
+            'workflows sandbox email blocked',
+            { reason, blocked_recipient_count: blockedRecipientCount, is_test: isTest },
+            () => this.isFirstBlockInWindow(teamId, isTest, reason)
+        )
+    }
+
+    private async captureEvent(
+        teamId: number,
+        event: string,
+        properties: Record<string, string | number | boolean>,
+        shouldCapture: () => Promise<boolean> = () => Promise.resolve(true)
+    ): Promise<void> {
         try {
-            if (outcome.type === 'blocked') {
-                const firstBlock = await this.blockedEventRedis?.useClient(
-                    { name: 'sandbox-blocked-event', timeout: 1000 },
-                    (client) =>
-                        client.set(
-                            `@posthog/workflows-sandbox-blocked/${teamId}/${outcome.reason}/${isTest ? 'test' : 'live'}`,
-                            '1',
-                            'EX',
-                            3600,
-                            'NX'
-                        )
-                )
-                if (firstBlock !== 'OK') {
-                    return
-                }
+            if (!(await shouldCapture())) {
+                return
             }
             const team = await this.teamManager.getTeam(teamId)
             if (team) {
-                captureTeamEvent(team, `workflows sandbox email ${outcome.type}`, {
-                    ...outcomeProperties(outcome, isTest),
-                    is_test: isTest,
-                })
+                captureTeamEvent(team, event, properties)
             }
         } catch (error) {
-            logger.warn('Could not capture sandbox email event', { teamId, error })
+            logger.warn('Could not capture sandbox email event', { teamId, event, error })
         }
+    }
+
+    private async isFirstBlockInWindow(
+        teamId: number,
+        isTest: boolean,
+        reason: SandboxEmailBlockReason
+    ): Promise<boolean> {
+        const firstBlock = await this.blockedEventRedis.useClient(
+            { name: 'sandbox-blocked-event', timeout: 1000 },
+            (client) =>
+                client.set(
+                    `@posthog/workflows-sandbox-blocked/${teamId}/${reason}/${isTest ? 'test' : 'live'}`,
+                    '1',
+                    'EX',
+                    BLOCKED_EVENT_WINDOW_SECONDS,
+                    'NX'
+                )
+        )
+        return firstBlock === 'OK'
     }
 }

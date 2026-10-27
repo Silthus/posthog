@@ -7,7 +7,7 @@ from django.db.models import BigIntegerField, F
 from django.db.models.functions import Coalesce
 
 from posthog.models import EventProperty, Team
-from posthog.models.integration import SANDBOX_EMAIL_PROVIDER, Integration
+from posthog.models.integration import Integration
 
 from products.messaging.backend.facade.api import EmailTemplateSummary, list_email_templates
 from products.workflows.backend.models.hog_flow.hog_flow import HogFlow
@@ -100,9 +100,7 @@ def _verified_senders(team: Team) -> list[EmailSender]:
     return [
         EmailSender(integration_id=integration.id, email=str(config["email"]), name=str(config.get("name") or ""))
         for integration in Integration.objects.filter(team_id=team.id, kind="email").order_by("created_at")
-        if (config := integration.config or {}).get("verified") is True
-        and config.get("email")
-        and config.get("provider") != SANDBOX_EMAIL_PROVIDER
+        if (config := integration.config or {}).get("verified") is True and config.get("email")
     ]
 
 

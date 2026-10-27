@@ -7,6 +7,11 @@ import { SandboxEmailSender } from './sandbox-email-sender'
 
 const footer =
     'This email was sent by Example organization via PostHog with the PostHog sandbox sender. Organization ID: 00000000-0000-0000-0000-000000000001.'
+const teamManager = {
+    getTeam: jest.fn().mockResolvedValue({ organization_id: '00000000-0000-0000-0000-000000000001' }),
+} as unknown as TeamManager
+const blockedEventRedis = { useClient: jest.fn() }
+const senderState = { isPaused: jest.fn().mockResolvedValue(false) }
 const sender = new SandboxEmailSender(
     {
         enabled: true,
@@ -16,12 +21,10 @@ const sender = new SandboxEmailSender(
         dailyTeamCap: '25',
         dailyRecipientCap: '5',
     },
-    {
-        getTeam: jest.fn().mockResolvedValue({ organization_id: '00000000-0000-0000-0000-000000000001' }),
-    } as unknown as TeamManager,
+    teamManager,
+    blockedEventRedis,
     null,
-    null,
-    { isPaused: jest.fn().mockResolvedValue(false) }
+    senderState
 )
 const params = (html: string, text?: string, preheader?: string): CyclotronInvocationQueueParametersEmailType => ({
     type: 'email',
@@ -69,12 +72,10 @@ describe('sandbox email content', () => {
                 configurationSetName: ' sandbox-email ',
                 fromAddress: ' fixed-sandbox@example.com ',
             },
-            {
-                getTeam: jest.fn().mockResolvedValue({ organization_id: '00000000-0000-0000-0000-000000000001' }),
-            } as unknown as TeamManager,
+            teamManager,
+            blockedEventRedis,
             null,
-            null,
-            { isPaused: jest.fn().mockResolvedValue(false) }
+            senderState
         )
         const result = await paddedSender.withIdentificationFooter(
             params('<p>Hello</p>'),

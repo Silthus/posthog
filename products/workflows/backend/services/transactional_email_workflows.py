@@ -7,7 +7,7 @@ from uuid import UUID
 
 from django.db import transaction
 
-from posthog.models.integration import SANDBOX_EMAIL_PROVIDER, Integration
+from posthog.models.integration import Integration
 from posthog.models.scoping import with_team_scope
 
 from products.workflows.backend.facade.contracts import (
@@ -105,15 +105,14 @@ def _content_fields(content: TransactionalEmailContent, from_integration_id: int
 
 
 def resolve_transactional_email_sender(team_id: int, requested_id: int | None) -> int:
-    """The requested sender, or the project's default when none is requested. Raise when it isn't verified,
-    or when it is the sandbox sender, which only workflow email steps and test sends may use."""
+    """The requested sender, or the project's default when none is requested. Raise when it isn't verified."""
     sender_id = requested_id or (
         TeamWorkflowsConfig.objects.filter(team_id=team_id)
         .values_list("default_email_integration_id", flat=True)
         .first()
     )
     sender = Integration.objects.filter(team_id=team_id, kind="email", id=sender_id).first() if sender_id else None
-    if sender is None or not sender.config.get("verified") or sender.config.get("provider") == SANDBOX_EMAIL_PROVIDER:
+    if sender is None or not sender.config.get("verified"):
         raise TransactionalEmailSenderUnavailable()
     return sender.id
 
