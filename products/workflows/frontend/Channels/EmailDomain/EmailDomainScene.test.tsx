@@ -156,6 +156,12 @@ describe('EmailDomainScene', () => {
         expectProgress('8 of 8 found')
         expect(screen.getByText('Turn on your workflows now')).toBeInTheDocument()
         expect(element('email-domain-verifying-go-to-workflows')).toBeInTheDocument()
+        expect(element('email-domain-verifying-create-welcome-workflow')).toBeInTheDocument()
+        expect(element('email-domain-verifying-create-blank-workflow')).toBeInTheDocument()
+        expect(screen.queryByText('Proves you own the domain')).not.toBeInTheDocument()
+        click('email-domain-dns-records')
+        await flush()
+        expect(screen.getByText('Proves you own the domain')).toBeInTheDocument()
 
         backend.verifyDomain(DOMAIN)
         await flush(POLL_MS)
@@ -224,7 +230,7 @@ describe('EmailDomainScene', () => {
         expectStep(/You can send from/)
     })
 
-    it('replaces the template with workflows suggested from the data, loaded while DNS was checked', async () => {
+    it('replaces the template with workflows suggested from the data, from the wait for DNS to the last step', async () => {
         const capture = jest.spyOn(posthog, 'capture')
         const shownEvents = (): unknown[][] =>
             capture.mock.calls.filter(([event]) => event === 'workflows data suggestions shown')
@@ -237,21 +243,33 @@ describe('EmailDomainScene', () => {
         ])
         await open(urls.workflowsEmailDomain(SENDER_ID))
         expectStep('Checking your settings…')
-        expect(screen.queryByText('Welcome new teammates')).not.toBeInTheDocument()
-        expect(shownEvents()).toHaveLength(0)
+        expect(screen.getByText('Welcome new teammates')).toBeInTheDocument()
+        expect(document.querySelector('[data-attr="email-domain-verifying-create-welcome-workflow"]')).toBeNull()
+        expect(element('email-domain-verifying-skip-suggestions')).toBeInTheDocument()
+        expect(element('email-domain-verifying-suggested-workflow-choices')).toContainElement(
+            element('workflows-data-suggestion-ai')
+        )
+        expect(shownEvents()).toHaveLength(1)
 
         backend.verifyDomain(DOMAIN)
         await flush(POLL_MS)
         expectStep(/You can send from/)
         expect(screen.getByText('Welcome new teammates')).toBeInTheDocument()
         expect(element('workflows-data-suggestion-ai')).toHaveTextContent('Create workflow')
+        expect(element('email-domain-suggested-workflow-choices')).toContainElement(
+            element('workflows-data-suggestion-ai')
+        )
         expect(document.querySelector('[data-attr="email-domain-create-welcome-workflow"]')).toBeNull()
         expect(document.querySelector('[data-attr="email-domain-create-blank-workflow"]')).toBeNull()
         expect(backend.requestsTo('data_suggestions_generate')).toHaveLength(1)
         expect(shownEvents()).toEqual([
             [
                 'workflows data suggestions shown',
-                expect.objectContaining({ surface: 'email_domain_wizard', stages: ['onboarding'] }),
+                expect.objectContaining({ surface: 'email_domain_wizard', placement: 'verifying' }),
+            ],
+            [
+                'workflows data suggestions shown',
+                expect.objectContaining({ surface: 'email_domain_wizard', placement: 'ready' }),
             ],
         ])
 
@@ -408,6 +426,38 @@ describe('EmailDomainScene', () => {
             expect(screen.queryByText(/could not find these settings/)).not.toBeInTheDocument()
         }
     )
+
+    it('opens the DNS records by itself once automatic checks stop with a setting missing', async () => {
+        seedSender()
+        backend.publishRecords(DOMAIN, (record) => record.kind !== 'verification')
+        await open(urls.workflowsEmailDomain(SENDER_ID))
+        expect(screen.queryByText('Proves you own the domain')).not.toBeInTheDocument()
+
+        await flush(31 * 60_000)
+        expect(screen.getByText('One setting is still missing')).toBeInTheDocument()
+        expect(screen.getByText('Proves you own the domain')).toBeInTheDocument()
+    })
+
+    it.each<[string, (fake: FakeEmailDomainBackend) => void]>([
+        ['verifying', (fake) => fake.publishRecords(DOMAIN)],
+        ['ready', (fake) => fake.verifyDomain(DOMAIN)],
+    ])('reports a suggestion clicked on the %s step with its placement', async (placement, reachStep) => {
+        const capture = jest.spyOn(posthog, 'capture')
+        turnOnSuggestions(true)
+        seedSender()
+        reachStep(backend)
+        backend.suggestWorkflows([SUGGESTED_WORKFLOW])
+        await open(urls.workflowsEmailDomain(SENDER_ID))
+
+        click('workflows-data-suggestion-ai')
+
+        expect(capture.mock.calls.filter(([event]) => event === 'workflows data suggestion clicked')).toEqual([
+            [
+                'workflows data suggestion clicked',
+                expect.objectContaining({ surface: 'email_domain_wizard', placement }),
+            ],
+        ])
+    })
 
     it('falls back to the generic manual setup when host detection fails', async () => {
         seedSender()
