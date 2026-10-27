@@ -93,6 +93,7 @@ The worker checks the pause again after the daily allowance claim and gives the 
 Django mirrors the tenant named by `SES_SANDBOX_TENANT_NAME` into `SandboxSenderTenantState` from the SES tenant-state webhook and the daily reconciliation, without emailing project admins. Set the same `SES_SANDBOX_TENANT_NAME` on Django web, Celery, and the worker.
 A committed state change reaches the workers through the `reload-sandbox-sender-state` message. Own-sender sends do not read this state.
 Each delivered send emits a `workflows sandbox email sent` event.
-Successful sandbox sends still count as `email_sent`, which the sending tier reads, until sandbox sends get their own metric.
+A successful sandbox send records `email_sandbox_sent` next to `email_sent`, so the workflow's metrics still show it.
 The sending tier subtracts `email_sandbox_sent` from `email_sent` per day, and the team's sending allowance per workflow, both floored at zero. Sandbox bounces and complaints still count.
-Keep the switch off in production until that metric is deployed.
+The CDP API's SES webhook captures `workflows sandbox email delivered` for a delivery on `SES_SANDBOX_CONFIGURATION_SET`, test sends included. Without that setting on the CDP API, the event never fires.
+Deploy this metric to the worker and Django before you enable the switch in production.
