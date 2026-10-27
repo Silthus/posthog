@@ -6703,24 +6703,28 @@ class TestHogFlowSendOnceVerified(APIBaseTest):
             assert body["went_live_at"] is None
             assert self._activated_events() == []
 
-    def test_a_graph_edit_to_a_verified_sender_takes_a_waiting_workflow_live(self):
+    @parameterized.expand([("graph_edit", "graph"), ("email_edit", "actions/email_node/email")])
+    def test_an_edit_to_a_verified_sender_takes_a_waiting_workflow_live(self, _name, path):
         flow_id = self._waiting_flow()
         verified_inputs = self._email_flow(self._sender(verified=True))["actions"][1]["config"]["inputs"]
-
-        response = self.client.patch(
-            f"/api/projects/{self.team.id}/hog_flows/{flow_id}/graph",
+        body = (
             {
                 "operations": [
                     {"op": "update_action", "id": "email_node", "patch": {"config": {"inputs": verified_inputs}}}
                 ]
-            },
-            format="json",
-            HTTP_X_POSTHOG_CLIENT="mcp",
+            }
+            if path == "graph"
+            else {"email_patch": {"from": verified_inputs["email"]["value"]["from"]}}
+        )
+
+        response = self.client.patch(
+            f"/api/projects/{self.team.id}/hog_flows/{flow_id}/{path}", body, format="json", HTTP_X_POSTHOG_CLIENT="mcp"
         )
 
         assert response.status_code == 200, response.json()
         assert response.json()["status"] == "active"
         assert response.json()["went_live_at"] is not None
+        assert [event["activated_by"] for event in self._activated_events()] == ["user"]
 
     def test_an_edit_that_would_fail_activation_is_refused_on_a_waiting_workflow(self):
         flow_id = self._waiting_flow()
