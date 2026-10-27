@@ -10,6 +10,7 @@ import { initKeaTests } from '~/test/init'
 import { IntegrationType } from '~/types'
 
 import { draftMessage } from '../MessageAudience/messageDrafts'
+import { hogFlowEditorLogic } from './hogflows/hogFlowEditorLogic'
 import { HogFlowAction } from './hogflows/types'
 import { NEW_WORKFLOW, workflowLogic } from './workflowLogic'
 
@@ -293,5 +294,77 @@ describe('workflow first-run sender', () => {
         expect(emailValueOf(logic)?.from).toEqual({ integrationId: SANDBOX.id })
         expect(ensureCalls).toBe(2)
         logic.unmount()
+    })
+    it.each<{
+        name: string
+        step: HogFlowAction
+        senders: Partial<IntegrationType>[]
+        flag: boolean
+        originProduct?: 'broadcasts'
+        expectedFrom: Record<string, unknown>
+        expectedEnsureCalls: number
+    }>([
+        {
+            name: 'an inserted email step gets the sandbox sender set up when the editor opened',
+            step: emailAction('function_email'),
+            senders: [],
+            flag: true,
+            expectedFrom: { integrationId: SANDBOX.id },
+            expectedEnsureCalls: 1,
+        },
+        {
+            name: 'an inserted email step gets the verified own sender over the sandbox sender',
+            step: emailAction('function_email'),
+            senders: [OWN_VERIFIED, SANDBOX],
+            flag: true,
+            expectedFrom: { integrationId: OWN_VERIFIED.id },
+            expectedEnsureCalls: 0,
+        },
+        {
+            name: 'an inserted broadcast email step never gets the sandbox sender',
+            step: emailAction('function_email'),
+            senders: [SANDBOX],
+            flag: true,
+            originProduct: 'broadcasts',
+            expectedFrom: {},
+            expectedEnsureCalls: 0,
+        },
+        {
+            name: 'an inserted generic email function never gets the sandbox sender',
+            step: emailAction('function'),
+            senders: [SANDBOX],
+            flag: true,
+            expectedFrom: {},
+            expectedEnsureCalls: 0,
+        },
+        {
+            name: 'flag off sets nothing up and leaves an inserted email step empty',
+            step: emailAction('function_email'),
+            senders: [],
+            flag: false,
+            expectedFrom: {},
+            expectedEnsureCalls: 0,
+        },
+    ])('$name', async ({ step, senders, flag, originProduct, expectedFrom, expectedEnsureCalls }) => {
+        integrations = senders
+        setSandboxFlag(flag)
+        const workflow = workflowLogic({ id: 'new' })
+        workflow.mount()
+        await expectLogic(workflow).toDispatchActions(['loadWorkflowSuccess'])
+        if (originProduct) {
+            workflow.actions.setWorkflowInfo({ origin_product: originProduct })
+        }
+        const editor = hogFlowEditorLogic({ id: 'new' })
+        editor.mount()
+        await expectLogic(editor).toFinishAllListeners()
+
+        editor.actions.setNodeToBeAdded({ ...step, id: undefined } as any)
+        editor.actions.onDrop(undefined, NEW_WORKFLOW.edges[0])
+
+        const inserted = workflow.values.workflow.actions.find((action) => action.type === step.type)
+        expect((inserted?.config as any)?.inputs?.email?.value?.from).toEqual(expectedFrom)
+        expect(ensureCalls).toBe(expectedEnsureCalls)
+        editor.unmount()
+        workflow.unmount()
     })
 })
