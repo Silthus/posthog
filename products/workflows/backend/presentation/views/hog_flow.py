@@ -5687,16 +5687,15 @@ class HogFlowViewSet(
         # A workflow that kept suggestions on while it was off needs its scout back when it goes live again.
         if is_optimization_enabled(instance.id):
             self._sync_suggestions_scout(self.request)
-        if result.previous.get("status") in (HogFlowState.DRAFT, HogFlowState.WAITING_FOR_DOMAIN):
-            self._report_workflow_action(
-                "hog_flow_activated",
-                instance,
-                {
-                    "activated_by": "user",
-                    "edges_count": len(instance.edges or []),
-                    "actions_count": len(instance.actions or []),
-                },
-            )
+        self._report_workflow_action(
+            "hog_flow_activated",
+            instance,
+            {
+                "activated_by": "user",
+                "edges_count": len(instance.edges or []),
+                "actions_count": len(instance.actions or []),
+            },
+        )
 
     def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         partial = kwargs.pop("partial", False)

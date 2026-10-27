@@ -280,13 +280,15 @@ def get_active_workflows_using_integration(*, team_id: int, integration_id: int)
     ]
 
 
-def enable_waiting_workflows(*, team_id: int, sender_ids: Iterable[int]) -> None:
+def enable_waiting_workflows(*, team_id: int, sender_ids: Iterable[int], workers_reloaded: bool) -> None:
     # Deferred because the tasks package imports core tasks that import this facade.
     from products.workflows.backend.tasks.waiting_workflows import queue_enable_waiting_workflows  # noqa: PLC0415
 
     ids = sorted(set(sender_ids))
     if ids:
-        transaction.on_commit(lambda: queue_enable_waiting_workflows(team_id=team_id, sender_ids=ids))
+        transaction.on_commit(
+            lambda: queue_enable_waiting_workflows(team_id=team_id, sender_ids=ids, workers_reloaded=workers_reloaded)
+        )
 
 
 def get_active_workflows_using_realtime_cohort(
