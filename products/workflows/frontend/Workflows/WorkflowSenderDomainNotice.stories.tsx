@@ -21,5 +21,5 @@ export const UnverifiedDomain: Story = {
 }
 
 export const WaitingForSeveralDomains: Story = {
-    args: { notice: { stage: 'waiting', domains: ['mail.example.com', 'news.example.org'], integrationId: null } },
+    args: { notice: { stage: 'waiting', domains: ['mail.example.com', 'news.example.org'], integrationId: 2 } },
 }

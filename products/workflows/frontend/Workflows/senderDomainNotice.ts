@@ -5,10 +5,10 @@ import type { IntegrationType } from '~/types'
 import { isEmailAction } from './hogflows/steps/types'
 import type { HogFlow } from './hogflows/types'
 
-/** `integrationId` names the one domain whose setup to open, or is null when several domains wait. */
+/** `integrationId` names the first pending domain's sender, whose setup the notice opens. */
 export type SenderDomainNotice =
     | { stage: 'no_domain' }
-    | { stage: 'unverified' | 'waiting'; domains: string[]; integrationId: number | null }
+    | { stage: 'unverified' | 'waiting'; domains: string[]; integrationId: number }
 
 function chosenSenderIds(sender: EmailTemplateFrom | undefined): number[] {
     return sender?.integrationIds?.length ? sender.integrationIds : sender?.integrationId ? [sender.integrationId] : []
@@ -22,9 +22,8 @@ export function hasEmailStepWithoutSender(workflow: HogFlow, emailSenders: Integ
     })
 }
 
-function domainStatus(senders: { id: number; domain: string }[]): { domains: string[]; integrationId: number | null } {
-    const domains = [...new Set(senders.map(({ domain }) => domain))]
-    return { domains, integrationId: domains.length === 1 ? senders[0].id : null }
+function domainStatus(senders: { id: number; domain: string }[]): { domains: string[]; integrationId: number } {
+    return { domains: [...new Set(senders.map(({ domain }) => domain))], integrationId: senders[0].id }
 }
 
 function projectDomainNotice(workflow: HogFlow, emailSenders: IntegrationType[]): SenderDomainNotice | null {

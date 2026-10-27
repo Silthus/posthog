@@ -419,7 +419,7 @@ describe('workflowLogic send once verified', () => {
             from: { integrationIds: [7, 8] },
             unverified: [UNVERIFIED_SENDER, { id: 8, domain: 'mail.example.org' }],
             senders: [PENDING_PROJECT_SENDER],
-            notice: { stage: 'waiting', domains: ['example.com', 'mail.example.org'], integrationId: null },
+            notice: { stage: 'waiting', domains: ['example.com', 'mail.example.org'], integrationId: 7 },
         },
         {
             name: 'every sender is verified',

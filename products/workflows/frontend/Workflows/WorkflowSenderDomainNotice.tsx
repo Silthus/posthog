@@ -1,7 +1,5 @@
 import { Link } from '@posthog/lemon-ui'
 
-import { urls } from 'scenes/urls'
-
 import type { SenderDomainNotice } from './senderDomainNotice'
 
 const domainList = new Intl.ListFormat('en', { type: 'conjunction' })
@@ -35,19 +33,9 @@ function NoticeAction({ notice, onOpenDomainSetup }: WorkflowSenderDomainNoticeP
             </Link>
         )
     }
-    const { integrationId } = notice
-    return integrationId === null ? (
+    return (
         <Link
-            to={urls.workflows('channels')}
-            target="_blank"
-            className="shrink-0"
-            data-attr="workflow-sender-domain-status"
-        >
-            Check domain status
-        </Link>
-    ) : (
-        <Link
-            onClick={() => onOpenDomainSetup(integrationId)}
+            onClick={() => onOpenDomainSetup(notice.integrationId)}
             className="shrink-0"
             data-attr="workflow-sender-domain-status"
         >
