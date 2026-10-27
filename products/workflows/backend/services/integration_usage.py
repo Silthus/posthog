@@ -1,6 +1,8 @@
 from typing import Any
 from uuid import UUID
 
+from django.db.models import QuerySet
+
 from posthog.models.integration import Integration
 
 from products.cdp.backend.models.hog_function_template import HogFunctionTemplate
@@ -108,16 +110,40 @@ def email_senders_of(flow: HogFlow) -> frozenset[int]:
     )
 
 
+def _email_integrations(team_id: int, sender_ids: frozenset[int]) -> "QuerySet[Integration]":
+    return Integration.objects.filter(team_id=team_id, kind="email", id__in=sender_ids).only("id", "config")
+
+
+def _is_unverified(sender: Integration) -> bool:
+    return not (sender.config or {}).get("verified")
+
+
 def lock_unverified_senders(*, team_id: int, sender_ids: frozenset[int]) -> frozenset[int]:
     """The senders among ``sender_ids`` that exist and are not verified yet. A sender that no longer exists
     can never verify, so it does not hold a workflow back. Locks the senders until the caller's transaction
     ends, so a verification of them waits for the caller's status write and then finds it."""
     if not sender_ids:
         return frozenset()
-    senders = Integration.objects.filter(team_id=team_id, kind="email", id__in=sender_ids).only("id", "config")
     return frozenset(
-        sender.id for sender in senders.order_by("id").select_for_update() if not (sender.config or {}).get("verified")
+        sender.id
+        for sender in _email_integrations(team_id, sender_ids).order_by("id").select_for_update()
+        if _is_unverified(sender)
     )
+
+
+def unverified_sender_domains(*, team_id: int, sender_ids: frozenset[int]) -> dict[int, str]:
+    """The domain of each sender among ``sender_ids`` that exists and is not verified yet, keyed by sender id."""
+    if not sender_ids:
+        return {}
+    return {
+        sender.id: _sender_domain(sender.config or {})
+        for sender in _email_integrations(team_id, sender_ids)
+        if _is_unverified(sender)
+    }
+
+
+def _sender_domain(config: dict) -> str:
+    return config.get("domain") or str(config.get("email") or "").rpartition("@")[2]
 
 
 def waiting_flows_using(*, team_id: int, sender_ids: frozenset[int]) -> list[UUID]:
