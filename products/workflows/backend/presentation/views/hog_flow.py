@@ -229,6 +229,7 @@ from products.workflows.backend.facade.email_health import (
     verified_email_domains,
 )
 from products.workflows.backend.facade.enums import (
+    ENABLED_HOG_FLOW_STATES,
     HogFlowBatchJobState,
     HogFlowExitCondition,
     HogFlowOriginProduct,
@@ -5679,15 +5680,18 @@ class HogFlowViewSet(
         )
         self._emit_resource_edited(serializer.instance)
 
-        self._report_went_live(result, serializer.instance)
+        self._report_turned_on(result, serializer.instance)
 
-    def _report_went_live(self, result: WorkflowWriteResult, instance: Workflow) -> None:
-        if result.previous.get("status") == HogFlowState.ACTIVE or instance.status != HogFlowState.ACTIVE:
-            return
-        # A workflow that kept suggestions on while it was off needs its scout back when it goes live again.
-        if is_optimization_enabled(instance.id):
+    def _report_turned_on(self, result: WorkflowWriteResult, instance: Workflow) -> None:
+        previous = result.previous.get("status")
+        # A workflow that kept suggestions on while it was off needs its scout back when it is enabled again.
+        if (
+            previous not in ENABLED_HOG_FLOW_STATES
+            and instance.status in ENABLED_HOG_FLOW_STATES
+            and is_optimization_enabled(instance.id)
+        ):
             self._sync_suggestions_scout(self.request)
-        if result.previous.get("status") in (HogFlowState.DRAFT, HogFlowState.WAITING_FOR_DOMAIN):
+        if previous in (HogFlowState.DRAFT, HogFlowState.WAITING_FOR_DOMAIN) and instance.status == HogFlowState.ACTIVE:
             self._report_workflow_action(
                 "hog_flow_activated",
                 instance,
@@ -5817,7 +5821,7 @@ class HogFlowViewSet(
             instance,
             {"operations_count": len(operations), "routed_to_draft": result.routed_to_draft},
         )
-        self._report_went_live(result, instance)
+        self._report_turned_on(result, instance)
 
         return Response(self.get_serializer(instance).data)
 
@@ -5888,7 +5892,7 @@ class HogFlowViewSet(
                 "routed_to_draft": result.routed_to_draft,
             },
         )
-        self._report_went_live(result, instance)
+        self._report_turned_on(result, instance)
 
         return Response(self.get_serializer(instance).data)
 
@@ -6036,7 +6040,7 @@ class HogFlowViewSet(
         self._log_activity(locked.id, locked.name, "published", previous=result.previous, current=result.current)
         self._emit_resource_edited(locked)
         self._report_workflow_action("hog_flow_draft_published", locked)
-        self._report_went_live(result, locked)
+        self._report_turned_on(result, locked)
 
         return Response(
             {

@@ -24,20 +24,44 @@ describe('workflowsLogic', () => {
 
     afterEach(() => logic.unmount())
 
-    it.each(['/workflows', '/workflows/workflows'])('fills the filters from the query params on %s', (path) => {
+    it.each([
+        ['/workflows', 'active'],
+        ['/workflows/workflows', 'waiting_for_domain'],
+    ])('fills the filters from the query params on %s with status %s', (path, status) => {
         router.actions.push(
-            `${path}?created_by=user-uuid&status=active&trigger_type=event&type=messaging&tags=${encodeURIComponent('["growth","billing"]')}`
+            `${path}?created_by=user-uuid&status=${status}&trigger_type=event&type=messaging&tags=${encodeURIComponent('["growth","billing"]')}`
         )
 
         expect(logic.values.filters).toEqual({
             search: '',
             createdBy: 'user-uuid',
-            status: 'active',
+            status,
             type: 'messaging',
             triggerType: 'event',
             tags: ['growth', 'billing'],
             page: 1,
         })
+    })
+
+    it.each([
+        ['draft', 'active'],
+        ['active', 'draft'],
+        ['waiting_for_domain', 'draft'],
+    ] as const)('the list toggle on a %s workflow saves %s', async (status, expected) => {
+        const workflow = { id: 'flow-1', name: 'Welcome', status } as HogFlow
+        const bodies: unknown[] = []
+        useMocks({
+            patch: {
+                '/api/projects/:team_id/hog_flows/:id/': async ({ request }) => {
+                    bodies.push(await request.json())
+                    return [200, { ...workflow, status: expected }]
+                },
+            },
+        })
+
+        await expectLogic(logic, () => logic.actions.toggleWorkflowStatus(workflow)).toFinishAllListeners()
+
+        expect(bodies).toEqual([{ status: expected }])
     })
 
     it('saves a row tag edit with only the tags, and shows the name the server stored', async () => {

@@ -45,7 +45,20 @@ export function WorkflowStatusBar({
     const showWorkflowStatus = !props.editTemplateId
     const historyWorkflowId = props.id && props.id !== 'new' ? props.id : null
     const isActive = originalWorkflow.status === 'active'
+    const isWaitingForDomain = originalWorkflow.status === 'waiting_for_domain'
     const isEditingDraftOfLive = isActive && (hasStagedDraft || hasUnsavedChanges)
+    const statusExplanation = isEditingDraftOfLive
+        ? 'The live version keeps running until you publish.'
+        : isActive
+          ? 'Changes you make save as a draft.'
+          : isWaitingForDomain
+            ? 'Sending starts once every email domain is verified.'
+            : null
+    const autoSaveExplanation = isActive
+        ? 'Auto-save stores your changes as a draft. Nothing goes live until you publish.'
+        : isWaitingForDomain
+          ? 'Auto-save stores your changes as you edit. Sending starts once every email domain is verified.'
+          : 'Draft workflows auto-save as you edit.'
 
     return (
         <div className="@container/workflow-status flex items-center justify-between gap-2 px-2 py-1.5 border-b bg-surface-secondary rounded-t-md flex-wrap">
@@ -76,15 +89,13 @@ export function WorkflowStatusBar({
                         <LemonTag type="warning">Editing draft</LemonTag>
                     ) : isActive ? (
                         <LemonTag type="success">Live</LemonTag>
+                    ) : isWaitingForDomain ? (
+                        <LemonTag type="warning">Waiting for domain</LemonTag>
                     ) : (
                         <LemonTag>Draft</LemonTag>
                     ))}
-                {showWorkflowStatus && isActive && (
-                    <span className="text-xs text-secondary truncate">
-                        {isEditingDraftOfLive
-                            ? 'The live version keeps running until you publish.'
-                            : 'Changes you make save as a draft.'}
-                    </span>
+                {showWorkflowStatus && statusExplanation && (
+                    <span className="text-xs text-secondary truncate">{statusExplanation}</span>
                 )}
                 {commands}
             </div>
@@ -106,14 +117,7 @@ export function WorkflowStatusBar({
                             label="Auto-save"
                             size="small"
                         />
-                        <Tooltip
-                            title={
-                                isActive
-                                    ? 'Auto-save stores your changes as a draft. Nothing goes live until you publish.'
-                                    : 'Draft workflows auto-save as you edit.'
-                            }
-                            placement="bottom"
-                        >
+                        <Tooltip title={autoSaveExplanation} placement="bottom">
                             <IconInfo className="text-tertiary size-4" />
                         </Tooltip>
                     </span>

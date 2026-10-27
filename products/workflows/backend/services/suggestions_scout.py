@@ -24,6 +24,7 @@ from products.signals.backend.facade.api import (
     scout_status_for_product,
 )
 from products.workflows.backend.facade.contracts import SuggestionsSample
+from products.workflows.backend.facade.enums import ENABLED_HOG_FLOW_STATES
 from products.workflows.backend.metrics import (
     HOG_FLOW_VERSION_APP_SOURCE,
     MIN_EVIDENCE_SAMPLE,
@@ -61,7 +62,7 @@ _STEP_SENDS_QUERY = """
 
 
 def sync_suggestions_scout(team: Team, *, acting_user: User | None, may_grant: bool) -> None:
-    """Switch the scout on or off to match the project's live opted-in workflows.
+    """Switch the scout on or off to match the project's enabled opted-in workflows.
 
     Switching it on grants `hog_flow_proposal:write` and makes `acting_user` the person its runs act as,
     so it happens only with an `acting_user` and `may_grant` set. Switching it off needs neither.
@@ -75,7 +76,7 @@ def sync_suggestions_scout(team: Team, *, acting_user: User | None, may_grant: b
         environments = Team.objects.filter(Q(id=project.id) | Q(parent_team_id=project.id)).values("id")
         wanted = (
             HogFlowOptimization.objects.unscoped()
-            .filter(team_id__in=environments, enabled=True, hog_flow__status=HogFlow.State.ACTIVE)
+            .filter(team_id__in=environments, enabled=True, hog_flow__status__in=ENABLED_HOG_FLOW_STATES)
             .exists()
         )
         if not wanted:
