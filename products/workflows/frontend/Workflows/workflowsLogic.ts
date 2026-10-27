@@ -381,7 +381,7 @@ export const workflowsLogic = kea<workflowsLogicType>([
                     return response
                 },
                 toggleWorkflowStatus: async ({ workflow }) => {
-                    await api.hogFlows.updateHogFlow(workflow.id, {
+                    await hogFlowsPartialUpdate(String(ApiConfig.getCurrentTeamId()), workflow.id, {
                         status: workflow.status === 'draft' ? 'active' : 'draft',
                     })
                     // Reload instead of patching in place: the new status may no longer match the
