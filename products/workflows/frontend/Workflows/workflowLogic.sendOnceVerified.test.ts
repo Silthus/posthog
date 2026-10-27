@@ -472,6 +472,35 @@ describe('workflowLogic send once verified', () => {
         })
     })
 
+    it.each<{ name: string; edit: (workflow: HogFlow) => Partial<HogFlow>; reason: string }>([
+        {
+            name: 'a step has errors',
+            edit: (workflow) => ({
+                actions: workflow.actions.map((action) => {
+                    if (action.id !== 'email_node') {
+                        return action
+                    }
+                    const step = emailStep({ integrationId: 7 }) as any
+                    step.config.inputs.email.value.subject = ''
+                    return step
+                }),
+            }),
+            reason: "Fix the errors in the workflow's steps first.",
+        },
+        {
+            name: 'edits are unsaved',
+            edit: () => ({ name: 'Welcome, renamed' }),
+            reason: 'Save the workflow first.',
+        },
+    ])('blocks Enable from the domain setup while $name', async ({ edit, reason }) => {
+        await mountWith(withEmailStep(makeWorkflow(), { integrationId: 7 }))
+        expect(logic.values.enableFromSenderDomainSetupDisabledReason).toBeNull()
+
+        logic.actions.setWorkflowValues(edit(logic.values.workflow))
+
+        expect(logic.values.enableFromSenderDomainSetupDisabledReason).toEqual(reason)
+    })
+
     describe('a domain that verified while the setup was open', () => {
         const waiting = (): HogFlow =>
             withEmailStep(
