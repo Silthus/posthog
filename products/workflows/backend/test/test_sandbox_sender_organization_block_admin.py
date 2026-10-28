@@ -13,6 +13,8 @@ class TestSandboxSenderOrganizationBlockAdmin(BaseTest):
         super().setUp()
         self.user.is_staff = True
         self.user.save()
+        self.organization.name = "Blocked example organization"
+        self.organization.save()
         self.client = Client()
         self.client.force_login(self.user)
 
@@ -24,6 +26,9 @@ class TestSandboxSenderOrganizationBlockAdmin(BaseTest):
         assert added.status_code == 302, added.content
         block = SandboxSenderOrganizationBlock.objects.get(organization=self.organization)
         assert (block.reason, block.created_by) == ("Abuse report", self.user)
+
+        confirmation = self.client.get(f"{ADMIN_URL}{block.pk}/delete/")
+        assert self.organization.name in confirmation.content.decode()
 
         deleted = self.client.post(f"{ADMIN_URL}{block.pk}/delete/", data={"post": "yes"})
 
