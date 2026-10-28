@@ -354,7 +354,7 @@ def get_scoped_models() -> tuple[dict[str, set[str]], set[str], set[str], set[st
         "RoleMembership",
         "LinkedIdentityProviderConfig",
         "IdJagIdentity",
-        "SandboxSenderOrganizationBlock",  # staff-managed switch that turns the sandbox sender off for one organization
+        "SandboxSenderOrganizationBlock",
         # --- User-scoped (cross-tenant by design) ---
         "NotificationViewed",
         "SCIMProvisionedUser",
