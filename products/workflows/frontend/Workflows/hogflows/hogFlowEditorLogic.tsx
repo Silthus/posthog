@@ -2202,6 +2202,9 @@ export interface hogFlowEditorLogicActions {
     prepareFirstRunSender: () => {
         value: true
     }
+    assignInsertedStepSender: (actionId: string) => {
+        actionId: string
+    }
     resetFlowFromHogFlow: (hogFlow: HogFlow) => {
         hogFlow: HogFlow
     }
@@ -2333,6 +2336,7 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
         onNodesChange: (nodes: NodeChange<HogFlowActionNode>[]) => ({ nodes }),
         onNodesDelete: (deleted: HogFlowActionNode[]) => ({ deleted }),
         prepareFirstRunSender: true,
+        assignInsertedStepSender: (actionId: string) => ({ actionId }),
         setNodes: (nodes: HogFlowActionNode[]) => ({ nodes }),
         setDropzoneNodes: (dropzoneNodes: DropzoneNode[]) => ({
             dropzoneNodes,
@@ -2602,7 +2606,7 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
             },
         ],
     })),
-    listeners(({ values, actions }) => {
+    listeners(({ values, actions, cache }) => {
         let animationTimeout: ReturnType<typeof setTimeout> | null = null
         return {
             onEdgesChange: ({ edges }) => {
@@ -2738,7 +2742,24 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
             },
 
             prepareFirstRunSender: async () => {
-                await prepareSandboxSender().catch(() => undefined)
+                cache.senderPreparation = prepareSandboxSender().catch(() => undefined)
+                await cache.senderPreparation
+            },
+            assignInsertedStepSender: async ({ actionId }) => {
+                await cache.senderPreparation
+                if (cache.disposables.isDisposed) {
+                    return
+                }
+                const step = values.workflow.actions.find((action) => action.id === actionId)
+                if (!step) {
+                    return
+                }
+                const { action, sender } = withInsertedStepSender(step, values.workflow, values.integrations)
+                if (sender) {
+                    actions.setWorkflowAction(actionId, action)
+                    // pinned: analytics event name
+                    posthog.capture('email sender preselected', { surface: 'workflow', reason: sender.reason })
+                }
             },
             setFeatureFlags: () => {
                 actions.prepareFirstRunSender()
@@ -3058,6 +3079,9 @@ export const hogFlowEditorLogic = kea<hogFlowEditorLogicType>([
                     actions.setWorkflowInfo({ actions: newActions, edges: newEdges, variables: updatedVariables })
                     actions.setNodeToBeAdded(null)
                     actions.setSelectedNodeId(newAction.id)
+                    if (!sender && !isHogFlowActionNode) {
+                        actions.assignInsertedStepSender(newAction.id)
+                    }
                 }
                 // We can clear the dropzones now
                 actions.hideDropzones()
