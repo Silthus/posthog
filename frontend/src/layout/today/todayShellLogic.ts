@@ -18,7 +18,15 @@ import { navigationLogic } from '~/layout/navigation/navigationLogic'
 import { getNavProductPages, navProductHrefForPath } from '~/layout/panel-layout/navbar/tabs/navProductItems'
 import { FileSystemImport } from '~/queries/schema/schema-general'
 
-export type TodayRailPane = 'home' | 'spaces' | 'analytics' | 'products' | 'settings'
+import {
+    MESSAGING_HOME_URL,
+    WORKFLOWS_ROW_URL,
+    MessagingPrototypeVariant,
+    messagingPrototypeLogic,
+    messagingPrototypeVariant,
+} from './messagingPrototype/messagingPrototypeLogic'
+
+export type TodayRailPane = 'home' | 'spaces' | 'analytics' | 'products' | 'settings' | 'messaging'
 
 /** What showed or hid the sidebar. `navigation` is a page change that hides the unpinned sidebar. */
 export type TodaySidebarToggleSource =
@@ -87,6 +95,13 @@ export function nextPhonePages(
 /** The pane a route belongs to, or null for pages that keep whichever pane was open. */
 export function railPaneForPath(pathname: string): TodayRailPane | null {
     const path = removeProjectIdIfPresent(pathname)
+    const prototypeVariant = messagingPrototypeVariant()
+    if (prototypeVariant && isUnderPath(path, MESSAGING_HOME_URL)) {
+        return prototypeVariant === 'C' ? 'messaging' : 'products'
+    }
+    if (prototypeVariant && isUnderPath(path, WORKFLOWS_ROW_URL)) {
+        return 'products'
+    }
     if (path === '/' || isUnderPath(path, urls.projectHomepage())) {
         return 'home'
     }
@@ -141,6 +156,7 @@ export interface todayShellLogicValues {
     featureFlags: FeatureFlagsSet // featureFlagLogic
     effectivePhaiView: PhaiViewMode // maxGlobalLogic
     mobileLayout: boolean // navigationLogic
+    variant: MessagingPrototypeVariant | null // messagingPrototypeLogic
     activePane: TodayRailPane
     lastSceneUrl: string | null
     leftNavWidth: number
@@ -288,6 +304,8 @@ export const todayShellLogic = kea<todayShellLogicType>([
             ['effectivePhaiView'],
             navigationLogic,
             ['mobileLayout'],
+            messagingPrototypeLogic,
+            ['variant'],
         ],
         actions: [router, ['locationChanged']],
     })),
@@ -358,7 +376,8 @@ export const todayShellLogic = kea<todayShellLogicType>([
     }),
     selectors({
         routePane: [
-            () => [router.selectors.location],
+            // PROTOTYPE (Silthus/personal#212): the variant decides the pane of the Messaging home.
+            (s) => [router.selectors.location, s.variant],
             (location: { pathname: string }): TodayRailPane | null => railPaneForPath(location.pathname),
         ],
         activePane: [

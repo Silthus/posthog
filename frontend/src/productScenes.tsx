@@ -217,5 +217,8 @@ export const productScenes: Record<string, () => Promise<any>> = {
     Broadcasts: () => import('../../products/workflows/frontend/Broadcasts/BroadcastsScene'),
     Broadcast: () => import('../../products/workflows/frontend/Broadcasts/BroadcastScene'),
     Transactional: () => import('../../products/workflows/frontend/Transactional/TransactionalScene'),
+    MessagingPrototype: () => import('../../products/workflows/frontend/MessagingPrototype/MessagingPrototypeScene'),
+    WorkflowsRowPrototype: () =>
+        import('../../products/workflows/frontend/MessagingPrototype/WorkflowsRowPrototypeScene'),
     WorkflowsEmailDomain: () => import('../../products/workflows/frontend/Channels/EmailDomain/EmailDomainScene'),
 }

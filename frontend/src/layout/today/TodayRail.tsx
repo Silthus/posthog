@@ -18,7 +18,8 @@ export function TodayRail(): JSX.Element {
             key={pane}
             label={TODAY_PANES[pane].label}
             icon={TODAY_PANES[pane].icon}
-            active={activePane === pane}
+            // PROTOTYPE (Silthus/personal#212): the Messaging pane opens from Products, so Products stays lit.
+            active={activePane === pane || (pane === 'products' && activePane === 'messaging')}
             to={railPaneHref(pane, effectivePhaiView)}
             onClick={() => clickRailPane(pane)}
             dataAttr={RAIL_DATA_ATTRS[pane] ?? `today-rail-${pane}`}

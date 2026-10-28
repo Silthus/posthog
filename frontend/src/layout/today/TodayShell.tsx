@@ -15,6 +15,7 @@ import { lazyWithRetry } from 'lib/utils/retryImport'
 
 import { QuillSceneHeader } from '~/layout/scenes/components/QuillSceneHeader'
 
+import { MessagingPaneBackButton } from './messagingPrototype/MessagingPaneBackButton'
 import { TodayPhoneHeader } from './TodayPhoneHeader'
 import { TodayPreviewCardProvider } from './TodayPreviewCardProvider'
 import { TodayRail } from './TodayRail'
@@ -34,6 +35,9 @@ const TodayProductsPane = lazyWithRetry(() =>
 )
 const TodaySettingsSidebar = lazyWithRetry(() =>
     import('./TodaySettingsSidebar').then((m) => ({ default: m.TodaySettingsSidebar }))
+)
+const MessagingPane = lazyWithRetry(() =>
+    import('./messagingPrototype/MessagingPane').then((m) => ({ default: m.MessagingPane }))
 )
 const NewSpaceDialog = lazyWithRetry(() =>
     import('products/tasks/frontend/spaces/NewSpaceDialog').then((m) => ({ default: m.NewSpaceDialog }))
@@ -98,6 +102,8 @@ export function TodayShell({ className }: { className?: string }): JSX.Element {
                 </TodayPreviewCardProvider>
             ) : activePane === 'settings' ? (
                 <TodaySettingsSidebar />
+            ) : activePane === 'messaging' ? (
+                <MessagingPane />
             ) : (
                 <TodayProductsPane />
             )}
@@ -111,7 +117,7 @@ export function TodayShell({ className }: { className?: string }): JSX.Element {
                 // Transparent, not removed: the scene header keeps its border inside the same height, so both headers
                 // center their buttons on the same line.
                 className="group/header border-b-transparent"
-                back={<TodaySidebarCollapseButton />}
+                back={activePane === 'messaging' ? <MessagingPaneBackButton /> : <TodaySidebarCollapseButton />}
                 title={
                     <div className="flex min-w-0 items-center gap-1">
                         <h2 className="m-0 min-w-0 truncate text-base font-bold text-foreground">{paneTitle}</h2>

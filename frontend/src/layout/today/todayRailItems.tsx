@@ -1,8 +1,9 @@
-import { IconApps, IconChat, IconGear, IconHome, IconSidebarClose, IconSidebarOpen } from '@posthog/icons'
+import { IconApps, IconChat, IconGear, IconHome, IconSend, IconSidebarClose, IconSidebarOpen } from '@posthog/icons'
 
 import { IconAnalyticsBars } from 'lib/lemon-ui/icons'
 import { isMac } from 'lib/utils/dom'
 
+import { MessagingPaneNewButton } from './messagingPrototype/MessagingPaneNewButton'
 import { TodayNewAnalyticsButton } from './TodayNewAnalyticsButton'
 import { TodayNewChatButton } from './TodayNewChatButton'
 import type { TodayRailPane } from './todayShellLogic'
@@ -26,6 +27,8 @@ export const TODAY_PANES: Record<TodayRailPane, TodayPane> = {
     analytics: { label: 'Analytics', title: 'Analytics', icon: <IconAnalyticsBars />, action: TodayNewAnalyticsButton },
     products: { label: 'Products', title: 'Products', icon: <IconApps /> },
     settings: { label: 'Settings', title: 'Settings', icon: <IconGear /> },
+    // PROTOTYPE (Silthus/personal#212): variant C opens this pane from the Products pane's Messaging row.
+    messaging: { label: 'Messaging', title: 'Messaging', icon: <IconSend />, action: MessagingPaneNewButton },
 }
 
 export const TODAY_RAIL_PANES: TodayRailPane[] = ['home', 'spaces', 'analytics', 'products']

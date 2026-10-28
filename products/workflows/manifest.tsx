@@ -51,6 +51,19 @@ export const manifest: ProductManifest = {
             projectBased: true,
             description: 'Send emails from your code with one API call',
         },
+        // PROTOTYPE, never merged: Silthus/personal#212.
+        MessagingPrototype: {
+            import: () => import('./frontend/MessagingPrototype/MessagingPrototypeScene'),
+            name: 'Messaging',
+            iconType: 'broadcasts',
+            projectBased: true,
+        },
+        WorkflowsRowPrototype: {
+            import: () => import('./frontend/MessagingPrototype/WorkflowsRowPrototypeScene'),
+            name: 'Workflows',
+            iconType: 'workflows',
+            projectBased: true,
+        },
         WorkflowsEmailDomain: {
             import: () => import('./frontend/Channels/EmailDomain/EmailDomainScene'),
             name: 'Workflows',
@@ -60,6 +73,10 @@ export const manifest: ProductManifest = {
     },
     routes: {
         // URL: [Scene, SceneKey]
+        // PROTOTYPE, never merged: Silthus/personal#212.
+        '/messaging-prototype': ['MessagingPrototype', 'messagingPrototype'],
+        '/messaging-prototype/:section': ['MessagingPrototype', 'messagingPrototype'],
+        '/workflows-prototype': ['WorkflowsRowPrototype', 'workflowsRowPrototype'],
         '/workflows': ['Workflows', 'workflows'],
         '/workflows/:tab': ['Workflows', 'workflows'],
         '/workflows/channels/email/:id': ['WorkflowsEmailDomain', 'workflowsEmailDomain'],
