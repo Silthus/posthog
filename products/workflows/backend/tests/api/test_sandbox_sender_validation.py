@@ -256,30 +256,16 @@ class TestSandboxSenderValidation(APIBaseTest):
         assert "fixed From address and name" in response.json()["detail"]
         assert "Reply-To" in response.json()["detail"]
 
-    def test_workflow_cannot_select_the_sandbox_sender_after_the_flag_turns_off(self) -> None:
+    @parameterized.expand([("hog_flows",), ("hog_functions/",)])
+    def test_saves_skip_the_sandbox_checks_while_the_flag_is_off(self, endpoint: str) -> None:
         self.flag_enabled.return_value = False
+        payload = self._workflow() if endpoint == "hog_flows" else self._function()
 
-        response = self.client.post(f"/api/projects/{self.team.id}/hog_flows", self._workflow())
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.post(f"/api/projects/{self.team.id}/{endpoint}", payload)
 
-        assert response.status_code == 400, response.json()
-        assert "sandbox sender is not available for this project" in response.json()["detail"].lower()
-
-    def test_unchanged_sandbox_sender_keeps_saving_after_the_flag_turns_off(self) -> None:
-        created = self.client.post(f"/api/projects/{self.team.id}/hog_flows", self._workflow())
-        assert created.status_code == 201, created.json()
-        actions = created.json()["actions"]
-        actions[1]["config"]["inputs"]["email"]["value"]["subject"] = "Updated subject"
-        self.flag_enabled.return_value = False
-
-        response = self.client.patch(
-            f"/api/projects/{self.team.id}/hog_flows/{created.json()['id']}",
-            {"name": "Renamed workflow", "actions": actions},
-        )
-
-        assert response.status_code == 200, response.json()
-        email = response.json()["actions"][1]["config"]["inputs"]["email"]["value"]
-        assert email["from"] == {"integrationId": self.sender.id}
-        assert email["subject"] == "Updated subject"
+        assert response.status_code == 201, response.json()
+        assert not [query for query in queries.captured_queries if '"posthog_integration"' in query["sql"]]
 
     def test_test_send_configuration_can_select_the_sandbox_sender(self) -> None:
         serializer = HogFunctionInvocationSerializer(
@@ -338,7 +324,6 @@ class TestSandboxSenderValidation(APIBaseTest):
         )
         actions = deepcopy(live["actions"] if variant == "live" else draft["actions"])
         actions[1]["config"]["inputs"]["email"]["value"]["subject"] = "Updated legacy subject"
-        self.flag_enabled.return_value = False
 
         response = self.client.patch(
             f"/api/projects/{self.team.id}/hog_flows/{stored.id}",
