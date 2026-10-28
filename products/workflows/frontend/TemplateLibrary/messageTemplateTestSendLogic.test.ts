@@ -314,7 +314,7 @@ describe('messageTemplateTestSendLogic', () => {
                                 user: {
                                     ...MOCK_SECOND_BASIC_USER,
                                     id: 303,
-                                    email: 'unverified@posthog.com',
+                                    email: 'unverified@example.com',
                                     is_email_verified: false,
                                 },
                             },
@@ -350,9 +350,9 @@ describe('messageTemplateTestSendLogic', () => {
             logic.actions.setRecipientEmail('Rose.Dawson@posthog.com')
             await expectLogic(logic).toMatchValues({ recipientNotSuggested: false, sendDisabledReason: undefined })
 
-            logic.actions.setRecipientEmail('unverified@posthog.com')
+            logic.actions.setRecipientEmail('unverified@example.com')
             await expectLogic(logic).toMatchValues({ recipientNotSuggested: true })
-            expect(logic.values.recipientSuggestions).not.toContain('unverified@posthog.com')
+            expect(logic.values.recipientSuggestions).not.toContain('unverified@example.com')
 
             logic.actions.setRecipientEmail('unknown@example.com')
             await expectLogic(logic).toMatchValues({ recipientNotSuggested: true })
