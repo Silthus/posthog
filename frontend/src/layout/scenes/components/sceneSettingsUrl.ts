@@ -1,6 +1,7 @@
 import type { SettingSectionId } from 'scenes/settings/types'
 import { urls } from 'scenes/urls'
 
+import { messagingPrototypeSettingsUrl } from '~/layout/today/messagingPrototype/messagingPrototypeNav'
 import { ProductKey } from '~/queries/schema/schema-general'
 
 const SETTINGS_SECTION_BY_PRODUCT: Partial<Record<ProductKey, SettingSectionId>> = {
@@ -15,6 +16,11 @@ const SETTINGS_SECTION_BY_PRODUCT: Partial<Record<ProductKey, SettingSectionId>>
 }
 
 export function getSceneSettingsUrl(productKey: ProductKey | null): string | null {
+    // PROTOTYPE (Silthus/personal#212): the Messaging pages' gear opens Messaging settings.
+    const prototypeSettingsUrl = messagingPrototypeSettingsUrl()
+    if (prototypeSettingsUrl) {
+        return prototypeSettingsUrl
+    }
     const section = productKey ? SETTINGS_SECTION_BY_PRODUCT[productKey] : undefined
     return section ? urls.settings(section) : null
 }

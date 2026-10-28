@@ -34,7 +34,7 @@ import {
 import { startNew } from '~/layout/today/messagingPrototype/NewMessagingMenuItems'
 
 import { MessagingHeaderActions } from './MessagingHeaderActions'
-import { CalendarBody, MessagingSectionBody, SectionHeading, SectionPrimaryAction } from './MessagingSectionContent'
+import { MessagingSectionBody, SectionHeading, SectionPrimaryAction, UpcomingSends } from './MessagingSectionContent'
 
 type BTab = 'overview' | 'broadcasts' | 'transactional' | 'workflows' | 'templates' | 'calendar' | 'setup'
 
@@ -136,7 +136,7 @@ function Overview(): JSX.Element {
                         <CardDescription>From the calendar</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <CalendarBody compact />
+                        <UpcomingSends />
                     </CardContent>
                 </Card>
             </div>
@@ -153,7 +153,6 @@ function SetupTab({ section }: { section: MessagingSection }): JSX.Element {
                 variant="outline"
                 value={[current]}
                 onValueChange={(value: string[]) => value[0] && push(messagingSectionUrl(value[0] as MessagingSection))}
-                className="flex-wrap"
             >
                 {SETUP_SECTIONS.map((key) => (
                     <ToggleGroupItem key={key} value={key}>

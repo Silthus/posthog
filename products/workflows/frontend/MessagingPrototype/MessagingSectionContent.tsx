@@ -24,54 +24,74 @@ import {
     TabsTrigger,
     Text,
     toast,
-    cn,
 } from '@posthog/quill'
 
-import { MessagingSection, workflowsRowUrl } from '~/layout/today/messagingPrototype/messagingPrototypeNav'
+import {
+    MessagingSection,
+    messagingSectionUrl,
+    workflowsRowUrl,
+} from '~/layout/today/messagingPrototype/messagingPrototypeNav'
 import { startNew } from '~/layout/today/messagingPrototype/NewMessagingMenuItems'
+import { TemplatePeek } from '~/layout/today/messagingPrototype/TemplatePeek'
 
+import { NEW_BROADCAST_SUGGESTIONS } from 'products/workflows/frontend/Broadcasts/broadcastAgentContext'
+import { SendCalendar } from 'products/workflows/frontend/SendCalendar/SendCalendar'
+import { NEW_TEMPLATE_SUGGESTIONS } from 'products/workflows/frontend/TemplateLibrary/templateAgentContext'
+import { NEW_WORKFLOW_SUGGESTIONS } from 'products/workflows/frontend/Workflows/workflowAgentContext'
+
+import { MessagingAgentStart } from './MessagingAgentStart'
+import { MessagingList } from './MessagingList'
+import { MessagingSettingsPage } from './MessagingSettingsPage'
 import {
     BROADCASTS,
-    CALENDAR,
+    BROADCAST_COLUMNS,
     CHANNELS,
     OPT_OUTS,
     SUPPRESSION,
     TEMPLATES,
+    TEMPLATE_COLUMNS,
     TOPICS,
+    TRANSACTIONAL_COLUMNS,
     TRANSACTIONAL_EMAILS,
+    UPCOMING,
     WORKFLOWS,
+    WORKFLOW_COLUMNS,
 } from './prototypeData'
 
-type BadgeVariant = 'default' | 'info' | 'destructive' | 'warning' | 'success' | 'completed'
+const TRANSACTIONAL_SUGGESTIONS = [
+    {
+        title: 'Password reset',
+        description: 'A reset link that expires',
+        prompt: 'Write a password reset email with a link that expires in one hour',
+    },
+    {
+        title: 'Receipt',
+        description: 'Confirm a payment',
+        prompt: 'Write a payment receipt email with the amount, the date and a link to the invoice',
+    },
+    {
+        title: 'Sign-in link',
+        description: 'A one-time magic link',
+        prompt: 'Write a magic link sign-in email',
+    },
+]
 
-/** Columns a narrow scene drops, so a table never scrolls sideways. */
-const WIDE_ONLY = 'hidden @min-[48rem]/main-content:table-cell'
+type BadgeVariant = 'default' | 'success' | 'warning'
 
-const STATUS_BADGE: Record<string, BadgeVariant> = {
-    Draft: 'default',
-    Scheduled: 'info',
-    Sent: 'completed',
-    Live: 'success',
-    Paused: 'warning',
+const CHANNEL_BADGE: Record<string, BadgeVariant> = {
     Verified: 'success',
     Connected: 'success',
     'DNS records missing': 'warning',
-    'Not set up': 'default',
-}
-
-function StatusBadge({ status }: { status: string }): JSX.Element {
-    return <Badge variant={STATUS_BADGE[status] ?? 'default'}>{status}</Badge>
 }
 
 function prototypeToast(what: string): void {
     toast.info({ title: `Prototype: this opens ${what}.` })
 }
 
-/** The one create action of a section, where it has one. */
+/** The one create action of a section, where it has one. It is the page's only primary button. */
 export function SectionPrimaryAction({ section }: { section: MessagingSection }): JSX.Element | null {
     switch (section) {
         case 'broadcasts':
-        case 'calendar':
             return (
                 <Button variant="primary" onClick={() => startNew('broadcasts')}>
                     <IconPlus />
@@ -113,92 +133,40 @@ export function SectionPrimaryAction({ section }: { section: MessagingSection })
 
 function BroadcastsBody(): JSX.Element {
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className={WIDE_ONLY}>Audience</TableHead>
-                    <TableHead>Send time</TableHead>
-                    <TableHead className={cn(WIDE_ONLY, 'text-right')}>Open rate</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {BROADCASTS.map((row) => (
-                    <TableRow key={row.name}>
-                        <TableCell className="font-semibold">{row.name}</TableCell>
-                        <TableCell>
-                            <StatusBadge status={row.status} />
-                        </TableCell>
-                        <TableCell className={WIDE_ONLY}>{row.audience}</TableCell>
-                        <TableCell>{row.when}</TableCell>
-                        <TableCell className={cn(WIDE_ONLY, 'text-right')}>{row.openRate}</TableCell>
-                    </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+        <div className="flex flex-col gap-4">
+            <MessagingAgentStart
+                placeholder="Describe a broadcast and who gets it, and PostHog AI drafts it…"
+                suggestions={NEW_BROADCAST_SUGGESTIONS}
+            />
+            <MessagingList rows={BROADCASTS} columns={BROADCAST_COLUMNS} />
+        </div>
     )
 }
 
 function TransactionalBody(): JSX.Element {
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>API key</TableHead>
-                    <TableHead className="text-right">Sends, 7 days</TableHead>
-                    <TableHead className={WIDE_ONLY}>Last sent</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {TRANSACTIONAL_EMAILS.map((row) => (
-                    <TableRow key={row.key}>
-                        <TableCell className="font-semibold">{row.name}</TableCell>
-                        <TableCell className="font-mono">{row.key}</TableCell>
-                        <TableCell className="text-right">{row.sends}</TableCell>
-                        <TableCell className={WIDE_ONLY}>{row.lastSent}</TableCell>
-                    </TableRow>
-                ))}
-            </TableBody>
-        </Table>
-    )
-}
-
-export function WorkflowsTable({ views }: { views: readonly string[] }): JSX.Element {
-    return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className={WIDE_ONLY}>Channels</TableHead>
-                    <TableHead className={WIDE_ONLY}>Trigger</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {WORKFLOWS.filter((row) => views.includes(row.view)).map((row) => (
-                    <TableRow key={row.name}>
-                        <TableCell className="font-semibold">{row.name}</TableCell>
-                        <TableCell>
-                            <StatusBadge status={row.status} />
-                        </TableCell>
-                        <TableCell>{row.view}</TableCell>
-                        <TableCell className={WIDE_ONLY}>{row.channels}</TableCell>
-                        <TableCell className={WIDE_ONLY}>{row.trigger}</TableCell>
-                    </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+        <div className="flex flex-col gap-4">
+            <MessagingAgentStart
+                placeholder="Describe an email your app sends, and PostHog AI drafts it…"
+                suggestions={TRANSACTIONAL_SUGGESTIONS}
+            />
+            <MessagingList rows={TRANSACTIONAL_EMAILS} columns={TRANSACTIONAL_COLUMNS} />
+            <Text size="xs" variant="muted" className="m-0">
+                The code under each name is the ID your app sends with. Requests sign in with a project secret API key.
+            </Text>
+        </div>
     )
 }
 
 function WorkflowsBody(): JSX.Element {
     const { push } = useActions(router)
     return (
-        <div className="flex flex-col gap-2">
-            <WorkflowsTable views={['Messaging']} />
+        <div className="flex flex-col gap-4">
+            <MessagingAgentStart
+                placeholder="Describe when to message people, and PostHog AI builds the workflow…"
+                suggestions={NEW_WORKFLOW_SUGGESTIONS}
+            />
+            <MessagingList rows={WORKFLOWS.filter((row) => row.view === 'Messaging')} columns={WORKFLOW_COLUMNS} />
             <Text size="xs" variant="muted" className="m-0">
                 Shows workflows that send messages. Automations and loops are on the{' '}
                 <Button variant="link" size="inline" onClick={() => push(workflowsRowUrl())}>
@@ -212,36 +180,25 @@ function WorkflowsBody(): JSX.Element {
 
 function TemplatesBody(): JSX.Element {
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Kind</TableHead>
-                    <TableHead>Updated</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {TEMPLATES.map((row) => (
-                    <TableRow key={row.name}>
-                        <TableCell className="font-semibold">
-                            <span className="flex flex-wrap items-center gap-2">
-                                {row.name}
-                                {row.transactional && <Badge variant="info">Transactional</Badge>}
-                            </span>
-                        </TableCell>
-                        <TableCell>{row.kind}</TableCell>
-                        <TableCell>{row.updated}</TableCell>
-                    </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+        <div className="flex flex-col gap-4">
+            <MessagingAgentStart
+                placeholder="Describe a template, and PostHog AI designs it…"
+                suggestions={NEW_TEMPLATE_SUGGESTIONS}
+            />
+            <MessagingList
+                rows={TEMPLATES}
+                columns={TEMPLATE_COLUMNS}
+                renderName={(row, name) => <TemplatePeek preview={row.preview}>{name}</TemplatePeek>}
+            />
+        </div>
     )
 }
 
-export function CalendarBody({ compact = false }: { compact?: boolean }): JSX.Element {
+/** Variant B's overview card: the next few sends. The Calendar section shows the full send calendar. */
+export function UpcomingSends(): JSX.Element {
     return (
         <div className="flex flex-col gap-3">
-            {CALENDAR.map((day) => (
+            {UPCOMING.map((day) => (
                 <div key={day.day} className="flex flex-col gap-1">
                     <Text size="xs" weight="semibold" variant="muted" className="m-0">
                         {day.day}
@@ -257,7 +214,6 @@ export function CalendarBody({ compact = false }: { compact?: boolean }): JSX.El
                             <Text size="xs" weight="semibold" className="m-0 min-w-0 flex-1 truncate">
                                 {item.name}
                             </Text>
-                            {!compact && <Badge>{item.kind}</Badge>}
                         </div>
                     ))}
                 </div>
@@ -282,7 +238,7 @@ function ChannelsBody(): JSX.Element {
                         <TableCell className="font-semibold">{row.name}</TableCell>
                         <TableCell>{row.detail}</TableCell>
                         <TableCell>
-                            <StatusBadge status={row.status} />
+                            <Badge variant={CHANNEL_BADGE[row.status] ?? 'default'}>{row.status}</Badge>
                         </TableCell>
                     </TableRow>
                 ))}
@@ -365,26 +321,36 @@ function RecipientsBody(): JSX.Element {
 }
 
 function DeliverabilityBody(): JSX.Element {
+    const { push } = useActions(router)
     const facts = [
-        { title: 'Reputation', value: 'Good', description: 'Bounce rate 0.8%, complaint rate 0.02%, last 30 days' },
-        { title: 'Daily limit', value: '50,000', description: 'Emails per day across all channels' },
-        { title: 'Frequency cap', value: '3 a week', description: 'Most messages one person gets' },
+        { title: 'Reputation', value: 'Good', description: 'From bounces and complaints over the last 30 days' },
+        { title: 'Bounce rate', value: '0.8%', description: 'Keep it under 2%' },
+        { title: 'Complaint rate', value: '0.02%', description: 'Keep it under 0.1%' },
     ]
     return (
-        <div className="grid grid-cols-1 gap-3 @min-[40rem]/main-content:grid-cols-3">
-            {facts.map((fact) => (
-                <Card key={fact.title} size="sm">
-                    <CardHeader>
-                        <CardDescription>{fact.title}</CardDescription>
-                        <CardTitle>{fact.value}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Text size="xs" variant="muted" className="m-0">
-                            {fact.description}
-                        </Text>
-                    </CardContent>
-                </Card>
-            ))}
+        <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 gap-3 @min-[40rem]/main-content:grid-cols-3">
+                {facts.map((fact) => (
+                    <Card key={fact.title} size="sm">
+                        <CardHeader>
+                            <CardDescription>{fact.title}</CardDescription>
+                            <CardTitle>{fact.value}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <Text size="xs" variant="muted" className="m-0">
+                                {fact.description}
+                            </Text>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+            <Text size="xs" variant="muted" className="m-0">
+                The frequency cap and daily limits are in{' '}
+                <Button variant="link" size="inline" onClick={() => push(messagingSectionUrl('settings'))}>
+                    Settings
+                </Button>
+                .
+            </Text>
         </div>
     )
 }
@@ -400,13 +366,15 @@ export function MessagingSectionBody({ section }: { section: MessagingSection })
         case 'templates':
             return <TemplatesBody />
         case 'calendar':
-            return <CalendarBody />
+            return <SendCalendar />
         case 'channels':
             return <ChannelsBody />
         case 'recipients':
             return <RecipientsBody />
         case 'deliverability':
             return <DeliverabilityBody />
+        case 'settings':
+            return <MessagingSettingsPage />
         default:
             return null
     }

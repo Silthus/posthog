@@ -1,7 +1,8 @@
 // PROTOTYPE, never merged: Silthus/personal#212.
 import { router } from 'kea-router'
 
-import { DropdownMenuItem, toast } from '@posthog/quill'
+import { IconSparkles } from '@posthog/icons'
+import { DropdownMenuItem, DropdownMenuSeparator, toast } from '@posthog/quill'
 
 import { SECTION_ICONS, messagingSectionUrl } from './messagingPrototypeNav'
 
@@ -32,10 +33,26 @@ export function startNew(section: (typeof NEW_ITEMS)[number]['section']): void {
     toast.info({ title: `Prototype: this opens ${item?.opens}.` })
 }
 
-/** The three things Messaging creates, for any "New" menu in the prototype. */
+/** Hands a prompt to PostHog AI. The prototype only says what would happen. */
+export function startWithAgent(prompt: string): void {
+    toast.info({
+        title: 'Prototype: PostHog AI drafts this for you to review',
+        description: prompt || 'It asks what you want to send and to whom.',
+    })
+}
+
+/** The three things Messaging creates, for any "New" menu in the prototype, after the agent start. */
 export function NewMessagingMenuItems(): JSX.Element {
     return (
         <>
+            <DropdownMenuItem
+                description="Describe what to send and to whom, and it drafts it"
+                onClick={() => startWithAgent('')}
+            >
+                <IconSparkles />
+                Start with PostHog AI
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             {NEW_ITEMS.map((item) => (
                 <DropdownMenuItem
                     key={item.section}

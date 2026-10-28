@@ -1,14 +1,19 @@
+import { router } from 'kea-router'
+
 // PROTOTYPE, never merged: Silthus/personal#212. Navigation data shared by the Messaging home variants.
 import {
     IconCalendar,
     IconDecisionTree,
     IconDocument,
+    IconGear,
     IconLetter,
     IconPeople,
     IconPlug,
     IconPulse,
     IconSend,
 } from '@posthog/icons'
+
+import { removeProjectIdIfPresent } from 'lib/utils/kea-router'
 
 import { FileSystemImport, ProductItemCategory } from '~/queries/schema/schema-general'
 
@@ -29,10 +34,11 @@ export type MessagingSection =
     | 'channels'
     | 'recipients'
     | 'deliverability'
+    | 'settings'
 
 export const SEND_SECTIONS: MessagingSection[] = ['broadcasts', 'transactional', 'workflows']
 export const CONTENT_SECTIONS: MessagingSection[] = ['templates', 'calendar']
-export const SETUP_SECTIONS: MessagingSection[] = ['channels', 'recipients', 'deliverability']
+export const SETUP_SECTIONS: MessagingSection[] = ['channels', 'recipients', 'deliverability', 'settings']
 
 export const SECTION_LABELS: Record<MessagingSection, string> = {
     overview: 'Overview',
@@ -44,6 +50,7 @@ export const SECTION_LABELS: Record<MessagingSection, string> = {
     channels: 'Channels',
     recipients: 'Recipients',
     deliverability: 'Deliverability',
+    settings: 'Settings',
 }
 
 export const SECTION_DESCRIPTIONS: Record<MessagingSection, string> = {
@@ -56,6 +63,7 @@ export const SECTION_DESCRIPTIONS: Record<MessagingSection, string> = {
     channels: 'Email, SMS, push and Slack. Email setup is your sending domains.',
     recipients: 'Who may receive your messages: topics, opt-outs and the suppression list',
     deliverability: 'Reputation and sending limits',
+    settings: 'Tracking, links and limits for every message you send',
 }
 
 export const SECTION_ICONS: Record<MessagingSection, JSX.Element> = {
@@ -68,6 +76,7 @@ export const SECTION_ICONS: Record<MessagingSection, JSX.Element> = {
     channels: <IconPlug />,
     recipients: <IconPeople />,
     deliverability: <IconPulse />,
+    settings: <IconGear />,
 }
 
 export const ALL_SECTIONS: MessagingSection[] = ['overview', ...SEND_SECTIONS, ...CONTENT_SECTIONS, ...SETUP_SECTIONS]
@@ -81,8 +90,15 @@ export function messagingLandingSection(variant: MessagingPrototypeVariant | nul
     return variant === 'B' ? 'overview' : 'broadcasts'
 }
 
-export function messagingSectionUrl(section: MessagingSection): string {
-    return withVariant(`${MESSAGING_HOME_URL}/${section}`)
+export function messagingSectionUrl(section: MessagingSection, search?: string): string {
+    const url = withVariant(`${MESSAGING_HOME_URL}/${section}`)
+    return search ? `${url}&search=${encodeURIComponent(search)}` : url
+}
+
+/** Messaging settings, while a Messaging page of the prototype shows. Null everywhere else. */
+export function messagingPrototypeSettingsUrl(): string | null {
+    const path = removeProjectIdIfPresent(router.values.location.pathname)
+    return path.startsWith(`${MESSAGING_HOME_URL}/`) ? messagingSectionUrl('settings') : null
 }
 
 export function workflowsRowUrl(filter?: string): string {

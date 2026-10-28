@@ -5,6 +5,7 @@ import { SceneTitleSection } from '~/layout/scenes/components/SceneTitleSection'
 import {
     MessagingSection,
     SECTION_DESCRIPTIONS,
+    SECTION_ICONS,
     SECTION_LABELS,
 } from '~/layout/today/messagingPrototype/messagingPrototypeNav'
 
@@ -17,7 +18,7 @@ export function MessagingVariantC({ section }: { section: MessagingSection }): J
             <SceneTitleSection
                 name={SECTION_LABELS[current]}
                 description={SECTION_DESCRIPTIONS[current]}
-                resourceType={{ type: 'broadcasts' }}
+                resourceType={{ type: 'broadcasts', forceIcon: SECTION_ICONS[current] }}
                 actions={<SectionPrimaryAction section={current} />}
             />
             <MessagingSectionBody section={current} />

@@ -7,7 +7,6 @@ import { SceneExport } from 'scenes/sceneTypes'
 
 import { messagingPrototypeLogic } from '~/layout/today/messagingPrototype/messagingPrototypeLogic'
 import { messagingLandingSection, parseMessagingSection } from '~/layout/today/messagingPrototype/messagingPrototypeNav'
-import { MessagingSettingsDialog } from '~/layout/today/messagingPrototype/MessagingSettingsDialog'
 import { ProductKey } from '~/queries/schema/schema-general'
 
 import { MessagingVariantA } from './MessagingVariantA'
@@ -24,16 +23,11 @@ export function MessagingPrototypeScene(): JSX.Element {
     const { variant } = useValues(messagingPrototypeLogic)
     const section = parseMessagingSection(location.pathname.split('/').pop()) ?? messagingLandingSection(variant ?? 'A')
 
-    return (
-        <>
-            {variant === 'B' ? (
-                <MessagingVariantB section={section} />
-            ) : variant === 'C' ? (
-                <MessagingVariantC section={section} />
-            ) : (
-                <MessagingVariantA section={section} />
-            )}
-            <MessagingSettingsDialog />
-        </>
+    return variant === 'B' ? (
+        <MessagingVariantB section={section} />
+    ) : variant === 'C' ? (
+        <MessagingVariantC section={section} />
+    ) : (
+        <MessagingVariantA section={section} />
     )
 }

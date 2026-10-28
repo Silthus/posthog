@@ -18,7 +18,7 @@ import {
     messagingSectionUrl,
 } from '~/layout/today/messagingPrototype/messagingPrototypeNav'
 
-import { MessagingHeaderActions, MessagingSettingsMenuButton } from './MessagingHeaderActions'
+import { MessagingHeaderActions } from './MessagingHeaderActions'
 import { MessagingSectionBody, SectionHeading, SectionPrimaryAction } from './MessagingSectionContent'
 
 const MENU: { label: string | null; sections: MessagingSection[] }[] = [
@@ -35,7 +35,7 @@ export function MessagingVariantA({ section }: { section: MessagingSection }): J
                 name="Messaging"
                 description="Broadcasts, transactional emails and workflows that send messages"
                 resourceType={{ type: 'broadcasts' }}
-                actions={<MessagingHeaderActions showSettings={false} />}
+                actions={<MessagingHeaderActions />}
             />
             <div className="flex flex-col gap-4 @min-[48rem]/main-content:flex-row">
                 <nav
@@ -69,8 +69,6 @@ export function MessagingVariantA({ section }: { section: MessagingSection }): J
                             ))}
                         </Fragment>
                     ))}
-                    <div className="hidden @min-[48rem]/main-content:block my-1.5 border-t border-border" />
-                    <MessagingSettingsMenuButton />
                 </nav>
                 <div className="flex min-w-0 flex-1 flex-col gap-3">
                     <SectionHeading

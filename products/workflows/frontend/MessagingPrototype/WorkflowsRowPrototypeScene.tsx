@@ -11,11 +11,14 @@ import { SceneExport } from 'scenes/sceneTypes'
 import { SceneContent } from '~/layout/scenes/components/SceneContent'
 import { SceneTitleSection } from '~/layout/scenes/components/SceneTitleSection'
 import { messagingSectionUrl, workflowsRowUrl } from '~/layout/today/messagingPrototype/messagingPrototypeNav'
-import { MessagingSettingsDialog } from '~/layout/today/messagingPrototype/MessagingSettingsDialog'
 import { startNew } from '~/layout/today/messagingPrototype/NewMessagingMenuItems'
 import { ProductKey } from '~/queries/schema/schema-general'
 
-import { WorkflowsTable } from './MessagingSectionContent'
+import { NEW_WORKFLOW_SUGGESTIONS } from 'products/workflows/frontend/Workflows/workflowAgentContext'
+
+import { MessagingAgentStart } from './MessagingAgentStart'
+import { MessagingList } from './MessagingList'
+import { WORKFLOWS, WORKFLOW_COLUMNS } from './prototypeData'
 
 export const scene: SceneExport = {
     component: WorkflowsRowPrototypeScene,
@@ -47,19 +50,29 @@ export function WorkflowsRowPrototypeScene(): JSX.Element {
                     </Button>
                 }
             />
-            <ToggleGroup
-                variant="outline"
-                value={[filter.key]}
-                onValueChange={(value: string[]) => value[0] && push(workflowsRowUrl(value[0]))}
-                className="flex-wrap"
-            >
-                {FILTERS.map((candidate) => (
-                    <ToggleGroupItem key={candidate.key} value={candidate.key}>
-                        {candidate.label}
-                    </ToggleGroupItem>
-                ))}
-            </ToggleGroup>
-            <WorkflowsTable views={filter.views} />
+            <MessagingAgentStart
+                placeholder="Describe what should happen and when, and PostHog AI builds the workflow…"
+                suggestions={NEW_WORKFLOW_SUGGESTIONS}
+            />
+            <MessagingList
+                rows={WORKFLOWS.filter((row) => row.view && (filter.views as readonly string[]).includes(row.view))}
+                columns={WORKFLOW_COLUMNS}
+                extraFilters={
+                    <ToggleGroup
+                        variant="outline"
+                        size="sm"
+                        value={[filter.key]}
+                        onValueChange={(value: string[]) => value[0] && push(workflowsRowUrl(value[0]))}
+                        className="flex-wrap"
+                    >
+                        {FILTERS.map((candidate) => (
+                            <ToggleGroupItem key={candidate.key} value={candidate.key}>
+                                {candidate.label}
+                            </ToggleGroupItem>
+                        ))}
+                    </ToggleGroup>
+                }
+            />
             <Text size="xs" variant="muted" className="m-0">
                 Channels, recipients and sending limits for messages are in{' '}
                 <Button variant="link" size="inline" onClick={() => push(messagingSectionUrl('channels'))}>
@@ -67,7 +80,6 @@ export function WorkflowsRowPrototypeScene(): JSX.Element {
                 </Button>
                 .
             </Text>
-            <MessagingSettingsDialog />
         </SceneContent>
     )
 }

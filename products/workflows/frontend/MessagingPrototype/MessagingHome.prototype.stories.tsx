@@ -12,6 +12,8 @@ import { messagingLandingSection } from '~/layout/today/messagingPrototype/messa
 import { MessagingPrototypeSwitcher } from '~/layout/today/messagingPrototype/MessagingPrototypeSwitcher'
 import { mswDecorator } from '~/mocks/browser'
 
+import { CALENDAR_MOCKS } from './prototypeCalendarMocks'
+
 function pageUrl(variant: MessagingPrototypeVariant): string {
     return `/messaging-prototype/${messagingLandingSection(variant)}?variant=${variant}`
 }
@@ -21,6 +23,7 @@ const meta: Meta = {
     title: 'Prototypes/Messaging home',
     decorators: [
         mswDecorator({
+            get: CALENDAR_MOCKS,
             post: {
                 '/api/projects/:team_id/file_system/home_folder/': [
                     200,

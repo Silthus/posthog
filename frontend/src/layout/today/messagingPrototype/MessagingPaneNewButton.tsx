@@ -7,7 +7,7 @@ import { NewMessagingMenuItems } from './NewMessagingMenuItems'
 export function MessagingPaneNewButton(): JSX.Element {
     return (
         <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="primary" size="sm" />}>
+            <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
                 <IconPlus />
                 New
                 <IconChevronDown />
