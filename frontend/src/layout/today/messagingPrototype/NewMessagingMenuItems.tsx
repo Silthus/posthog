@@ -2,7 +2,9 @@
 import { router } from 'kea-router'
 
 import { IconSparkles } from '@posthog/icons'
-import { DropdownMenuItem, DropdownMenuSeparator, toast } from '@posthog/quill'
+import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, toast } from '@posthog/quill'
+
+import { EVENT_SUGGESTIONS } from 'products/workflows/frontend/MessagingPrototype/prototypeData'
 
 import { SECTION_ICONS, messagingSectionUrl } from './messagingPrototypeNav'
 
@@ -41,7 +43,15 @@ export function startWithAgent(prompt: string): void {
     })
 }
 
-/** The three things Messaging creates, for any "New" menu in the prototype, after the agent start. */
+function startFromSuggestion(suggestion: (typeof EVENT_SUGGESTIONS)[number]): void {
+    router.actions.push(messagingSectionUrl(suggestion.section))
+    toast.info({
+        title: `Prototype: this opens a draft ${suggestion.section === 'workflows' ? 'workflow' : 'broadcast'}`,
+        description: `PostHog AI builds "${suggestion.title}" from your events for you to review.`,
+    })
+}
+
+/** Every "New" menu in the prototype: the agent start, suggestions from the project's events, then the three kinds. */
 export function NewMessagingMenuItems(): JSX.Element {
     return (
         <>
@@ -52,6 +62,20 @@ export function NewMessagingMenuItems(): JSX.Element {
                 <IconSparkles />
                 Start with PostHog AI
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+                <DropdownMenuLabel>Suggested from your events</DropdownMenuLabel>
+                {EVENT_SUGGESTIONS.map((suggestion) => (
+                    <DropdownMenuItem
+                        key={suggestion.id}
+                        description={suggestion.reason}
+                        onClick={() => startFromSuggestion(suggestion)}
+                    >
+                        {SECTION_ICONS[suggestion.section]}
+                        {suggestion.title}
+                    </DropdownMenuItem>
+                ))}
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {NEW_ITEMS.map((item) => (
                 <DropdownMenuItem

@@ -6,9 +6,12 @@ export type WorkflowView = 'Messaging' | 'Automation' | 'Loop'
 export interface MessagingRow {
     id: string
     name: string
-    /** The second line under the name: the audience, the API ID, the trigger, or the template kind. */
+    /** The second line under the name: the audience, the description, the trigger, or the template kind. */
     detail: string
-    detailIsCode?: boolean
+    /** The ID a transactional email is sent with, shown behind the name. */
+    slug?: string
+    /** Set when PostHog AI watches the workflow and files suggestions for it. */
+    selfDriving?: { pendingSuggestions: number }
     status: string
     tags: string[]
     fact: string
@@ -106,8 +109,8 @@ export const TRANSACTIONAL_EMAILS: MessagingRow[] = [
     {
         id: 't1',
         name: 'Password reset',
-        detail: 'password-reset',
-        detailIsCode: true,
+        detail: 'Sent when someone asks to reset their password',
+        slug: 'password-reset',
         status: 'Live',
         tags: ['auth'],
         fact: '2 minutes ago',
@@ -117,8 +120,8 @@ export const TRANSACTIONAL_EMAILS: MessagingRow[] = [
     {
         id: 't2',
         name: 'Magic link sign-in',
-        detail: 'magic-link',
-        detailIsCode: true,
+        detail: 'A one-time link that signs someone in',
+        slug: 'magic-link',
         status: 'Live',
         tags: ['auth'],
         fact: 'Just now',
@@ -128,8 +131,8 @@ export const TRANSACTIONAL_EMAILS: MessagingRow[] = [
     {
         id: 't3',
         name: 'Invoice ready',
-        detail: 'invoice-ready',
-        detailIsCode: true,
+        detail: 'Sent when a monthly invoice is ready',
+        slug: 'invoice-ready',
         status: 'Live',
         tags: ['billing'],
         fact: '1 hour ago',
@@ -139,8 +142,8 @@ export const TRANSACTIONAL_EMAILS: MessagingRow[] = [
     {
         id: 't4',
         name: 'Seat added',
-        detail: 'seat-added',
-        detailIsCode: true,
+        detail: 'Tells an admin that someone joined a paid seat',
+        slug: 'seat-added',
         status: 'Draft',
         tags: ['billing'],
         fact: 'Never',
@@ -167,6 +170,7 @@ export const WORKFLOWS: MessagingRow[] = [
         metric: '842',
         owner: 'Priya',
         view: 'Messaging',
+        selfDriving: { pendingSuggestions: 2 },
     },
     {
         id: 'w2',
@@ -222,6 +226,7 @@ export const WORKFLOWS: MessagingRow[] = [
         metric: '31',
         owner: 'Priya',
         view: 'Messaging',
+        selfDriving: { pendingSuggestions: 0 },
     },
     {
         id: 'w7',
@@ -363,6 +368,28 @@ export const SUPPRESSION = [
     { address: 'bounced@example.net', reason: 'Hard bounce', when: 'Oct 26' },
     { address: 'complaint@example.com', reason: 'Spam complaint', when: 'Oct 12' },
     { address: 'old@example.org', reason: 'Added by hand', when: 'Sep 30' },
+] as const
+
+/** What PostHog AI suggests from the project's events, offered when someone creates something new. */
+export const EVENT_SUGGESTIONS = [
+    {
+        id: 'es1',
+        section: 'workflows',
+        title: 'Welcome people who sign up',
+        reason: 'Many people sign up and never come back',
+    },
+    {
+        id: 'es2',
+        section: 'workflows',
+        title: 'Nudge trials with no teammates',
+        reason: 'Trials that invite a teammate convert more often',
+    },
+    {
+        id: 'es3',
+        section: 'broadcasts',
+        title: 'Tell exporters about the new export',
+        reason: 'People who exported a dashboard this month',
+    },
 ] as const
 
 /** Every item the pane search finds, with the section that lists it. */

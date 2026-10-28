@@ -34,12 +34,8 @@ import {
 import { startNew } from '~/layout/today/messagingPrototype/NewMessagingMenuItems'
 import { TemplatePeek } from '~/layout/today/messagingPrototype/TemplatePeek'
 
-import { NEW_BROADCAST_SUGGESTIONS } from 'products/workflows/frontend/Broadcasts/broadcastAgentContext'
 import { SendCalendar } from 'products/workflows/frontend/SendCalendar/SendCalendar'
-import { NEW_TEMPLATE_SUGGESTIONS } from 'products/workflows/frontend/TemplateLibrary/templateAgentContext'
-import { NEW_WORKFLOW_SUGGESTIONS } from 'products/workflows/frontend/Workflows/workflowAgentContext'
 
-import { MessagingAgentStart } from './MessagingAgentStart'
 import { MessagingList } from './MessagingList'
 import { MessagingSettingsPage } from './MessagingSettingsPage'
 import {
@@ -57,24 +53,6 @@ import {
     WORKFLOWS,
     WORKFLOW_COLUMNS,
 } from './prototypeData'
-
-const TRANSACTIONAL_SUGGESTIONS = [
-    {
-        title: 'Password reset',
-        description: 'A reset link that expires',
-        prompt: 'Write a password reset email with a link that expires in one hour',
-    },
-    {
-        title: 'Receipt',
-        description: 'Confirm a payment',
-        prompt: 'Write a payment receipt email with the amount, the date and a link to the invoice',
-    },
-    {
-        title: 'Sign-in link',
-        description: 'A one-time magic link',
-        prompt: 'Write a magic link sign-in email',
-    },
-]
 
 type BadgeVariant = 'default' | 'success' | 'warning'
 
@@ -134,10 +112,6 @@ export function SectionPrimaryAction({ section }: { section: MessagingSection })
 function BroadcastsBody(): JSX.Element {
     return (
         <div className="flex flex-col gap-4">
-            <MessagingAgentStart
-                placeholder="Describe a broadcast and who gets it, and PostHog AI drafts it…"
-                suggestions={NEW_BROADCAST_SUGGESTIONS}
-            />
             <MessagingList rows={BROADCASTS} columns={BROADCAST_COLUMNS} />
         </div>
     )
@@ -146,14 +120,7 @@ function BroadcastsBody(): JSX.Element {
 function TransactionalBody(): JSX.Element {
     return (
         <div className="flex flex-col gap-4">
-            <MessagingAgentStart
-                placeholder="Describe an email your app sends, and PostHog AI drafts it…"
-                suggestions={TRANSACTIONAL_SUGGESTIONS}
-            />
             <MessagingList rows={TRANSACTIONAL_EMAILS} columns={TRANSACTIONAL_COLUMNS} />
-            <Text size="xs" variant="muted" className="m-0">
-                The code under each name is the ID your app sends with. Requests sign in with a project secret API key.
-            </Text>
         </div>
     )
 }
@@ -162,10 +129,6 @@ function WorkflowsBody(): JSX.Element {
     const { push } = useActions(router)
     return (
         <div className="flex flex-col gap-4">
-            <MessagingAgentStart
-                placeholder="Describe when to message people, and PostHog AI builds the workflow…"
-                suggestions={NEW_WORKFLOW_SUGGESTIONS}
-            />
             <MessagingList rows={WORKFLOWS.filter((row) => row.view === 'Messaging')} columns={WORKFLOW_COLUMNS} />
             <Text size="xs" variant="muted" className="m-0">
                 Shows workflows that send messages. Automations and loops are on the{' '}
@@ -181,10 +144,6 @@ function WorkflowsBody(): JSX.Element {
 function TemplatesBody(): JSX.Element {
     return (
         <div className="flex flex-col gap-4">
-            <MessagingAgentStart
-                placeholder="Describe a template, and PostHog AI designs it…"
-                suggestions={NEW_TEMPLATE_SUGGESTIONS}
-            />
             <MessagingList
                 rows={TEMPLATES}
                 columns={TEMPLATE_COLUMNS}

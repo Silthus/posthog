@@ -23,6 +23,7 @@ import {
 
 const ROW_META: Partial<Record<MessagingSection, string>> = {
     broadcasts: '2 scheduled',
+    workflows: '2 suggestions',
     calendar: '3 this week',
     channels: '1 to fix',
 }

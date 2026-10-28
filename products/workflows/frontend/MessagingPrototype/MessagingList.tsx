@@ -31,6 +31,7 @@ import {
     cn,
 } from '@posthog/quill'
 
+import { CopyableSlug } from './CopyableSlug'
 import { MessagingListColumns, MessagingRow } from './prototypeData'
 
 type BadgeVariant = 'default' | 'info' | 'destructive' | 'warning' | 'success' | 'completed'
@@ -54,9 +55,23 @@ function distinct(values: string[]): string[] {
     return [...new Set(values)].sort()
 }
 
+function SelfDrivingBadge({ pendingSuggestions }: { pendingSuggestions: number }): JSX.Element {
+    if (pendingSuggestions === 0) {
+        return <Badge variant="default">Self-driving</Badge>
+    }
+    return (
+        <Badge variant="completed">
+            {pendingSuggestions === 1 ? '1 suggestion' : `${pendingSuggestions} suggestions`}
+        </Badge>
+    )
+}
+
 function rowMatches(row: MessagingRow, search: string): boolean {
     const query = search.trim().toLowerCase()
-    return !query || [row.name, row.detail, ...row.tags].some((value) => value.toLowerCase().includes(query))
+    return (
+        !query ||
+        [row.name, row.detail, row.slug ?? '', ...row.tags].some((value) => value.toLowerCase().includes(query))
+    )
 }
 
 function FilterMenu({
@@ -198,19 +213,19 @@ export function MessagingList({ rows, columns, renderName, extraFilters }: Messa
                         {shown.map((row) => {
                             const name = (
                                 <span className="flex min-w-0 flex-col">
-                                    <span className="truncate font-semibold">{row.name}</span>
-                                    <Text
-                                        size="xs"
-                                        variant="muted"
-                                        className={cn('m-0 truncate', row.detailIsCode && 'font-mono')}
-                                    >
+                                    <span className="flex min-w-0 flex-wrap items-center gap-1">
+                                        <span className="truncate font-semibold">{row.name}</span>
+                                        {row.slug && <CopyableSlug slug={row.slug} />}
+                                        {row.selfDriving && <SelfDrivingBadge {...row.selfDriving} />}
+                                    </span>
+                                    <Text size="xs" variant="muted" className="m-0 truncate">
                                         {row.detail}
                                     </Text>
                                 </span>
                             )
                             return (
                                 <TableRow key={row.id}>
-                                    <TableCell className="max-w-72">
+                                    <TableCell className="max-w-96">
                                         {renderName ? renderName(row, name) : name}
                                     </TableCell>
                                     <TableCell>

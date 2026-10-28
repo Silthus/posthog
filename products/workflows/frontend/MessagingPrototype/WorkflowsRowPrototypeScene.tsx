@@ -14,9 +14,6 @@ import { messagingSectionUrl, workflowsRowUrl } from '~/layout/today/messagingPr
 import { startNew } from '~/layout/today/messagingPrototype/NewMessagingMenuItems'
 import { ProductKey } from '~/queries/schema/schema-general'
 
-import { NEW_WORKFLOW_SUGGESTIONS } from 'products/workflows/frontend/Workflows/workflowAgentContext'
-
-import { MessagingAgentStart } from './MessagingAgentStart'
 import { MessagingList } from './MessagingList'
 import { WORKFLOWS, WORKFLOW_COLUMNS } from './prototypeData'
 
@@ -49,10 +46,6 @@ export function WorkflowsRowPrototypeScene(): JSX.Element {
                         New workflow
                     </Button>
                 }
-            />
-            <MessagingAgentStart
-                placeholder="Describe what should happen and when, and PostHog AI builds the workflow…"
-                suggestions={NEW_WORKFLOW_SUGGESTIONS}
             />
             <MessagingList
                 rows={WORKFLOWS.filter((row) => row.view && (filter.views as readonly string[]).includes(row.view))}
