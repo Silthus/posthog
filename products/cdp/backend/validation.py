@@ -108,6 +108,18 @@ def _email_integrations(integration_ids: set[int], context: dict[str, Any]) -> d
     return cache
 
 
+def _sandbox_sender_enabled(team: Team, context: dict[str, Any]) -> bool:
+    flag_cache: dict[int, bool] = context.setdefault("sandbox_sender_enabled_cache", {})
+    if team.id not in flag_cache:
+        try:
+            flag_cache[team.id] = posthog_feature_flag_enabled(
+                "workflows-sandbox-sender", str(team.uuid), organization_id=team.organization_id, team_id=team.id
+            )
+        except Exception:
+            flag_cache[team.id] = False
+    return flag_cache[team.id]
+
+
 def validate_sandbox_email_sender(email_value: object, context: dict[str, Any]) -> None:
     if not isinstance(email_value, dict) or not isinstance(email_value.get("from"), dict):
         return
@@ -116,7 +128,7 @@ def validate_sandbox_email_sender(email_value: object, context: dict[str, Any]) 
         raise serializers.ValidationError({"input": f"At most {MAX_WORKFLOW_EMAIL_SENDERS} email senders are allowed."})
     integration_ids = _sender_integration_ids(email_value["from"])
     get_team = context.get("get_team")
-    if not integration_ids or get_team is None:
+    if not integration_ids or get_team is None or not _sandbox_sender_enabled(get_team(), context):
         return
     integrations = _email_integrations(integration_ids, context)
     if not any(
@@ -156,22 +168,6 @@ def validate_sandbox_email_sender(email_value: object, context: dict[str, Any]) 
             {
                 "input": "The sandbox sender uses a fixed From address and name and does not support Reply-To. "
                 "Remove these overrides or select a sender on your own verified domain."
-            }
-        )
-    team = get_team()
-    flag_cache: dict[int, bool] = context.setdefault("sandbox_sender_enabled_cache", {})
-    if team.id not in flag_cache:
-        try:
-            flag_cache[team.id] = posthog_feature_flag_enabled(
-                "workflows-sandbox-sender", str(team.uuid), organization_id=team.organization_id, team_id=team.id
-            )
-        except Exception:
-            flag_cache[team.id] = False
-    if not flag_cache[team.id]:
-        raise serializers.ValidationError(
-            {
-                "input": "The sandbox sender is not available for this project. "
-                "Select a sender on your own verified domain."
             }
         )
 
