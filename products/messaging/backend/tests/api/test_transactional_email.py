@@ -681,6 +681,34 @@ class TestTransactionalEmail(APIBaseTest):
                 },
             ),
             (
+                "rendered_content_with_attachments",
+                "template_key",
+                {
+                    "text": "Hi",
+                    "attachments": [
+                        {
+                            "filename": "invite.ics",
+                            "content": "QkVHSU46VkNBTEVOREFS",
+                            "content_type": "text/calendar; method=REQUEST",
+                        },
+                        {"filename": "logo.png", "content": "iVBORw0KGgo=", "content_id": "logo"},
+                    ],
+                },
+                {
+                    "content": {"subject": "Welcome, Jane", "html": "<p>Hi {{ variables.name }}</p>", "text": "Hi"},
+                    "from": {"integrationId": "default", "isDefault": True},
+                    "attachments": [
+                        {
+                            "filename": "invite.ics",
+                            "content": "QkVHSU46VkNBTEVOREFS",
+                            "contentType": "text/calendar; method=REQUEST",
+                        },
+                        {"filename": "logo.png", "content": "iVBORw0KGgo=", "contentId": "logo"},
+                    ],
+                    "tracking": {"captureEngagement": True},
+                },
+            ),
+            (
                 "template_by_key_with_a_copy",
                 "key",
                 {"bcc": ["audit@example.com"]},
@@ -759,6 +787,12 @@ class TestTransactionalEmail(APIBaseTest):
             ),
             ("header_posthog_sets", {"headers": {"From": "a@example.com"}}, "invalid_request", "headers"),
             ("bad_tag", {"tags": [{"name": "plan", "value": "pro.v2"}]}, "invalid_request", "tags__0__value"),
+            (
+                "blocked_attachment",
+                {"attachments": [{"filename": "setup.exe", "content": "aGk="}]},
+                "invalid_request",
+                "attachments__0__filename",
+            ),
         ]
     )
     def test_refuses_a_rendered_send_it_cannot_make_with_what_to_fix(

@@ -1589,6 +1589,69 @@ describe('EmailService', () => {
             )
         })
 
+        it("sends a code send's attachments beside its recipients and PostHog's headers", async () => {
+            sendEmailSpy.mockResolvedValue({ MessageId: 'test-message-id' })
+            const invite = 'BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nEND:VCALENDAR\r\n'
+            invocation.hogFunction.metadata = {
+                message_category_type: 'transactional',
+                attachments: [
+                    {
+                        filename: 'invite.ics',
+                        content: Buffer.from(invite).toString('base64'),
+                        contentType: 'text/calendar; method=REQUEST',
+                    },
+                    { filename: 'logo.png', content: Buffer.from('png').toString('base64'), contentId: 'logo' },
+                ],
+            }
+            invocation.queueParameters = createEmailParams({
+                html: '<p>Hi</p><img src="cid:logo">',
+                cc: 'jane@example.com',
+                bcc: 'audit@example.com',
+                replyTo: 'help@example.com',
+                headers: [{ name: 'X-Entity-Ref-ID', value: 'order-123' }],
+                tags: [{ name: 'category', value: 'invite' }],
+            })
+
+            const result = await service.executeSendEmail(invocation)
+
+            expect(result.error).toBeUndefined()
+            const { input } = sendEmailSpy.mock.calls[0][0] as { input: any }
+            expect(input).toMatchObject({
+                FromEmailAddress: '"Test User" <test@posthog-test.com>',
+                Destination: {
+                    ToAddresses: ['"Test User" <test@example.com>'],
+                    CcAddresses: ['jane@example.com'],
+                    BccAddresses: ['audit@example.com'],
+                },
+                ReplyToAddresses: ['help@example.com'],
+                TenantName: `team-${team.id}`,
+            })
+            expect(input.EmailTags.map((t: { Name: string }) => t.Name)).toEqual(['ph_id', 'category'])
+            expect(input.Content.Simple.Headers.map((h: { Name: string }) => h.Name)).toEqual([
+                'X-Entity-Ref-ID',
+                'X-PostHog-Tracking-Code',
+                'Auto-Submitted',
+            ])
+            expect(input.Content.Simple.Attachments).toEqual([
+                {
+                    FileName: 'invite.ics',
+                    RawContent: Buffer.from(invite),
+                    ContentType: 'text/calendar; method=REQUEST',
+                    ContentId: undefined,
+                    ContentDisposition: 'ATTACHMENT',
+                    ContentTransferEncoding: 'BASE64',
+                },
+                {
+                    FileName: 'logo.png',
+                    RawContent: Buffer.from('png'),
+                    ContentType: undefined,
+                    ContentId: 'logo',
+                    ContentDisposition: 'INLINE',
+                    ContentTransferEncoding: 'BASE64',
+                },
+            ])
+        })
+
         it('attaches the X-PostHog-Tracking-Code header carrying the full signed code', async () => {
             // The header is the authoritative tracking-code carrier (the EmailTag is the
             // bounded backwards-compat fallback). It rides on every outbound message,

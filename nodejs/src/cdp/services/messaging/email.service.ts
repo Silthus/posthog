@@ -1,10 +1,11 @@
-import { MessageHeader, SESv2Client, SendEmailCommand, SendEmailCommandInput } from '@aws-sdk/client-sesv2'
+import { Attachment, MessageHeader, SESv2Client, SendEmailCommand, SendEmailCommandInput } from '@aws-sdk/client-sesv2'
 import { DateTime } from 'luxon'
 import { SendMailOptions } from 'nodemailer'
+import Mail from 'nodemailer/lib/mailer'
 import { Counter, Histogram } from 'prom-client'
 
 import { CyclotronInvocationQueueParametersEmailType } from '~/cdp/schema/cyclotron'
-import { EmailTag } from '~/cdp/schema/emailFields'
+import { EmailAttachment, EmailAttachmentsSchema, EmailTag } from '~/cdp/schema/emailFields'
 import { HogFlowEmailSendingRateLimit, HogFlowEmailSendingRateLimitSchema } from '~/cdp/schema/hogflow'
 import {
     CyclotronJobInvocationHogFunction,
@@ -319,6 +320,27 @@ export function formatMailbox(name: string | undefined, email: string): string {
 
 export function emailTagProperties(tags: readonly EmailTag[]): Record<string, string> {
     return Object.fromEntries(tags.map((tag) => [tag.name, tag.value]))
+}
+
+// The workflow puts a code send's attachments on the email step's hog function. Checked again here so
+// an attachment from any path reaches the provider only in a shape the send route accepts.
+function codeSendAttachments(invocation: CyclotronJobInvocationHogFunction): EmailAttachment[] {
+    return EmailAttachmentsSchema.parse(invocation.hogFunction.metadata?.attachments ?? [])
+}
+
+function toSesAttachment({ filename, content, contentType, contentId }: EmailAttachment): Attachment {
+    return {
+        FileName: filename,
+        RawContent: Buffer.from(content, 'base64'),
+        ContentType: contentType,
+        ContentId: contentId,
+        ContentDisposition: contentId ? 'INLINE' : 'ATTACHMENT',
+        ContentTransferEncoding: 'BASE64',
+    }
+}
+
+function toMailAttachment({ filename, content, contentType, contentId }: EmailAttachment): Mail.Attachment {
+    return { filename, content: Buffer.from(content, 'base64'), contentType, cid: contentId }
 }
 
 export function parseAddressList(value?: string): string[] | undefined {
@@ -994,7 +1016,13 @@ export class EmailService {
         const ccAddresses = parseAddressList(params.cc)
         const bccAddresses = parseAddressList(params.bcc)
         const replyToAddresses = parseAddressList(params.replyTo)
+        const attachments = codeSendAttachments(result.invocation)
 
+        if (attachments.length) {
+            mailOptions.attachments = attachments.map(toMailAttachment)
+            mailOptions.disableFileAccess = true
+            mailOptions.disableUrlAccess = true
+        }
         if (ccAddresses) {
             mailOptions.cc = ccAddresses
         }
@@ -1060,6 +1088,7 @@ export class EmailService {
               }
             : {}
 
+        const attachments = codeSendAttachments(result.invocation)
         const sendEmailParams: SendEmailCommandInput = {
             FromEmailAddress: formatMailbox(from.name, from.email),
             Destination: {
@@ -1075,6 +1104,7 @@ export class EmailService {
                         ...(params.text ? { Text: { Data: params.text, Charset: 'UTF-8' } } : {}),
                         ...htmlBody,
                     },
+                    ...(attachments.length ? { Attachments: attachments.map(toSesAttachment) } : {}),
                 },
             },
             ConfigurationSetName: this.resolveConfigurationSetName(trackingEnabled, result.invocation),

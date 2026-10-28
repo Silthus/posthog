@@ -22,6 +22,7 @@ from products.messaging.backend.facade.transactional_email import (
     SENDER_ADDRESS_MAX_LENGTH,
     SENDER_ADDRESS_PATTERN,
     AcceptedSend,
+    EmailAttachment,
     EmailField,
     EmailSendCommand,
     RenderedContent,
@@ -32,6 +33,11 @@ from products.messaging.backend.facade.transactional_email import (
     code_send_from,
     rendered_content,
     require_code_email_access,
+)
+from products.messaging.backend.presentation.views.send_email_attachments import (
+    MAX_ATTACHMENTS,
+    MAX_ATTACHMENTS_BYTES,
+    attachments_field,
 )
 from products.messaging.backend.presentation.views.send_email_fields import (
     MAX_COPIES,
@@ -85,7 +91,7 @@ class TemplateReferenceSerializer(RefusesUnknownFieldsSerializer):
 
 
 CODE_FORM_FIELDS = ("subject", "html", "text")
-CODE_SEND_FIELDS = ("from", "reply_to", "cc", "bcc", "headers", "tags")
+CODE_SEND_FIELDS = ("from", "reply_to", "cc", "bcc", "headers", "tags", "attachments")
 
 
 class SendIdentifiersSerializer(RefusesUnknownFieldsSerializer, TransactionalEmailIdentifiersSerializer):
@@ -162,6 +168,7 @@ class SendEmailSerializer(RefusesUnknownFieldsSerializer, SendTransactionalEmail
         help_text=f"Name and value pairs, at most {MAX_TAGS}, that PostHog adds to the email's engagement events "
         "as `$email_tags`. Not with `template.id`.",
     )
+    attachments = attachments_field()
     capture_engagement = serializers.BooleanField(
         required=False,
         help_text="Whether the email's engagement events (sent, delivered, opened, clicked, bounced) are captured "
@@ -283,6 +290,9 @@ SEND_FIELD_WHY = {
     "other standard headers itself, so you can't set them here.",
     "tags": f"`tags` holds up to {MAX_TAGS} name and value pairs of letters, numbers, `_` and `-`, which PostHog "
     "adds to the email's engagement events.",
+    "attachments": f"`attachments` holds up to {MAX_ATTACHMENTS} files of {MAX_ATTACHMENTS_BYTES // 1024} KB in total, "
+    "each with a plain file name and base64 content. Mailbox providers block some file types, such as `.exe`, so "
+    "PostHog refuses them.",
     "capture_engagement": "`capture_engagement` turns the email's engagement events on or off, so it is true or false.",
 }
 
@@ -499,6 +509,7 @@ class MessagingSendViewSet(TransactionalEmailViewSetMixin, viewsets.ViewSet):
                 EmailField(name=tag["name"], value=tag["value"])
                 for tag in sorted(data.get("tags", ()), key=lambda tag: tag["name"])
             ),
+            attachments=tuple(EmailAttachment(**attachment) for attachment in data.get("attachments", ())),
         )
 
     @staticmethod
