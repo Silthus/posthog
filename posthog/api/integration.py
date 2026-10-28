@@ -53,6 +53,12 @@ from posthog.api.integration_email_status_serializers import (
     EmailDomainStatusSerializer,
     EmailDomainVerificationSerializer,
 )
+from posthog.api.integration_push_tokens import (
+    PushTokenImportRequestSerializer,
+    PushTokenImportResponseSerializer,
+    import_push_tokens,
+    push_channel_app_id,
+)
 from posthog.api.mixins import ValidatedRequest, validated_request
 from posthog.api.routing import TeamAndOrgViewSetMixin
 from posthog.api.shared import UserBasicSerializer
@@ -131,7 +137,7 @@ from posthog.permissions import (
     TimeSensitiveActionPermission,
 )
 from posthog.ph_client import feature_enabled_or_false
-from posthog.rate_limit import GitHubRepositoryRefreshThrottle
+from posthog.rate_limit import GitHubRepositoryRefreshThrottle, PushTokenImportThrottle
 from posthog.tasks.email import send_integration_access_request
 from posthog.utils import absolute_uri, is_relative_url
 
@@ -141,7 +147,12 @@ from products.cdp.backend.services.integration_usage import get_enabled_hog_func
 from products.slack_app.backend.services.slack_auth import SLACK_AUTH_FAILURE_CODES
 from products.tasks.backend.facade.api import get_in_progress_runs_for_github_integration
 from products.tasks.backend.facade.contracts import InProgressGithubRunsDTO
-from products.workflows.backend.facade.api import get_active_workflows_using_integration, lookup_existing_email_tools
+from products.workflows.backend.facade.api import (
+    SandboxSenderUnavailable,
+    ensure_sandbox_email_sender,
+    get_active_workflows_using_integration,
+    lookup_existing_email_tools,
+)
 from products.workflows.backend.facade.contracts import EmailProviderUnavailableError
 from products.workflows.backend.facade.enums import EmailDomainSetupMethod
 
@@ -1527,8 +1538,10 @@ class IntegrationViewSet(
         "github_link_existing",
         "github_oauth_authorize",
         "email_verify",
+        "email_sandbox_sender",
         # Side-effecting POST (emails admins) — a read-only token must not be able to trigger it.
         "request_access",
+        "push_tokens",
     ]
     permission_classes = [IntegrationManagementPermission, PersonalConnectionRecentAuthPermission]
     # LimitOffsetPagination needs a total order, or Postgres can return a row on neither side of a
@@ -1565,7 +1578,13 @@ class IntegrationViewSet(
         ]
         # Adding an integration only requires project membership. Every edit and removal uses the
         # viewset permission class, including the creator exception for Google account removal.
-        if self.action in ("create", "github_link_existing", "github_oauth_authorize", "request_access"):
+        if self.action in (
+            "create",
+            "github_link_existing",
+            "github_oauth_authorize",
+            "request_access",
+            "email_sandbox_sender",
+        ):
             return base_permissions
         if self.action == "refresh_github_repos":
             return [*base_permissions, TeamMemberLightManagementPermission()]
@@ -1574,9 +1593,14 @@ class IntegrationViewSet(
     def get_throttles(self):
         if self.action == "refresh_github_repos":
             return [GitHubRepositoryRefreshThrottle(), *super().get_throttles()]
+        if self.action == "push_tokens":
+            return [PushTokenImportThrottle(), *super().get_throttles()]
         return super().get_throttles()
 
     def perform_destroy(self, instance: Integration) -> None:
+        if instance.kind == "email":
+            EmailIntegration(instance).ensure_user_managed()
+
         flows_using_integration = get_active_workflows_using_integration(
             team_id=instance.team_id, integration_id=instance.id
         )
@@ -2678,6 +2702,46 @@ class IntegrationViewSet(
         search = query_serializer.validated_data["search"]
         return assignees_response(lambda: GitLabIntegration(instance).list_assignees(search))
 
+    @validated_request(
+        PushTokenImportRequestSerializer,
+        responses={
+            200: OpenApiResponse(response=PushTokenImportResponseSerializer, description="Import outcome."),
+            400: OpenApiResponse(description="The rows are invalid, or the integration is not a push channel."),
+            429: OpenApiResponse(description="Too many imports for this project. Retry after a minute."),
+        },
+        summary="Import push device tokens",
+        description="Register existing device tokens, for example exported from another provider, on this push "
+        "channel. Each token is stored encrypted on its person, as the mobile SDK stores it.",
+    )
+    @action(methods=["POST"], detail=True, url_path="push_tokens")
+    def push_tokens(self, request: ValidatedRequest, **kwargs) -> Response:
+        integration = self.get_object()
+        if not push_channel_app_id(integration):
+            raise ValidationError("Device tokens can only be imported into an APNs or Firebase push channel.")
+        result = import_push_tokens(integration, request.validated_data["subscriptions"])
+        return Response(
+            PushTokenImportResponseSerializer(
+                {"imported": result.imported, "failed_distinct_ids": result.failed_distinct_ids}
+            ).data
+        )
+
+    @extend_schema(
+        request=None,
+        responses={200: IntegrationSerializer, 404: OpenApiResponse(description="No sandbox sender for this project.")},
+    )
+    @action(methods=["POST"], detail=False, url_path="email_sandbox_sender")
+    def email_sandbox_sender(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        try:
+            sandbox_sender = ensure_sandbox_email_sender(self.team_id)
+        except SandboxSenderUnavailable:
+            raise NotFound("The sandbox sender is not available for this project.")
+        if sandbox_sender.created:
+            report_user_action(
+                cast(User, request.user), "workflows sandbox sender provisioned", team=self.team, request=request
+            )
+        integration = self.get_queryset().get(id=sandbox_sender.integration_id)
+        return Response(IntegrationSerializer(integration, context=self.get_serializer_context()).data)
+
     @extend_schema(
         request=None,
         responses={200: EmailDomainVerificationSerializer},
@@ -2754,14 +2818,13 @@ class IntegrationViewSet(
     @extend_schema(responses={200: IntegrationSerializer})
     @action(methods=["PATCH"], detail=True, url_path="email")
     def email_update(self, request, **kwargs) -> Response:
-        instance = self.get_object()
-        config = request.data.get("config", {})
+        email = EmailIntegration(self.get_object())
+        email.ensure_user_managed()
 
-        serializer = NativeEmailIntegrationSerializer(data=config)
+        serializer = NativeEmailIntegrationSerializer(data=request.data.get("config", {}))
         serializer.is_valid(raise_exception=True)
 
-        email = EmailIntegration(instance)
-        email.update_native_integration(serializer.validated_data, instance.team_id)
+        email.update_native_integration(serializer.validated_data, email.integration.team_id)
 
         return Response(IntegrationSerializer(email.integration).data)
 

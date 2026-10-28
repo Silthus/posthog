@@ -1,7 +1,10 @@
 import { router } from 'kea-router'
 import { expectLogic } from 'kea-test-utils'
 
+import { LemonDialog } from '@posthog/lemon-ui'
+
 import { FEATURE_FLAGS } from 'lib/constants'
+import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { preflightLogic } from 'scenes/PreflightCheck/preflightLogic'
 
@@ -57,6 +60,152 @@ describe('emailTemplaterLogic', () => {
     afterEach(() => {
         logic?.unmount()
         jest.useRealTimers()
+    })
+
+    describe('sender picker', () => {
+        const OWN_SENDER = { id: 5, kind: 'email', display_name: 'Acme <hello@acme.example.com>', config: {} }
+        const SANDBOX_SENDER = {
+            id: 7,
+            kind: 'email',
+            display_name: 'Acme via PostHog <sandbox@example.com>',
+            config: { provider: 'sandbox', verified: true },
+        }
+
+        function enableSandboxFlag(): void {
+            featureFlagLogic.actions.setFeatureFlags([FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER], {
+                [FEATURE_FLAGS.WORKFLOWS_SANDBOX_SENDER]: true,
+            })
+        }
+
+        async function mountWithSenders(overrides?: Partial<EmailTemplaterLogicProps>): Promise<void> {
+            logic = emailTemplaterLogic(makeProps(overrides))
+            logic.mount()
+            await expectLogic(integrationsLogic).toDispatchActions(['loadIntegrationsSuccess'])
+        }
+
+        beforeEach(() => {
+            useMocks({ get: { '/api/projects/:team_id/integrations/': { results: [SANDBOX_SENDER, OWN_SENDER] } } })
+        })
+
+        afterEach(() => {
+            featureFlagLogic.actions.setFeatureFlags([], {})
+        })
+
+        it.each([
+            { surface: 'a workflow email step', sandboxSenderAllowed: true, flag: true, expectedIds: [5, 7] },
+            {
+                surface: 'a workflow email step with the flag off',
+                sandboxSenderAllowed: true,
+                flag: false,
+                expectedIds: [5],
+            },
+            { surface: 'a broadcast or destination', sandboxSenderAllowed: false, flag: true, expectedIds: [5] },
+        ])('lists the sandbox sender last only on $surface', async ({ sandboxSenderAllowed, flag, expectedIds }) => {
+            if (flag) {
+                enableSandboxFlag()
+            }
+            await mountWithSenders({ sandboxSenderAllowed })
+
+            expect(logic.values.senderIntegrations.map((integration) => integration.id)).toEqual(expectedIds)
+        })
+
+        it('keeps a saved sandbox sender listed after the flag turns off, until another sender replaces it', async () => {
+            const onChange = jest.fn()
+            await mountWithSenders({
+                sandboxSenderAllowed: true,
+                liveChanges: true,
+                onChange,
+                value: { ...DEFAULT_EMAIL_TEMPLATE, from: { integrationId: 7 } },
+            })
+
+            expect(logic.values.senderIntegrations.map((integration) => integration.id)).toEqual([5, 7])
+            expect(logic.values.isSandboxSenderSelected).toBe(true)
+
+            logic.actions.chooseSenders([7, 5])
+
+            expect(onChange).toHaveBeenLastCalledWith(
+                expect.objectContaining({ from: { integrationId: 5, integrationIds: undefined } })
+            )
+            expect(logic.values.senderIntegrations.map((integration) => integration.id)).toEqual([5])
+        })
+
+        it.each([
+            {
+                field: 'a custom address',
+                from: { integrationId: 5, email: 'hello@acme.example.com' },
+                replyTo: '',
+                confirm: true,
+            },
+            { field: 'a custom name', from: { integrationId: 5, name: 'Acme' }, replyTo: '', confirm: true },
+            { field: 'a Reply-To', from: { integrationId: 5 }, replyTo: 'replies@acme.example.com', confirm: true },
+            { field: 'a rotation', from: { integrationId: 5, integrationIds: [5, 6] }, replyTo: '', confirm: true },
+            { field: 'one plain sender', from: { integrationId: 5 }, replyTo: '', confirm: false },
+        ])(
+            'picking the sandbox sender over $field replaces it after any confirmation',
+            async ({ from, replyTo, confirm }) => {
+                enableSandboxFlag()
+                useMocks({
+                    get: {
+                        '/api/projects/:team_id/integrations/': {
+                            results: [
+                                SANDBOX_SENDER,
+                                OWN_SENDER,
+                                { ...OWN_SENDER, id: 6, display_name: 'Second <second@acme.example.com>' },
+                            ],
+                        },
+                    },
+                })
+                const onChange = jest.fn()
+                const dialog = jest.spyOn(LemonDialog, 'open').mockImplementation(jest.fn())
+                const props = { sandboxSenderAllowed: true, liveChanges: true, onChange }
+                await mountWithSenders({ ...props, value: { ...DEFAULT_EMAIL_TEMPLATE, from, replyTo } })
+                onChange.mockClear()
+
+                logic.actions.chooseSenders([...(from.integrationIds ?? [from.integrationId]), 7])
+
+                expect(dialog).toHaveBeenCalledTimes(confirm ? 1 : 0)
+                if (confirm) {
+                    expect(onChange).not.toHaveBeenCalled()
+                    if (from.integrationIds) {
+                        expect(dialog.mock.calls[0][0].description).toContain(
+                            'This replaces Acme <hello@acme.example.com> and Second <second@acme.example.com>'
+                        )
+                    }
+                    emailTemplaterLogic(
+                        makeProps({
+                            ...props,
+                            value: { ...DEFAULT_EMAIL_TEMPLATE, from, replyTo, subject: 'Changed during confirmation' },
+                        })
+                    )
+                    ;(dialog.mock.calls[0][0].primaryButton?.onClick as () => void)()
+                }
+                expect(onChange).toHaveBeenLastCalledWith(
+                    expect.objectContaining({
+                        from: { integrationId: 7, integrationIds: undefined, email: undefined, name: undefined },
+                        replyTo: '',
+                        subject: confirm ? 'Changed during confirmation' : DEFAULT_EMAIL_TEMPLATE.subject,
+                    })
+                )
+                expect(logic.values.isSandboxSenderSelected).toBe(true)
+                dialog.mockRestore()
+            }
+        )
+
+        it('offers no Reply-To while the sandbox sender is selected', async () => {
+            enableSandboxFlag()
+            await mountWithSenders({
+                sandboxSenderAllowed: true,
+                value: { ...DEFAULT_EMAIL_TEMPLATE, from: { integrationId: 7 }, replyTo: 'replies@example.com' },
+            })
+
+            expect(logic.values.visibleFields.map((field) => field.key)).not.toContain('replyTo')
+            expect(logic.values.hiddenAdvancedFields.map((field) => field.key)).not.toContain('replyTo')
+
+            logic.actions.setEmailTemplateValue('from', { integrationId: 5 })
+
+            expect(logic.values.isSandboxSenderSelected).toBe(false)
+            expect(logic.values.visibleFields.map((field) => field.key)).toContain('replyTo')
+        })
     })
 
     describe('advanced fields', () => {
@@ -144,26 +293,58 @@ describe('emailTemplaterLogic', () => {
             {
                 description: 'identifies the project to Unlayer in the native editor',
                 type: 'native_email',
-                flagOn: true,
                 identified: true,
             },
-            {
-                description: 'leaves Unlayer anonymous with the flag off',
-                type: 'native_email',
-                flagOn: false,
-                identified: false,
-            },
-            { description: 'leaves the destination editor untouched', type: 'email', flagOn: true, identified: false },
-        ] as const)('$description', ({ type, flagOn, identified }) => {
+            { description: 'leaves the destination editor untouched', type: 'email', identified: false },
+        ] as const)('$description', ({ type, identified }) => {
             preflightLogic.mount()
             preflightLogic.actions.loadPreflightSuccess({ realm: Realm.Cloud } as any)
-            featureFlagLogic.mount()
-            featureFlagLogic.actions.setFeatureFlags([], { [FEATURE_FLAGS.WORKFLOWS_EMAIL_MEDIA_LIBRARY]: flagOn })
 
             logic = emailTemplaterLogic(makeProps({ type }))
             logic.mount()
 
             expect(logic.values.unlayerEditorUser?.id.startsWith('project-') ?? false).toBe(identified)
+        })
+    })
+
+    describe('merge tags', () => {
+        beforeEach(() => {
+            useMocks({ get: { '/api/projects/:team_id/property_definitions/': { results: [{ name: 'email' }] } } })
+        })
+
+        it.each([
+            { type: 'native_email_template', variables: undefined, expected: ['email'] },
+            {
+                type: 'native_email_transactional_template',
+                variables: { variables: { first_name: '', reset_link: '' } },
+                expected: ['variables.first_name', 'variables.reset_link'],
+            },
+        ] as const)('$type offers $expected', async ({ type, variables, expected }) => {
+            logic = emailTemplaterLogic(makeProps({ type, variables }))
+            logic.mount()
+            await expectLogic(logic).toFinishAllListeners()
+
+            const offered = Object.keys(logic.values.mergeTags).filter((key) => !key.startsWith('unsubscribe'))
+            expect(offered).toEqual(expected)
+        })
+
+        it('pushes a newly added variable into the open editor', async () => {
+            const setMergeTags = jest.fn()
+            const props = makeProps({ type: 'native_email_transactional_template', variables: { variables: {} } })
+            logic = emailTemplaterLogic(props)
+            logic.mount()
+            logic.actions.setEmailEditorRef({
+                editor: { setMergeTags, addEventListener: jest.fn(), loadDesign: jest.fn() },
+            } as any)
+            logic.actions.onEmailEditorReady()
+
+            emailTemplaterLogic({ ...props, variables: { variables: { code: '' } } })
+
+            expect(setMergeTags).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    'variables.code': expect.objectContaining({ value: '{{ variables.code }}' }),
+                })
+            )
         })
     })
 

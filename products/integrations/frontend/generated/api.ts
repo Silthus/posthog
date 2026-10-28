@@ -47,6 +47,8 @@ import type {
     PostHogConnectionForwardApi,
     PostHogConnectionForwardResponseApi,
     PostHogConnectionTargetApi,
+    PushTokenImportRequestApi,
+    PushTokenImportResponseApi,
     RoleExternalReferenceApi,
     RoleExternalReferencesListParams,
     RoleExternalReferencesLookupRetrieveParams,
@@ -795,6 +797,28 @@ export const integrationsLinkedinAdsConversionRulesRetrieve = async (
     })
 }
 
+export const getIntegrationsPushTokensCreateUrl = (projectId: string, id: number) => {
+    return `/api/projects/${projectId}/integrations/${id}/push_tokens/`
+}
+
+/**
+ * Register existing device tokens, for example exported from another provider, on this push channel. Each token is stored encrypted on its person, as the mobile SDK stores it.
+ * @summary Import push device tokens
+ */
+export const integrationsPushTokensCreate = async (
+    projectId: string,
+    id: number,
+    pushTokenImportRequestApi: PushTokenImportRequestApi,
+    options?: RequestInit
+): Promise<PushTokenImportResponseApi> => {
+    return apiMutator<PushTokenImportResponseApi>(getIntegrationsPushTokensCreateUrl(projectId, id), {
+        ...options,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        body: JSON.stringify(pushTokenImportRequestApi),
+    })
+}
+
 export const getIntegrationsTwilioPhoneNumbersRetrieveUrl = (projectId: string, id: number) => {
     return `/api/projects/${projectId}/integrations/${id}/twilio_phone_numbers/`
 }
@@ -904,6 +928,20 @@ export const integrationsDomainConnectCheckRetrieve = async (
     return apiMutator<EmailDomainConnectCheckApi>(getIntegrationsDomainConnectCheckRetrieveUrl(projectId, params), {
         ...options,
         method: 'GET',
+    })
+}
+
+export const getIntegrationsEmailSandboxSenderCreateUrl = (projectId: string) => {
+    return `/api/projects/${projectId}/integrations/email_sandbox_sender/`
+}
+
+export const integrationsEmailSandboxSenderCreate = async (
+    projectId: string,
+    options?: RequestInit
+): Promise<IntegrationConfigApi> => {
+    return apiMutator<IntegrationConfigApi>(getIntegrationsEmailSandboxSenderCreateUrl(projectId), {
+        ...options,
+        method: 'POST',
     })
 }
 

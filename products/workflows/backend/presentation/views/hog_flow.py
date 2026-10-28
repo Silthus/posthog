@@ -20,7 +20,6 @@ from django.utils import timezone as django_timezone
 
 import requests
 import structlog
-import posthoganalytics
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -73,7 +72,6 @@ from posthog.permissions import (
     get_authenticator_scoped_team_ids,
     get_authenticator_scopes,
     is_service_auth,
-    posthog_feature_flag_enabled,
 )
 from posthog.ph_client import feature_enabled_or_false
 from posthog.plugins.plugin_server_api import (
@@ -128,6 +126,7 @@ from products.cdp.backend.presentation.serializers import (
     InputsSchemaSerializer,
     InputsSerializer,
     require_viewer_access_to_added_actions,
+    validate_sandbox_email_sender,
 )
 from products.cohorts.backend.facade.api import get_cohort_ref
 from products.messaging.backend.facade.categories import MessageCategoryMissing, get_category
@@ -959,6 +958,18 @@ def _event_trigger_targets_something(filters: Any) -> bool:
     return any(isinstance(prop, dict) and prop.get("key") for prop in filters.get("properties") or [])
 
 
+def _reject_empty_required_lists(input_schema: list[dict] | None, inputs: dict) -> None:
+    # The shared input check skips every falsy value, so {}, 0 and false pass as well as []. A live push step with no
+    # channel fails every send.
+    for schema in input_schema or []:
+        if not schema.get("required") or schema.get("type") != "integration_multi":
+            continue
+        item = inputs.get(schema["key"])
+        value = item.get("value") if isinstance(item, dict) else None
+        if not isinstance(value, list) or not value:
+            raise serializers.ValidationError({"inputs": {schema["key"]: {"input": "This field is required."}}})
+
+
 def _should_validate_strictly(context: dict, is_draft: Optional[bool]) -> bool:
     # Non-draft saves always validate fully. Drafts stay lenient for the web UI builder (which saves
     # incomplete graphs mid-edit) and for internal re-saves (e.g. the refresh management command), which
@@ -1085,14 +1096,14 @@ def _has_exact_string_filter(filters: dict, key: str) -> bool:
     return False
 
 
-def _existing_email_from_by_action(instance: WorkflowEditState) -> dict[str, list[dict]]:
-    """Stored email sender overrides keyed by action id, live and draft variants both kept.
+def _existing_email_values_by_action(instance: WorkflowEditState) -> dict[str, list[tuple[str | None, dict]]]:
+    """Stored email inputs keyed by action id, live and draft variants both kept.
 
     Which variant a save should be compared against depends on how the request routes (a
     builder save targets the draft, a raw API write targets live), so validation grandfathers
     a value matching either - both are values already stored on the workflow.
     """
-    result: dict[str, list[dict]] = {}
+    result: dict[str, list[tuple[str | None, dict]]] = {}
     draft = instance.draft if isinstance(instance.draft, dict) else {}
     for actions in (instance.actions, draft.get("actions")):
         for stored_action in actions or []:
@@ -1101,8 +1112,8 @@ def _existing_email_from_by_action(instance: WorkflowEditState) -> dict[str, lis
             email_input = ((stored_action.get("config") or {}).get("inputs") or {}).get("email")
             value = email_input.get("value") if isinstance(email_input, dict) else None
             from_value = value.get("from") if isinstance(value, dict) else None
-            if isinstance(from_value, dict):
-                result.setdefault(stored_action["id"], []).append(from_value)
+            if isinstance(value, dict) and isinstance(from_value, dict):
+                result.setdefault(stored_action["id"], []).append((stored_action.get("type"), value))
     return result
 
 
@@ -2133,6 +2144,25 @@ class HogFlowActionSerializer(serializers.Serializer):
             else:
                 input_schema = template.inputs_schema
                 inputs = data.get("config", {}).get("inputs", {})
+                existing_emails = (self.context.get("existing_action_emails") or {}).get(data.get("id")) or []
+                input_context = {
+                    **self.context,
+                    "workflow_action_type": data.get("type"),
+                    "existing_email_values": [
+                        email
+                        for action_type, email in existing_emails
+                        if action_type == "function_email" and data.get("type") == "function_email"
+                    ],
+                    # Request-scoped: a drip sequence's steps share senders, and the actions
+                    # list validates one action at a time (mirrors _message_template_cache).
+                    "email_integration_cache": self.context.setdefault("_email_integration_cache", {}),
+                    "sandbox_sender_enabled_cache": self.context.setdefault("_sandbox_sender_enabled_cache", {}),
+                }
+                for schema in input_schema or []:
+                    if schema.get("type") in {"email", "native_email"} and isinstance(inputs, dict):
+                        email_input = inputs.get(schema["key"])
+                        if isinstance(email_input, dict):
+                            validate_sandbox_email_sender(email_input.get("value"), input_context)
 
                 function_config_serializer = HogFlowConfigFunctionInputsSerializer(
                     data={
@@ -2140,6 +2170,7 @@ class HogFlowActionSerializer(serializers.Serializer):
                         "inputs": inputs,
                     },
                     context={
+                        **input_context,
                         "function_type": template.type,
                         "is_dwh_source": self.context.get("is_dwh_source", False),
                         # The existing (decrypted) secret inputs for this action, so a resent
@@ -2150,14 +2181,7 @@ class HogFlowActionSerializer(serializers.Serializer):
                         # sender address is checked against the integration's verified domain at
                         # save time, while an unchanged stored value is grandfathered.
                         "get_team": self.context.get("get_team"),
-                        "existing_email_from": (self.context.get("existing_action_email_from") or {}).get(
-                            data.get("id")
-                        ),
-                        # Request-scoped: a drip sequence's steps share senders, and the actions
-                        # list validates one action at a time (mirrors _message_template_cache).
-                        "email_integration_domain_cache": self.context.setdefault(
-                            "_email_integration_domain_cache", {}
-                        ),
+                        "existing_email_from": [email["from"] for _, email in existing_emails],
                     },
                 )
 
@@ -2174,6 +2198,8 @@ class HogFlowActionSerializer(serializers.Serializer):
                     function_config_serializer.is_valid(raise_exception=True)
                     data["config"]["inputs"] = function_config_serializer.validated_data["inputs"]
 
+                if not is_draft:
+                    _reject_empty_required_lists(input_schema, data["config"].get("inputs") or {})
                 if strict and template_id == _CREATE_TASK_TEMPLATE_ID:
                     self._validate_create_task_action(data["config"]["inputs"])
                 if strict and template_id == _RUN_SCOUT_TEMPLATE_ID:
@@ -2689,30 +2715,6 @@ def _email_sending_rates(sent: int, bounced: int, complained: int) -> dict[str, 
     }
 
 
-# Shared with FEATURE_FLAGS in frontend/src/lib/constants.tsx.
-ISP_SENDING_HEALTH_FLAG = "workflows-isp-sending-health"
-
-
-def _isp_breakdown_enabled(team: Team) -> bool:
-    # The shared helper suppresses the $feature_flag_called exposure event (this gate runs on every
-    # reputation request, not once per person) and honors _FORCE_ENABLED_FLAGS like other internal
-    # gates. It does not catch, so the try/except stays to fail closed when a flag-eval errors.
-    try:
-        return posthog_feature_flag_enabled(
-            ISP_SENDING_HEALTH_FLAG,
-            str(team.uuid),
-            organization_id=team.organization_id,
-            team_id=team.id,
-        )
-    except Exception:
-        logger.warning(
-            "workflows.isp_sending_health_flag_check_failed_defaulting_off",
-            team_id=team.id,
-            exc_info=True,
-        )
-        return False
-
-
 @frozen
 class IspDomains:
     """Which of this project's sending domains the breakdown may cover, and what to say about them."""
@@ -3022,7 +3024,8 @@ class TeamEmailReputationResponseSerializer(serializers.Serializer):
         read_only=True,
         help_text=(
             "The project's sending tier, what it allows, and how much of it has been used; null when the "
-            "caller lacks project-wide workflow access."
+            "caller lacks project-wide workflow access. Tiers grow on their own as the project builds a clean "
+            "sending record."
         ),
     )
 
@@ -3463,6 +3466,7 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
         # When used as a nested field (the `configuration` override on test invocations) DRF never
         # binds `self.instance`, so fall back to the flow passed in via context so recovery still works.
         instance = cast(Optional[WorkflowEditState], self.instance) or self.context.get("instance")
+        self.context["workflow_origin_product"] = instance.origin_product if instance else data.get("origin_product")
 
         # Who a "Create AI task" step runs as: the existing creator for an update, or the
         # requesting user for a brand-new flow (matches the `created_by` a create() actually
@@ -3584,7 +3588,7 @@ class HogFlowSerializer(HogFlowMinimalSerializer):
             # Stored sender overrides, keyed by action id, so child action validation only holds
             # newly written custom sender addresses to the verified-domain rule. Draft wins over
             # live for the same reason as secrets: it is the value the client last saw.
-            self.context["existing_action_email_from"] = _existing_email_from_by_action(instance)
+            self.context["existing_action_emails"] = _existing_email_values_by_action(instance)
             # Live "Run scout" notes, so only a new or changed note needs skill editor access.
             self.context["live_run_scout_notes"] = _live_run_scout_notes_by_action(instance)
 
@@ -4337,8 +4341,6 @@ class HogFlowRevisionRestoreRequestSerializer(serializers.Serializer):
     )
 
 
-SELF_OPTIMISING_FEATURE_FLAG = "self-optimising-workflows"
-
 # `trigger` and `abort_action` are read-only on the workflow serializer, so publish would drop them.
 PROPOSAL_CONTENT_FIELDS = tuple(field for field in DRAFT_CONTENT_FIELDS if field not in ("trigger", "abort_action"))
 
@@ -4992,6 +4994,11 @@ class HogFlowVersionMetricsRequestSerializer(AppMetricsRequestSerializer):
                     "whether a schedule still has sends to come."
                 ),
             ),
+            OpenApiParameter(
+                "latest_send_first",
+                OpenApiTypes.BOOL,
+                description="Pass `true` to order by when each workflow's newest completed run finished, newest first. Workflows that never finished a run come last.",
+            ),
         ]
     ),
     # The mixin action's default schema documents integer ids; workflows are keyed by UUID.
@@ -5288,6 +5295,7 @@ class HogFlowViewSet(
             broadcast_statuses=frozenset(broadcast_statuses),
             suggestions_first=params.get("suggestions_first") in ("true", "1"),
             tags=tags,
+            latest_send_first=params.get("latest_send_first") == "true",
             field_filters={name: params[name] for name in WORKFLOW_FIELD_FILTER_PARAMS if name in params},
         )
 
@@ -6105,22 +6113,6 @@ class HogFlowViewSet(
 
         return Response(self.get_serializer(locked).data)
 
-    def _require_self_optimising_enabled(self) -> None:
-        # Invisible while the flag is off, rather than 403: an endpoint that admits it exists gets built against.
-        if not posthoganalytics.feature_enabled(
-            SELF_OPTIMISING_FEATURE_FLAG,
-            str(self.team.uuid),
-            groups={"organization": str(self.team.organization_id)},
-            group_properties={
-                "organization": {
-                    "id": str(self.team.organization_id),
-                    "created_at": self.team.organization.created_at,
-                }
-            },
-            send_feature_flag_events=False,
-        ):
-            raise exceptions.NotFound()
-
     @extend_schema(
         methods=["GET"],
         parameters=[
@@ -6143,7 +6135,6 @@ class HogFlowViewSet(
         Creating one stages nothing: a proposal only reaches the workflow's draft once a human
         approves it, and only reaches the live config once someone publishes that draft.
         """
-        self._require_self_optimising_enabled()
         instance = self._edit_state()
 
         # DRF routes HEAD to the GET handler, and the scope gate reads it as a read.
@@ -6279,7 +6270,6 @@ class HogFlowViewSet(
     )
     @action(detail=True, methods=["GET"], url_path=r"proposals/(?P<proposal_id>[^/.]+)", filter_backends=[])
     def proposal_detail(self, request: Request, proposal_id: Optional[str] = None, *args, **kwargs):
-        self._require_self_optimising_enabled()
         instance = self._workflow_ref()
         proposal = self._get_proposal_or_404(instance, proposal_id)
         return Response(WorkflowProposalSerializer(proposal, context={"hog_flow": instance}).data)
@@ -6312,7 +6302,6 @@ class HogFlowViewSet(
     )
     def approve_proposal(self, request: Request, proposal_id: Optional[str] = None, *args, **kwargs):
         # Approval only stages into the draft, like restore_revision; publish still previews and confirms.
-        self._require_self_optimising_enabled()
         param_serializer = WorkflowProposalApproveRequestSerializer(data=request.data)
         param_serializer.is_valid(raise_exception=True)
 
@@ -6384,7 +6373,6 @@ class HogFlowViewSet(
         as a result — a verdict off twenty sends is the loop's most embarrassing failure mode.
         Comparing two windows is not a controlled experiment; that is what the A/B step is for.
         """
-        self._require_self_optimising_enabled()
         instance = self._workflow_ref()
         proposal = self._get_proposal_or_404(instance, proposal_id)
         # The read below goes to ClickHouse, which refuses an untagged query.
@@ -6445,7 +6433,6 @@ class HogFlowViewSet(
         filter_backends=[],
     )
     def reject_proposal(self, request: Request, proposal_id: Optional[str] = None, *args, **kwargs):
-        self._require_self_optimising_enabled()
         param_serializer = WorkflowProposalRejectRequestSerializer(data=request.data)
         param_serializer.is_valid(raise_exception=True)
 
@@ -6475,7 +6462,6 @@ class HogFlowViewSet(
         Turning it off stops new suggestions. Suggestions already made are left alone: someone
         still has them to resolve.
         """
-        self._require_self_optimising_enabled()
         instance = self._workflow_ref()
 
         if request.method == "POST":
@@ -7242,7 +7228,7 @@ class HogFlowViewSet(
         # sending domain, so object-level grants alone don't earn it.
         isp_domains = (
             _isp_domains(self.team, self.user_access_control, self.user_permissions)
-            if can_read_all_workflows and _isp_breakdown_enabled(self.team)
+            if can_read_all_workflows
             else IspDomains(readable=(), withheld=(), shared=())
         )
 

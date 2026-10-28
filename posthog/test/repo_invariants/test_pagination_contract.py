@@ -30,6 +30,10 @@ EXISTING_CUSTOM_LIST_VIEWSETS = {
     "products.aeo.backend.presentation.views.AEOPromptViewSet",
     # Returns one bounded object (capped at SERVICES_LIMIT services), not a page of rows.
     "products.apm.backend.presentation.views.ServicesHealthViewSet",
+    # Returns one bounded object (capped at ENDPOINTS_LIMIT rows), not a page of rows.
+    "products.apm.backend.presentation.views.EndpointsHealthViewSet",
+    # Returns one bounded object (capped at MAP_EDGES_LIMIT edges over a bounded trace sample), not a page of rows.
+    "products.apm.backend.presentation.views.ServiceMapViewSet",
     "ee.api.billing.BillingViewset",
     "ee.api.quota_limits.QuotaLimitsViewSet",
     "products.subscriptions.backend.presentation.views.SubscriptionDeliveryViewSet",
@@ -159,6 +163,8 @@ EXISTING_CUSTOM_LIST_VIEWSETS = {
     "products.data_warehouse.backend.presentation.views.fix_hogql.FixHogQLViewSet",
     "products.data_warehouse.backend.presentation.views.saved_query.viewset.DataWarehouseSavedQueryViewSet",
     "products.data_warehouse.backend.presentation.views.saved_query_column_annotation.DataWarehouseSavedQueryColumnAnnotationViewSet",
+    # extend_schema_view wraps the inherited DRF list solely to document include_columns.
+    "products.data_warehouse.backend.presentation.views.table.TableViewSet",
     "products.data_warehouse.backend.presentation.views.view_link.ViewLinkViewSet",
     "products.endpoints.backend.presentation.views.api.EndpointViewSet",
     "products.error_tracking.backend.presentation.views.alerts.ErrorTrackingAlertViewSet",

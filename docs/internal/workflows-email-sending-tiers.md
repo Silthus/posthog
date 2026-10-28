@@ -12,9 +12,32 @@ Only workflows that send email are subject to the tiers; SMS, push, and webhook 
 - Batch audience cap: `get_hogflow_batch_trigger_limit` in `products/workflows/backend/utils/batch_trigger_limit.py`, applied at batch dispatch and shown in the blast radius preview.
 - Send-time caps: two Valkey token buckets per team in the CDP email worker (`claimTeamSendingBudget` in `nodejs/src/cdp/services/messaging/email.service.ts`).
 - Staff controls: the team's Django admin page (view state, set/pin a tier, recompute now).
+- Audit trail: every tier or pin change writes an `email_sending_tier_changed` row to the team's activity log, with the before and after values and the decision reason (`staff_set` for a tier staff set by hand). Staff rows name the acting user. Sweep and backfill rows carry a trigger with the job type and a per-run id. The rows are staff-only in the activity log (`products/workflows/backend/services/email_sending_tier_audit.py`).
 - Customer surface: the Reputation tab's sending allowance card, shown only while the team is enforced.
+- Agent surface: the `workflows-reputation-get` MCP tool returns the same allowance (`sending_allowance` on `GET hog_flows/reputation`), behind the same `workflows-sending-tier-requests` flag.
+- Raise requests: the card's "Request a higher allowance" link opens a support ticket whose hidden context starts with `Email sending tier increase request`, followed by the project ID, tier, usage, and 30-day rates.
+  Search tickets for that line to find these requests.
+  The `workflows-sending-tier-requests` feature flag gates the link.
+  With the flag on, when the tier sets an email batch's cap, the MCP batch tool's over-cap error points agents at the same link, so they can tell the user how to ask for more.
+  Agents cannot file a request themselves.
+  The link shows only to accounts that can file a support ticket: a paid or custom plan, an active support trial, or an organization in its first 3 months.
 
 ## Configuration
+
+### Sandbox sender provisioning
+
+The `workflows-sandbox-sender` flag enables a PostHog-managed email integration per project through `POST /api/projects/:project_id/integrations/email_sandbox_sender/`.
+The endpoint requires `integration:write` and project membership. Repeated requests keep the same integration and refresh its display name from the organization name.
+Set `WORKFLOWS_SANDBOX_SENDER_DOMAIN`, `SES_SANDBOX_FROM_ADDRESS`, and `SES_SANDBOX_TENANT_NAME` in Django; any empty value leaves the endpoint unavailable.
+The worker sends from the same `SES_SANDBOX_FROM_ADDRESS`, so set it once for Django and the worker. The address the UI shows is then the address the worker sends from.
+Workflow email steps and test sends offer it as a sender.
+Users cannot edit, verify, or remove the managed integration, or register their own integration on the shared domain.
+The managed integration is excluded from project SES tenant migration, identity cleanup, and the reputation page's domain breakdown.
+Deploy the schema, recipient restrictions, daily caps, and tenant pause checks first. Configure the shared SES route, then enable `WORKFLOWS_SANDBOX_SENDER_ENABLED` on the worker and CDP API. Enable `workflows-sandbox-sender` last so provisioning and sender selection follow delivery readiness.
+The sandbox sender is available only in workflow email steps and test sends. Broadcasts, destinations, sender rotation, custom From values, and Reply-To overrides are rejected. Unchanged stored sender settings remain editable.
+Saves check the sandbox sender only while `workflows-sandbox-sender` is on for the project, so projects without the flag skip the integration lookup.
+
+### Sending tiers
 
 Two sides read their own env vars because the worker never reads Django settings.
 Set them together; drift means the UI describes limits the worker does not apply, or the reverse.
@@ -96,7 +119,8 @@ Staff turn the sandbox sender off for one organization by adding a `SandboxSende
 A blocked organization's sandbox sends skip with the reason `organization_blocked`, and its projects get no new sandbox sender.
 The worker reads the block with the organization members, so a block and its removal reach the workers within one minute. Own-sender sends do not read it.
 Each delivered send emits a `workflows sandbox email sent` event.
-A successful sandbox send records `email_sandbox_sent` next to `email_sent`, so the workflow's metrics still show it.
+Test sends never record `email_sent`, so they do not count toward the sending tier.
+A successful live sandbox send records `email_sandbox_sent` next to `email_sent`, so the workflow's metrics still show it.
 The sending tier subtracts `email_sandbox_sent` from `email_sent` per day, and the team's sending allowance per workflow, both floored at zero. Sandbox bounces and complaints still count.
 The CDP API's SES webhook captures `workflows sandbox email delivered` for a delivery on `SES_SANDBOX_CONFIGURATION_SET`, test sends included. Without that setting on the CDP API, the event never fires.
-Deploy this metric to the worker and Django before you enable the switch in production.
+Deploy this metric to the worker and Django before live workflow sends use the switch in production.

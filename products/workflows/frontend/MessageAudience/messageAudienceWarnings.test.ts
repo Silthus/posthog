@@ -17,6 +17,7 @@ const LIST_MATCHING = '"Signups" is still matching people. You can launch when i
 
 const verified = { kind: 'email', config: { verified: true } }
 const unverified = { kind: 'email', config: { verified: false } }
+const sandbox = { kind: 'email', config: { provider: 'sandbox', verified: true } }
 const matchingList = { name: 'Signups', is_static: true, is_calculating: true, last_calculation: null }
 const audience: MessageAudience = {
     source: 'cohort',
@@ -50,6 +51,26 @@ describe('loadMessageAudienceWarnings', () => {
             destination: 'broadcast',
             senders: [unverified],
             expected: ["Verify the sender's domain before sending"],
+        },
+        ...(['broadcast', 'workflow'] as const).map((destination) => ({
+            case: `only the sandbox sender (${destination})`,
+            destination,
+            senders: [sandbox],
+            expected: [
+                'The sandbox sender only delivers to verified members of your organization. Set up your own email sender to reach this audience.',
+            ],
+        })),
+        {
+            case: 'an unverified own sender beside the sandbox sender',
+            destination: 'broadcast',
+            senders: [sandbox, unverified],
+            expected: ["Verify the sender's domain before sending"],
+        },
+        {
+            case: 'a verified own sender beside the sandbox sender',
+            destination: 'broadcast',
+            senders: [sandbox, verified],
+            expected: [],
         },
         {
             case: 'unverified senders on the first of several pages',

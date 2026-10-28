@@ -11,7 +11,7 @@ from rest_framework import status
 from posthog.constants import AvailableFeature
 from posthog.models import Team
 from posthog.models.integration import Integration
-from posthog.models.organization import OrganizationMembership
+from posthog.models.organization import Organization, OrganizationMembership
 from posthog.models.user import User
 
 from products.access_control.backend.models.access_control import AccessControl
@@ -44,7 +44,6 @@ class TestEmailReputationAPI(APIBaseTest):
         query: str = "",
         aws_tenant: dict | None | Exception = None,
         isp_metrics: list | Exception | None = None,
-        isp_flag_enabled: bool = True,
     ) -> dict:
         provider = MagicMock()
         if isinstance(aws_tenant, Exception):
@@ -61,10 +60,6 @@ class TestEmailReputationAPI(APIBaseTest):
                 return_value=totals_by_source,
             ),
             patch("products.workflows.backend.services.email_health.SESProvider", return_value=provider),
-            patch(
-                "products.workflows.backend.presentation.views.hog_flow._isp_breakdown_enabled",
-                return_value=isp_flag_enabled,
-            ),
         ):
             response = self.client.get(f"/api/projects/{self.team.id}/hog_flows/reputation{query}")
         assert response.status_code == status.HTTP_200_OK
@@ -378,14 +373,19 @@ class TestEmailReputationAPI(APIBaseTest):
 
     @parameterized.expand(
         [
-            ("sibling verified on the same domain", True, ["mail.example.com"]),
-            ("sibling not verified yet", False, []),
+            ("sibling verified on the same domain", True, ["mail.example.com"], "ses"),
+            ("sibling not verified yet", False, [], "ses"),
+            ("legacy sender without a provider", True, ["mail.example.com"], None),
         ]
     )
     def test_reputation_endpoint_names_domains_a_sibling_project_also_sends_from(
-        self, _name: str, sibling_verified: bool, expected: list[str]
-    ):
+        self, _name: str, sibling_verified: bool, expected: list[str], provider: str | None
+    ) -> None:
         self._verify_sending_domain()
+        if provider is None:
+            Integration.objects.filter(team=self.team, kind="email", integration_id="mail.example.com").update(
+                config={"domain": "mail.example.com", "verified": True}
+            )
         sibling = Team.objects.create(organization=self.organization, name="Sibling")
         Integration.objects.create(
             team=sibling,
@@ -397,6 +397,35 @@ class TestEmailReputationAPI(APIBaseTest):
         body = self._get_reputation({}, isp_metrics=[])
 
         assert body["isp_shared_domains"] == expected
+
+    def test_reputation_endpoint_leaves_the_sandbox_sender_out_of_the_breakdown(self) -> None:
+        other_team = Team.objects.create(organization=Organization.objects.create(name="Other"), name="Other")
+        for team in (self.team, other_team):
+            Integration.objects.create(
+                team=team,
+                kind="email",
+                integration_id="posthog-sandbox",
+                config={"domain": "sandbox.example.com", "provider": "sandbox", "verified": True},
+            )
+
+        body = self._get_reputation(
+            {},
+            isp_metrics=[
+                IspSendingMetrics(
+                    isp="Gmail",
+                    emails_sent=900,
+                    delivery_rate=0.97,
+                    bounce_rate=0.01,
+                    transient_bounce_rate=0.0,
+                    complaint_rate=None,
+                    complaint_base=0,
+                )
+            ],
+        )
+
+        assert body["isps"] == []
+        assert body["isp_shared_domains"] == []
+        assert body["isp_withheld_domains"] == []
 
     def test_reputation_endpoint_omits_domains_only_this_project_sends_from(self):
         self._verify_sending_domain()
@@ -485,7 +514,6 @@ class TestEmailReputationAPI(APIBaseTest):
                 return_value={},
             ),
             patch("products.workflows.backend.services.email_health.SESProvider", return_value=provider),
-            patch("products.workflows.backend.presentation.views.hog_flow._isp_breakdown_enabled", return_value=True),
             patch("products.workflows.backend.services.email_health.cache.add", return_value=False),
         ):
             response = self.client.get(f"/api/projects/{self.team.id}/hog_flows/reputation")
@@ -493,28 +521,6 @@ class TestEmailReputationAPI(APIBaseTest):
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["isps"] == []
         assert provider.get_identity_isp_metrics.call_count == 0
-
-    def test_reputation_endpoint_withholds_the_breakdown_without_the_feature_flag(self):
-        self._verify_sending_domain()
-
-        body = self._get_reputation(
-            {"src": {"email_sent": 100, "email_bounced_hard": 1}},
-            isp_metrics=[
-                IspSendingMetrics(
-                    isp="Gmail",
-                    emails_sent=90,
-                    delivery_rate=0.99,
-                    bounce_rate=0.01,
-                    transient_bounce_rate=0.0,
-                    complaint_rate=None,
-                    complaint_base=0,
-                )
-            ],
-            isp_flag_enabled=False,
-        )
-
-        assert body["isps"] == []
-        assert body["reputation"]["emails_sent"] == 100
 
 
 @pytest.mark.ee
@@ -575,8 +581,6 @@ class TestEmailReputationAccessControl(APIBaseTest):
                 return_value={str(flow.id): {"email_sent": 100, "email_bounced_hard": 5}},
             ),
             patch("products.workflows.backend.services.email_health.SESProvider", return_value=provider),
-            # Enabled, so what the assertion below tests is the access-control gate, not the flag.
-            patch("products.workflows.backend.presentation.views.hog_flow._isp_breakdown_enabled", return_value=True),
         ):
             response = self.client.get(f"/api/projects/{self.team.id}/hog_flows/reputation")
 

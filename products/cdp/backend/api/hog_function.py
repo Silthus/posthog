@@ -195,6 +195,16 @@ def snapshot_hog_function_content(hog_function: HogFunction) -> dict:
     return snapshot
 
 
+def _stored_input_values(instance: Optional[HogFunction]) -> list[dict]:
+    """Stored input values, so a save that leaves an email value unchanged, such as disabling the function, keeps working."""
+    stored_inputs = instance.inputs if instance and isinstance(instance.inputs, dict) else {}
+    return [
+        entry["value"]
+        for entry in stored_inputs.values()
+        if isinstance(entry, dict) and isinstance(entry.get("value"), dict)
+    ]
+
+
 def _named_warehouse_tables(entries: Any) -> list[Any]:
     """The warehouse tables a filters blob actually names, ignoring the picker's placeholder row.
 
@@ -632,6 +642,7 @@ class HogFunctionSerializer(HogFunctionMinimalSerializer):
         ):
             raise serializers.ValidationError({"filters": "Select the materialized view to trigger on."})
         self.context["encrypted_inputs"] = instance.encrypted_inputs if instance else {}
+        self.context["existing_email_values"] = _stored_input_values(instance)
 
         template = None
         if data["template_id"]:
@@ -645,6 +656,14 @@ class HogFunctionSerializer(HogFunctionMinimalSerializer):
                 )
 
                 raise serializers.ValidationError({"template_id": f"No template found for id '{data['template_id']}'"})
+
+            # A test run of an unsaved function takes template_id from the caller, and the template decides
+            # which reserved functions the code may call, so it gets the same check as a create.
+            is_unsaved_test = (
+                instance is None and self.context.get("view") and self.context["view"].action == "invocations"
+            )
+            if is_unsaved_test:
+                self._validate_template_is_creatable(template)
 
         if is_create:
             # Set defaults for new functions
