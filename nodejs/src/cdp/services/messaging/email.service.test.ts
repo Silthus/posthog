@@ -577,7 +577,7 @@ describe('EmailService', () => {
             })
 
             it.each(['cc', 'bcc'] as const)('delivers a quoted %s mailbox whole', async (field) => {
-                const email = `"example,<${team.id}>"@example.com`
+                const email = `"example,colleague-${team.id}"@example.com`
                 await createMember(email)
                 service = createSandboxService(true)
                 invocation.queueParameters = createSandboxParams({ [field]: `Example colleague <${email}>` })
