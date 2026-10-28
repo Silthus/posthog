@@ -57,7 +57,12 @@ export const messagingPrototypeLogic = kea<messagingPrototypeLogicType>([
     })),
 ])
 
-/** The variant in force, read by the shell's pure helpers. Null outside the prototype stories. */
+/** The variant a URL's query names. The shell's reducers read it here, because they may not read another logic. */
+export function messagingPrototypeVariantFromSearch(search: string): MessagingPrototypeVariant | null {
+    return parseVariant(new URLSearchParams(search).get('variant'))
+}
+
+/** The variant in force, for links built at render time. Null outside the prototype stories. */
 export function messagingPrototypeVariant(): MessagingPrototypeVariant | null {
     return messagingPrototypeLogic.findMounted()?.values.variant ?? null
 }

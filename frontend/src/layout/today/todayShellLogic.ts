@@ -23,7 +23,7 @@ import {
     WORKFLOWS_ROW_URL,
     MessagingPrototypeVariant,
     messagingPrototypeLogic,
-    messagingPrototypeVariant,
+    messagingPrototypeVariantFromSearch,
 } from './messagingPrototype/messagingPrototypeLogic'
 
 export type TodayRailPane = 'home' | 'spaces' | 'analytics' | 'products' | 'settings' | 'messaging'
@@ -93,9 +93,11 @@ export function nextPhonePages(
 }
 
 /** The pane a route belongs to, or null for pages that keep whichever pane was open. */
-export function railPaneForPath(pathname: string): TodayRailPane | null {
+export function railPaneForPath(
+    pathname: string,
+    prototypeVariant: MessagingPrototypeVariant | null = null
+): TodayRailPane | null {
     const path = removeProjectIdIfPresent(pathname)
-    const prototypeVariant = messagingPrototypeVariant()
     if (prototypeVariant && isUnderPath(path, MESSAGING_HOME_URL)) {
         return prototypeVariant === 'C' ? 'messaging' : 'products'
     }
@@ -142,8 +144,12 @@ function productsPaneListsPath(path: string): boolean {
 }
 
 /** The pane to show after a page change: a page both panes list keeps the Products pane when it is open. */
-function paneAfterNavigation(openPane: TodayRailPane | null, pathname: string): TodayRailPane | null {
-    const routePane = railPaneForPath(pathname)
+function paneAfterNavigation(
+    openPane: TodayRailPane | null,
+    pathname: string,
+    prototypeVariant: MessagingPrototypeVariant | null
+): TodayRailPane | null {
+    const routePane = railPaneForPath(pathname, prototypeVariant)
     return openPane === 'products' &&
         routePane === 'analytics' &&
         productsPaneListsPath(removeProjectIdIfPresent(pathname))
@@ -330,7 +336,8 @@ export const todayShellLogic = kea<todayShellLogicType>([
             null as TodayRailPane | null,
             {
                 pickPane: (_, { pane }) => pane,
-                locationChanged: (state, { pathname }) => paneAfterNavigation(state, pathname),
+                locationChanged: (state, { pathname, search }) =>
+                    paneAfterNavigation(state, pathname, messagingPrototypeVariantFromSearch(search)),
             },
         ],
         sidebarOpen: [
@@ -378,7 +385,8 @@ export const todayShellLogic = kea<todayShellLogicType>([
         routePane: [
             // PROTOTYPE (Silthus/personal#212): the variant decides the pane of the Messaging home.
             (s) => [router.selectors.location, s.variant],
-            (location: { pathname: string }): TodayRailPane | null => railPaneForPath(location.pathname),
+            (location: { pathname: string }, variant: MessagingPrototypeVariant | null): TodayRailPane | null =>
+                railPaneForPath(location.pathname, variant),
         ],
         activePane: [
             (s) => [s.pickedPane, s.routePane],

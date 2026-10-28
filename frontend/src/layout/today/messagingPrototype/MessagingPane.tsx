@@ -34,6 +34,8 @@ const GROUPS: { label: string | null; sections: MessagingSection[] }[] = [
     { label: 'Setup', sections: SETUP_SECTIONS },
 ]
 
+const SETTINGS_LABEL = 'Settings'
+
 export function MessagingPane(): JSX.Element {
     const { location } = useValues(router)
     const { setSettingsOpen } = useActions(messagingPrototypeLogic)
@@ -52,12 +54,17 @@ export function MessagingPane(): JSX.Element {
             >
                 {GROUPS.map((group, index) => {
                     const sections = group.sections.filter(matches)
-                    if (sections.length === 0) {
+                    const showSettings = group.label === 'Setup' && SETTINGS_LABEL.toLowerCase().includes(query)
+                    if (sections.length === 0 && !showSettings) {
                         return null
                     }
                     return (
                         <div key={index} className="flex flex-col gap-px pb-2">
-                            {group.label && <TodayPaneGroupLabel first={false}>{group.label}</TodayPaneGroupLabel>}
+                            {group.label ? (
+                                <TodayPaneGroupLabel first={false}>{group.label}</TodayPaneGroupLabel>
+                            ) : (
+                                index > 0 && <div className="mx-2 mb-2 border-t border-border" />
+                            )}
                             {sections.map((section) => (
                                 <TodayPaneRow
                                     key={section}
@@ -69,16 +76,21 @@ export function MessagingPane(): JSX.Element {
                                     active={path === `${MESSAGING_HOME_URL}/${section}`}
                                 />
                             ))}
+                            {showSettings && (
+                                <Button
+                                    size="row"
+                                    left
+                                    className="w-full font-semibold text-foreground"
+                                    onClick={() => setSettingsOpen(true)}
+                                >
+                                    <IconGear />
+                                    {SETTINGS_LABEL}
+                                </Button>
+                            )}
                         </div>
                     )
                 })}
             </TodayPaneSearchList>
-            <div className="border-t border-border p-2">
-                <Button left className="w-full text-muted-foreground" onClick={() => setSettingsOpen(true)}>
-                    <IconGear />
-                    Settings
-                </Button>
-            </div>
         </div>
     )
 }
