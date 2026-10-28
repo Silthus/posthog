@@ -116,7 +116,7 @@ class TestSandboxSenderAPI(APIBaseTest):
         assert not self._sandbox_rows().exists()
         assert self._provisioned_events() == []
 
-    def test_ensure_is_not_found_for_a_blocked_organization_until_the_block_is_removed(self) -> None:
+    def test_ensure_is_not_found_while_the_organization_is_blocked_and_keeps_existing_senders(self) -> None:
         other_organization = Organization.objects.create(name="Other organization")
         SandboxSenderOrganizationBlock.objects.create(organization=other_organization, reason="Abuse report")
         block = SandboxSenderOrganizationBlock.objects.create(organization=self.organization, reason="Abuse report")
@@ -129,6 +129,10 @@ class TestSandboxSenderAPI(APIBaseTest):
         block.delete()
         unblocked = self._ensure()
         assert unblocked.status_code == status.HTTP_200_OK, unblocked.json()
+        assert self._sandbox_rows().count() == 1
+        SandboxSenderOrganizationBlock.objects.create(organization=self.organization, reason="Abuse report")
+        reblocked = self._ensure()
+        assert reblocked.status_code == status.HTTP_404_NOT_FOUND, reblocked.json()
         assert self._sandbox_rows().count() == 1
 
     @parameterized.expand(
