@@ -3,12 +3,13 @@ per send, so sends get the workflow's metrics, run history and versions."""
 
 import re
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from email.utils import parseaddr
 from typing import Any, Literal
 from uuid import UUID
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 import requests
 import structlog
@@ -18,10 +19,12 @@ from posthog.integrations import IntegrationManager, IntegrationNotFound
 from posthog.models.team import Team
 from posthog.plugins.plugin_server_api import (
     reload_hog_flows_on_workers,
+    send_accepted_transactional_email,
     send_transactional_email as run_transactional_workflow,
 )
 
 from products.messaging.backend.facade.contracts import (
+    CodeEmail,
     DeliveryUnavailable,
     IdempotencyKeyInFlight,
     IdempotencyKeyReused,
@@ -32,6 +35,7 @@ from products.messaging.backend.facade.contracts import (
     QuotaLimited,
     RecipientSuppressed,
     RecipientUnreachable,
+    SenderNotVerified,
     SenderUnavailable,
     SendingPaused,
     SendingSuspended,
@@ -40,13 +44,17 @@ from products.messaging.backend.facade.contracts import (
     TransactionalEmailError,
     TransactionalEmailPaused,
 )
-from products.messaging.backend.models import MessageCategory, MessageTemplate
+from products.messaging.backend.models import MessageCategory, MessageTemplate, TransactionalEmailKey
 from products.messaging.backend.models.message_category import MessageCategoryType
+from products.messaging.backend.models.transactional_email_key import TRANSACTIONAL_EMAIL_KEY_CONSTRAINT
+from products.messaging.backend.services.html_text import text_from_html
 from products.workflows.backend.facade.api import WorkflowNotFound, get_workflow_summary
 from products.workflows.backend.facade.transactional_emails import (
     TransactionalEmailContent,
     TransactionalEmailContentInvalid,
     TransactionalEmailSenderUnavailable,
+    code_send_sender,
+    create_code_email_workflow,
     create_transactional_email_workflow,
     resolve_transactional_email_sender,
     update_transactional_email_workflow,
@@ -357,13 +365,73 @@ def _transactional_workflow_id(team_id: int, template_id: UUID) -> UUID:
         content=template.content,
         message_category_id=template.message_category_id,
     )
+    _require_active(team_id, template.transactional_hog_flow_id)
+    return template.transactional_hog_flow_id
+
+
+def _require_active(team_id: int, hog_flow_id: UUID) -> None:
     try:
-        workflow = get_workflow_summary(team_id=team_id, workflow_id=str(template.transactional_hog_flow_id))
+        workflow = get_workflow_summary(team_id=team_id, workflow_id=str(hog_flow_id))
     except WorkflowNotFound as e:
         raise TransactionalEmailPaused("The template's transactional email no longer exists.") from e
     if workflow.status != "active":
         raise TransactionalEmailPaused("The template's transactional email isn't active.")
-    return template.transactional_hog_flow_id
+
+
+def _code_email_workflow_id(team_id: int, key: str) -> UUID:
+    template_id = _template_id_for_key(team_id, key)
+    if template_id is not None:
+        return _transactional_workflow_id(team_id, template_id)
+    hog_flow_id = _key_workflow_id(team_id, key)
+    _require_active(team_id, hog_flow_id)
+    return hog_flow_id
+
+
+def _template_id_for_key(team_id: int, key: str) -> UUID | None:
+    return MessageTemplate.objects.filter(team_id=team_id, key=key, deleted=False).values_list("id", flat=True).first()
+
+
+def known_key(team_id: int, key: str) -> TransactionalEmailKey | None:
+    return TransactionalEmailKey.objects.for_team(team_id).filter(key=key).first()
+
+
+def _key_workflow_id(team_id: int, key: str) -> UUID:
+    keys = TransactionalEmailKey.objects.for_team(team_id)
+    known = known_key(team_id, key)
+    if known is not None:
+        if _workflow_exists(team_id, known.hog_flow_id):
+            return known.hog_flow_id
+        known.delete()
+    try:
+        with transaction.atomic():
+            hog_flow_id = create_code_email_workflow(team_id=team_id, key=key)
+            keys.create(team_id=team_id, key=key, hog_flow_id=hog_flow_id)
+        return hog_flow_id
+    except IntegrityError as error:
+        if TRANSACTIONAL_EMAIL_KEY_CONSTRAINT not in str(error):
+            raise
+    return keys.get(key=key).hog_flow_id
+
+
+def require_code_email_access(
+    team_id: int,
+    key: str,
+    *,
+    require_workflow_editor: Callable[[UUID], None],
+    require_workflow_create: Callable[[], None],
+) -> None:
+    template = MessageTemplate.objects.filter(team_id=team_id, key=key, deleted=False).first()
+    if template is not None:
+        if template.transactional_hog_flow_id is not None:
+            require_workflow_editor(template.transactional_hog_flow_id)
+        return
+    hog_flow_id = (
+        TransactionalEmailKey.objects.for_team(team_id).filter(key=key).values_list("hog_flow_id", flat=True).first()
+    )
+    if hog_flow_id is not None and _workflow_exists(team_id, hog_flow_id):
+        require_workflow_editor(hog_flow_id)
+    else:
+        require_workflow_create()
 
 
 def send_transactional_email(
@@ -374,8 +442,31 @@ def send_transactional_email(
     distinct_id: str | None,
     message_data: dict[str, Any],
     idempotency_key: str | None = None,
-    timeout: float = 10,
 ) -> QueuedEmail:
+    _check_send_request(to, idempotency_key)
+    with transactional_email_stage("workflow_lookup"):
+        hog_flow_id = _transactional_workflow_id(team.id, template_id)
+    payload = _send_payload(to, distinct_id, message_data, idempotency_key)
+    return _queue(team.id, hog_flow_id, payload, run_transactional_workflow)
+
+
+def send_code_email(
+    team: Team,
+    email: CodeEmail,
+    *,
+    to: str,
+    distinct_id: str | None,
+    idempotency_key: str | None = None,
+) -> QueuedEmail:
+    _check_send_request(to, idempotency_key)
+    with transactional_email_stage("workflow_lookup"):
+        accepted_send = _accepted_send(team.id, email)
+        hog_flow_id = _code_email_workflow_id(team.id, email.key)
+    payload = {**_send_payload(to, distinct_id, {}, idempotency_key), "send": accepted_send}
+    return _queue(team.id, hog_flow_id, payload, send_accepted_transactional_email)
+
+
+def _check_send_request(to: str, idempotency_key: str | None) -> None:
     if idempotency_key is not None and not IDEMPOTENCY_KEY_PATTERN.fullmatch(idempotency_key):
         raise InvalidIdempotencyKey(
             "The Idempotency-Key header must be 1 to 255 visible ASCII characters, with no spaces."
@@ -384,9 +475,11 @@ def send_transactional_email(
     if "{" in to or "}" in to:
         raise InvalidRecipient("The recipient address can't contain { or }.")
 
-    with transactional_email_stage("workflow_lookup"):
-        hog_flow_id = _transactional_workflow_id(team.id, template_id)
-    payload = {
+
+def _send_payload(
+    to: str, distinct_id: str | None, message_data: dict[str, Any], idempotency_key: str | None
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         "to": to,
         # The recipient is the person the send is tracked against. Without a distinct_id, the address is one.
         "distinct_id": distinct_id or to,
@@ -395,13 +488,50 @@ def send_transactional_email(
     if idempotency_key is not None:
         # The CDP service holds the key, because only it knows whether the email was queued.
         payload["idempotency_key"] = idempotency_key
+    return payload
+
+
+def _accepted_send(team_id: int, email: CodeEmail) -> dict[str, Any]:
+    accepted: dict[str, Any] = {
+        "content": _without_empty(
+            {"subject": email.subject, "html": email.html, "text": email.text or text_from_html(email.html)}
+        ),
+        "from": _without_empty(_code_send_sender(team_id, email.sender)),
+        "tracking": {"captureEngagement": email.capture_engagement},
+    }
+    if email.reply_to:
+        accepted["replyTo"] = list(email.reply_to)
+    return accepted
+
+
+def _code_send_sender(team_id: int, address: str | None) -> dict[str, Any]:
+    name, email = parseaddr(address) if address else ("", "")
+    try:
+        sender = code_send_sender(team_id=team_id, email=email or None, name=name or None)
+    except TransactionalEmailSenderUnavailable as e:
+        if address:
+            raise SenderNotVerified(f"No verified sender in this project can send from `{email}`.") from e
+        raise SenderNotVerified("The project has no verified default email sender.") from e
+    return {"integrationId": sender.integration_id, "email": sender.email, "name": sender.name}
+
+
+def _without_empty(fields: dict[str, Any]) -> dict[str, Any]:
+    return {name: value for name, value in fields.items() if value}
+
+
+def _queue(
+    team_id: int,
+    hog_flow_id: UUID,
+    payload: dict[str, Any],
+    post: Callable[[int, str, dict], requests.Response],
+) -> QueuedEmail:
     started_at = time.monotonic()
     try:
-        response = run_transactional_workflow(team.id, str(hog_flow_id), payload, timeout=timeout)
+        response = post(team_id, str(hog_flow_id), payload)
     except Exception as e:
         _observe_cdp_call(time.monotonic() - started_at)
         CDP_SEND_RESULTS.labels(result=_cdp_error_result(e)).inc()
-        logger.exception("transactional_email_queue_failed", team_id=team.id, template_id=str(template_id))
+        logger.exception("transactional_email_queue_failed", team_id=team_id, hog_flow_id=str(hog_flow_id))
         raise DeliveryUnavailable() from e
     _observe_cdp_call(time.monotonic() - started_at)
     CDP_SEND_RESULTS.labels(result=_cdp_response_result(response.status_code)).inc()
@@ -414,8 +544,8 @@ def send_transactional_email(
             raise error_class(message)
         logger.error(
             "transactional_email_queue_rejected",
-            team_id=team.id,
-            template_id=str(template_id),
+            team_id=team_id,
+            hog_flow_id=str(hog_flow_id),
             status_code=response.status_code,
             refusal_code=refusal_code,
         )
