@@ -1125,6 +1125,7 @@ describe('Tool Filtering - Feature Flags', () => {
             'insight-data-checks',
             'logs-agent-tools',
             'workflows-transactional-email-api',
+            'workflows-email-from-code',
             'activity-summary',
             'personal-inbox-ranking',
             'anomalies-search',
