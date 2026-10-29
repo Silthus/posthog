@@ -1,6 +1,32 @@
 import { Counter, Histogram } from 'prom-client'
 import { z } from 'zod'
 
+export const AcceptedSendSchema = z
+    .object({
+        content: z
+            .object({
+                subject: z.string().min(1),
+                html: z.string().optional(),
+                text: z.string().optional(),
+            })
+            .readonly()
+            .refine((content) => !!content.html || !!content.text, { message: 'content needs html or text' })
+            .optional(),
+        from: z
+            .object({
+                integrationId: z.number().int(),
+                email: z.string().optional(),
+                name: z.string().optional(),
+            })
+            .readonly()
+            .optional(),
+        replyTo: z.array(z.string()).readonly().optional(),
+        tracking: z.object({ captureEngagement: z.boolean() }).readonly(),
+    })
+    .readonly()
+
+export type AcceptedSend = z.infer<typeof AcceptedSendSchema>
+
 // What Django sends to run a transactional email's workflow once.
 export const TransactionalEmailRequestSchema = z.object({
     to: z.string().email(),
@@ -11,6 +37,10 @@ export const TransactionalEmailRequestSchema = z.object({
     // The caller's `Idempotency-Key`. A repeat with the same key and request returns the first send.
     idempotency_key: z.string().min(1).max(255).optional(),
 })
+
+export const AcceptedSendRequestSchema = TransactionalEmailRequestSchema.extend({ send: AcceptedSendSchema })
+
+export type TransactionalEmailRequest = z.infer<typeof TransactionalEmailRequestSchema> & { send?: AcceptedSend }
 
 export type TransactionalEmailOutcome =
     | 'queued'

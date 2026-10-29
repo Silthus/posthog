@@ -142,6 +142,18 @@ export class HogFlowManagerService {
         return (await this.lazyLoader.get(id)) ?? null
     }
 
+    public async getHogFlowCheckingPrimaryOnMiss(id: HogFlow['id']): Promise<HogFlow | null> {
+        const cached = await this.getHogFlow(id)
+        if (cached) {
+            return cached
+        }
+        const fromPrimary = (await this.fetchHogFlows([id], PostgresUse.COMMON_WRITE))[id] ?? null
+        if (fromPrimary) {
+            this.lazyLoader.markForRefresh(id)
+        }
+        return fromPrimary
+    }
+
     public async getHogFlows(ids: HogFlow['id'][]): Promise<Record<HogFlow['id'], HogFlow | null>> {
         return await this.lazyLoader.getMany(ids)
     }
@@ -173,11 +185,14 @@ export class HogFlowManagerService {
         return byTeam
     }
 
-    private async fetchHogFlows(ids: string[]): Promise<Record<string, HogFlow | undefined>> {
+    private async fetchHogFlows(
+        ids: string[],
+        use: PostgresUse = PostgresUse.COMMON_READ
+    ): Promise<Record<string, HogFlow | undefined>> {
         logger.debug('[HogFlowManager]', 'Fetching hog flows', { ids })
 
         const response = await this.postgres.query<HogFlow>(
-            PostgresUse.COMMON_READ,
+            use,
             `SELECT ${HOG_FLOW_FIELDS.join(', ')} FROM posthog_hogflow WHERE id = ANY($1)`,
             [ids],
             'fetchHogFlows'
