@@ -70,6 +70,7 @@ export function WizardPushStep(): JSX.Element {
     return (
         <>
             <ChannelSetupModal
+                surface="onboarding_wizard"
                 isOpen={setupModalOpen}
                 channelType={setupModalType}
                 integration={selectedIntegration || undefined}

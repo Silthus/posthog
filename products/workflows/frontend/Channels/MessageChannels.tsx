@@ -24,6 +24,7 @@ export function MessageChannels(): JSX.Element {
     return (
         <>
             <ChannelSetupModal
+                surface="channels"
                 isOpen={setupModalOpen}
                 channelType={setupModalType}
                 integration={selectedIntegration || undefined}
