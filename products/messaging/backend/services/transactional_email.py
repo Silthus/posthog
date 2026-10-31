@@ -550,7 +550,7 @@ def _accepted_send(team_id: int, email: CodeEmail) -> dict[str, Any]:
         "content": _without_empty(
             {"subject": email.subject, "html": email.html, "text": email.text or text_from_html(email.html)}
         ),
-        "from": _sender_fields(sender, email.sender),
+        "from": _sender_fields(sender),
         "tracking": {"captureEngagement": email.capture_engagement},
     }
     if email.reply_to:
@@ -572,7 +572,7 @@ def _graded_version(team_id: int, hog_flow_id: UUID) -> int:
 def _accepted_template_send(team_id: int, options: TemplateSendOptions) -> dict[str, Any]:
     accepted: dict[str, Any] = {"tracking": {"captureEngagement": options.capture_engagement}}
     if options.sender:
-        accepted["from"] = _sender_fields(_code_send_sender(team_id, options.sender), options.sender)
+        accepted["from"] = _sender_fields(_code_send_sender(team_id, options.sender))
     if options.reply_to:
         accepted["replyTo"] = list(options.reply_to)
     return accepted
@@ -588,13 +588,13 @@ def _code_send_sender(team_id: int, address: str | None) -> TransactionalEmailSe
         raise SenderNotVerified("The project has no verified default email sender.") from e
 
 
-def _sender_fields(sender: TransactionalEmailSender, address: str | None) -> dict[str, Any]:
+def _sender_fields(sender: TransactionalEmailSender) -> dict[str, Any]:
     return _without_empty(
         {
             "integrationId": sender.integration_id,
             "email": sender.email,
             "name": sender.name,
-            "isDefault": not address,
+            "isDefault": sender.email is None,
         }
     )
 
