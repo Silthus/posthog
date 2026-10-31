@@ -5,6 +5,7 @@ import pytest
 from posthog.test.base import APIBaseTest
 from unittest.mock import MagicMock, patch
 
+from django.conf import settings
 from django.db import IntegrityError, connection, transaction
 from django.test.utils import CaptureQueriesContext
 
@@ -56,6 +57,11 @@ def _stage_counts() -> dict[str, float]:
         or 0
         for stage in get_args(TransactionalEmailStage)
     }
+
+
+class _HogFlowReadsFromMissingReplicaRouter:
+    def db_for_read(self, model: type, **hints: Any) -> str | None:
+        return "unavailable_replica" if model is HogFlow else None
 
 
 @patch("products.messaging.backend.presentation.views.message_templates.posthoganalytics.capture")
@@ -534,13 +540,25 @@ class TestTransactionalEmail(APIBaseTest):
 
     @parameterized.expand(
         [
-            ("without_a_hash", {}, "transactional_email", None, None),
-            ("with_the_current_hash", {"hash": PASSWORD_RESET_HASH}, "transactional_email", None, None),
+            (
+                "without_a_hash",
+                {},
+                "transactional_email/send",
+                {"tracking": {"captureEngagement": True}, "hogFlowVersion": 1},
+                None,
+            ),
+            (
+                "with_the_current_hash",
+                {"hash": PASSWORD_RESET_HASH},
+                "transactional_email/send",
+                {"tracking": {"captureEngagement": True}, "hogFlowVersion": 1},
+                None,
+            ),
             (
                 "with_a_superseded_hash",
                 {"hash": SUPERSEDED_HASH},
-                "transactional_email",
-                None,
+                "transactional_email/send",
+                {"tracking": {"captureEngagement": True}, "hogFlowVersion": 1},
                 [
                     {
                         "code": "template_superseded",
@@ -558,6 +576,7 @@ class TestTransactionalEmail(APIBaseTest):
                     "from": {"email": "hello@example.com", "name": "Example"},
                     "replyTo": ["help@example.com"],
                     "tracking": {"captureEngagement": True},
+                    "hogFlowVersion": 1,
                 },
                 None,
             ),
@@ -565,7 +584,7 @@ class TestTransactionalEmail(APIBaseTest):
                 "without_engagement_capture",
                 {"capture_engagement": False},
                 "transactional_email/send",
-                {"tracking": {"captureEngagement": False}},
+                {"tracking": {"captureEngagement": False}, "hogFlowVersion": 1},
                 None,
             ),
         ]
@@ -1027,6 +1046,67 @@ class TestTransactionalEmail(APIBaseTest):
         after = MessageTemplate.objects.get(id=self.template.id)
         assert (after.message_category_id, after.content) == (None, before.content)
         assert self._workflow(self.hog_flow_id)["version"] == 1
+
+    @patch("products.messaging.backend.services.transactional_email.reload_hog_flows_on_workers")
+    def test_a_send_after_a_save_carries_the_workflow_version_that_holds_the_saved_content(
+        self, _reload, mock_post, _flag, _capture
+    ):
+        self._cdp_accepts(mock_post)
+        body = self._keyed()
+        with self.captureOnCommitCallbacks(execute=True):
+            MessageTemplate.objects.filter(id=self.template.id).update(managed_by=None)
+            saved = self.client.patch(
+                f"/api/projects/{self.team.id}/messaging_templates/{self.template.id}/",
+                {"content": {"email": {"subject": "A new subject", "html": "<p>New</p>"}}},
+                format="json",
+            )
+            MessageTemplate.objects.filter(id=self.template.id).update(managed_by=TemplateManagedBy.CODE)
+        assert saved.status_code == status.HTTP_200_OK, saved.json()
+        read_version = transactional_email.get_workflow_version
+
+        def read_version_with_hog_flow_reads_on_a_missing_replica(**kwargs: Any) -> int:
+            with self.settings(DATABASE_ROUTERS=[_HogFlowReadsFromMissingReplicaRouter(), *settings.DATABASE_ROUTERS]):
+                return read_version(**kwargs)
+
+        with patch.object(
+            transactional_email,
+            "get_workflow_version",
+            side_effect=read_version_with_hog_flow_reads_on_a_missing_replica,
+        ):
+            response = self._psak_client(["hog_flow:write"]).post(self.send_email_url, body, format="json")
+
+        assert response.status_code == status.HTTP_202_ACCEPTED, response.json()
+        assert mock_post.call_args.kwargs["json"]["send"]["hogFlowVersion"] == 2
+
+    def test_a_send_the_pipeline_holds_an_older_workflow_for_asks_for_a_retry(self, mock_post, _flag, capture):
+        mock_post.return_value = MagicMock(status_code=503, json=lambda: {"error": "workflow_version_behind"})
+
+        response = self._psak_client(["hog_flow:write"]).post(self.send_email_url, self._keyed(), format="json")
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert (response.json()["code"], response.json()["detail"]) == (
+            "delivery_unavailable",
+            "This template's newest version hasn't reached the email pipeline yet, so nothing was sent. Retry in a "
+            "few seconds, with the same Idempotency-Key if you sent one.",
+        )
+        assert "workflow_version_behind" not in response.content.decode()
+        assert capture.call_args.kwargs["properties"]["outcome"] == "unavailable"
+
+    def test_a_send_whose_workflow_is_deleted_before_its_version_read_is_unavailable(self, mock_post, _flag, _capture):
+        read_version = transactional_email.get_workflow_version
+
+        def delete_the_workflow_then_read_its_version(**kwargs: Any) -> int:
+            HogFlow.objects.filter(id=kwargs["workflow_id"]).delete()
+            return read_version(**kwargs)
+
+        with patch.object(
+            transactional_email, "get_workflow_version", side_effect=delete_the_workflow_then_read_its_version
+        ):
+            response = self._psak_client(["hog_flow:write"]).post(self.send_email_url, self._keyed(), format="json")
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert response.json()["code"] == "delivery_unavailable"
+        mock_post.assert_not_called()
 
     def _sender_client(self, sender: str) -> APIClient:
         if sender == "personal_api_key":
