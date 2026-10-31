@@ -23,6 +23,7 @@ from products.messaging.backend.models.message_category import MessageCategory, 
 from products.messaging.backend.models.message_template import MessageTemplate
 from products.messaging.backend.models.transactional_email_key import TransactionalEmailKey
 from products.messaging.backend.presentation.views.message_templates import (
+    CODE_SEND_FIELDS,
     EMAIL_FROM_CODE_FLAG,
     TRANSACTIONAL_EMAIL_API_FLAG,
 )
@@ -103,22 +104,19 @@ class TestTransactionalEmail(APIBaseTest):
 
     @parameterized.expand(
         [
-            ("with_distinct_id", "template", {"distinct_id": "user-1"}, "user-1"),
+            ("with_distinct_id", "template", {"identifiers": {"distinct_id": "user-1"}}, "user-1"),
             # Without a distinct_id the recipient's address is the person the send is tracked against.
-            ("email_only", "template", None, "user@example.com"),
-            ("with_distinct_id_on_send_email", "send_email", {"distinct_id": "user-1"}, "user-1"),
-            ("email_only_on_send_email", "send_email", None, "user@example.com"),
+            ("email_only", "template", {}, "user@example.com"),
+            ("with_distinct_id_on_send_email", "send_email", {"identifiers": {"distinct_id": "user-1"}}, "user-1"),
+            ("flat_distinct_id_on_send_email", "send_email", {"distinct_id": "user-1"}, "user-1"),
+            ("email_only_on_send_email", "send_email", {}, "user@example.com"),
         ]
     )
     def test_runs_the_templates_workflow_for_the_recipient(
-        self, mock_post, _flag, capture, _name, route, identifiers, expected_distinct_id
+        self, mock_post, _flag, capture, _name, route, recipient, expected_distinct_id
     ):
         self._cdp_accepts(mock_post)
-        body = (
-            {**self.body, "identifiers": identifiers}
-            if identifiers
-            else {k: v for k, v in self.body.items() if k != "identifiers"}
-        )
+        body = {**{k: v for k, v in self.body.items() if k != "identifiers"}, **recipient}
         client = self._psak_client(["hog_flow:write"])
         stages_before = _stage_counts()
 
@@ -506,6 +504,23 @@ class TestTransactionalEmail(APIBaseTest):
         assert not TransactionalEmailKey.objects.for_team(self.team.id).exists()
         assert capture.call_args.kwargs["properties"]["error_code"] == "sender_not_verified"
         mock_post.assert_not_called()
+
+    def test_a_code_send_the_pipeline_does_not_confirm_warns_it_may_still_go_out(self, mock_post, _flag, _capture):
+        mock_post.side_effect = requests.ReadTimeout()
+
+        response = self._psak_client(["hog_flow:write"]).post(self.send_email_url, self._code_send(), format="json")
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert response.json()["code"] == "delivery_unavailable"
+        assert "may still go out" in response.json()["detail"]
+
+    def test_the_send_schema_gives_a_template_send_no_code_only_field(self, _mock_post, _flag, _capture):
+        schema = self.client.get("/api/schema/").data
+
+        send_email = schema["paths"]["/api/projects/{project_id}/messaging/send/email/"]["post"]
+        reference = send_email["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+        fields = schema["components"]["schemas"][reference.rsplit("/", 1)[-1]]["properties"]
+        assert {name: fields[name]["default"] for name in CODE_SEND_FIELDS if "default" in fields[name]} == {}
 
     @parameterized.expand(
         [

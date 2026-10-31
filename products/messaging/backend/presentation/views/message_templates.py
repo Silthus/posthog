@@ -459,8 +459,8 @@ class SendEmailSerializer(SendTransactionalEmailSerializer):
         required=False,
         allow_blank=True,
         max_length=400,
-        help_text="Distinct ID of the recipient's person, for a send with `template_key`. The send and its "
-        "engagement events are recorded against that person. Defaults to the recipient's email address.",
+        help_text="Distinct ID of the recipient's person. The send and its engagement events are recorded against "
+        "that person. Defaults to `identifiers.distinct_id`, then to the recipient's email address.",
     )
     subject = serializers.CharField(
         required=False, trim_whitespace=False, help_text="Subject of the email your code rendered."
@@ -489,7 +489,6 @@ class SendEmailSerializer(SendTransactionalEmailSerializer):
     )
     capture_engagement = serializers.BooleanField(
         required=False,
-        default=True,
         help_text="Whether the engagement events (sent, delivered, opened, clicked, bounced) of the email your code "
         "rendered are captured as analytics events of the recipient. Defaults to true. A project whose admin turned "
         "engagement capture off captures nothing, whatever the send says.",
@@ -580,6 +579,12 @@ class TransactionalEmailUnavailable(exceptions.APIException):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     default_detail = "The email pipeline is unavailable. Try again shortly."
     default_code = "delivery_unavailable"
+
+
+class UnconfirmedEmailSend(TransactionalEmailUnavailable):
+    default_detail = (
+        "The email pipeline did not confirm the send. The email may still go out, so check before you send it again."
+    )
 
 
 class TransactionalEmailBurstThrottle(PersonalOrProjectSecretApiKeyRateThrottle):
@@ -730,6 +735,7 @@ class TransactionalEmailSendMixin:
         *,
         route: str,
         addressed: dict[str, str],
+        unavailable: type[TransactionalEmailUnavailable] = TransactionalEmailUnavailable,
     ) -> Response:
         idempotency_key = request.headers.get("Idempotency-Key")
         outcome: dict[str, Any] = {
@@ -745,7 +751,7 @@ class TransactionalEmailSendMixin:
             raise TransactionalEmailRejected(e)
         except DeliveryUnavailable:
             outcome["outcome"] = "unavailable"
-            raise TransactionalEmailUnavailable() from None
+            raise unavailable() from None
         finally:
             with transactional_email_stage("usage_event"):
                 self._report_transactional_email_send(request, {**addressed, **outcome})
@@ -1150,7 +1156,7 @@ class MessagingSendViewSet(TransactionalEmailSendMixin, TeamAndOrgViewSetMixin, 
             text=data.get("text", ""),
             sender=data.get("from"),
             reply_to=tuple(data.get("reply_to", ())),
-            capture_engagement=data["capture_engagement"],
+            capture_engagement=data.get("capture_engagement", True),
         )
         return self._queue_send(
             request,
@@ -1158,13 +1164,14 @@ class MessagingSendViewSet(TransactionalEmailSendMixin, TeamAndOrgViewSetMixin, 
                 self.team,
                 email,
                 to=data["to"],
-                distinct_id=data.get("distinct_id") or _distinct_id(data),
+                distinct_id=_distinct_id(data),
                 idempotency_key=idempotency_key,
             ),
             route="send_email",
             addressed={"addressed_by": "template_key"},
+            unavailable=UnconfirmedEmailSend,
         )
 
 
 def _distinct_id(data: Mapping[str, Any]) -> str | None:
-    return (data.get("identifiers") or {}).get("distinct_id") or None
+    return data.get("distinct_id") or (data.get("identifiers") or {}).get("distinct_id") or None
