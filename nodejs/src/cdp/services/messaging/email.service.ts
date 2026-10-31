@@ -1203,7 +1203,7 @@ export class EmailService {
             })
         }
         if (organizationBlocked) {
-            this.skipSandboxSend(result, SANDBOX_ORGANIZATION_BLOCKED_MESSAGE)
+            this.skipSandboxSend(result, isTest, SANDBOX_ORGANIZATION_BLOCKED_MESSAGE, 'sending_suspended')
             await this.sandboxSender?.captureBlocked(teamId, isTest, 'organization_blocked', 0)
             return false
         }
