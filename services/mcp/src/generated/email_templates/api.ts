@@ -3,7 +3,7 @@
  * MCP service uses these Zod schemas for generated tool handlers.
  * To regenerate: hogli build:openapi
  *
- * PostHog API - MCP 8 enabled ops
+ * PostHog API - MCP 9 enabled ops
  * OpenAPI spec version: 1.0.0
  */
 import * as zod from 'zod'
@@ -495,6 +495,30 @@ export const MessagingTemplatesMakeTransactionalCreateBody = () => zod.object({
         .nullish()
         .describe(
             "ID of the verified email sender integration the email is sent from. Defaults to the project's default sender."
+        ),
+})
+
+/**
+ * Start a PostHog Code task that changes the file of a template managed by code, as `instruction` asks, and opens a pull request in the template's GitHub repository. PostHog doesn't change the template: the next upload of the changed file publishes it. Use it only when you can't edit the file yourself. Each call starts another task.
+ * @summary Request a change to a template managed by code
+ */
+export const MessagingTemplatesRequestChangeCreateParams = () => zod.object({
+    id: zod.string().describe('A UUID string identifying this message template.'),
+    project_id: zod
+        .string()
+        .describe(
+            "Project ID of the project you're trying to access. To find the ID of the project, make a call to \/api\/projects\/."
+        ),
+})
+
+export const messagingTemplatesRequestChangeCreateBodyInstructionMax = 2000
+
+export const MessagingTemplatesRequestChangeCreateBody = () => zod.object({
+    instruction: zod
+        .string()
+        .max(messagingTemplatesRequestChangeCreateBodyInstructionMax)
+        .describe(
+            "The change to make, in the person's words, such as `Make the button green.` At most 2,000 characters."
         ),
 })
 
