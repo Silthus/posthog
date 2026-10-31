@@ -3,10 +3,12 @@ import { useActions, useValues } from 'kea'
 import { LemonBanner } from '@posthog/lemon-ui'
 
 import { SetupTaskId } from 'lib/components/ProductSetup'
+import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
 import { EmailIntegrationsList } from 'lib/integrations/EmailIntegrationsList'
 import { IntegrationsList } from 'lib/integrations/IntegrationsList'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 
+import { SupabaseAuthEmails } from '../SupabaseAuthEmails/SupabaseAuthEmails'
 import { ChannelCatalog } from './ChannelCatalog'
 import { channelCatalogLogic } from './channelCatalogLogic'
 import { ChannelSetupModal } from './ChannelSetupModal'
@@ -21,6 +23,7 @@ export function MessageChannels(): JSX.Element {
     const { closeSetupModal, markTaskAsCompleted } = useActions(integrationsLogic)
     const { sandboxSetupError, sandboxSetupLoading } = useValues(channelCatalogLogic)
     const { retrySandboxSenderSetup } = useActions(channelCatalogLogic)
+    const supabaseAuthEmailsEnabled = useFeatureFlag('WORKFLOWS_SUPABASE_AUTH_EMAILS')
 
     const ownWorkflowIntegrations =
         userManagedIntegrations?.filter((integration) =>
@@ -55,6 +58,7 @@ export function MessageChannels(): JSX.Element {
                     </LemonBanner>
                 )}
                 {sandboxEmailSender && <SandboxEmailSenderRow integration={sandboxEmailSender} />}
+                {supabaseAuthEmailsEnabled && <SupabaseAuthEmails />}
                 {ownWorkflowIntegrations.length > 0 && (
                     <h3 className="mb-0 text-base font-semibold">Your connections</h3>
                 )}

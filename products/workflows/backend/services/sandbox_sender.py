@@ -2,7 +2,8 @@ from django.conf import settings
 
 import structlog
 
-from posthog.models.integration import SANDBOX_EMAIL_INTEGRATION_ID, SANDBOX_EMAIL_PROVIDER, Integration
+from posthog.integrations import IntegrationManager
+from posthog.models.integration import SANDBOX_EMAIL_INTEGRATION_ID, SANDBOX_EMAIL_PROVIDER
 from posthog.models.team import Team
 from posthog.permissions import posthog_feature_flag_enabled
 from posthog.plugins.plugin_server_api import reload_integrations_on_workers
@@ -60,14 +61,11 @@ def ensure_sandbox_email_sender(team_id: int) -> SandboxEmailSender:
         raise SandboxSenderUnavailable()
 
     config = _sandbox_sender_config(team.organization.name)
-    integration, created = Integration.objects.get_or_create(
-        team_id=team_id,
-        kind="email",
-        integration_id=SANDBOX_EMAIL_INTEGRATION_ID,
-        defaults={"config": config, "created_by": None},
-    )
-    if not created and integration.config != config:
-        integration.config = config
-        integration.save()
+    senders = IntegrationManager.email.credentials
+    current = senders.find(team_id, external_id=SANDBOX_EMAIL_INTEGRATION_ID)
+    if current is not None and current.config == config:
+        return SandboxEmailSender(integration_id=current.id, created=False)
+    integration, created = senders.upsert(team_id, SANDBOX_EMAIL_INTEGRATION_ID, config=config)
+    if not created:
         reload_integrations_on_workers(team_id, [integration.id])
     return SandboxEmailSender(integration_id=integration.id, created=created)
