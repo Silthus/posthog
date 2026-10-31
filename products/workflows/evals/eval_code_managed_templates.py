@@ -1,24 +1,3 @@
-"""How PostHog AI changes an email template that is managed by code.
-
-A code-managed template is a file in the person's repository, so PostHog refuses writes to it. PostHog AI runs inside
-PostHog Code, where `workflows-request-email-template-change` refuses its calls. So when the template's repository is
-not in its workspace, PostHog AI leaves the template alone and links its page, where "Run with PostHog Code" opens the
-pull request. A template made in PostHog keeps its normal editing path.
-
-Three cases, one per surface:
-
-* ``sidebar_on_code_managed_page`` — the sidebar on the template's page, with the context the page attaches.
-* ``slack_message_names_code_managed_template`` — a Slack message that names the template, with no page context.
-* ``gui_template_still_patched`` — the same request on a template made in PostHog.
-
-Every case runs in a sandbox with `posthog/hedgebox` checked out, which is not the template's repository. Two
-situations the harness can't build stay unproven here: an agent in the template's repository (it edits the file), and
-an agent outside PostHog Code without the repository (it calls the request tool).
-
-To run:
-    flox activate -- bash -c "hogli evals eval_code_managed_templates"
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -38,8 +17,6 @@ from products.workflows.evals.seeders import CODE_MANAGED_TEMPLATE_NAME, GUI_TEM
 
 CHANGE_REQUEST: Final = "Make the button green."
 
-# The first message the sidebar sends on the code-managed template's page. templateAgentContext.test.ts renders it
-# from the page's real context builder and fails when the page changes it.
 SIDEBAR_PROMPT: Final = Path(__file__).parent / "fixtures" / "sidebar_on_code_managed_page.txt"
 TEMPLATE_ID_PLACEHOLDER: Final = "{code_managed_template_id}"
 
@@ -76,7 +53,6 @@ async def eval_code_managed_templates(ctx: EvalContext) -> None:
         experiment_name="sandboxed-workflows-code-managed-templates-cli",
         cases=cases,
         scorers=[
-            # Every case has to read the template before it can tell who owns it.
             RequiredToolCall({"workflows-get-email-template"}, name="read_the_template"),
             LeftCodeManagedTemplateAlone(),
             DidNotRequestChangeFromPostHogCode(),

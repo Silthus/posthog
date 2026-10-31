@@ -1,9 +1,3 @@
-"""A request to change the file of a template managed by code, carried out by a PostHog Code task.
-
-The task edits the file in the template's repository and opens a pull request. PostHog never changes the template
-here: the next upload of the changed file publishes it.
-"""
-
 import re
 from typing import Final
 
@@ -39,10 +33,6 @@ TASK_TITLE_MAX_LENGTH: Final = 255
 def request_change(
     team: Team, user: User, template: PromptedTemplate, instruction: str, *, from_sandbox: bool
 ) -> TemplateChangeRequested:
-    """Start a PostHog Code task that changes the template's file as `instruction` asks, and opens a pull request.
-
-    Raises TemplateChangeRefused when PostHog Code can't take the request.
-    """
     prompt = template_change_prompt.change_prompt(team.id, template)
     if prompt is None or template.key is None:
         raise not_managed_by_code()
@@ -58,8 +48,6 @@ def request_change(
             user_id=user.id,
             repository=repository,
             create_pr=True,
-            # The task changes a file in the repository. It has no reason to write to PostHog, so it can't change
-            # the template there either.
             posthog_mcp_scopes="read_only",
         )
     except (ValueError, ComputeBillingLimitExceeded) as e:
@@ -84,7 +72,6 @@ def _title(key: str) -> str:
 
 
 def _description(prompt: TemplateChangePrompt, instruction: str) -> str:
-    # The starter names the file. A sentence that doesn't start with it, such as one from an agent, gets it in front.
     request = (
         instruction
         if instruction.startswith(prompt.starter)

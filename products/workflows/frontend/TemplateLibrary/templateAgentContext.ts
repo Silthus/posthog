@@ -100,13 +100,10 @@ export function pickedTemplateContextItem(template: MessageTemplate): AttachedCo
     }
 }
 
-// Per template: a dismissal is global and never resets, so closing one template's chip must not strip another's.
 function codeManagedDismissGroup(template: MessageTemplate): string {
     return `code-managed-email-template:${template.id}`
 }
 
-// Static, like the items above: the key and the source come from an upload, so the instruction names the
-// email_template_source item instead of quoting them.
 const CODE_MANAGED_INSTRUCTIONS: AttachedContextItem = {
     type: 'instructions',
     hidden: true,
@@ -135,7 +132,6 @@ function templateSourceSummary(template: MessageTemplate): string {
         .join('; ')
 }
 
-/** What the agent needs before its first tool call on a template managed by code; null for any other template. */
 export function buildCodeManagedTemplateContext(template: MessageTemplate): AttachedContextItem[] | null {
     if (!isCodeManagedTemplate(template)) {
         return null
@@ -143,7 +139,6 @@ export function buildCodeManagedTemplateContext(template: MessageTemplate): Atta
     const dismissGroup = codeManagedDismissGroup(template)
     return [
         { ...CODE_MANAGED_INSTRUCTIONS, dismissGroup },
-        // Not dismissible: closing a chip also dismisses its key everywhere, and every page shares this skill's key.
         { ...SKILL_CHIP_CONTEXT_ITEM, dismissGroup },
         {
             type: 'email_template',

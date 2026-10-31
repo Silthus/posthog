@@ -1076,7 +1076,6 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
                 if (!integrations.some((integration) => integration.kind === 'github')) {
                     return 'Connect GitHub to run PostHog Code'
                 }
-                // Code points, as the route counts them: an emoji is one character, not two UTF-16 units.
                 if ([...changeSentence].length > messagingTemplatesRequestChangeCreateBodyInstructionMax) {
                     return `Shorten the change to ${messagingTemplatesRequestChangeCreateBodyInstructionMax.toLocaleString('en-US')} characters`
                 }

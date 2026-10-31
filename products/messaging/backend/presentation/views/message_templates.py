@@ -1134,7 +1134,6 @@ TEMPLATE_KEY_PARAMETER = OpenApiParameter(
 )
 
 
-# The caller can't fix these by changing the request.
 FORBIDDEN_REFUSALS = frozenset({"immutable", "posthog_code_not_available"})
 MANAGED_BY_CODE_RESPONSE = OpenApiResponse(
     response=TemplateErrorSerializer,
