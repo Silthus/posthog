@@ -91,6 +91,7 @@ from products.messaging.backend.facade.transactional_email import (
     CodeEmail,
     DeliveryUnavailable,
     QueuedEmail,
+    SandboxCheckFailed,
     TemplateOutdated,
     TemplateSendOptions,
     TransactionalEmailError,
@@ -748,6 +749,13 @@ class PipelineHoldsAnOlderWorkflow(TransactionalEmailUnavailable):
     )
 
 
+class SandboxChecksUnavailable(TransactionalEmailUnavailable):
+    default_detail = (
+        "PostHog couldn't run the sandbox sender's checks, so nothing was sent. Retry in a few seconds, with the "
+        "same Idempotency-Key if you sent one."
+    )
+
+
 class UnconfirmedEmailSend(TransactionalEmailUnavailable):
     default_detail = (
         "The email pipeline did not confirm the send. The email may still go out, so check before you send it again."
@@ -952,12 +960,17 @@ class TransactionalEmailSendMixin:
         try:
             queued = send(idempotency_key)
             outcome["outcome"] = "replayed" if queued.replayed else "queued"
+            if queued.delivery_mode is not None:
+                outcome["delivery_mode"] = queued.delivery_mode.value
         except TransactionalEmailError as e:
             outcome.update({"outcome": "rejected", "error_code": e.code})
             raise _rejection(e)
         except WorkflowVersionBehind:
             outcome["outcome"] = "unavailable"
             raise PipelineHoldsAnOlderWorkflow() from None
+        except SandboxCheckFailed:
+            outcome["outcome"] = "unavailable"
+            raise SandboxChecksUnavailable() from None
         except DeliveryUnavailable:
             outcome["outcome"] = "unavailable"
             raise unavailable() from None
@@ -965,7 +978,9 @@ class TransactionalEmailSendMixin:
             with transactional_email_stage("usage_event"):
                 self._report_transactional_email_send(request, {**addressed, **outcome})
         if not queued.replayed:
-            self._report_first_code_send_after_commit(request, route, addressed.get("addressed_by", "template_id"))
+            self._report_first_code_send_after_commit(
+                request, route, _first_send_properties(addressed.get("addressed_by", "template_id"), queued)
+            )
         data = SendTransactionalEmailResponseSerializer(queued).data
         return Response({**data, "warnings": list(warnings)} if warnings else data, status=status.HTTP_202_ACCEPTED)
 
@@ -994,33 +1009,33 @@ class TransactionalEmailSendMixin:
         if not self.user_access_control.check_access_level_for_resource("hog_flow", "editor"):
             raise exceptions.PermissionDenied("You need editor access to workflows to send under a new key.")
 
-    def _report_first_code_send_after_commit(self, request: Any, route: str, addressed_by: str) -> None:
+    def _report_first_code_send_after_commit(self, request: Any, route: str, properties: dict[str, str]) -> None:
         if route != "send_email" or not isinstance(request.user, ProjectSecretAPIKeyUser):
             return
         if not email_from_code_enabled(self.team):
             return
         key = request.user.project_secret_api_key
         if key.created_by_id is not None:
-            transaction.on_commit(lambda: self._report_first_code_send(key, addressed_by))
+            transaction.on_commit(lambda: self._report_first_code_send(key, properties))
 
-    def _report_first_code_send(self, key: ProjectSecretAPIKey, addressed_by: str) -> None:
+    def _report_first_code_send(self, key: ProjectSecretAPIKey, properties: dict[str, str]) -> None:
         try:
             if first_code_send_recorded(self.team_id):
                 return
             key_creator = _current_creator(key)
             if key_creator is not None and record_first_code_send(self.team_id):
-                self._capture_first_code_send(key_creator, addressed_by)
+                self._capture_first_code_send(key_creator, properties)
         except Exception as e:
             logger.warning("Failed to capture the first code send", team_id=self.team_id, error=str(e))
 
-    def _capture_first_code_send(self, key_creator: User, addressed_by: str) -> None:
+    def _capture_first_code_send(self, key_creator: User, properties: dict[str, str]) -> None:
         queued = False
         try:
             queued = (
                 posthoganalytics.capture(
                     distinct_id=key_creator.distinct_id,
                     event=FIRST_CODE_SEND_EVENT,
-                    properties={"team_id": self.team_id, "addressed_by": addressed_by},
+                    properties={"team_id": self.team_id, **properties},
                     groups=groups(self.organization, self.team),
                 )
                 is not None
@@ -1752,6 +1767,12 @@ def _template_send_options(data: Mapping[str, Any]) -> TemplateSendOptions:
         reply_to=tuple(data.get("reply_to", ())),
         capture_engagement=data.get("capture_engagement", True),
     )
+
+
+def _first_send_properties(addressed_by: str, queued: QueuedEmail) -> dict[str, str]:
+    if queued.delivery_mode is None:
+        return {"addressed_by": addressed_by}
+    return {"addressed_by": addressed_by, "delivery_mode": queued.delivery_mode.value}
 
 
 def _distinct_id(data: Mapping[str, Any]) -> str | None:

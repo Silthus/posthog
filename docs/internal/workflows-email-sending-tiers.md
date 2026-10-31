@@ -36,7 +36,7 @@ Workflow email steps and test sends offer it as a sender.
 Users cannot edit, verify, or remove the managed integration, or register their own integration on the shared domain.
 The managed integration is excluded from project SES tenant migration, identity cleanup, and the reputation page's domain breakdown.
 Deploy the schema, recipient restrictions, daily caps, and tenant pause checks first. Configure the shared SES route, then enable `WORKFLOWS_SANDBOX_SENDER_ENABLED` on the worker and CDP API. Enable `workflows-sandbox-sender` last so provisioning and sender selection follow delivery readiness.
-The sandbox sender is available only in workflow email steps and test sends. Broadcasts, destinations, sender rotation, custom From values, and Reply-To overrides are rejected. Unchanged stored sender settings remain editable.
+The sandbox sender is available only in workflow email steps, test sends, and code sends that name no `from` (see [Sandbox sends from code](#sandbox-sends-from-code)). Broadcasts, destinations, sender rotation, custom From values, and Reply-To overrides are rejected. Unchanged stored sender settings remain editable.
 Saves check the sandbox sender only while `workflows-sandbox-sender` is on for the project, so projects without the flag skip the integration lookup.
 
 ### Sending tiers
@@ -101,13 +101,14 @@ Every To, CC, and BCC address must belong to an active member of the team's acti
 Membership snapshots expire within one minute, and the worker checks recipients again right before delivery.
 A failed or stale membership check skips the send and lists the blocked addresses in the run log.
 The blocked event fires at most once an hour per team, reason, and send kind (workflow or test).
+The SES envelope lists each address once, compared without case, so an address repeated across To, CC, and BCC gets one copy.
 A send that passes every check goes out through the fixed SES tenant, configuration set, and From address, whatever the step's custom sender and Reply-To say.
 Sandbox sends skip the team's tier budget, click and open tracking, and unsubscribe headers, because they reach only members of the sending organization.
 The worker parses and normalizes the HTML, then appends a footer that names the sender and the organization ID.
 It overrides root clipping and visibility styles and keeps the template's typography, so malformed markup may render differently from an own-domain send.
 A template whose HTML cannot keep the footer fails the send.
 The visible footer is best effort across email clients and template CSS; the signed tracking header still attributes the message.
-Right before delivery, every sandbox send, test sends included, claims a daily allowance per project (`WORKFLOWS_SANDBOX_DAILY_TEAM_CAP`, one token per recipient copy) and per recipient address across the organization (`WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP`).
+Right before delivery, every sandbox send, test sends included, claims a daily allowance per project (`WORKFLOWS_SANDBOX_DAILY_TEAM_CAP`, one token per distinct recipient) and per recipient address across the organization (`WORKFLOWS_SANDBOX_DAILY_RECIPIENT_CAP`).
 The allowances are token buckets that refill their capacity over 24 hours, not calendar-day counters.
 A reached allowance skips the send instead of delaying it. A limiter error, or an empty or invalid cap value, skips every sandbox send.
 The worker checks members after the claim and gives the claim back when that check skips the send.
@@ -125,3 +126,27 @@ A successful live sandbox send records `email_sandbox_sent` next to `email_sent`
 The sending tier subtracts `email_sandbox_sent` from `email_sent` per day, and the team's sending allowance per workflow, both floored at zero. Sandbox bounces and complaints still count.
 The CDP API's SES webhook captures `workflows sandbox email delivered` for a delivery on `SES_SANDBOX_CONFIGURATION_SET`, test sends included. Without that setting on the CDP API, the event never fires.
 Deploy this metric to the worker and Django before live workflow sends use the switch in production.
+
+### Sandbox sends from code
+
+A code send (`POST /api/projects/:project_id/messaging/send/email/` with a `template_key`) that names no `from` goes through the sandbox sender when the project has no verified sender of its own.
+Django then provisions the sandbox integration the same way the provisioning endpoint does, so `workflows-sandbox-sender`, the organization block, and the three sandbox settings all apply.
+A project with a verified sender of its own but no default keeps the `sender_not_verified` refusal.
+A send by `template_id` keeps the sender its workflow stores.
+A `from` that names the sandbox address, or any address on its domain, is refused with `sender_not_verified` on `from`, and a `reply_to` on a sandbox send is refused with `invalid_request` on `reply_to`.
+
+The CDP API runs the worker's checks on a sandbox code send before it queues it, after the idempotency replay:
+
+| Check                                                                                                                  | Answer                                                      |
+| ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| A recipient in To, CC, or BCC is not a verified member, or a stored copy address can't be read without the send's data | `400 sandbox_recipient_not_allowed`                         |
+| The project or recipient allowance is used up (a read-only peek, so the check claims nothing)                          | `400 sandbox_limit_reached`                                 |
+| The worker switch is off, the shared tenant is paused, or the organization is blocked                                  | `422 sending_suspended`                                     |
+| The members, the pause state, or the allowance can't be read                                                           | `503 delivery_unavailable` in Django, and nothing is queued |
+
+Each refusal emits `workflows sandbox email blocked` with `source: api`.
+The worker still runs every check again and claims the allowance at delivery, so the CDP API check can let through a send that the worker then skips.
+The 202 answer carries `delivery_mode` (`own` or `sandbox`), and the idempotency record stores it, so a replay reports the mode of the first send.
+Django adds `delivery_mode` to the `transactional email api send` usage event and to the `email first code send` event. The API response doesn't carry it.
+
+Deploy the CDP API change before the Django change. A CDP API without the checks accepts a sandbox code send with 202, and only the worker checks then decide whether it goes out.
