@@ -6,7 +6,8 @@ from uuid import UUID
 from django.db import models, transaction
 from django.utils import timezone
 
-from posthog.models.integration import SANDBOX_EMAIL_PROVIDER, Integration
+from posthog.integrations import IntegrationManager
+from posthog.models.integration import SANDBOX_EMAIL_PROVIDER
 
 from products.access_control.backend.facade.user_access_control import UserAccessControl
 from products.workflows.backend.facade.contracts import WorkflowActor, WorkflowSummary
@@ -73,10 +74,8 @@ def _integration_id_key(integration_id: object) -> str:
 def _sandbox_sender_ids(team_id: int) -> set[str]:
     """Broadcasts can't send through the sandbox sender, so a workflow that uses it stays a workflow."""
     return {
-        str(integration_id)
-        for integration_id in Integration.objects.filter(
-            team_id=team_id, kind="email", config__provider=SANDBOX_EMAIL_PROVIDER
-        ).values_list("id", flat=True)
+        str(sender.id)
+        for sender in IntegrationManager.email.credentials.list(team_id, where={"provider": SANDBOX_EMAIL_PROVIDER})
     }
 
 
