@@ -633,6 +633,20 @@ class TestTransactionalEmail(APIBaseTest):
                 "subject",
             ),
             (
+                "misspelled_field",
+                {"template": {"key": "password-reset"}, "capture_engagment": False},
+                status.HTTP_400_BAD_REQUEST,
+                "invalid_input",
+                "capture_engagment",
+            ),
+            (
+                "misspelled_template_field",
+                {"template": {"key": "password-reset", "haash": PASSWORD_RESET_HASH}},
+                status.HTTP_400_BAD_REQUEST,
+                "invalid_input",
+                "template__haash",
+            ),
+            (
                 "unverified_sender",
                 {"template": {"key": "password-reset"}, "from": "security@example.org"},
                 status.HTTP_400_BAD_REQUEST,

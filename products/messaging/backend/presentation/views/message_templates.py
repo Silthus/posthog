@@ -1,5 +1,5 @@
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import fields as dataclass_fields
 from email.utils import parseaddr
@@ -531,6 +531,18 @@ class SendEmailTemplateSerializer(serializers.Serializer):
         "template_outdated` and sends nothing. Only with `key`.",
     )
 
+    def to_internal_value(self, data: Any) -> dict[str, Any]:
+        if isinstance(data, Mapping) and "key" in data:
+            refuse_unknown_fields(data, self.fields)
+        return super().to_internal_value(data)
+
+
+def refuse_unknown_fields(sent: Iterable[str], known: Mapping[str, Any]) -> None:
+    if unknown := next((field for field in sorted(sent) if field not in known), None):
+        raise serializers.ValidationError(
+            {unknown: "PostHog doesn't take this field, so it doesn't send the email without it."}
+        )
+
 
 CODE_SEND_FIELDS = ("template_key", "subject", "html", "text", "from", "reply_to", "capture_engagement")
 RENDERED_CONTENT_FIELDS = ("subject", "html", "text")
@@ -606,12 +618,11 @@ class SendEmailSerializer(SendTransactionalEmailSerializer):
         if ("template" in data) == ("template_key" in data):
             raise serializers.ValidationError({"template": "Send either `template` or `template_key`."})
         if "template" in data:
+            if "key" in data["template"]:
+                refuse_unknown_fields(sent, self.fields)
             self._validate_template(data["template"], sent)
             return data
-        if unknown := next((field for field in sorted(sent) if field not in self.fields), None):
-            raise serializers.ValidationError(
-                {unknown: "PostHog doesn't take this field, so it doesn't send the email without it."}
-            )
+        refuse_unknown_fields(sent, self.fields)
         if "message_data" in sent:
             raise serializers.ValidationError(
                 {"message_data": "A send with `template_key` carries content your code rendered, not `message_data`."}
