@@ -24,7 +24,7 @@ To run:
 
 from __future__ import annotations
 
-from products.posthog_ai.eval_harness.base import SandboxedPrivateEval
+from products.posthog_ai.eval_harness.base import SandboxedEval
 from products.posthog_ai.eval_harness.config import SandboxedEvalCase
 from products.posthog_ai.eval_harness.harness.context import EvalContext
 from products.workflows.evals.scorers import (
@@ -313,7 +313,7 @@ async def eval_email_domain_setup(ctx: EvalContext) -> None:
     if ctx.trials > 1:
         raise ValueError("eval_email_domain_setup runs one trial per case, because trials of a case share its domain")
     with simulated_email_domains():
-        await SandboxedPrivateEval(
+        await SandboxedEval(
             experiment_name="sandboxed-email-domain-setup-cli",
             cases=_cases(),
             scorers=[
