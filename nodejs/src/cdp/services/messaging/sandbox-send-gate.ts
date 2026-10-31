@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'timers/promises'
 import { z } from 'zod'
 
 import { HogFlow } from '~/cdp/schema/hogflow'
@@ -40,6 +41,8 @@ const StoredCopiesSchema = z.object({
 
 type StoredSender = z.infer<typeof StoredSenderSchema>['from']
 type StoredCopies = z.infer<typeof StoredCopiesSchema>
+
+const BLOCKED_EVENT_WAIT_MS = 1000
 
 const isTemplated = (copies: string): boolean => /[{}]/.test(copies)
 
@@ -149,7 +152,10 @@ export class SandboxSendGate {
         reason: Parameters<SandboxEmailSender['captureBlocked']>[2],
         blockedRecipientCount: number
     ): Promise<SandboxSendRefusal> {
-        await this.sandboxSender.captureBlocked(teamId, 'api', reason, blockedRecipientCount)
+        await Promise.race([
+            this.sandboxSender.captureBlocked(teamId, 'api', reason, blockedRecipientCount),
+            delay(BLOCKED_EVENT_WAIT_MS, undefined, { ref: false }),
+        ])
         return refusal
     }
 }

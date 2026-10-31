@@ -39,16 +39,26 @@ export class IntegrationManagerService {
     private async fetchIntegrations(ids: string[]): Promise<Record<string, IntegrationType | undefined>> {
         logger.info('[IntegrationManager]', 'Fetching integrations', { ids })
 
+        const fromReplica = await this.queryIntegrations(PostgresUse.COMMON_READ, ids)
+        const missingFromReplica = ids.filter((id) => !fromReplica[id])
+        if (!missingFromReplica.length) {
+            return fromReplica
+        }
+        return { ...fromReplica, ...(await this.queryIntegrations(PostgresUse.COMMON_WRITE, missingFromReplica)) }
+    }
+
+    private async queryIntegrations(
+        use: PostgresUse,
+        ids: string[]
+    ): Promise<Record<string, IntegrationType | undefined>> {
         const response = await this.postgres.query<IntegrationType>(
-            PostgresUse.COMMON_READ,
+            use,
             `SELECT id, team_id, kind, config, sensitive_config FROM posthog_integration WHERE id = ANY($1)`,
             [ids],
             'fetchIntegrations'
         )
 
-        const items = response.rows
-
-        return items.reduce<Record<string, IntegrationType | undefined>>((acc, item) => {
+        return response.rows.reduce<Record<string, IntegrationType | undefined>>((acc, item) => {
             const sensitiveConfig = this.encryptedFields.decryptObject(item.sensitive_config || {}, {
                 ignoreDecryptionErrors: true,
             })

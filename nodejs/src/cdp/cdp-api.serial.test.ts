@@ -2874,7 +2874,8 @@ describe('CDP API', () => {
             }
             const sandboxSender = (
                 settings: Partial<SandboxEmailSenderConfig> = {},
-                limiterRedis: RedisV2 = sandboxRedis
+                limiterRedis: RedisV2 = sandboxRedis,
+                blockedEventRedis: RedisV2 = sandboxRedis
             ): SandboxEmailSender =>
                 new SandboxEmailSender(
                     {
@@ -2887,7 +2888,7 @@ describe('CDP API', () => {
                         ...settings,
                     },
                     hub.teamManager,
-                    sandboxRedis,
+                    blockedEventRedis,
                     new RateLimiterService(limiterRedis, { name: 'sandbox-email' }),
                     new SandboxSenderStateService(hub.postgres, hub.pubSub)
                 )
@@ -2974,6 +2975,20 @@ describe('CDP API', () => {
                     'workflows sandbox email blocked',
                     expect.objectContaining({ source: 'api', blocked_recipient_count: 1 })
                 )
+            })
+
+            it('answers a refusal while the blocked event store does not answer', async () => {
+                const silentRedis: RedisV2 = {
+                    useClient: () => new Promise(() => {}),
+                    usePipeline: () => new Promise(() => {}),
+                }
+                admitThrough(sandboxSender({}, sandboxRedis, silentRedis))
+                await addUser(address('other'), { member: false })
+
+                const res = await sandboxSend(address('other'))
+
+                expect(res.status).toEqual(400)
+                expect(res.body).toEqual({ error: 'sandbox_recipient_not_allowed' })
             })
 
             it('queues a send to a member and leaves the daily allowance for the worker to claim', async () => {

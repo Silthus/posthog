@@ -70,6 +70,14 @@ describe('IntegrationManager', () => {
         expect(item?.config).toEqual({ team: 'foobar' })
     })
 
+    it('finds an integration the read replica does not have yet', async () => {
+        jest.spyOn(hub.postgres, 'query').mockResolvedValueOnce({ rows: [] } as any)
+
+        const item = await manager.get(integrations[0].id)
+
+        expect(item?.config).toEqual({ team: 'foobar' })
+    })
+
     it('updates cached integration data when integration changes', async () => {
         // First check - initial state
         const item = await manager.get(integrations[0].id)
