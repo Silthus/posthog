@@ -117,6 +117,7 @@ Django mirrors the tenant named by `SES_SANDBOX_TENANT_NAME` into `SandboxSender
 A committed state change reaches the workers through the `reload-sandbox-sender-state` message. Own-sender sends do not read this state.
 Each delivered send emits a `workflows sandbox email sent` event.
 Test sends never record `email_sent`, so they do not count toward the sending tier.
-Live workflow sends still count as `email_sent`, which the sending tier reads, until sandbox sends get their own metric.
+A successful live sandbox send records `email_sandbox_sent` next to `email_sent`, so the workflow's metrics still show it.
 The sending tier subtracts `email_sandbox_sent` from `email_sent` per day, and the team's sending allowance per workflow, both floored at zero. Sandbox bounces and complaints still count.
-Use the switch in production for test sends only until that metric is deployed.
+The CDP API's SES webhook captures `workflows sandbox email delivered` for a delivery on `SES_SANDBOX_CONFIGURATION_SET`, test sends included. Without that setting on the CDP API, the event never fires.
+Deploy this metric to the worker and Django before live workflow sends use the switch in production.
