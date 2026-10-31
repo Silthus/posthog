@@ -9,6 +9,7 @@ import { useMocks } from '~/mocks/jest'
 import { initKeaTests } from '~/test/init'
 import type { ResourceEditedEvent } from '~/types'
 
+import { messagingTemplatesRequestChangeCreateBodyInstructionMax } from 'products/messaging/frontend/generated/api.zod'
 import { resourceEditedLogic } from 'products/notifications/frontend/resourceEditedLogic'
 
 import { messageTemplateLogic } from './messageTemplateLogic'
@@ -1177,7 +1178,9 @@ describe('messageTemplateLogic', () => {
 
         it('takes a change of exactly 2,000 characters that ends in an emoji', async () => {
             await mountServing()
-            const filler = 'x'.repeat(2000 - [...DESCRIBED].length - 1)
+            const filler = 'x'.repeat(
+                messagingTemplatesRequestChangeCreateBodyInstructionMax - [...DESCRIBED].length - 1
+            )
             logic.actions.setChangeSentence(`${DESCRIBED}${filler}🎨`)
 
             await expectLogic(logic).toMatchValues({ runWithPostHogCodeDisabledReason: undefined })
@@ -1238,7 +1241,7 @@ describe('messageTemplateLogic', () => {
             },
             {
                 description: 'the change is longer than the route takes',
-                sentence: `${DESCRIBED}${'x'.repeat(2000)}`,
+                sentence: `${DESCRIBED}${'x'.repeat(messagingTemplatesRequestChangeCreateBodyInstructionMax)}`,
                 reason: 'Shorten the change to 2,000 characters',
             },
             {

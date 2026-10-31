@@ -33,7 +33,6 @@ import type {
     TemplateErrorApi,
     TemplateManagedByEnumApi,
 } from 'products/messaging/frontend/generated/api.schemas'
-import { messagingTemplatesRequestChangeCreateBodyInstructionMax } from 'products/messaging/frontend/generated/api.zod'
 import { resourceEditedLogic } from 'products/notifications/frontend/resourceEditedLogic'
 import { AttachedContextItem } from 'products/posthog_ai/frontend/api/types'
 import { desktopAccessRetrieve } from 'products/tasks/frontend/generated/api'
@@ -98,6 +97,8 @@ export interface ChangeRunError {
     detail: string
     fix: string | null
 }
+
+const CHANGE_INSTRUCTION_MAX_CHARACTERS = 2000
 
 export const CHANGE_RUN_STARTED = "PostHog Code is working on it. It opens a pull request when it's done."
 
@@ -1100,8 +1101,8 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
                 if (!integrations.some((integration) => integration.kind === 'github')) {
                     return 'Connect GitHub to run PostHog Code'
                 }
-                if ([...changeSentence].length > messagingTemplatesRequestChangeCreateBodyInstructionMax) {
-                    return `Shorten the change to ${messagingTemplatesRequestChangeCreateBodyInstructionMax.toLocaleString('en-US')} characters`
+                if ([...changeSentence].length > CHANGE_INSTRUCTION_MAX_CHARACTERS) {
+                    return `Shorten the change to ${CHANGE_INSTRUCTION_MAX_CHARACTERS.toLocaleString('en-US')} characters`
                 }
                 return copyAgentPromptDisabledReason
             },
