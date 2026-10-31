@@ -95,6 +95,7 @@ from products.messaging.backend.facade.transactional_email import (
     TemplateSendOptions,
     TransactionalEmailError,
     TransactionalEmailStage,
+    WorkflowVersionBehind,
     first_code_send_recorded,
     forget_first_code_send,
     make_transactional,
@@ -740,6 +741,13 @@ class TransactionalEmailUnavailable(exceptions.APIException):
     default_code = "delivery_unavailable"
 
 
+class PipelineHoldsAnOlderWorkflow(TransactionalEmailUnavailable):
+    default_detail = (
+        "This template's newest version hasn't reached the email pipeline yet, so nothing was sent. Retry in a few "
+        "seconds, with the same Idempotency-Key if you sent one."
+    )
+
+
 class UnconfirmedEmailSend(TransactionalEmailUnavailable):
     default_detail = (
         "The email pipeline did not confirm the send. The email may still go out, so check before you send it again."
@@ -947,6 +955,9 @@ class TransactionalEmailSendMixin:
         except TransactionalEmailError as e:
             outcome.update({"outcome": "rejected", "error_code": e.code})
             raise _rejection(e)
+        except WorkflowVersionBehind:
+            outcome["outcome"] = "unavailable"
+            raise PipelineHoldsAnOlderWorkflow() from None
         except DeliveryUnavailable:
             outcome["outcome"] = "unavailable"
             raise unavailable() from None

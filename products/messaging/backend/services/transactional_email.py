@@ -46,13 +46,14 @@ from products.messaging.backend.facade.contracts import (
     TemplateSendOptions,
     TransactionalEmailError,
     TransactionalEmailPaused,
+    WorkflowVersionBehind,
 )
 from products.messaging.backend.models import FirstCodeSend, MessageCategory, MessageTemplate, TransactionalEmailKey
 from products.messaging.backend.models.first_code_send import FIRST_CODE_SEND_CONSTRAINT
 from products.messaging.backend.models.message_category import MessageCategoryType
 from products.messaging.backend.models.transactional_email_key import TRANSACTIONAL_EMAIL_KEY_CONSTRAINT
 from products.messaging.backend.services.html_text import text_from_html
-from products.workflows.backend.facade.api import WorkflowNotFound, get_workflow_summary
+from products.workflows.backend.facade.api import WorkflowNotFound, get_workflow_summary, get_workflow_version
 from products.workflows.backend.facade.transactional_emails import (
     TransactionalEmailContent,
     TransactionalEmailContentInvalid,
@@ -472,7 +473,10 @@ def send_transactional_email(
     payload = _send_payload(to, distinct_id, message_data, idempotency_key)
     if options is None:
         return _queue(team.id, hog_flow_id, payload, run_transactional_workflow, timeout=timeout)
-    accepted_send = _accepted_template_send(team.id, options)
+    accepted_send = {
+        **_accepted_template_send(team.id, options),
+        "hogFlowVersion": _graded_version(team.id, hog_flow_id),
+    }
     return _queue(
         team.id, hog_flow_id, {**payload, "send": accepted_send}, send_accepted_transactional_email, timeout=timeout
     )
@@ -530,6 +534,17 @@ def _accepted_send(team_id: int, email: CodeEmail) -> dict[str, Any]:
     if email.reply_to:
         accepted["replyTo"] = list(email.reply_to)
     return accepted
+
+
+def _graded_version(team_id: int, hog_flow_id: UUID) -> int:
+    try:
+        return get_workflow_version(team_id=team_id, workflow_id=str(hog_flow_id))
+    except WorkflowNotFound:
+        workflow_deleted_since_the_lookup = DeliveryUnavailable()
+    logger.error(
+        "transactional_email_queue_rejected", team_id=team_id, hog_flow_id=str(hog_flow_id), reason="workflow_not_found"
+    )
+    raise workflow_deleted_since_the_lookup
 
 
 def _accepted_template_send(team_id: int, options: TemplateSendOptions) -> dict[str, Any]:
@@ -597,6 +612,8 @@ def _queue(
             status_code=response.status_code,
             refusal_code=refusal_code,
         )
+        if refusal_code == "workflow_version_behind":
+            raise WorkflowVersionBehind()
         raise DeliveryUnavailable()
 
     body = response.json()

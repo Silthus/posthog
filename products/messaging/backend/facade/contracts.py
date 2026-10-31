@@ -134,6 +134,10 @@ class DeliveryUnavailable(Exception):
     """The email pipeline did not accept the send. Safe to retry."""
 
 
+class WorkflowVersionBehind(DeliveryUnavailable):
+    pass
+
+
 @frozen
 class QueuedEmail:
     message_id: str

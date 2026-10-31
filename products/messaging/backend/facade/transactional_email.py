@@ -9,6 +9,7 @@ from products.messaging.backend.facade.contracts import (
     TemplateOutdated,
     TemplateSendOptions,
     TransactionalEmailError,
+    WorkflowVersionBehind,
 )
 from products.messaging.backend.services.transactional_email import (
     SENDER_ADDRESS_MAX_LENGTH,
@@ -40,6 +41,7 @@ __all__ = [
     "TemplateSendOptions",
     "TransactionalEmailError",
     "TransactionalEmailStage",
+    "WorkflowVersionBehind",
     "first_code_send_recorded",
     "forget_first_code_send",
     "get_email_status",

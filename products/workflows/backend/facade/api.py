@@ -2,6 +2,7 @@ from collections.abc import Collection, Iterable
 from typing import Any
 from uuid import UUID
 
+from django.db import router
 from django.db.models import F
 
 from posthog.helpers.full_text_search import build_rank
@@ -220,6 +221,18 @@ def get_workflow_names(*, team_id: int, workflow_ids: Iterable[str]) -> dict[str
         str(pk): (name or "")
         for pk, name in HogFlow.objects.filter(team_id=team_id, id__in=list(workflow_ids)).values_list("id", "name")
     }
+
+
+def get_workflow_version(*, team_id: int, workflow_id: str) -> int:
+    version = (
+        HogFlow.objects.using(router.db_for_write(HogFlow))
+        .filter(team_id=team_id, id=workflow_id)
+        .values_list("version", flat=True)
+        .first()
+    )
+    if version is None:
+        raise WorkflowNotFound()
+    return version
 
 
 def get_workflow_summary(*, team_id: int, workflow_id: str) -> WorkflowSummary:
