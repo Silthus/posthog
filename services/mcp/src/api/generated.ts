@@ -110976,8 +110976,19 @@ export namespace Schemas {
     }
 
     export interface SendEmailTemplate {
-      /** ID of the email template to send. The template must be made transactional first. */
-      id: string;
+      /** ID of the email template to send. The template must be made transactional first. Give either `id` or `key`. */
+      id?: string;
+      /**
+         * Key of the email template to send, as uploaded with `PUT /api/projects/@current/messaging_templates/by_key/{key}/`. Give either `id` or `key`.
+         * @maxLength 400
+         * @pattern ^[a-zA-Z0-9_-]+$
+         */
+      key?: string;
+      /**
+         * Content hash of the template you hold, as an upload's `content_hash`. When PostHog doesn't hold that content as the current content or one of the last 100 contents it replaced, the send answers `409 template_outdated` and sends nothing. Only with `key`.
+         * @pattern ^v1:[0-9a-f]{64}$
+         */
+      hash?: string;
     }
 
     export interface SendEmail {
@@ -111015,6 +111026,24 @@ export namespace Schemas {
       capture_engagement?: boolean;
       /** Sender of the email your code rendered, as `security@example.com` or `Example <security@example.com>`, on a verified domain of the project. Without it, the email goes out from the project's default sender. */
       from?: string;
+    }
+
+    export interface SendEmailWarning {
+      /** Stable code of the warning, such as `template_superseded`. */
+      code: string;
+      /** What happened. */
+      detail: string;
+      /** What you can change, if the warning isn't what you want. */
+      fix: string;
+    }
+
+    export interface SendEmailResponse {
+      /** ID of the queued send. Delivery and engagement are reported against the template asynchronously. */
+      message_id: string;
+      /** True when an earlier request with the same `Idempotency-Key` already queued this email. No new email was sent, and `message_id` is the earlier send's ID. */
+      replayed: boolean;
+      /** Things to know about the queued email. Left out when there are none. */
+      warnings?: SendEmailWarning[];
     }
 
     /**
@@ -123550,7 +123579,7 @@ export namespace Schemas {
       text?: string;
       /** Inbox preview text shown after the subject. Leaving it out removes the stored one. */
       preheader?: string;
-      /** Set it on uploads a program makes on its own, such as a sync that may hold an older copy of the file. When newer content already replaced this content, the upload changes nothing and answers `superseded`. The check covers the last 100 different contents the template replaced. Content outside those 100 publishes. Leave it out to publish the content in any case, such as to roll back to earlier content. */
+      /** Set it on uploads a program makes on its own, such as a sync that may hold an older copy of the file, or an upload after a send answered `template_outdated`. When newer content already replaced this content, the upload changes nothing and answers `superseded`. The check covers the last 100 different contents the template replaced. Content outside those 100 publishes. Leave it out to publish the content in any case, such as to roll back to earlier content. */
       if_not_superseded?: boolean;
       /** Where the template file lives, so people in PostHog can find it. Leaving it out, or a part of it, keeps what is stored. */
       source?: TemplateSource;
@@ -123568,7 +123597,7 @@ export namespace Schemas {
        * * `unchanged` - Unchanged
        * * `superseded` - Superseded */
       result: TemplateUploadResultEnum;
-      /** Hash of the published content, as `v1:` and 64 hex characters. After `superseded` it is the hash of the newer content. */
+      /** Hash of the published content, as `v1:` and 64 hex characters. Send it with an email as `template.hash` to check PostHog holds the content you hold. After `superseded` it is the hash of the newer content. */
       content_hash: string;
       /** `code` after every upload except `superseded`, which changes nothing. After `superseded` it is what the template had, which is null for a template made in PostHog that no upload claimed yet.
        *

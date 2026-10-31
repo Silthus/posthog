@@ -10,11 +10,15 @@
 import * as zod from 'zod'
 
 /**
- * Send one transactional email to one recipient. Name a template made transactional in `template.id`, and `message_data` fills its `{{ variables.* }}` placeholders. Or send content your code rendered with a `template_key`, a `subject` and `html` or `text`: PostHog sends it as is, and its metrics and run history group under the key. Transactional emails skip opt-outs and frequency caps. Send an `Idempotency-Key` header to retry safely without sending the email twice.
+ * Send one transactional email to one recipient. Name a template made transactional in `template.id`, or one uploaded from code in `template.key`, and `message_data` fills its `{{ variables.* }}` placeholders. Or send content your code rendered with a `template_key`, a `subject` and `html` or `text`: PostHog sends it as is, and its metrics and run history group under the key. Transactional emails skip opt-outs and frequency caps. Send an `Idempotency-Key` header to retry safely without sending the email twice.
  * @summary Send a transactional email
  */
 export const messagingSendEmailCreateBodyIdentifiersOneDistinctIdMax = 400
 
+export const messagingSendEmailCreateBodyTemplateOneKeyMax = 400
+
+export const messagingSendEmailCreateBodyTemplateOneKeyRegExp = new RegExp('^[a-zA-Z0-9_-]+$')
+export const messagingSendEmailCreateBodyTemplateOneHashRegExp = new RegExp('^v1:[0-9a-f]{64}$')
 export const messagingSendEmailCreateBodyTemplateKeyMax = 400
 
 export const messagingSendEmailCreateBodyTemplateKeyRegExp = new RegExp('^[a-zA-Z0-9_-]+$')
@@ -44,7 +48,27 @@ export const MessagingSendEmailCreateBody = /* @__PURE__ */ zod.object({
         ),
     template: zod
         .object({
-            id: zod.uuid().describe('ID of the email template to send. The template must be made transactional first.'),
+            id: zod
+                .uuid()
+                .optional()
+                .describe(
+                    'ID of the email template to send. The template must be made transactional first. Give either `id` or `key`.'
+                ),
+            key: zod
+                .string()
+                .max(messagingSendEmailCreateBodyTemplateOneKeyMax)
+                .regex(messagingSendEmailCreateBodyTemplateOneKeyRegExp)
+                .optional()
+                .describe(
+                    'Key of the email template to send, as uploaded with `PUT \/api\/projects\/@current\/messaging_templates\/by_key\/{key}\/`. Give either `id` or `key`.'
+                ),
+            hash: zod
+                .string()
+                .regex(messagingSendEmailCreateBodyTemplateOneHashRegExp)
+                .optional()
+                .describe(
+                    "Content hash of the template you hold, as an upload's `content_hash`. When PostHog doesn't hold that content as the current content or one of the last 100 contents it replaced, the send answers `409 template_outdated` and sends nothing. Only with `key`."
+                ),
         })
         .optional()
         .describe('The transactional email template to send. Send either `template` or `template_key`.'),
@@ -1450,7 +1474,7 @@ export const MessagingTemplatesByKeyUpdateBody = /* @__PURE__ */ zod.object({
         .boolean()
         .default(messagingTemplatesByKeyUpdateBodyIfNotSupersededDefault)
         .describe(
-            'Set it on uploads a program makes on its own, such as a sync that may hold an older copy of the file. When newer content already replaced this content, the upload changes nothing and answers `superseded`. The check covers the last 100 different contents the template replaced. Content outside those 100 publishes. Leave it out to publish the content in any case, such as to roll back to earlier content.'
+            'Set it on uploads a program makes on its own, such as a sync that may hold an older copy of the file, or an upload after a send answered `template_outdated`. When newer content already replaced this content, the upload changes nothing and answers `superseded`. The check covers the last 100 different contents the template replaced. Content outside those 100 publishes. Leave it out to publish the content in any case, such as to roll back to earlier content.'
         ),
     source: zod
         .object({
