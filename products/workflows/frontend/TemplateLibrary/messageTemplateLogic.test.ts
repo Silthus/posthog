@@ -1,5 +1,6 @@
 import { router } from 'kea-router'
 import { expectLogic } from 'kea-test-utils'
+import posthog from 'posthog-js'
 
 import { FEATURE_FLAGS } from 'lib/constants'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
@@ -452,6 +453,12 @@ describe('messageTemplateLogic', () => {
         source_path: 'emails/welcome.html',
         source_ref: '3f2c1ab9d4e5f60718293a4b5c6d7e8f90a1b2c3',
         content_hash: 'v1:0000000000000000000000000000000000000000000000000000000000000000',
+        change_prompt_starter: 'In `emails/welcome.html`, change ',
+        change_prompt_context:
+            'About this file:\n' +
+            '- It is the PostHog email template with the key `welcome`.\n' +
+            '- This file uses `{{ variables.first_name }}` and `{{ variables.confirm_url }}`.',
+        change_prompt_variables: ['first_name', 'confirm_url'],
     }
 
     describe('code-managed source', () => {
@@ -533,10 +540,16 @@ describe('messageTemplateLogic', () => {
     describe('code-managed template', () => {
         let patchBodies: Record<string, unknown>[]
         let createBodies: Record<string, unknown>[]
+        let capture: jest.SpyInstance
+        let writeText: jest.Mock
 
         beforeEach(async () => {
+            jest.clearAllMocks()
             patchBodies = []
             createBodies = []
+            capture = jest.spyOn(posthog, 'capture').mockImplementation(() => undefined)
+            writeText = jest.fn().mockResolvedValue(undefined)
+            Object.assign(navigator, { clipboard: { writeText } })
             useMocks({
                 get: { '/api/environments/:team_id/messaging_templates/:id/': CODE_MANAGED },
                 patch: {
@@ -590,6 +603,10 @@ describe('messageTemplateLogic', () => {
                     content: { ...CODE_MANAGED.content, email: emailWithoutDesign },
                 },
             ])
+            expect(capture).toHaveBeenCalledWith('message template duplicated', {
+                template_id: 'existing-id',
+                code_managed: true,
+            })
         })
 
         it('becomes editable once released', async () => {
@@ -617,6 +634,94 @@ describe('messageTemplateLogic', () => {
                 'source_ref',
             ].filter((field) => field in patchBodies[1])
             expect(serverOwnedFieldsSent).toEqual([])
+            expect(capture).toHaveBeenCalledWith('message template released from code', {
+                template_id: 'existing-id',
+            })
+        })
+
+        it.each([
+            { description: 'the starter as served', sentence: 'In `emails/welcome.html`, change ' },
+            { description: 'the starter without its trailing space', sentence: 'In `emails/welcome.html`, change' },
+            { description: 'a blank sentence', sentence: '  \n' },
+        ])('waits for a described change before it copies, given $description', async ({ sentence }) => {
+            logic.actions.setChangeSentence(sentence)
+
+            await expectLogic(logic).toMatchValues({
+                copyAgentPromptDisabledReason: 'Describe the change first',
+            })
+        })
+
+        it('starts from the server starter and keeps the sentence while the popover closes and reopens', async () => {
+            await expectLogic(logic).toMatchValues({ changeSentence: 'In `emails/welcome.html`, change ' })
+
+            logic.actions.setAgentPromptOpen(true)
+            logic.actions.setChangeSentence('In `emails/welcome.html`, change the button to green.')
+            logic.actions.setAgentPromptOpen(false)
+            logic.actions.setAgentPromptOpen(true)
+
+            await expectLogic(logic).toMatchValues({
+                changeSentence: 'In `emails/welcome.html`, change the button to green.',
+                copyAgentPromptDisabledReason: undefined,
+            })
+            expect(capture).toHaveBeenCalledWith('message template agent prompt opened', {
+                template_id: 'existing-id',
+                has_path: true,
+                has_repository: true,
+            })
+        })
+
+        it.each([
+            {
+                description: 'keeps the sentence when a reload serves the same starter',
+                reloaded: CODE_MANAGED,
+                changeSentence: 'In `emails/welcome.html`, change the button to green.',
+            },
+            {
+                description: 'drops the sentence when a reload points the template at another file',
+                reloaded: {
+                    ...CODE_MANAGED,
+                    source_path: 'emails/hello.html',
+                    change_prompt_starter: 'In `emails/hello.html`, change ',
+                },
+                changeSentence: 'In `emails/hello.html`, change ',
+            },
+        ])('$description', async ({ reloaded, changeSentence }) => {
+            logic.actions.setChangeSentence('In `emails/welcome.html`, change the button to green.')
+
+            await expectLogic(logic, () => {
+                logic.actions.loadTemplateSuccess(reloaded as any)
+            }).toFinishAllListeners()
+
+            await expectLogic(logic).toMatchValues({ changeSentence })
+        })
+
+        it('copies the sentence and the server context verbatim, and sends nothing', async () => {
+            logic.actions.setAgentPromptOpen(true)
+            logic.actions.setChangeSentence('In `emails/welcome.html`, change the button to green.')
+
+            await expectLogic(logic, () => {
+                logic.actions.copyAgentPrompt()
+            }).toFinishAllListeners()
+
+            expect(writeText).toHaveBeenCalledWith(
+                'In `emails/welcome.html`, change the button to green.\n' +
+                    '\n' +
+                    'About this file:\n' +
+                    '- It is the PostHog email template with the key `welcome`.\n' +
+                    '- This file uses `{{ variables.first_name }}` and `{{ variables.confirm_url }}`.'
+            )
+            expect(patchBodies).toEqual([])
+            expect(createBodies).toEqual([])
+            await expectLogic(logic).toMatchValues({ agentPromptOpen: false })
+            expect(mockToast.success).toHaveBeenCalledWith(
+                'Prompt copied. Paste it into your coding agent. PostHog keeps sending the current version until your app sends or uploads the changed file.'
+            )
+            expect(capture).toHaveBeenCalledWith('message template agent prompt copied', {
+                template_id: 'existing-id',
+                has_path: true,
+                has_repository: true,
+                variable_count: 2,
+            })
         })
 
         it('takes content an upload published during the release as the published content', async () => {
@@ -642,6 +747,50 @@ describe('messageTemplateLogic', () => {
             expect(logic.values.template.content).toEqual(uploaded)
             await expectLogic(logic).toMatchValues({ draftsEnabled: true, hasDraft: false, hasUnsavedChanges: false })
         })
+
+        it.each([
+            {
+                description: 'with a plain-text part',
+                text: 'Hi',
+                droppedTextPart: true,
+                toast: "Copied. Save it as the template's file. PostHog keeps sending the current version until your app sends or uploads the file. This file has no plain-text part. The next upload from this file removes the plain-text version.",
+            },
+            {
+                description: 'without a plain-text part',
+                text: ' ',
+                droppedTextPart: false,
+                toast: "Copied. Save it as the template's file. PostHog keeps sending the current version until your app sends or uploads the file.",
+            },
+        ])(
+            'copies the published template as its HTML file $description, and sends nothing',
+            async ({ text, toast, droppedTextPart }) => {
+                logic.unmount()
+                useMocks({
+                    get: {
+                        '/api/environments/:team_id/messaging_templates/:id/': {
+                            ...CODE_MANAGED,
+                            content: { ...CODE_MANAGED.content, email: { ...CODE_MANAGED.content.email, text } },
+                        },
+                    },
+                })
+                logic = messageTemplateLogic({ id: 'existing-id' })
+                logic.mount()
+                await expectLogic(logic).toDispatchActions(['loadTemplateSuccess'])
+
+                await expectLogic(logic, () => {
+                    logic.actions.copyHtmlFile()
+                }).toFinishAllListeners()
+
+                expect(writeText).toHaveBeenCalledWith('<head><title>Welcome</title></head><p>Hi</p>')
+                expect(patchBodies).toEqual([])
+                expect(createBodies).toEqual([])
+                expect(mockToast.success).toHaveBeenCalledWith(toast)
+                expect(capture).toHaveBeenCalledWith('message template html file copied', {
+                    template_id: 'existing-id',
+                    dropped_text_part: droppedTextPart,
+                })
+            }
+        )
     })
 
     describe('claimed back by an upload while editing', () => {
@@ -813,6 +962,7 @@ describe('messageTemplateLogic', () => {
         })
 
         it('duplicates the unsaved edits without its key, ownership, source or hash', async () => {
+            const capture = jest.spyOn(posthog, 'capture').mockImplementation(() => undefined)
             await refuse(claimThenAutosave)
             const { design: _design, ...emailWithoutDesign } = draft.email
 
@@ -828,6 +978,10 @@ describe('messageTemplateLogic', () => {
                 },
             ])
             await expectLogic(logic).toMatchValues({ refusedEdits: null })
+            expect(capture).toHaveBeenCalledWith('message template duplicated', {
+                template_id: 'existing-id',
+                code_managed: true,
+            })
         })
     })
 

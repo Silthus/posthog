@@ -77,6 +77,9 @@ tools:
                 - content
                 - created_by
                 - draft_content
+                - change_prompt_starter
+                - change_prompt_context
+                - change_prompt_variables
     workflows-send-email:
         operation: messaging_send_email_create
         enabled: true

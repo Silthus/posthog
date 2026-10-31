@@ -266,6 +266,13 @@ class TemplateSource:
 
 
 @frozen
+class TemplateChangePrompt:
+    starter: str
+    context: str
+    variables: tuple[str, ...]
+
+
+@frozen
 class TemplateUpload:
     key: str
     name: str
