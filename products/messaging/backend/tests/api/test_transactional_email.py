@@ -376,7 +376,7 @@ class TestTransactionalEmail(APIBaseTest):
     def _code_send(self, **fields: Any) -> dict[str, Any]:
         return {
             "to": "user@example.com",
-            "identifiers": {"distinct_id": "user-1"},
+            "distinct_id": "user-1",
             "template_key": "welcome",
             "subject": "Welcome, Jane",
             "html": "<p>Hi Jane</p>",

@@ -455,6 +455,13 @@ class SendEmailSerializer(SendTransactionalEmailSerializer):
         "and status group under it. Letters, numbers, hyphens (-) and underscores (_) only. Send it with `subject` "
         "and `html` or `text`. PostHog sends the content as is and never stores it as a template.",
     )
+    distinct_id = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=400,
+        help_text="Distinct ID of the recipient's person, for a send with `template_key`. The send and its "
+        "engagement events are recorded against that person. Defaults to the recipient's email address.",
+    )
     subject = serializers.CharField(
         required=False, trim_whitespace=False, help_text="Subject of the email your code rendered."
     )
@@ -1148,7 +1155,11 @@ class MessagingSendViewSet(TransactionalEmailSendMixin, TeamAndOrgViewSetMixin, 
         return self._queue_send(
             request,
             lambda idempotency_key: send_code_email(
-                self.team, email, to=data["to"], distinct_id=_distinct_id(data), idempotency_key=idempotency_key
+                self.team,
+                email,
+                to=data["to"],
+                distinct_id=data.get("distinct_id") or _distinct_id(data),
+                idempotency_key=idempotency_key,
             ),
             route="send_email",
             addressed={"addressed_by": "template_key"},
