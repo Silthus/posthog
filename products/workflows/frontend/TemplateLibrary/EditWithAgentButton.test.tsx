@@ -10,6 +10,7 @@ import { initKeaTests } from '~/test/init'
 
 import { EditWithAgentButton } from './EditWithAgentButton'
 import { messageTemplateLogic } from './messageTemplateLogic'
+import { QuillEditWithAgentButton } from './QuillEditWithAgentButton'
 
 const CODE_MANAGED = {
     id: 'existing-id',
@@ -23,7 +24,10 @@ const CODE_MANAGED = {
     change_prompt_variables: [],
 }
 
-describe('EditWithAgentButton', () => {
+describe.each([
+    { name: 'EditWithAgentButton', Button: EditWithAgentButton },
+    { name: 'QuillEditWithAgentButton', Button: QuillEditWithAgentButton },
+])('$name', ({ Button }) => {
     beforeEach(async () => {
         useMocks({ get: { '/api/environments/:team_id/messaging_templates/:id/': CODE_MANAGED } })
         initKeaTests()
@@ -32,7 +36,7 @@ describe('EditWithAgentButton', () => {
         await expectLogic(logic).toDispatchActions(['loadTemplateSuccess'])
         render(
             <Provider>
-                <EditWithAgentButton id="existing-id" />
+                <Button id="existing-id" />
             </Provider>
         )
     })
