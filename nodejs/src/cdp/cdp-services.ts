@@ -36,6 +36,7 @@ import { PersonsManagerService } from './services/managers/persons-manager.servi
 import { RecipientsManagerService } from './services/managers/recipients-manager.service'
 import { SandboxSenderStateService } from './services/managers/sandbox-sender-state.service'
 import { TeamWorkflowsConfigService } from './services/managers/team-workflows-config.service'
+import { EmailStatusService } from './services/messaging/email-status.service'
 import { EmailSuppressionService } from './services/messaging/email-suppression.service'
 import { EmailValidationService } from './services/messaging/email-validation.service'
 import { EmailService, parseTeamEmailCapMode, parseTierCaps } from './services/messaging/email.service'
@@ -122,6 +123,8 @@ export interface CdpCoreServices {
     sandboxEmailSender: SandboxEmailSender
     /** Buffers rendered-email asset rows and bulk-flushes them at the batch boundary. */
     messageAssetsService: MessageAssetsService
+    /** Buffers transactional email status rows. `invocationResultsService.flush()` produces them. */
+    emailStatusService: EmailStatusService
 }
 
 export type CdpCoreServicesConfig = Pick<
@@ -198,6 +201,9 @@ export type CdpCoreServicesConfig = Pick<
         | 'HOG_INVOCATION_RESULTS_ENABLED'
         | 'MESSAGE_ASSETS_TOPIC'
         | 'MESSAGE_ASSETS_PRODUCER'
+        | 'EMAIL_STATUS_TOPIC'
+        | 'EMAIL_STATUS_PRODUCER'
+        | 'EMAIL_STATUS_ENABLED'
         | 'CDP_WAREHOUSE_SOURCE_WEBHOOKS_TOPIC'
         | 'CDP_WAREHOUSE_SOURCE_WEBHOOKS_PRODUCER'
         | 'CDP_DLQ_ENABLED'
@@ -447,6 +453,7 @@ export function createCdpCoreServices(
     const teamWorkflowsConfigService = new TeamWorkflowsConfigService(deps.postgres, deps.pubSub)
     const outputs = createCdpOutputsRegistry().build(deps.cdpProducerRegistry, config)
     const messageAssetsService = new MessageAssetsService(outputs)
+    const emailStatusService = new EmailStatusService(outputs, config)
     // Constructed here (rather than below with the other messaging services) so it can be threaded
     // into EmailService — the pre-send suppression check lives there so every send path shares one
     // choke point regardless of whether the invocation came from a workflow action or a hog function.
@@ -501,6 +508,7 @@ export function createCdpCoreServices(
         trackingCodeSigner,
         emailSuppressionService,
         recipientsManager,
+        emailStatusService,
         messageAssetsService,
         workflowEmailRateLimiter,
         teamEmailRateLimiter,
@@ -588,6 +596,7 @@ export function createCdpCoreServices(
         emailValidationService,
         cohortMembershipRepository,
         deps.integrationManager,
+        emailStatusService,
         hogFlowDuplicateObserver,
         cdpUsageReporter,
         { awaitedStepsEnabled: config.CDP_HOGFLOW_AWAITED_STEPS_ENABLED }
@@ -607,7 +616,8 @@ export function createCdpCoreServices(
         warehouseWebhooksService,
         capturedEventsService,
         messageAssetsService,
-        conversionWatchersService
+        conversionWatchersService,
+        emailStatusService
     )
 
     const nativeDestinationExecutorService = new NativeDestinationExecutorService(config)
@@ -644,5 +654,6 @@ export function createCdpCoreServices(
         emailService,
         sandboxEmailSender,
         messageAssetsService,
+        emailStatusService,
     }
 }
