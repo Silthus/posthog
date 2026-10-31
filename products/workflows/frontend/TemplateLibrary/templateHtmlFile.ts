@@ -52,13 +52,12 @@ const LIQUID = /\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}/g
 const CHARACTER_REFERENCE_START = /&(?=#\d+;|#[xX][0-9a-fA-F]+;|(?:amp|lt|gt|quot|apos|nbsp);)/g
 const TITLE_CLOSE_START = /<(?=\/title)/gi
 
-/** The template as the `.html` file that posthog-node's `templateFile()` reads back as the same subject and preheader. */
 export function templateHtmlFile(email: TemplateHtmlFileContent): string {
     return withPreheader(withSubject(email.html, email.subject), email.preheader ?? '')
 }
 
 function withSubject(html: string, subject: string): string {
-    const { title, ...head } = scanHead(html)
+    const { title, ...head } = scanHeadLikeTheSdk(html)
     const wanted = collapseWhitespace(subject)
     if (subjectOf(title ? html.slice(title.textStart, title.textEnd) : '') === wanted) {
         return html
@@ -71,7 +70,7 @@ function withSubject(html: string, subject: string): string {
 }
 
 function withPreheader(html: string, preheader: string): string {
-    const { title, preheader: existing, ...head } = scanHead(html)
+    const { title, preheader: existing, ...head } = scanHeadLikeTheSdk(html)
     if (existing?.value === preheader) {
         return html
     }
@@ -88,11 +87,10 @@ function withPreheader(html: string, preheader: string): string {
     return insertIntoHead(html, head, tag)
 }
 
-/** Every preheader the SDK could read goes, or removing the first one would expose the next. */
 function withoutPreheaders(html: string): string {
     const kept: string[] = []
     let keptFrom = 0
-    for (const { start, end } of scanHead(html).preheaders) {
+    for (const { start, end } of scanHeadLikeTheSdk(html).preheaders) {
         kept.push(html.slice(keptFrom, start))
         keptFrom = end
     }
@@ -112,11 +110,7 @@ function splice(html: string, start: number, end: number, replacement: string): 
     return html.slice(0, start) + replacement + html.slice(end)
 }
 
-/**
- * Finds tags the way posthog-node's `parseTemplateFile` does, so the title and preheader changed here are the ones the
- * SDK reads: a comment or a title hides the tags in it, and the first title and the first preheader win.
- */
-function scanHead(html: string): HeadScan {
+function scanHeadLikeTheSdk(html: string): HeadScan {
     const scan: HeadScan = { preheaders: [] }
     let titleCanClose = true
     let position = html.indexOf('<')
@@ -217,7 +211,6 @@ function escapeTitleText(subject: string): string {
     )
 }
 
-/** Liquid stays literal, except for the few characters the SDK would decode or end the tag on when it reads the file. */
 function keepCharacterReferences(liquid: string): string {
     return liquid.replace(CHARACTER_REFERENCE_START, '&amp;')
 }

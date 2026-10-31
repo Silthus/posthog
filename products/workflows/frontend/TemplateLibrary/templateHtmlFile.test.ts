@@ -1,13 +1,11 @@
 import { TemplateHtmlFileContent, templateHtmlFile } from './templateHtmlFile'
 
-// `sdk` is what posthog-node's `parseTemplateFile` returned for each `file`,
-// recorded at PostHog/posthog-js#5312's head (87e9e95ca65).
-interface SdkParse {
+interface ParsedBySdk {
     subject: string
     preheader?: string
 }
 
-const SDK_UPLOADED_FILES: { name: string; file: string; sdk: SdkParse }[] = [
+const SDK_UPLOADED_FILES: { name: string; file: string; sdk: ParsedBySdk }[] = [
     {
         name: 'entities in the title and preheader, Liquid in the body',
         file: '<!doctype html><html><head><title>Welcome &amp; hello</title><meta name="preheader" content="A &quot;small&quot; preview"></head><body><p>{{ variables.first_name }}</p></body></html>\n',
@@ -33,7 +31,7 @@ const SDK_UPLOADED_FILES: { name: string; file: string; sdk: SdkParse }[] = [
     },
 ]
 
-const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file: string; sdk: SdkParse }[] = [
+const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file: string; sdk: ParsedBySdk }[] = [
     {
         name: 'a document without a head',
         template: {

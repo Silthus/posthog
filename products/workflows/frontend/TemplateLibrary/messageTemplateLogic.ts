@@ -1296,7 +1296,6 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
             }
         },
         loadTemplateSuccess: ({ template }, _, __, previousState) => {
-            // A sentence typed against another file's starter would point the agent at the old file.
             if (selectors.changePromptStarter(previousState) !== values.changePromptStarter) {
                 actions.discardChangeSentence()
             }

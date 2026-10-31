@@ -1,8 +1,3 @@
-"""The prompt that asks a coding agent to change the file of a template managed by code.
-
-The web page copies it, and agents read it from the API, so every caller hands the agent the same text.
-"""
-
 import re
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Any, Final, Protocol
@@ -16,9 +11,6 @@ from products.messaging.backend.facade.contracts import TemplateChangePrompt, Te
 LIQUID_DELIMITERS: Final = (("{{", "}}"), ("{%", "%}"))
 VARIABLE: Final = re.compile(r"(?<![\w.])variables\.([A-Za-z_][\w-]*)")
 COMMIT_SHA: Final = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
-# Uploads store source values as free text, and the prompt goes to an agent that can write to the repository,
-# so a value with characters a repository, path or ref never needs (spaces, backticks, shell syntax) is treated as
-# unknown.
 SOURCE_REPOSITORY: Final = re.compile(r"[\w.-]+(?:/[\w.-]+)+")
 SOURCE_PATH: Final = re.compile(r"[\w.@+~,=()\[\]-]+(?:/[\w.@+~,=()\[\]-]+)*")
 SOURCE_REF: Final = re.compile(r"[\w./-]+")
@@ -66,9 +58,9 @@ class PromptSource:
     @classmethod
     def of(cls, template: PromptedTemplate) -> "PromptSource":
         return cls(
-            repository=_if_shaped(template.source_repository, SOURCE_REPOSITORY),
-            path=_if_shaped(template.source_path, SOURCE_PATH),
-            ref=_if_shaped(template.source_ref, SOURCE_REF),
+            repository=_unless_it_could_instruct_the_agent(template.source_repository, SOURCE_REPOSITORY),
+            path=_unless_it_could_instruct_the_agent(template.source_path, SOURCE_PATH),
+            ref=_unless_it_could_instruct_the_agent(template.source_ref, SOURCE_REF),
         )
 
 
@@ -95,7 +87,7 @@ def _template_link(team_id: int, template_id: UUID) -> str:
     return absolute_uri(f"/project/{team_id}/workflows/library/templates/{template_id}")
 
 
-def _if_shaped(value: str | None, shape: re.Pattern[str]) -> str | None:
+def _unless_it_could_instruct_the_agent(value: str | None, shape: re.Pattern[str]) -> str | None:
     return value if value and shape.fullmatch(value) else None
 
 
@@ -135,13 +127,13 @@ def _published_parts(content: Mapping[str, Any]) -> list[str]:
 
 
 def _variables_in_order_of_first_use(parts: Sequence[str]) -> list[str]:
-    names = (name for part in parts for markup in _liquid_markups(part) for name in VARIABLE.findall(markup))
+    names = (
+        name for part in parts for markup in _liquid_markups_in_one_pass(part) for name in VARIABLE.findall(markup)
+    )
     return list(dict.fromkeys(names))
 
 
-def _liquid_markups(text: str) -> Iterator[str]:
-    """Each `{{ … }}` and `{% … %}` in one forward pass. A lazy regex rescans the rest of the text after every
-    opener that never closes, which turns a large uploaded HTML into quadratic work on every read."""
+def _liquid_markups_in_one_pass(text: str) -> Iterator[str]:
     next_opener = {opener: text.find(opener) for opener, _ in LIQUID_DELIMITERS}
     while True:
         open_delimiters = [

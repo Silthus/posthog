@@ -212,7 +212,6 @@ def check_template_write(template: MessageTemplateRow, intent: TemplateWriteInte
 
 
 def change_prompt(team_id: int, template: MessageTemplateRow) -> TemplateChangePrompt | None:
-    """The starter sentence and the "About this file" block for a template managed by code. None for any other."""
     return template_change_prompt.change_prompt(team_id, template)
 
 

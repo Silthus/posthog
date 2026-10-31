@@ -19,11 +19,8 @@ export function EditWithAgentButton(props: MessageTemplateLogicProps): JSX.Eleme
     return (
         <Popover
             visible={agentPromptOpen}
-            // Popover reports a press on its own trigger as outside, so the trigger's click alone toggles it.
             onClickOutside={(event) => {
-                const pressedTrigger =
-                    !(event instanceof KeyboardEvent) && triggerRef.current?.contains(event.target as Node)
-                if (!pressedTrigger) {
+                if (!isPressOnTrigger(event, triggerRef)) {
                     setAgentPromptOpen(false)
                 }
             }}
@@ -67,10 +64,10 @@ export function EditWithAgentButton(props: MessageTemplateLogicProps): JSX.Eleme
     )
 }
 
-/**
- * The popover unmounts its content shortly after it closes, which drops keyboard focus to the page's start. Focus that
- * is still inside the prompt goes back to the trigger; focus the person moved elsewhere stays where it is.
- */
+function isPressOnTrigger(event: Event, triggerRef: RefObject<HTMLButtonElement>): boolean {
+    return !(event instanceof KeyboardEvent) && !!triggerRef.current?.contains(event.target as Node)
+}
+
 function useFocusBackOnClose(open: boolean, promptRef: RefObject<HTMLElement>): RefObject<HTMLButtonElement> {
     const triggerRef = useRef<HTMLButtonElement>(null)
     const wasOpen = useRef(open)
@@ -137,8 +134,6 @@ function AgentPrompt({ containerRef, ...props }: AgentPromptProps): JSX.Element 
                         key: 'prompt',
                         header: 'Show full prompt',
                         content: (
-                            // Not a <pre>: global styles make every <pre> a scroll container, and a scroll container
-                            // in this collapse inside the popover stays unpainted in Chromium until it scrolls.
                             <div
                                 className="whitespace-pre-wrap break-words font-mono text-xs"
                                 data-attr="message-template-agent-prompt"
