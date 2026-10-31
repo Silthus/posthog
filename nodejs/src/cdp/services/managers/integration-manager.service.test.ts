@@ -70,12 +70,13 @@ describe('IntegrationManager', () => {
         expect(item?.config).toEqual({ team: 'foobar' })
     })
 
-    it('finds an integration the read replica does not have yet', async () => {
-        jest.spyOn(hub.postgres, 'query').mockResolvedValueOnce({ rows: [] } as any)
+    it('finds an integration the read replica does not have yet on the primary', async () => {
+        const query = jest.spyOn(hub.postgres, 'query').mockResolvedValueOnce({ rows: [] } as any)
 
         const item = await manager.get(integrations[0].id)
 
         expect(item?.config).toEqual({ team: 'foobar' })
+        expect(query.mock.calls.map(([use]) => use)).toEqual([PostgresUse.COMMON_READ, PostgresUse.COMMON_WRITE])
     })
 
     it('updates cached integration data when integration changes', async () => {
