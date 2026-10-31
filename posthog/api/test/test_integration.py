@@ -1616,6 +1616,60 @@ class TestAzureBlobIntegration:
         assert not Integration.objects.filter(team=self.team, kind="azure-blob").exists()
 
 
+class TestEmailDomainVerifiedEvent:
+    @pytest.fixture(autouse=True)
+    def setup(self, db) -> None:
+        self.home_organization = Organization.objects.create(name="Home organization")
+        self.user = User.objects.create_and_join(self.home_organization, "verifier@example.com", "test")
+        self.sender_organization = Organization.objects.create(name="Sender organization")
+        OrganizationMembership.objects.create(
+            organization=self.sender_organization, user=self.user, level=OrganizationMembership.Level.ADMIN
+        )
+        self.sender_team = Team.objects.create(organization=self.sender_organization)
+        self.sender = Integration.objects.create(
+            team=self.sender_team,
+            kind="email",
+            integration_id="hello@mail.example.com",
+            config={**EMAIL_CONFIG, "verified": False},
+        )
+        PersonalAPIKey.objects.create(
+            user=self.user,
+            label="Verifier",
+            secure_value=hash_key_value("verifier_key"),
+            scopes=["integration:write"],
+        )
+
+    @pytest.mark.parametrize("authentication,method", [("session", "manual"), ("pak", "agent")])
+    @patch("posthog.models.integration.email.reload_integrations_on_workers")
+    @patch("products.workflows.backend.facade.api.verify_ses_email_domain")
+    @patch("posthoganalytics.capture")
+    def test_verifying_a_domain_captures_the_event_for_the_person_in_the_senders_organization(
+        self,
+        capture: MagicMock,
+        verify: MagicMock,
+        _reload: MagicMock,
+        authentication: str,
+        method: str,
+        client: HttpClient,
+    ) -> None:
+        verify.return_value = {"status": "success", "dnsRecords": []}
+        headers = {"Authorization": "Bearer verifier_key"} if authentication == "pak" else {}
+        if authentication == "session":
+            client.force_login(self.user)
+
+        response = client.post(
+            f"/api/projects/{self.sender_team.pk}/integrations/{self.sender.pk}/email/verify/", headers=headers
+        )
+
+        assert response.status_code == status.HTTP_200_OK, response.json()
+        verified_events = [call for call in capture.call_args_list if call.kwargs["event"] == "email domain verified"]
+        assert len(verified_events) == 1
+        assert verified_events[0].kwargs["distinct_id"] == self.user.distinct_id
+        assert verified_events[0].kwargs["properties"]["method"] == method
+        assert verified_events[0].kwargs["groups"]["organization"] == str(self.sender_organization.pk)
+        assert verified_events[0].kwargs["groups"]["project"] == str(self.sender_team.uuid)
+
+
 class TestEmailIntegrationScopedAccess:
     @pytest.fixture(autouse=True)
     def enable_email_from_code(self) -> Iterator[None]:

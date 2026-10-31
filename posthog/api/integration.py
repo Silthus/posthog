@@ -2927,6 +2927,7 @@ class IntegrationViewSet(
                 "seconds_since_created": int((timezone.now() - instance.created_at).total_seconds()),
             },
             team=self.team,
+            organization=self.team.organization,
         )
 
     @staticmethod
