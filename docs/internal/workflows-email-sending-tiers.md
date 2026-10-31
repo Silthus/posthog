@@ -130,7 +130,10 @@ Deploy this metric to the worker and Django before live workflow sends use the s
 ### Sandbox sends from code
 
 A code send (`POST /api/projects/:project_id/messaging/send/email/` with a `template_key`) that names no `from` goes through the sandbox sender when the project has no verified sender of its own.
-Django then provisions the sandbox integration the same way the provisioning endpoint does, so `workflows-sandbox-sender`, the organization block, and the three sandbox settings all apply.
+Django then provisions the sandbox integration with the provisioning endpoint's checks, so `workflows-sandbox-sender`, the organization block, and the three sandbox settings all apply.
+When one of them fails, the send gets `sender_not_verified`, the same as before the sandbox sender existed, so a blocked organization learns nothing about the block.
+A project secret API key with the send scope can provision the sandbox integration this way. Only the provisioning endpoint captures `workflows sandbox sender provisioned`.
+The CDP API and the worker read an integration the read replica doesn't have yet from the primary, so the first send after provisioning finds it.
 A project with a verified sender of its own but no default keeps the `sender_not_verified` refusal.
 A send by `template_id` keeps the sender its workflow stores.
 A `from` that names the sandbox address, or any address on its domain, is refused with `sender_not_verified` on `from`, and a `reply_to` on a sandbox send is refused with `invalid_request` on `reply_to`.
@@ -141,7 +144,7 @@ The CDP API runs the worker's checks on a sandbox code send before it queues it,
 | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | A recipient in To, CC, or BCC is not a verified member, or a stored copy address can't be read without the send's data | `400 sandbox_recipient_not_allowed`                         |
 | The project or recipient allowance is used up (a read-only peek, so the check claims nothing)                          | `400 sandbox_limit_reached`                                 |
-| The worker switch is off, the shared tenant is paused, or the organization is blocked                                  | `422 sending_suspended`                                     |
+| The worker switch is off, the shared tenant is paused, or the organization is blocked after Django resolved the sender | `422 sending_suspended`                                     |
 | The members, the pause state, or the allowance can't be read                                                           | `503 delivery_unavailable` in Django, and nothing is queued |
 
 Each refusal emits `workflows sandbox email blocked` with `source: api`.
