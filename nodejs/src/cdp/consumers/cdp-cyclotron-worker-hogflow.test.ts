@@ -88,6 +88,7 @@ describe('CdpCyclotronWorkerHogFlow', () => {
     let team: Team
     let team2: Team
     let hogFlows: HogFlow[]
+    let jobQueue: ReturnType<typeof createMockJobQueue>
 
     const createSerializedHogFlowInvocation = (
         hogFlow: HogFlow,
@@ -160,11 +161,11 @@ describe('CdpCyclotronWorkerHogFlow', () => {
         ]
 
         const mockRepo = createMockPersonReadRepository(testPersons)
-        const mockJobQueue = createMockJobQueue()
+        jobQueue = createMockJobQueue()
         processor = new CdpCyclotronWorkerHogFlow(
             hub,
             { ...createCdpConsumerDeps(hub), personRepository: mockRepo },
-            mockJobQueue
+            jobQueue
         )
 
         hogFlows = []
@@ -586,6 +587,71 @@ describe('CdpCyclotronWorkerHogFlow', () => {
                 forceFresh: false,
             })
         })
+
+        it('runs a flow its cached read missed once the database has it, and fails one missing from both', async () => {
+            const lateFlow = new FixtureHogFlowBuilder()
+                .withName('Flow created after its first job was read')
+                .withTeamId(team.id)
+                .withStatus('active')
+                .withSimpleWorkflow()
+                .build()
+            const invocationBeforeInsert = createSerializedHogFlowInvocation(lateFlow, {
+                event: { distinct_id: 'distinct_A_1', properties: {} } as any,
+            })
+
+            const resultsBeforeInsert = await processor.processInvocations([invocationBeforeInsert])
+
+            expect(resultsBeforeInsert).toEqual([])
+            expect(jobQueue.dequeueInvocations).toHaveBeenLastCalledWith([invocationBeforeInsert])
+
+            await insertHogFlow(hub.postgres, lateFlow)
+            const invocationAfterInsert = createSerializedHogFlowInvocation(lateFlow, {
+                event: { distinct_id: 'distinct_A_1', properties: {} } as any,
+            })
+
+            const resultsAfterInsert = await processor.processInvocations([invocationAfterInsert])
+
+            expect(resultsAfterInsert).toHaveLength(1)
+            expect(resultsAfterInsert[0]).toMatchObject({
+                finished: true,
+                invocation: { hogFlow: { id: lateFlow.id } },
+            })
+            expect(jobQueue.dequeueInvocations).toHaveBeenLastCalledWith([])
+        })
+
+        it.each([
+            ['newer than the cached copy runs the database version', 2, [2], false],
+            ['missing runs the cached copy, as before the field', undefined, [1], false],
+            ['newer than the database fails the job', 3, [], true],
+        ])(
+            'an accepted send whose graded workflow version is %s',
+            async (_desc, hogFlowVersion, ranVersions, failed) => {
+                const hogFlow = hogFlows[0]
+                await processor['hogFlowManager'].getHogFlow(hogFlow.id)
+                await hub.postgres.query(
+                    PostgresUse.COMMON_WRITE,
+                    `UPDATE posthog_hogflow SET version = 2 WHERE id = $1`,
+                    [hogFlow.id],
+                    'upload-without-reload'
+                )
+                const invocation = createSerializedHogFlowInvocation(hogFlow, {
+                    event: { distinct_id: 'distinct_A_1', properties: {} } as any,
+                    send: { tracking: { captureEngagement: false }, hogFlowVersion },
+                })
+                const queueUnavailableRun = jest.spyOn(
+                    processor['invocationResultsService'].emailStatusService,
+                    'queueUnavailableRun'
+                )
+
+                const results = await processor.processInvocations([invocation])
+
+                expect(
+                    results.map((result) => (result.invocation as CyclotronJobInvocationHogFlow).hogFlow.version)
+                ).toEqual(ranVersions)
+                expect(jobQueue.dequeueInvocations).toHaveBeenLastCalledWith(failed ? [invocation] : [])
+                expect(queueUnavailableRun.mock.calls).toEqual(failed ? [[invocation]] : [])
+            }
+        )
 
         it('terminates invocations as canceled when the workflow is disabled after being queued', async () => {
             const hogFlow = hogFlows[0]

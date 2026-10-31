@@ -1,6 +1,39 @@
 import { Counter, Histogram } from 'prom-client'
 import { z } from 'zod'
 
+import { HogFlow } from '~/cdp/schema/hogflow'
+
+export const AcceptedSendSchema = z
+    .object({
+        content: z
+            .object({
+                subject: z.string().min(1),
+                html: z.string().optional(),
+                text: z.string().optional(),
+            })
+            .readonly()
+            .refine((content) => !!content.html || !!content.text, { message: 'content needs html or text' })
+            .optional(),
+        from: z
+            .object({
+                integrationId: z.number().int(),
+                email: z.string().optional(),
+                name: z.string().optional(),
+                isDefault: z.boolean().optional(),
+            })
+            .readonly()
+            .optional(),
+        replyTo: z.array(z.string()).readonly().optional(),
+        tracking: z.object({ captureEngagement: z.boolean() }).readonly(),
+        hogFlowVersion: z.number().int().positive().optional(),
+    })
+    .readonly()
+
+export type AcceptedSend = z.infer<typeof AcceptedSendSchema>
+
+export const predatesGradedVersion = (hogFlow: Pick<HogFlow, 'version'>, send: AcceptedSend | undefined): boolean =>
+    send?.hogFlowVersion !== undefined && hogFlow.version < send.hogFlowVersion
+
 // What Django sends to run a transactional email's workflow once.
 export const TransactionalEmailRequestSchema = z.object({
     to: z.string().email(),
@@ -11,6 +44,10 @@ export const TransactionalEmailRequestSchema = z.object({
     // The caller's `Idempotency-Key`. A repeat with the same key and request returns the first send.
     idempotency_key: z.string().min(1).max(255).optional(),
 })
+
+export const AcceptedSendRequestSchema = TransactionalEmailRequestSchema.extend({ send: AcceptedSendSchema })
+
+export type TransactionalEmailRequest = z.infer<typeof TransactionalEmailRequestSchema> & { send?: AcceptedSend }
 
 export type TransactionalEmailOutcome =
     | 'queued'
@@ -23,11 +60,15 @@ export type TransactionalEmailOutcome =
     | 'invalid_request'
     | 'not_found'
     | 'not_sendable'
+    | 'workflow_version_behind'
     | 'quota_limited'
     | 'sending_suspended'
     | 'sending_paused'
     | 'recipient_suppressed'
     | 'recipient_unreachable'
+    | 'sandbox_recipient_not_allowed'
+    | 'sandbox_limit_reached'
+    | 'sandbox_check_failed'
     | 'error'
 
 export const transactionalEmailRequestsTotal = new Counter({

@@ -839,6 +839,7 @@ export class RerunPaginatorService {
                 personId: persistedState.personId,
                 // Later message steps check these before the per-worker preferences cache, which can predate them.
                 messageOptOuts: persistedState.messageOptOuts,
+                send: persistedState.send,
                 // Sticky rerun counter — mirror the hog function path so the
                 // lifecycle row producer can derive `attempts` / `is_retry`
                 // for flows too, and the `max_attempts` guard actually trips.

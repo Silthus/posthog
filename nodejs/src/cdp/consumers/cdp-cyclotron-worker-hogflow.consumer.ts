@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { Counter } from 'prom-client'
 
 import { HogFlow } from '~/cdp/schema/hogflow'
 import { hasPushActions } from '~/cdp/services/hogflows/hogflow-utils'
@@ -7,6 +8,7 @@ import { logger } from '~/common/utils/logger'
 import { PluginsServerConfig } from '~/types'
 
 import { isRowScopedTrigger } from '../schema/hogflow'
+import { predatesGradedVersion } from '../services/hogflows/transactional-email'
 import { JobQueue } from '../services/job-queue/job-queue.interface'
 import {
     CyclotronJobInvocation,
@@ -18,6 +20,12 @@ import { convertToHogFunctionFilterGlobal } from '../utils/hog-function-filterin
 import { createInvocationResult } from '../utils/invocation-utils'
 import { CdpConsumerBaseDeps } from './cdp-base.consumer'
 import { CdpCyclotronWorker } from './cdp-cyclotron-worker.consumer'
+
+const counterHogFlowJobsFailed = new Counter({
+    name: 'cdp_hogflow_worker_jobs_failed_total',
+    help: 'Hog flow jobs the worker failed before running them, by reason',
+    labelNames: ['reason'],
+})
 
 type LoadHogFlowsResult = {
     loadedInvocations: CyclotronJobInvocationHogFlow[]
@@ -103,11 +111,29 @@ export class CdpCyclotronWorkerHogFlow extends CdpCyclotronWorker {
                 }
 
                 const team = await this.deps.teamManager.getTeam(item.teamId)
-                const hogFlow = await this.hogFlowManager.getHogFlow(item.functionId)
+                const send = (item.state as CyclotronJobInvocationHogFlow['state'] | null)?.send
+                const hogFlow = await this.hogFlowManager.getHogFlowCheckingPrimaryOnMiss(
+                    item.functionId,
+                    send?.hogFlowVersion
+                )
                 if (!hogFlow || !team) {
                     logger.error('⚠️', 'Error finding hog flow', {
                         id: item.functionId,
                     })
+
+                    failedInvocations.push(item)
+                    this.invocationResultsService.emailStatusService.queueUnavailableRun(item)
+
+                    return
+                }
+
+                if (predatesGradedVersion(hogFlow, send)) {
+                    logger.error('⚠️', 'Hog flow is older than the version its send was graded at', {
+                        id: item.functionId,
+                        version: hogFlow.version,
+                        gradedVersion: send?.hogFlowVersion,
+                    })
+                    counterHogFlowJobsFailed.labels({ reason: 'workflow_version_behind' }).inc()
 
                     failedInvocations.push(item)
                     this.invocationResultsService.emailStatusService.queueUnavailableRun(item)

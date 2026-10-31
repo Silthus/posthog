@@ -25,6 +25,7 @@ import { EmailSuppressionService } from './email-suppression.service'
 import { escapeHtml } from './helpers/escape-html'
 import { SES_LINK_INDEX_TAG, SesWebhookHandler } from './helpers/ses'
 import { EmailTrackingCodeSigner, trackingCodeFormatCounter } from './helpers/tracking-code'
+import { SandboxEmailSender } from './sandbox-email-sender'
 
 export const PIXEL_GIF = Buffer.from('R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==', 'base64')
 const LINK_REGEX =
@@ -127,6 +128,13 @@ export const resolveEmailSendingVersion = (invocation: CyclotronJobInvocationHog
         : undefined
 }
 
+export const resolveEmailCaptureChoice = (
+    invocation: Pick<CyclotronJobInvocationHogFunction, 'hogFunction'>
+): boolean | undefined => {
+    const choice = invocation.hogFunction?.metadata?.capture_engagement
+    return typeof choice === 'boolean' ? choice : undefined
+}
+
 // HTML attribute values arrive entity-encoded (e.g. `&amp;`, `&#38;`). Decode before
 // percent-encoding for the tracking redirect, otherwise `?a=1&amp;b=2` round-trips
 // through `target=` as a literal `&amp;` and breaks the destination page's query string.
@@ -160,7 +168,12 @@ export const addTrackingToEmail = (
     // The pixel and redirect codes carry the sending version too. SES-attributed opens and clicks
     // read the version off the signed header instead, but a provider we track ourselves has these
     // URLs as its only carrier, and without the version its engagement cannot split by version.
-    const trackingInvocation = { ...invocation, distinctId, workflowVersion: resolveEmailSendingVersion(invocation) }
+    const trackingInvocation = {
+        ...invocation,
+        distinctId,
+        workflowVersion: resolveEmailSendingVersion(invocation),
+        captureEngagement: resolveEmailCaptureChoice(invocation),
+    }
     const trackingUrl = signer.pixelUrl(trackingInvocation, isTest)
 
     // Incremented for every anchor LINK_REGEX matches, including ones that turn out to be opted
@@ -285,10 +298,15 @@ export class EmailTrackingService {
         private teamWorkflowsConfigService: TeamWorkflowsConfigService,
         private trackingCodeSigner: EmailTrackingCodeSigner,
         private emailSuppressionService: EmailSuppressionService,
+        private sandboxEmailSender: SandboxEmailSender,
         private emailStatusService: EmailStatusService | null = null
     ) {
         const allowedTopicArns = (process.env.SES_ALLOWED_SNS_TOPIC_ARNS ?? '').split(',')
-        this.sesWebhookHandler = new SesWebhookHandler(this.trackingCodeSigner, allowedTopicArns)
+        this.sesWebhookHandler = new SesWebhookHandler(
+            this.trackingCodeSigner,
+            allowedTopicArns,
+            this.sandboxEmailSender.config.configurationSetName
+        )
     }
 
     public async trackMetric({
@@ -305,6 +323,7 @@ export class EmailTrackingService {
         deferFlush = false,
         workflowVersion,
         verifiedTeamId,
+        captureEngagement,
     }: {
         functionId?: string
         invocationId?: string
@@ -324,6 +343,7 @@ export class EmailTrackingService {
         // of its workflow: sends are recorded at send time, so dropping the delayed complaint and
         // bounce feedback here would make the team's rates read cleaner than they are.
         verifiedTeamId?: string
+        captureEngagement?: boolean
     }): Promise<void> {
         if (!functionId || !invocationId) {
             logger.error('[EmailTrackingService] trackMetric: Invalid custom ID', {
@@ -391,7 +411,12 @@ export class EmailTrackingService {
         )
 
         const eventName = METRIC_NAME_TO_EVENT_NAME[metricName]
-        if (eventName && distinctId && (await this.teamWorkflowsConfigService.shouldCaptureEngagementEvents(teamId))) {
+        if (
+            eventName &&
+            distinctId &&
+            captureEngagement !== false &&
+            (await this.teamWorkflowsConfigService.shouldCaptureEngagementEvents(teamId))
+        ) {
             await this.capturedEventsService.queueEvent({
                 team_id: teamId,
                 event: eventName,
@@ -498,6 +523,7 @@ export class EmailTrackingService {
                 hardBounceRecipients,
                 complainedRecipients,
                 deliveredRecipients,
+                sandboxDeliveries,
                 emailStatusUpdates,
             } = await this.sesWebhookHandler.handleWebhook({
                 body: parseJSON(req.body),
@@ -523,6 +549,7 @@ export class EmailTrackingService {
                     deferFlush: true,
                     workflowVersion: metric.workflowVersion,
                     verifiedTeamId: metric.teamId,
+                    captureEngagement: metric.captureEngagement,
                 })
             }
             if (metrics?.length) {
@@ -601,11 +628,24 @@ export class EmailTrackingService {
                 emailTrackingErrorsCounter.inc({ error_type: 'suppression_update_failed', source: 'ses' })
             }
 
+            await this.captureSandboxDeliveries(sandboxDeliveries || [])
+
             return { status, message: body as string }
         } catch (error) {
             emailTrackingErrorsCounter.inc({ error_type: error.name || 'unknown' })
             logger.error('[EmailService] handleWebhook: SES webhook error', { error })
             throw error
+        }
+    }
+
+    private async captureSandboxDeliveries(
+        deliveries: { teamId: string; isTest: boolean; recipientCount: number }[]
+    ): Promise<void> {
+        for (const { teamId, isTest, recipientCount } of deliveries) {
+            const parsedTeamId = Number(teamId)
+            if (Number.isSafeInteger(parsedTeamId) && parsedTeamId > 0) {
+                await this.sandboxEmailSender.captureDelivered(parsedTeamId, isTest, recipientCount)
+            }
         }
     }
 
@@ -616,6 +656,7 @@ export class EmailTrackingService {
         parentRunId?: string
         distinctId?: string
         workflowVersion?: number
+        captureEngagement?: boolean
     } {
         // Support both combined ph_id format and legacy separate params
         if (query.ph_id) {
@@ -630,6 +671,7 @@ export class EmailTrackingService {
                 parentRunId: parsed?.parentRunId,
                 distinctId: parsed?.distinctId,
                 workflowVersion: parsed?.workflowVersion,
+                captureEngagement: parsed?.captureEngagement,
             }
         }
         return {
