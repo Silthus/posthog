@@ -14,6 +14,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
     Field,
+    FieldError,
     FieldLabel,
     Popover,
     PopoverContent,
@@ -92,8 +93,16 @@ interface QuillAgentPromptProps extends MessageTemplateLogicProps {
 
 function QuillAgentPrompt({ sentenceRef, ...props }: QuillAgentPromptProps): JSX.Element {
     const logic = messageTemplateLogic(props)
-    const { changeSentence, agentPrompt, copyAgentPromptDisabledReason } = useValues(logic)
-    const { setChangeSentence, copyAgentPrompt } = useActions(logic)
+    const {
+        changeSentence,
+        agentPrompt,
+        copyAgentPromptDisabledReason,
+        postHogCodeAvailable,
+        runWithPostHogCodeDisabledReason,
+        isRequestingChangeRun,
+        changeRunError,
+    } = useValues(logic)
+    const { setChangeSentence, copyAgentPrompt, runWithPostHogCode } = useActions(logic)
 
     const copyOnCmdEnter = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
         if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -115,8 +124,22 @@ function QuillAgentPrompt({ sentenceRef, ...props }: QuillAgentPromptProps): JSX
                     rows={3}
                     data-attr="message-template-change-sentence"
                 />
+                {changeRunError && (
+                    <FieldError>{[changeRunError.detail, changeRunError.fix].filter(Boolean).join(' ')}</FieldError>
+                )}
             </Field>
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+                {postHogCodeAvailable && (
+                    <Button
+                        variant="outline"
+                        data-attr="message-template-run-with-posthog-code"
+                        onClick={runWithPostHogCode}
+                        loading={isRequestingChangeRun}
+                        disabledReason={runWithPostHogCodeDisabledReason}
+                    >
+                        Run with PostHog Code
+                    </Button>
+                )}
                 <Button
                     variant="primary"
                     data-attr="message-template-copy-agent-prompt"
