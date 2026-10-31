@@ -221,11 +221,6 @@ def change_prompt(team_id: int, template: MessageTemplateRow) -> TemplateChangeP
 def request_template_change(
     team: Team, user: User, template: MessageTemplateRow, instruction: str, *, from_sandbox: bool
 ) -> TemplateChangeRequested:
-    """Start a PostHog Code task that changes the file of a template managed by code and opens a pull request.
-
-    The template and its workflow stay unchanged. Raises TemplateChangeRefused when PostHog Code can't take the
-    request, such as for a template without a GitHub repository, or when `from_sandbox` says a task asks.
-    """
     return template_change_requests.request_change(team, user, template, instruction, from_sandbox=from_sandbox)
 
 

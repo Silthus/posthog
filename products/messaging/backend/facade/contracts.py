@@ -259,16 +259,13 @@ class TemplateKeyRefused(TemplateWriteRefused):
 
 
 class TemplateChangeRefused(TemplateWriteRefused):
-    """PostHog Code can't take a request to change this template's file."""
+    pass
 
 
 @frozen
 class TemplateChangeRequested:
-    """The PostHog Code task that changes the template's file and opens a pull request."""
-
     task_id: UUID
     task_url: str
-    # `owner/name` on GitHub.
     repository: str
 
 

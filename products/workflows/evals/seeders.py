@@ -1,8 +1,3 @@
-"""Two email templates in the case's team: one managed by code, one made in PostHog.
-
-All names, keys, repositories and content are invented for these evals.
-"""
-
 from typing import Any, Final
 
 from products.messaging.backend.facade import templates as templates_facade
@@ -84,7 +79,6 @@ _GUI_DESIGN: Final[dict[str, Any]] = {
 
 
 def seed_email_templates(context: CustomPromptSandboxContext) -> dict[str, Any]:
-    """One template as an upload from a file leaves it, and one made in PostHog."""
     source = CODE_MANAGED_TEMPLATE_SOURCE
     code_managed = templates_facade.create_template(
         context.team_id,

@@ -28,13 +28,10 @@ REQUEST = "workflows-request-email-template-change"
 @pytest.mark.parametrize(
     "scorer,calls,expected_score",
     [
-        # The lock refuses the write, so only counting attempts shows the agent tried it.
         (LeftCodeManagedTemplateAlone(), [(PATCH, {"id": "code-1"}, "403 immutable", "failed")], 0.0),
         (LeftCodeManagedTemplateAlone(), [(PATCH, {"id": "gui-1"}, "ok")], 1.0),
-        # An upload by the key publishes HTML rebuilt from PostHog, which the file doesn't have.
         (LeftCodeManagedTemplateAlone(), [("workflows-upload-email-template", {"key": "hedgebox-welcome"}, "ok")], 0.0),
         (LeftCodeManagedTemplateAlone(), [("workflows-get-email-template", {"id": "code-1"}, "ok")], 1.0),
-        # The route refuses calls from inside PostHog Code, so a refused call is the wrong choice too.
         (
             DidNotRequestChangeFromPostHogCode(),
             [(REQUEST, {"id": "code-1"}, "posthog_code_not_available", "failed")],
