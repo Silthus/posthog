@@ -6,6 +6,11 @@
             "description": "Whether the engagement events (sent, delivered, opened, clicked, bounced) of the email your code rendered are captured as analytics events of the recipient. Defaults to true. A project whose admin turned engagement capture off captures nothing, whatever the send says.",
             "type": "boolean"
         },
+        "distinct_id": {
+            "description": "Distinct ID of the recipient's person, for a send with `template_key`. The send and its engagement events are recorded against that person. Defaults to the recipient's email address.",
+            "maxLength": 400,
+            "type": "string"
+        },
         "from": {
             "description": "Sender of the email your code rendered, as `security@example.com` or `Example <security@example.com>`, on a verified domain of the project. Without it, the email goes out from the project's default sender.",
             "type": "string"
@@ -13,24 +18,6 @@
         "html": {
             "description": "HTML body of the email your code rendered.",
             "type": "string"
-        },
-        "identifiers": {
-            "description": "Who the email is for, used to attribute engagement events.",
-            "properties": {
-                "distinct_id": {
-                    "anyOf": [
-                        {
-                            "maxLength": 400,
-                            "type": "string"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "description": "Distinct ID of the recipient's person. The email's engagement events (sent, delivered, opened, clicked, bounced) and the send itself are recorded against that person. Defaults to the recipient's email address. The template can't read the person's properties, so pass everything it needs in `message_data`."
-                }
-            },
-            "type": "object"
         },
         "reply_to": {
             "description": "Addresses replies to the email your code rendered go to.",

@@ -88,6 +88,7 @@ tools:
         exclude_params:
             - template
             - message_data
+            - identifiers
         param_overrides:
             template_key:
                 required: true

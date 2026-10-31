@@ -29,29 +29,17 @@ export const MessagingSendEmailCreateHeader = () => zod.object({
         ),
 })
 
-export const messagingSendEmailCreateBodyIdentifiersOneDistinctIdMax = 400
-
 export const messagingSendEmailCreateBodyTemplateKeyMax = 400
 
 export const messagingSendEmailCreateBodyTemplateKeyRegExp = new RegExp('^[a-zA-Z0-9_-]+$')
+export const messagingSendEmailCreateBodyDistinctIdMax = 400
+
 export const messagingSendEmailCreateBodyReplyToMax = 10
 
 export const messagingSendEmailCreateBodyCaptureEngagementDefault = true
 
 export const MessagingSendEmailCreateBody = () => zod.object({
     to: zod.email().describe('Email address of the recipient.'),
-    identifiers: zod
-        .object({
-            distinct_id: zod
-                .string()
-                .max(messagingSendEmailCreateBodyIdentifiersOneDistinctIdMax)
-                .nullish()
-                .describe(
-                    "Distinct ID of the recipient's person. The email's engagement events (sent, delivered, opened, clicked, bounced) and the send itself are recorded against that person. Defaults to the recipient's email address. The template can't read the person's properties, so pass everything it needs in `message_data`."
-                ),
-        })
-        .optional()
-        .describe('Who the email is for, used to attribute engagement events.'),
     template_key: zod
         .string()
         .max(messagingSendEmailCreateBodyTemplateKeyMax)
@@ -59,6 +47,13 @@ export const MessagingSendEmailCreateBody = () => zod.object({
         .optional()
         .describe(
             'Names an email whose content your code rendered, such as `password-reset`, so its metrics, logs and status group under it. Letters, numbers, hyphens (-) and underscores (_) only. Send it with `subject` and `html` or `text`. PostHog sends the content as is and never stores it as a template.'
+        ),
+    distinct_id: zod
+        .string()
+        .max(messagingSendEmailCreateBodyDistinctIdMax)
+        .optional()
+        .describe(
+            "Distinct ID of the recipient's person, for a send with `template_key`. The send and its engagement events are recorded against that person. Defaults to the recipient's email address."
         ),
     subject: zod.string().optional().describe('Subject of the email your code rendered.'),
     html: zod.string().optional().describe('HTML body of the email your code rendered.'),

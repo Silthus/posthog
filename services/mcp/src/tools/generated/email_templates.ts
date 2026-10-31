@@ -147,11 +147,11 @@ const workflowsSendEmail = (): ToolBase<ReturnType<typeof WorkflowsSendEmailSche
         if (params.to !== undefined) {
             body['to'] = params.to
         }
-        if (params.identifiers !== undefined) {
-            body['identifiers'] = params.identifiers
-        }
         if (params.template_key !== undefined) {
             body['template_key'] = params.template_key
+        }
+        if (params.distinct_id !== undefined) {
+            body['distinct_id'] = params.distinct_id
         }
         if (params.subject !== undefined) {
             body['subject'] = params.subject
