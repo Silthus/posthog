@@ -18,6 +18,7 @@ from rest_framework.exceptions import ValidationError
 
 from posthog.dataclasses import frozen
 from posthog.exceptions_capture import capture_exception
+from posthog.integrations.contracts import IntegrationRecord
 from posthog.models.team.team import Team
 from posthog.models.user import User
 from posthog.plugins.plugin_server_api import reload_integrations_on_workers
@@ -52,10 +53,10 @@ def is_sandbox_sender_domain(domain: str) -> bool:
 class EmailIntegration:
     integration: model.Integration
 
-    def __init__(self, integration: model.Integration) -> None:
+    def __init__(self, integration: IntegrationRecord) -> None:
         if integration.kind != "email":
             raise Exception("EmailIntegration init called with Integration with wrong 'kind'")
-        self.integration = integration
+        self.integration = model.integration_model(integration)
 
     @property
     def is_sandbox_sender(self) -> bool:
