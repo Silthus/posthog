@@ -537,6 +537,30 @@ describe('messageTemplateLogic', () => {
         })
     })
 
+    describe('agent context on a code-managed template', () => {
+        it.each([
+            { description: 'attaches the template while sending email from code is on', flagOn: true },
+            { description: 'attaches nothing while sending email from code is off', flagOn: false },
+        ])('$description', async ({ flagOn }) => {
+            featureFlagLogic.actions.setFeatureFlags(flagOn ? [FEATURE_FLAGS.WORKFLOWS_EMAIL_FROM_CODE] : [], {
+                [FEATURE_FLAGS.WORKFLOWS_EMAIL_FROM_CODE]: flagOn,
+            })
+            useMocks({ get: { '/api/environments/:team_id/messaging_templates/:id/': CODE_MANAGED } })
+            logic = messageTemplateLogic({ id: 'existing-id' })
+            logic.mount()
+
+            await expectLogic(logic)
+                .toDispatchActions(['loadTemplateSuccess'])
+                .toMatchValues({
+                    codeManagedAgentContext: flagOn
+                        ? expect.arrayContaining([
+                              expect.objectContaining({ type: 'email_template', key: 'existing-id' }),
+                          ])
+                        : null,
+                })
+        })
+    })
+
     describe('code-managed template', () => {
         let patchBodies: Record<string, unknown>[]
         let createBodies: Record<string, unknown>[]

@@ -1,6 +1,5 @@
 import { BindLogic, useActions, useValues } from 'kea'
 import { Form } from 'kea-forms'
-import { useMemo } from 'react'
 
 import { IconLock, IconTrash } from '@posthog/icons'
 import {
@@ -53,7 +52,7 @@ import { ReadOnlyTemplatePreview } from './ReadOnlyTemplatePreview'
 import { DUPLICATE_REFUSED_EDITS_REASON, RefusedEditsBanner } from './RefusedEditsBanner'
 import { openReleaseTemplateDialog } from './releaseTemplateDialog'
 import { SendTestEmailModal } from './SendTestEmailModal'
-import { NEW_TEMPLATE_AGENT_HEADLINES, buildCodeManagedTemplateContext } from './templateAgentContext'
+import { NEW_TEMPLATE_AGENT_HEADLINES } from './templateAgentContext'
 import { TransactionalEmailApiExample } from './TransactionalEmailApiExample'
 
 export const scene: SceneExport<MessageTemplateSceneLogicProps> = {
@@ -103,13 +102,14 @@ export function MessageTemplate(props: MessageTemplateSceneLogicProps): JSX.Elem
         isDiscardingDraft,
         isSavingSensitive,
         isCodeManaged,
+        codeManagedAgentContext,
+        editWithAgentAvailable,
         isDuplicating,
         refusedEdits,
         templateSource,
     } = useValues(logic)
     const transactionalEmailsEnabled = useFeatureFlag('WORKFLOWS_TRANSACTIONAL_EMAIL_API')
     const todayRailNav = useFeatureFlag('TODAY_RAIL_NAV')
-    const editWithAgentAvailable = useFeatureFlag('WORKFLOWS_EMAIL_FROM_CODE') && isCodeManaged
     const showTransactional = transactionalEmailsEnabled && props.id !== 'new'
 
     const { setIsSaveTemplateModalOpen } = useActions(emailTemplaterLogic)
@@ -124,7 +124,6 @@ export function MessageTemplate(props: MessageTemplateSceneLogicProps): JSX.Elem
     const { aiComposerAvailable, agentContextItems } = useValues(newTemplateAgentLogic)
     // A template started from a sent message, and the escape hatch, land in the editor instead (see `aiComposerAvailable`).
     const showAiComposer = props.id === 'new' && aiComposerAvailable
-    const codeManagedAgentContext = useMemo(() => buildCodeManagedTemplateContext(originalTemplate), [originalTemplate])
     useSceneAgentPanel({
         sceneKey: 'email-template',
         contextItems: showAiComposer ? agentContextItems : codeManagedAgentContext,
