@@ -78,7 +78,7 @@ class TestTemplateChangePrompt(APIBaseTest):
         assert template["change_prompt_context"] == "\n".join(
             [
                 "About this file:",
-                "- It is the PostHog email template with the key `welcome`, in the repository "
+                "- `emails/welcome.html` is the PostHog email template with the key `welcome`, in the repository "
                 "`github.com/example/app`, last uploaded from commit `3f2c1ab`.",
                 FILE_CONTRACT,
                 "- Personalize only with `{{ variables.<name> }}`. The values come from the `data` the app passes to "
@@ -94,7 +94,7 @@ class TestTemplateChangePrompt(APIBaseTest):
                 "path_only",
                 {**NO_VARIABLES, "source": {"path": "emails/welcome.html"}},
                 WITH_PATH,
-                "- It is the PostHog email template with the key `welcome`.",
+                "- `emails/welcome.html` is the PostHog email template with the key `welcome`.",
                 PERSONALIZATION,
             ),
             (
@@ -116,7 +116,7 @@ class TestTemplateChangePrompt(APIBaseTest):
                 "path_with_route_groups_and_brackets",
                 {**NO_VARIABLES, "source": {"path": "app/(marketing)/emails/[locale]/welcome.html"}},
                 "In `app/(marketing)/emails/[locale]/welcome.html`, change ",
-                "- It is the PostHog email template with the key `welcome`.",
+                "- `app/(marketing)/emails/[locale]/welcome.html` is the PostHog email template with the key `welcome`.",
                 PERSONALIZATION,
             ),
             (

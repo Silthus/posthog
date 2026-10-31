@@ -20,7 +20,7 @@ const TEMPLATE: MessageTemplate = {
     change_prompt_starter: 'In `emails/welcome.html`, change ',
     change_prompt_context:
         'About this file:\n' +
-        '- It is the PostHog email template with the key `welcome`, in the repository `github.com/example/app`.\n' +
+        '- `emails/welcome.html` is the PostHog email template with the key `welcome`, in the repository `github.com/example/app`.\n' +
         '- Personalize only with `{{ variables.<name> }}`. This file uses `{{ variables.first_name }}`.',
 }
 

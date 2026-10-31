@@ -99,7 +99,7 @@ def _starter(source: PromptSource, key: str) -> str:
 
 def _identity(source: PromptSource, key: str) -> str:
     if source.path:
-        sentence = f"It is the PostHog email template with the key `{key}`"
+        sentence = f"`{source.path}` is the PostHog email template with the key `{key}`"
     else:
         sentence = f"Find the HTML file that the app loads with `posthog.emails.templateFile()` for the key `{key}`"
     if source.repository:
