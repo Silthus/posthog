@@ -385,8 +385,9 @@ class TestTemplateUpload(APIBaseTest):
         assert response.status_code == expected_status, response.json()
         assert not MessageTemplate.objects.exists()
 
-    def test_refuses_a_first_upload_under_a_key_whose_workflow_the_member_cannot_edit(
-        self, post: MagicMock, _flag, _capture
+    @parameterized.expand([("a_first_upload", False), ("an_upload_that_adopts_a_template", True)])
+    def test_refuses_under_a_key_whose_workflow_the_member_cannot_edit(
+        self, post: MagicMock, _flag, _capture, _name, adopts_a_template
     ):
         post.return_value = MagicMock(status_code=202, json=lambda: {"invocation_id": "invocation-1"})
         code_send = {
@@ -399,6 +400,17 @@ class TestTemplateUpload(APIBaseTest):
         sent = self.psak.post(f"/api/projects/{self.team.id}/messaging/send/email/", code_send, format="json")
         assert sent.status_code == status.HTTP_202_ACCEPTED, sent.json()
         key_workflow_id = post.call_args.args[0].split("/hog_flows/")[1].split("/")[0]
+        made_in_posthog = (
+            MessageTemplate.objects.create(
+                team=self.team,
+                name="Welcome",
+                key="welcome",
+                type="email",
+                content={"email": {"subject": "Hello", "html": "<p>Hello</p>"}},
+            )
+            if adopts_a_template
+            else None
+        )
         self.organization.available_product_features = [
             {"name": AvailableFeature.ACCESS_CONTROL, "key": AvailableFeature.ACCESS_CONTROL}
         ]
@@ -412,7 +424,10 @@ class TestTemplateUpload(APIBaseTest):
         response = self.client.put(self.url, WELCOME, format="json")
 
         assert response.status_code == status.HTTP_403_FORBIDDEN, response.json()
-        assert not MessageTemplate.objects.exists()
+        assert [
+            (template.id, template.managed_by, template.content["email"]["subject"], template.transactional_hog_flow_id)
+            for template in MessageTemplate.objects.all()
+        ] == ([(made_in_posthog.id, None, "Hello", None)] if made_in_posthog else [])
 
     @patch("posthog.rate_limit.is_rate_limit_enabled", return_value=True)
     def test_uploads_leave_the_send_rate_limit_to_sends(self, _rate_limit, post: MagicMock, _flag, _capture):
