@@ -1111,14 +1111,36 @@ class TestTransactionalEmail(APIBaseTest):
         assert response.status_code == expected_status, response.json()
         assert self._first_code_sends(capture) == []
 
-    def test_a_first_code_send_that_fails_to_capture_still_answers_the_send(self, mock_post, _flag, capture):
+    def test_a_first_code_send_that_fails_to_capture_leaves_it_to_a_later_send(self, mock_post, _flag, capture):
         self._cdp_accepts(mock_post)
+        psak = self._sender_client("key_creator")
         capture.side_effect = RuntimeError("capture is down")
 
         with self.captureOnCommitCallbacks(execute=True):
-            response = self._sender_client("key_creator").post(self.send_email_url, self._code_send(), format="json")
+            failed = psak.post(self.send_email_url, self._code_send(), format="json")
+        capture.reset_mock(side_effect=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            later = psak.post(self.send_email_url, self._code_send(), format="json")
+
+        assert (failed.status_code, later.status_code) == (status.HTTP_202_ACCEPTED, status.HTTP_202_ACCEPTED)
+        assert [sent.properties["addressed_by"] for sent in self._first_code_sends(capture)] == ["template_key"]
+
+    @parameterized.expand(
+        [
+            ("the_template_route", "send", {EMAIL_FROM_CODE_FLAG, TRANSACTIONAL_EMAIL_API_FLAG}),
+            ("send_email_without_the_code_flag", "send_email", {TRANSACTIONAL_EMAIL_API_FLAG}),
+        ]
+    )
+    def test_a_template_send_by_id_reports_no_first_code_send_on(self, mock_post, flag, capture, _name, route, flags):
+        self._cdp_accepts(mock_post)
+        flag.side_effect = lambda name, *args, **kwargs: name in flags
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self._send(self._sender_client("key_creator"), route, self.body)
 
         assert response.status_code == status.HTTP_202_ACCEPTED, response.json()
+        assert self._first_code_sends(capture) == []
+        assert not FirstCodeSend.objects.for_team(self.team.id).exists()
 
     def test_a_creator_deleted_before_the_callback_leaves_the_first_code_send_to_a_later_send(
         self, mock_post, _flag, capture

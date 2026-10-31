@@ -96,6 +96,7 @@ from products.messaging.backend.facade.transactional_email import (
     TransactionalEmailError,
     TransactionalEmailStage,
     first_code_send_recorded,
+    forget_first_code_send,
     make_transactional,
     observe_transactional_email_stage,
     record_first_code_send,
@@ -775,15 +776,25 @@ def require_email_from_code(team: Any) -> None:
     _require_flag(team, EMAIL_FROM_CODE_FLAG)
 
 
+def email_from_code_enabled(team: Any) -> bool:
+    return _flag_enabled(team, EMAIL_FROM_CODE_FLAG)
+
+
 def _require_flag(team: Any, flag: str) -> None:
-    if not posthoganalytics.feature_enabled(
-        flag,
-        str(team.uuid),
-        groups={"organization": str(team.organization_id)},
-        group_properties={"organization": {"id": str(team.organization_id)}},
-        send_feature_flag_events=False,
-    ):
+    if not _flag_enabled(team, flag):
         raise NotFound()
+
+
+def _flag_enabled(team: Any, flag: str) -> bool:
+    return bool(
+        posthoganalytics.feature_enabled(
+            flag,
+            str(team.uuid),
+            groups={"organization": str(team.organization_id)},
+            group_properties={"organization": {"id": str(team.organization_id)}},
+            send_feature_flag_events=False,
+        )
+    )
 
 
 class TemplateUploadBurstThrottle(TransactionalEmailBurstThrottle):
@@ -943,7 +954,7 @@ class TransactionalEmailSendMixin:
             with transactional_email_stage("usage_event"):
                 self._report_transactional_email_send(request, {**addressed, **outcome})
         if not queued.replayed:
-            self._report_first_code_send_after_commit(request, addressed.get("addressed_by", "template_id"))
+            self._report_first_code_send_after_commit(request, route, addressed.get("addressed_by", "template_id"))
         data = SendTransactionalEmailResponseSerializer(queued).data
         return Response({**data, "warnings": list(warnings)} if warnings else data, status=status.HTTP_202_ACCEPTED)
 
@@ -972,8 +983,10 @@ class TransactionalEmailSendMixin:
         if not self.user_access_control.check_access_level_for_resource("hog_flow", "editor"):
             raise exceptions.PermissionDenied("You need editor access to workflows to send under a new key.")
 
-    def _report_first_code_send_after_commit(self, request: Any, addressed_by: str) -> None:
-        if not isinstance(request.user, ProjectSecretAPIKeyUser):
+    def _report_first_code_send_after_commit(self, request: Any, route: str, addressed_by: str) -> None:
+        if route != "send_email" or not isinstance(request.user, ProjectSecretAPIKeyUser):
+            return
+        if not email_from_code_enabled(self.team):
             return
         key = request.user.project_secret_api_key
         if key.created_by_id is not None:
@@ -985,14 +998,21 @@ class TransactionalEmailSendMixin:
                 return
             key_creator = _current_creator(key)
             if key_creator is not None and record_first_code_send(self.team_id):
-                posthoganalytics.capture(
-                    distinct_id=key_creator.distinct_id,
-                    event=FIRST_CODE_SEND_EVENT,
-                    properties={"team_id": self.team_id, "addressed_by": addressed_by},
-                    groups=groups(self.organization, self.team),
-                )
+                self._capture_first_code_send(key_creator, addressed_by)
         except Exception as e:
             logger.warning("Failed to capture the first code send", team_id=self.team_id, error=str(e))
+
+    def _capture_first_code_send(self, key_creator: User, addressed_by: str) -> None:
+        try:
+            posthoganalytics.capture(
+                distinct_id=key_creator.distinct_id,
+                event=FIRST_CODE_SEND_EVENT,
+                properties={"team_id": self.team_id, "addressed_by": addressed_by},
+                groups=groups(self.organization, self.team),
+            )
+        except Exception:
+            forget_first_code_send(self.team_id)
+            raise
 
     def _report_transactional_email_send(self, request: Any, properties: dict[str, Any]) -> None:
         self._capture_api_usage(request, "transactional email api send", properties)

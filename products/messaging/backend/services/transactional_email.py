@@ -430,6 +430,10 @@ def record_first_code_send(team_id: int) -> bool:
     return True
 
 
+def forget_first_code_send(team_id: int) -> None:
+    FirstCodeSend.objects.for_team(team_id).delete()
+
+
 def require_code_email_access(
     team_id: int,
     key: str,
