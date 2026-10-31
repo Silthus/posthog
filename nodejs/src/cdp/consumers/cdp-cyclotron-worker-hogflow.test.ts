@@ -638,6 +638,10 @@ describe('CdpCyclotronWorkerHogFlow', () => {
                     event: { distinct_id: 'distinct_A_1', properties: {} } as any,
                     send: { tracking: { captureEngagement: false }, hogFlowVersion },
                 })
+                const queueUnavailableRun = jest.spyOn(
+                    processor['invocationResultsService'].emailStatusService,
+                    'queueUnavailableRun'
+                )
 
                 const results = await processor.processInvocations([invocation])
 
@@ -645,6 +649,7 @@ describe('CdpCyclotronWorkerHogFlow', () => {
                     results.map((result) => (result.invocation as CyclotronJobInvocationHogFlow).hogFlow.version)
                 ).toEqual(ranVersions)
                 expect(jobQueue.dequeueInvocations).toHaveBeenLastCalledWith(failed ? [invocation] : [])
+                expect(queueUnavailableRun.mock.calls).toEqual(failed ? [[invocation]] : [])
             }
         )
 

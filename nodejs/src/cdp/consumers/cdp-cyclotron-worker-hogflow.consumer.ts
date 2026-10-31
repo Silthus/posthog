@@ -136,6 +136,7 @@ export class CdpCyclotronWorkerHogFlow extends CdpCyclotronWorker {
                     counterHogFlowJobsFailed.labels({ reason: 'workflow_version_behind' }).inc()
 
                     failedInvocations.push(item)
+                    this.invocationResultsService.emailStatusService.queueUnavailableRun(item)
 
                     return
                 }
