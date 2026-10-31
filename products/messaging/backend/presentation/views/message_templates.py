@@ -6,8 +6,12 @@ from email.utils import parseaddr
 from types import SimpleNamespace
 from typing import Any, cast
 
-from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.exceptions import (
+    ObjectDoesNotExist,
+    ValidationError as DjangoValidationError,
+)
 from django.core.validators import validate_email
+from django.db import transaction
 
 import structlog
 import posthoganalytics
@@ -31,10 +35,10 @@ from posthog.api.forbid_destroy_model import ForbidDestroyModel
 from posthog.api.mixins import ResponseDeclaration, validated_request
 from posthog.api.routing import TeamAndOrgViewSetMixin
 from posthog.api.shared import UserBasicSerializer
-from posthog.auth import ProjectSecretAPIKeyAuthentication
+from posthog.auth import ProjectSecretAPIKeyAuthentication, ProjectSecretAPIKeyUser
 from posthog.event_usage import groups, report_user_action
 from posthog.integrations import IntegrationManager, IntegrationNotFound
-from posthog.models import User
+from posthog.models import ProjectSecretAPIKey, User
 from posthog.models.tag import tagify
 from posthog.permissions import is_authenticated_via_project_secret_api_key
 from posthog.rate_limit import PersonalOrProjectSecretApiKeyRateThrottle, ProjectSecretApiKeyTeamRateThrottle
@@ -91,8 +95,10 @@ from products.messaging.backend.facade.transactional_email import (
     TemplateSendOptions,
     TransactionalEmailError,
     TransactionalEmailStage,
+    first_code_send_recorded,
     make_transactional,
     observe_transactional_email_stage,
+    record_first_code_send,
     require_code_email_access,
     send_code_email,
     send_transactional_email,
@@ -481,6 +487,7 @@ IDEMPOTENCY_KEY_PARAMETER = OpenApiParameter(
 
 TRANSACTIONAL_EMAIL_API_FLAG = "workflows-transactional-email-api"
 EMAIL_FROM_CODE_FLAG = "workflows-email-from-code"
+FIRST_CODE_SEND_EVENT = "email first code send"
 
 
 class TransactionalEmailIdentifiersSerializer(serializers.Serializer):
@@ -935,6 +942,8 @@ class TransactionalEmailSendMixin:
         finally:
             with transactional_email_stage("usage_event"):
                 self._report_transactional_email_send(request, {**addressed, **outcome})
+        if not queued.replayed:
+            self._report_first_code_send_after_commit(request, addressed.get("addressed_by", "template_id"))
         data = SendTransactionalEmailResponseSerializer(queued).data
         return Response({**data, "warnings": list(warnings)} if warnings else data, status=status.HTTP_202_ACCEPTED)
 
@@ -963,6 +972,28 @@ class TransactionalEmailSendMixin:
         if not self.user_access_control.check_access_level_for_resource("hog_flow", "editor"):
             raise exceptions.PermissionDenied("You need editor access to workflows to send under a new key.")
 
+    def _report_first_code_send_after_commit(self, request: Any, addressed_by: str) -> None:
+        if not isinstance(request.user, ProjectSecretAPIKeyUser):
+            return
+        key = request.user.project_secret_api_key
+        if key.created_by_id is not None:
+            transaction.on_commit(lambda: self._report_first_code_send(key, addressed_by))
+
+    def _report_first_code_send(self, key: ProjectSecretAPIKey, addressed_by: str) -> None:
+        try:
+            if first_code_send_recorded(self.team_id):
+                return
+            key_creator = _current_creator(key)
+            if key_creator is not None and record_first_code_send(self.team_id):
+                posthoganalytics.capture(
+                    distinct_id=key_creator.distinct_id,
+                    event=FIRST_CODE_SEND_EVENT,
+                    properties={"team_id": self.team_id, "addressed_by": addressed_by},
+                    groups=groups(self.organization, self.team),
+                )
+        except Exception as e:
+            logger.warning("Failed to capture the first code send", team_id=self.team_id, error=str(e))
+
     def _report_transactional_email_send(self, request: Any, properties: dict[str, Any]) -> None:
         self._capture_api_usage(request, "transactional email api send", properties)
 
@@ -983,6 +1014,14 @@ class TransactionalEmailSendMixin:
             )
         except Exception as e:
             logger.warning("Failed to capture transactional email usage event", event_name=event, error=str(e))
+
+
+def _current_creator(key: ProjectSecretAPIKey) -> User | None:
+    try:
+        key.refresh_from_db(fields=["created_by"])
+        return key.created_by
+    except ObjectDoesNotExist:
+        return None
 
 
 class TemplateSourceSerializer(serializers.Serializer):
