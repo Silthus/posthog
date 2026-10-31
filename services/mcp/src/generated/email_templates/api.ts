@@ -267,6 +267,8 @@ export const messagingTemplatesPartialUpdateBodyContentOneEmailOneFromOneEmailMa
 
 export const messagingTemplatesPartialUpdateBodyTypeMax = 24
 
+export const messagingTemplatesPartialUpdateBodyKeyMax = 400
+
 export const MessagingTemplatesPartialUpdateBody = () => zod.object({
     name: zod
         .string()
@@ -393,6 +395,13 @@ export const MessagingTemplatesPartialUpdateBody = () => zod.object({
         .optional()
         .describe(
             "For emails that carry login codes, reset links or other secrets. PostHog keeps no copy of each sent email's body or filled-in subject, and clicked links keep only the site address. Can change at any time."
+        ),
+    key: zod
+        .string()
+        .max(messagingTemplatesPartialUpdateBodyKeyMax)
+        .optional()
+        .describe(
+            "Give a template that has no key one, so code can take it over: the next upload under this key updates this template and keeps its id, workflow and sender. Code sends that already use this key keep their own workflow until that upload, then run through this template's workflow. Send it as the only field of the PATCH. Letters, digits, hyphens (-) and underscores (_). Set once: a template that has a key keeps it."
         ),
 })
 

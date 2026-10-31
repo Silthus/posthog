@@ -810,11 +810,11 @@ export interface MessageTemplateApi {
     /** Unpublished edits to a transactional template's content. Sends keep using `content`. Saving `content` publishes it and clears the draft. Set null to discard the draft. */
     draft_content?: MessageTemplateContentApi | null
     /**
-     * Stable identifier code uses to upload and send this template, unique within the project. Null for templates that have no key. Set once, by the first upload.
+     * Stable identifier code uses to upload and send this template, unique within the project. Null for templates that have no key. Set once, by the first upload or by a PATCH whose only field is `key`.
      * @nullable
      */
     readonly key: string | null
-    /** Who owns the content. `code` when it was uploaded from a repository, and the template changes through its next upload. `gui` or null when it is edited in PostHog.
+    /** Who owns the content. `code` when it was uploaded from a repository: PostHog then refuses edits, and the template changes through its next upload. To edit it in PostHog, send a PATCH whose only field is `managed_by` set to `gui`. `gui` or null when it is edited in PostHog.
      *
      * * `gui` - GUI
      * * `code` - Code */
@@ -850,7 +850,36 @@ export interface PaginatedMessageTemplateListApi {
     results: MessageTemplateApi[]
 }
 
-export interface PatchedMessageTemplateApi {
+export interface TemplateErrorApi {
+    /** Error class, such as `invalid_request`. */
+    type: string
+    /** Stable error code to branch on, such as `invalid_template_key`. */
+    code: string
+    /** What went wrong. */
+    detail: string
+    /**
+     * The request field the error is about, if any.
+     * @nullable
+     */
+    attr: string | null
+    /** Why PostHog refuses the request. */
+    why?: string
+    /** What to change before you retry. */
+    fix?: string
+    /** Documentation for this error code. */
+    docs_url?: string
+}
+
+/**
+ * * `gui` - GUI
+ */
+export type TemplateReleasedToEnumApi = (typeof TemplateReleasedToEnumApi)[keyof typeof TemplateReleasedToEnumApi]
+
+export const TemplateReleasedToEnumApi = {
+    Gui: 'gui',
+} as const
+
+export interface PatchedMessageTemplateUpdateApi {
     readonly id?: string
     /**
      * Human-readable template name shown in the library.
@@ -892,15 +921,14 @@ export interface PatchedMessageTemplateApi {
     /** Unpublished edits to a transactional template's content. Sends keep using `content`. Saving `content` publishes it and clears the draft. Set null to discard the draft. */
     draft_content?: MessageTemplateContentApi | null
     /**
-     * Stable identifier code uses to upload and send this template, unique within the project. Null for templates that have no key. Set once, by the first upload.
-     * @nullable
+     * Give a template that has no key one, so code can take it over: the next upload under this key updates this template and keeps its id, workflow and sender. Code sends that already use this key keep their own workflow until that upload, then run through this template's workflow. Send it as the only field of the PATCH. Letters, digits, hyphens (-) and underscores (_). Set once: a template that has a key keeps it.
+     * @maxLength 400
      */
-    readonly key?: string | null
-    /** Who owns the content. `code` when it was uploaded from a repository, and the template changes through its next upload. `gui` or null when it is edited in PostHog.
+    key?: string
+    /** Send `gui` as the only field to stop managing a template in code, so it can be edited in PostHog. It keeps its key, so the next upload under that key manages it in code again.
      *
-     * * `gui` - GUI
-     * * `code` - Code */
-    readonly managed_by?: TemplateManagedByEnumApi | null
+     * * `gui` - GUI */
+    managed_by?: TemplateReleasedToEnumApi
     /**
      * Repository the template was last uploaded from, such as `github.com/example/app`.
      * @nullable
@@ -1085,26 +1113,6 @@ export interface UploadTemplateResponseApi {
     transactional_hog_flow_id: string | null
     /** Where the template file lives, as stored after the upload. */
     source: TemplateSourceApi
-}
-
-export interface TemplateErrorApi {
-    /** Error class, such as `invalid_request`. */
-    type: string
-    /** Stable error code to branch on, such as `invalid_template_key`. */
-    code: string
-    /** What went wrong. */
-    detail: string
-    /**
-     * The request field the error is about, if any.
-     * @nullable
-     */
-    attr: string | null
-    /** Why PostHog refuses the request. */
-    why?: string
-    /** What to change before you retry. */
-    fix?: string
-    /** Documentation for this error code. */
-    docs_url?: string
 }
 
 export type MessagingCategoriesListParams = {

@@ -1054,6 +1054,8 @@ export const messagingTemplatesPartialUpdateBodyTypeMax = 24
 export const messagingTemplatesPartialUpdateBodyDraftContentOneTemplatingDefault = `liquid`
 export const messagingTemplatesPartialUpdateBodyDraftContentOneEmailOneFromOneEmailMax = 254
 
+export const messagingTemplatesPartialUpdateBodyKeyMax = 400
+
 export const MessagingTemplatesPartialUpdateBody = /* @__PURE__ */ zod.object({
     name: zod
         .string()
@@ -1294,6 +1296,20 @@ export const MessagingTemplatesPartialUpdateBody = /* @__PURE__ */ zod.object({
         .optional()
         .describe(
             "Unpublished edits to a transactional template's content. Sends keep using `content`. Saving `content` publishes it and clears the draft. Set null to discard the draft."
+        ),
+    key: zod
+        .string()
+        .max(messagingTemplatesPartialUpdateBodyKeyMax)
+        .optional()
+        .describe(
+            "Give a template that has no key one, so code can take it over: the next upload under this key updates this template and keeps its id, workflow and sender. Code sends that already use this key keep their own workflow until that upload, then run through this template's workflow. Send it as the only field of the PATCH. Letters, digits, hyphens (-) and underscores (_). Set once: a template that has a key keeps it."
+        ),
+    managed_by: zod
+        .enum(['gui'])
+        .describe('\* `gui` - GUI')
+        .optional()
+        .describe(
+            'Send `gui` as the only field to stop managing a template in code, so it can be edited in PostHog. It keeps its key, so the next upload under that key manages it in code again.\n\n\* `gui` - GUI'
         ),
 })
 
