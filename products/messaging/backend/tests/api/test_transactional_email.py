@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from django.conf import settings
 from django.db import IntegrityError, connection, transaction
+from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 
 import requests
@@ -19,7 +20,7 @@ from structlog.testing import capture_logs
 from posthog.constants import AvailableFeature
 from posthog.dataclasses import frozen
 from posthog.models import OrganizationMembership, ProjectSecretAPIKey, Team, User
-from posthog.models.integration import Integration
+from posthog.models.integration import SANDBOX_EMAIL_INTEGRATION_ID, SANDBOX_EMAIL_PROVIDER, Integration
 from posthog.models.personal_api_key import PersonalAPIKey, hash_key_value
 from posthog.models.utils import generate_random_token_personal, generate_random_token_secret
 
@@ -1286,6 +1287,170 @@ class TestTransactionalEmail(APIBaseTest):
             FirstCodeSend.objects.for_team(self.team.id).create(team_id=self.team.id)
         with patch.object(transactional_email, "first_code_send_recorded", return_value=False):
             assert record_first_code_send(self.team.id) is False
+
+
+SANDBOX_FROM_ADDRESS = "hello@sandbox.example.com"
+
+
+@override_settings(
+    WORKFLOWS_SANDBOX_SENDER_DOMAIN="sandbox.example.com",
+    SES_SANDBOX_FROM_ADDRESS=SANDBOX_FROM_ADDRESS,
+    SES_SANDBOX_TENANT_NAME="posthog-sandbox",
+)
+@patch("products.messaging.backend.presentation.views.message_templates.posthoganalytics.capture")
+@patch(
+    "products.messaging.backend.presentation.views.message_templates.posthoganalytics.feature_enabled",
+    return_value=True,
+)
+@patch("posthog.plugins.plugin_server_api.internal_requests.post")
+class TestTransactionalEmailThroughTheSandboxSender(APIBaseTest):
+    def setUp(self):
+        super().setUp()
+        self.send_email_url = f"/api/projects/{self.team.id}/messaging/send/email/"
+        self.psak = self._psak_client()
+
+    def _code_send(self, **fields: Any) -> dict[str, Any]:
+        return {
+            "to": "member@example.com",
+            "distinct_id": "member-1",
+            "template_key": "welcome",
+            "subject": "Welcome",
+            "html": "<p>Hi</p>",
+            **fields,
+        }
+
+    def _send(self, body: dict[str, Any], **kwargs: Any) -> Any:
+        return self.psak.post(self.send_email_url, body, format="json", **kwargs)
+
+    def _psak_client(self) -> APIClient:
+        raw_token = generate_random_token_secret()
+        ProjectSecretAPIKey.objects.create(
+            team=self.team,
+            label="transactional email",
+            secure_value=hash_key_value(raw_token),
+            scopes=["hog_flow:write"],
+            mask_value=f"{raw_token[:4]}...{raw_token[-4:]}",
+            created_by=self.user,
+        )
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {raw_token}")
+        return client
+
+    def _pipeline_answers(self, mock_post: MagicMock, status_code: int, body: dict[str, Any]) -> None:
+        mock_post.return_value = MagicMock(status_code=status_code, json=lambda: body)
+
+    def _sandbox_sender(self) -> Integration | None:
+        return Integration.objects.filter(
+            team=self.team, kind="email", integration_id=SANDBOX_EMAIL_INTEGRATION_ID
+        ).first()
+
+    def _usage_events(self, capture: MagicMock, event: str) -> list[dict[str, Any]]:
+        return [call.kwargs["properties"] for call in capture.call_args_list if call.kwargs["event"] == event]
+
+    @parameterized.expand([("no_sender", False), ("only_an_unverified_sender", True)])
+    def test_a_code_send_without_from_goes_out_through_the_sandbox_when_no_own_sender_is_verified(
+        self, mock_post, _flag, _capture, _name, has_unverified_sender
+    ):
+        if has_unverified_sender:
+            unverified = Integration.objects.create(
+                team=self.team, kind="email", integration_id="hello@example.com", config={"verified": False}
+            )
+            set_default_email_sender_if_unset(self.team.id, unverified.id)
+        self._pipeline_answers(mock_post, 202, {"invocation_id": "sandbox-send", "delivery_mode": "sandbox"})
+
+        response = self._send(self._code_send())
+
+        assert response.status_code == status.HTTP_202_ACCEPTED, response.json()
+        sandbox = self._sandbox_sender()
+        assert sandbox is not None and sandbox.config["provider"] == SANDBOX_EMAIL_PROVIDER
+        assert mock_post.call_args.kwargs["json"]["send"]["from"] == {"integrationId": sandbox.id, "isDefault": True}
+
+    @parameterized.expand(
+        [
+            ("a_verified_sender_without_a_default", "verified_sender"),
+            ("the_sandbox_sender_switched_off", "sandbox_flag_off"),
+        ]
+    )
+    def test_a_code_send_without_from_keeps_the_no_sender_refusal_for(self, mock_post, flag, _capture, _name, case):
+        if case == "verified_sender":
+            Integration.objects.create(
+                team=self.team, kind="email", integration_id="hello@example.com", config={"verified": True}
+            )
+        if case == "sandbox_flag_off":
+            flag.side_effect = lambda key, *args, **kwargs: key != "workflows-sandbox-sender"
+
+        response = self._send(self._code_send())
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()
+        assert (response.json()["code"], response.json()["attr"]) == ("sender_not_verified", None)
+        assert self._sandbox_sender() is None
+        mock_post.assert_not_called()
+
+    @parameterized.expand(
+        [
+            ("its_address", SANDBOX_FROM_ADDRESS),
+            ("its_display_name_and_address", f"Example via PostHog <{SANDBOX_FROM_ADDRESS}>"),
+            ("another_address_on_its_domain", "support@sandbox.example.com"),
+        ]
+    )
+    def test_refuses_a_code_send_that_names_the_sandbox_sender(self, mock_post, _flag, _capture, _name, sender):
+        self._pipeline_answers(mock_post, 202, {"invocation_id": "sandbox-send", "delivery_mode": "sandbox"})
+        assert self._send(self._code_send()).status_code == status.HTTP_202_ACCEPTED
+        mock_post.reset_mock()
+
+        response = self._send(self._code_send(**{"from": sender}))
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()
+        assert (response.json()["code"], response.json()["attr"]) == ("sender_not_verified", "from")
+        mock_post.assert_not_called()
+
+    def test_refuses_a_reply_to_on_a_code_send_through_the_sandbox(self, mock_post, _flag, _capture):
+        response = self._send(self._code_send(reply_to=["help@example.com"]))
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST, response.json()
+        assert (response.json()["code"], response.json()["attr"]) == ("invalid_request", "reply_to")
+        mock_post.assert_not_called()
+
+    @parameterized.expand(
+        [
+            ("sandbox_recipient_not_allowed", 400, status.HTTP_400_BAD_REQUEST, "sandbox_recipient_not_allowed"),
+            ("sandbox_limit_reached", 400, status.HTTP_400_BAD_REQUEST, "sandbox_limit_reached"),
+            ("sending_suspended", 422, status.HTTP_422_UNPROCESSABLE_ENTITY, "sending_suspended"),
+            ("sandbox_check_failed", 503, status.HTTP_503_SERVICE_UNAVAILABLE, "delivery_unavailable"),
+        ]
+    )
+    def test_forwards_the_sandbox_refusal_of(
+        self, mock_post, _flag, capture, refusal, pipeline_status, expected_status, expected_code
+    ):
+        self._pipeline_answers(mock_post, pipeline_status, {"error": refusal})
+
+        response = self._send(self._code_send())
+
+        assert response.status_code == expected_status, response.json()
+        assert response.json()["code"] == expected_code
+        if expected_status == status.HTTP_503_SERVICE_UNAVAILABLE:
+            assert "nothing was sent" in response.json()["detail"]
+
+    @parameterized.expand(
+        [
+            ("a_first_send", {"invocation_id": "sandbox-send", "delivery_mode": "sandbox"}, "queued"),
+            ("a_replay", {"invocation_id": "sandbox-send", "replayed": True, "delivery_mode": "sandbox"}, "replayed"),
+        ]
+    )
+    def test_reports_the_delivery_mode_the_pipeline_answers_with_for(
+        self, mock_post, _flag, capture, _name, pipeline_body, outcome
+    ):
+        self._pipeline_answers(mock_post, 202, pipeline_body)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self._send(self._code_send(), headers={"Idempotency-Key": "welcome:member-1"})
+
+        assert response.status_code == status.HTTP_202_ACCEPTED, response.json()
+        assert response.json() == {"message_id": "sandbox-send", "replayed": outcome == "replayed"}
+        [usage] = self._usage_events(capture, "transactional email api send")
+        assert (usage["outcome"], usage["delivery_mode"]) == (outcome, "sandbox")
+        first_sends = self._usage_events(capture, "email first code send")
+        assert [sent.get("delivery_mode") for sent in first_sends] == (["sandbox"] if outcome == "queued" else [])
 
 
 @pytest.mark.ee

@@ -2,7 +2,8 @@
 and an exit. The message template it was made from owns the content, so each content change writes a new version
 of the workflow through the same write path as the workflows UI, with its revision history."""
 
-from typing import Optional
+from collections.abc import Mapping
+from typing import Any, Optional
 from uuid import UUID
 
 from django.db import transaction
@@ -13,6 +14,7 @@ from posthog.models.scoping import with_team_scope
 
 from products.workflows.backend.facade.contracts import (
     TRANSACTIONAL_EMAIL_ACTION_ID,
+    SandboxSenderUnavailable,
     TransactionalEmailContent,
     TransactionalEmailContentInvalid,
     TransactionalEmailSender,
@@ -22,6 +24,7 @@ from products.workflows.backend.facade.contracts import (
 from products.workflows.backend.facade.enums import HogFlowOriginProduct
 from products.workflows.backend.models import HogFlow, TeamWorkflowsConfig
 from products.workflows.backend.services.hog_flow_writes import create_workflow, update_workflow
+from products.workflows.backend.services.sandbox_sender import ensure_sandbox_email_sender
 
 TRIGGER_ACTION_ID = "trigger_node"
 EXIT_ACTION_ID = "exit_node"
@@ -164,8 +167,8 @@ def _default_sender_id(team_id: int) -> int | None:
 
 
 def resolve_transactional_email_sender(team_id: int, requested_id: int | None) -> int:
-    """The requested sender, or the project's default when none is requested. Raise when it isn't verified,
-    or when it is the sandbox sender, which only workflow email steps and test sends may use."""
+    """The requested sender, or the project's default when none is requested. Raise when it isn't one of the
+    project's own verified senders."""
     sender_id = requested_id or _default_sender_id(team_id)
     sender = None
     if sender_id:
@@ -173,9 +176,17 @@ def resolve_transactional_email_sender(team_id: int, requested_id: int | None) -
             sender = IntegrationManager.email.credentials.get(team_id, sender_id)
         except IntegrationNotFound:
             pass
-    if sender is None or not sender.config.get("verified") or sender.config.get("provider") == SANDBOX_EMAIL_PROVIDER:
+    if sender is None or not _is_own_verified_sender(sender.config):
         raise TransactionalEmailSenderUnavailable()
     return sender.id
+
+
+def _is_own_verified_sender(config: Mapping[str, Any]) -> bool:
+    return bool(config.get("verified")) and config.get("provider") != SANDBOX_EMAIL_PROVIDER
+
+
+def _has_own_verified_sender(team_id: int) -> bool:
+    return any(_is_own_verified_sender(sender.config) for sender in IntegrationManager.email.credentials.list(team_id))
 
 
 def _sender_on_domain(team_id: int, email: str) -> int:
@@ -183,7 +194,7 @@ def _sender_on_domain(team_id: int, email: str) -> int:
     domain = address.rpartition("@")[2]
     on_domain: list[int] = []
     for sender in IntegrationManager.email.credentials.list(team_id):
-        if not sender.config.get("verified"):
+        if not _is_own_verified_sender(sender.config):
             continue
         own = str(sender.config.get("email") or sender.integration_id or "").lower()
         if own == address:
@@ -200,10 +211,28 @@ def _sender_on_domain(team_id: int, email: str) -> int:
 
 def code_send_sender(*, team_id: int, email: str | None, name: str | None) -> TransactionalEmailSender:
     if email is None:
+        return _sender_for_an_omitted_from(team_id)
+    return TransactionalEmailSender(integration_id=_sender_on_domain(team_id, email), email=email, name=name)
+
+
+def _sender_for_an_omitted_from(team_id: int) -> TransactionalEmailSender:
+    try:
         return TransactionalEmailSender(
             integration_id=resolve_transactional_email_sender(team_id, None), email=None, name=None
         )
-    return TransactionalEmailSender(integration_id=_sender_on_domain(team_id, email), email=email, name=name)
+    except TransactionalEmailSenderUnavailable:
+        if _has_own_verified_sender(team_id):
+            raise
+        return TransactionalEmailSender(
+            integration_id=_sandbox_sender_id(team_id), email=None, name=None, is_sandbox=True
+        )
+
+
+def _sandbox_sender_id(team_id: int) -> int:
+    try:
+        return ensure_sandbox_email_sender(team_id).integration_id
+    except SandboxSenderUnavailable as e:
+        raise TransactionalEmailSenderUnavailable() from e
 
 
 def _current_sender(flow: HogFlow) -> int | None:
