@@ -34,7 +34,7 @@ import {
 import { HogTransformerService, createHogTransformerService } from './hog-transformations/hog-transformer.service'
 import { RerunJobManager } from './rerun/rerun-job.manager'
 import { RerunRequest } from './rerun/rerun-job.types'
-import { HogFlow, HogFlowAction } from './schema/hogflow'
+import { HogFlowAction } from './schema/hogflow'
 import { BatchExportHogFunctionService, NotFoundError, ParseError } from './services/batch-export-hog-function.service'
 import type { CyclotronV2JobProducer } from './services/cyclotron-v2'
 import { HogExecutorAsyncService, HogExecutorExecuteAsyncOptions } from './services/hog-executor-async.service'
@@ -75,6 +75,11 @@ import { EmailTrackingService } from './services/messaging/email-tracking.servic
 import { EmailValidationService } from './services/messaging/email-validation.service'
 import { EmailTrackingCodeSigner } from './services/messaging/helpers/tracking-code'
 import { RecipientTokensService } from './services/messaging/recipient-tokens.service'
+import {
+    SandboxSendAdmission,
+    SandboxSendRefusal,
+    SandboxSendRequest,
+} from './services/messaging/sandbox-send-admission'
 import {
     HogWatcherService,
     HogWatcherState,
@@ -173,6 +178,13 @@ function parseRealtimeCohort(value: unknown): BatchResolverState['realtimeCohort
 
 const ACCEPTED_SEND_FINGERPRINT_MARKER = 'accepted_send'
 
+const SANDBOX_REFUSAL_STATUS: Record<SandboxSendRefusal, number> = {
+    sandbox_recipient_not_allowed: 400,
+    sandbox_limit_reached: 400,
+    sending_suspended: 422,
+    sandbox_check_failed: 503,
+}
+
 const transactionalEmailFingerprint = (
     hogFlowId: string,
     { to, distinct_id, variables, send }: TransactionalEmailRequest
@@ -237,6 +249,7 @@ export class CdpApi {
     private emailValidationService: EmailValidationService
     private teamWorkflowsConfigService: TeamWorkflowsConfigService
     private emailStatusService: EmailStatusService
+    private sandboxSendAdmission: SandboxSendAdmission
     private resumeBatchJwt: ScopedServiceJwt
 
     constructor(
@@ -262,6 +275,11 @@ export class CdpApi {
         this.hogWatcherMirror = services.hogWatcherMirror
         this.invocationResultsService = services.invocationResultsService
         this.emailStatusService = services.emailStatusService
+        this.sandboxSendAdmission = new SandboxSendAdmission(
+            services.sandboxEmailSender,
+            services.organizationMembers,
+            deps.integrationManager
+        )
 
         // API-only services. The hog-transformer's monitoring service reuses the same
         // resolved outputs registry as the core CDP services — no separate construction.
@@ -1322,7 +1340,13 @@ export class CdpApi {
                 }
                 try {
                     stages.start('checks')
-                    const refusal = await this.refuseTransactionalEmail(team.id, hogFlow, to)
+                    const refusal = await this.refuseTransactionalEmail({
+                        teamId: team.id,
+                        invocationId: invocation.id,
+                        hogFlow,
+                        send,
+                        to,
+                    })
                     if (refusal) {
                         if (idempotencyKey) {
                             stages.start('idempotency')
@@ -1379,10 +1403,9 @@ export class CdpApi {
     // here tells the caller that the email will not go out. The worker keeps its checks, because the state can
     // change while the job waits on the queue.
     private async refuseTransactionalEmail(
-        teamId: number,
-        hogFlow: HogFlow,
-        to: string
+        request: SandboxSendRequest
     ): Promise<{ outcome: TransactionalEmailOutcome; status: number } | null> {
+        const { teamId, hogFlow, to } = request
         if (hogFlow.status !== 'active') {
             return { outcome: 'not_sendable', status: 400 }
         }
@@ -1398,6 +1421,10 @@ export class CdpApi {
         const { isLimited } = await checkHogFlowQuotaLimits(hogFlow, teamId, this.deps.quotaLimiting)
         if (isLimited) {
             return { outcome: 'quota_limited', status: 429 }
+        }
+        const sandboxRefusal = await this.sandboxSendAdmission.refusal(request)
+        if (sandboxRefusal) {
+            return { outcome: sandboxRefusal, status: SANDBOX_REFUSAL_STATUS[sandboxRefusal] }
         }
         // Last, because a cache miss costs a DNS lookup. A DNS failure lets the send through.
         if (await this.emailValidationService.getRecipientSkipReason(teamId, to)) {

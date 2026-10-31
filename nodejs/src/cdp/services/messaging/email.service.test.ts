@@ -369,7 +369,12 @@ describe('EmailService', () => {
                 expect(capture).toHaveBeenLastCalledWith(
                     expect.objectContaining({ id: team.id }),
                     'workflows sandbox email blocked',
-                    { reason, is_test: isTest, blocked_recipient_count: blockedRecipientCount }
+                    {
+                        reason,
+                        is_test: isTest,
+                        blocked_recipient_count: blockedRecipientCount,
+                        source: isTest ? 'test' : 'workflow',
+                    }
                 )
             }
 
@@ -608,6 +613,24 @@ describe('EmailService', () => {
                     'workflows sandbox email sent',
                     { recipient_count: 3, source: 'workflow', is_test: false }
                 )
+            })
+
+            it('delivers to each member once when an address repeats across to, cc and bcc', async () => {
+                service = createSandboxService(true)
+                invocation.queueParameters = createSandboxParams({
+                    to: { email: memberEmail() },
+                    cc: `${memberEmail().toUpperCase()}, ${memberEmail('cc')}, ${memberEmail('cc')}`,
+                    bcc: `Example colleague <${memberEmail('cc')}>, ${memberEmail('bcc')}, ${memberEmail()}`,
+                })
+
+                const result = await service.executeSendEmail(invocation)
+
+                expect(result.error).toBeUndefined()
+                expect((sendEmailSpy.mock.calls[0][0] as SendEmailCommand).input.Destination).toEqual({
+                    ToAddresses: [memberEmail()],
+                    CcAddresses: [memberEmail('cc')],
+                    BccAddresses: [memberEmail('bcc')],
+                })
             })
 
             it.each(['cc', 'bcc'] as const)('delivers a quoted %s mailbox whole', async (field) => {
@@ -876,7 +899,12 @@ describe('EmailService', () => {
                     expect(capture).toHaveBeenCalledWith(
                         expect.objectContaining({ id: team.id }),
                         'workflows sandbox email blocked',
-                        { reason: 'paused', is_test: isTest, blocked_recipient_count: 0 }
+                        {
+                            reason: 'paused',
+                            is_test: isTest,
+                            blocked_recipient_count: 0,
+                            source: isTest ? 'test' : 'workflow',
+                        }
                     )
                 })
 
@@ -916,7 +944,7 @@ describe('EmailService', () => {
                     expect(capture).toHaveBeenCalledWith(
                         expect.objectContaining({ id: team.id }),
                         'workflows sandbox email blocked',
-                        { reason: 'check_failed', is_test: false, blocked_recipient_count: 0 }
+                        { reason: 'check_failed', is_test: false, blocked_recipient_count: 0, source: 'workflow' }
                     )
                 })
 
@@ -1164,19 +1192,20 @@ describe('EmailService', () => {
                     }
                 )
 
-                it('charges a repeated address once per address and once per copy for the project', async () => {
+                it('charges a repeated address once, as it is delivered once', async () => {
                     service = createSandboxService(true, {
-                        senderSettings: { dailyTeamCap: '3', dailyRecipientCap: '1' },
+                        senderSettings: { dailyTeamCap: '2', dailyRecipientCap: '1' },
                     })
 
                     expectSent(await send(false, { cc: memberEmail().toUpperCase(), bcc: ` ${memberEmail()} ` }))
+                    expectSent(await send(false, { to: { email: memberEmail('cc') } }))
                     expectCapSkip(
-                        await send(false, { to: { email: memberEmail('cc') } }),
+                        await send(false, { to: { email: memberEmail('bcc') } }),
                         false,
                         TEAM_CAP_REACHED,
                         'cap_reached'
                     )
-                    expect(sendEmailSpy).toHaveBeenCalledTimes(1)
+                    expect(sendEmailSpy).toHaveBeenCalledTimes(2)
                 })
 
                 it('refills a spent allowance over a day rather than seconds', async () => {

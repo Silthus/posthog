@@ -12,17 +12,24 @@ import { PosthogJwtAudience } from '~/cdp/utils/jwt-utils'
 import { ScopedServiceJwt } from '~/cdp/utils/scoped-service-jwt'
 import { setupExpressApp } from '~/common/api/router'
 import { deleteKeysWithPrefix } from '~/common/redis/_tests/redis'
-import { createRedisV2PoolFromConfig } from '~/common/redis/redis-v2'
+import { RedisClient, RedisV2, createRedisV2PoolFromConfig } from '~/common/redis/redis-v2'
 import { closeHub, createHub } from '~/common/utils/db/hub'
 import { PostgresUse } from '~/common/utils/db/postgres'
 import { parseJSON } from '~/common/utils/json-parse'
 import { logger } from '~/common/utils/logger'
+import * as posthog from '~/common/utils/posthog'
 import { UUIDT } from '~/common/utils/utils'
 import { waitForExpect } from '~/tests/helpers/expectations'
 
 import { createCdpConsumerDeps } from '../../tests/helpers/cdp'
 import { forSnapshot } from '../../tests/helpers/snapshots'
-import { createTeam, getFirstTeam, resetTestDatabase } from '../../tests/helpers/sql'
+import {
+    createOrganizationMembership,
+    createTeam,
+    createUser,
+    getFirstTeam,
+    resetTestDatabase,
+} from '../../tests/helpers/sql'
 import { Hub, Team } from '../types'
 import { FixtureHogFlowBuilder } from './_tests/builders/hogflow.builder'
 import { HOG_EXAMPLES, HOG_FILTERS_EXAMPLES, HOG_INPUTS_EXAMPLES } from './_tests/examples'
@@ -41,7 +48,12 @@ import {
     transactionalEmailRequestsTotal,
     transactionalEmailStageDurationMs,
 } from './services/hogflows/transactional-email'
+import { OrganizationMembersService } from './services/managers/organization-members.service'
+import { SandboxSenderStateService } from './services/managers/sandbox-sender-state.service'
+import { SandboxEmailSender, SandboxEmailSenderConfig } from './services/messaging/sandbox-email-sender'
+import { SandboxSendAdmission } from './services/messaging/sandbox-send-admission'
 import { BASE_REDIS_KEY, HogWatcherState } from './services/monitoring/hog-watcher.service'
+import { RateLimiterService } from './services/rate-limiter/rate-limiter.service'
 import { compileHog } from './templates/compiler'
 import { HogFunctionInvocationGlobals, HogFunctionType } from './types'
 
@@ -2822,6 +2834,282 @@ describe('CDP API', () => {
 
             expect(res.status).toEqual(401)
             expect(mockQueueInvocations).not.toHaveBeenCalled()
+        })
+
+        describe('through the sandbox sender', () => {
+            let sandboxIntegrationId: number
+            let userIds: number[]
+            let capture: jest.SpyInstance
+            const address = (name: string): string => `${name}-${team.id}@example.com`
+            const sandboxRedis: RedisV2 = {
+                useClient: async (_options, callback) => {
+                    const client = await hub.redisPool.acquire()
+                    try {
+                        return await callback(client as unknown as RedisClient)
+                    } finally {
+                        await hub.redisPool.release(client)
+                    }
+                },
+                usePipeline: () => Promise.reject(new Error('The sandbox tests do not use pipelines')),
+            }
+            const addUser = async (email: string, { member = true, verified = true } = {}): Promise<void> => {
+                const id = await createUser(hub.postgres, email)
+                userIds.push(id)
+                if (member) {
+                    await createOrganizationMembership(hub.postgres, team.organization_id, id)
+                }
+                await hub.postgres.query(
+                    PostgresUse.COMMON_WRITE,
+                    'UPDATE posthog_user SET email = $1, is_active = true, is_email_verified = $2 WHERE id = $3',
+                    [email, verified, id],
+                    'test:sandbox-api-user'
+                )
+            }
+            const unreachableRedis: RedisV2 = {
+                useClient: () => Promise.reject(new Error('Valkey is unreachable')),
+                usePipeline: () => Promise.reject(new Error('Valkey is unreachable')),
+            }
+            const sandboxSender = (
+                settings: Partial<SandboxEmailSenderConfig> = {},
+                limiterRedis: RedisV2 = sandboxRedis
+            ): SandboxEmailSender =>
+                new SandboxEmailSender(
+                    {
+                        enabled: true,
+                        tenantName: 'sandbox-tenant',
+                        configurationSetName: 'sandbox-email',
+                        fromAddress: 'fixed-sandbox@example.com',
+                        dailyTeamCap: '25',
+                        dailyRecipientCap: '5',
+                        ...settings,
+                    },
+                    hub.teamManager,
+                    sandboxRedis,
+                    new RateLimiterService(limiterRedis, { name: 'sandbox-email' }),
+                    new SandboxSenderStateService(hub.postgres, hub.pubSub)
+                )
+            const admitThrough = (
+                sender: SandboxEmailSender,
+                members = new OrganizationMembersService(hub.postgres)
+            ) => {
+                api['sandboxSendAdmission'] = new SandboxSendAdmission(sender, members, cdpDeps.integrationManager)
+            }
+            const sandboxSend = (to: string, extra: Record<string, unknown> = {}) =>
+                sendAccepted(hogFlow.id, {
+                    ...body,
+                    to,
+                    send: {
+                        content: codeSend.content,
+                        from: { integrationId: sandboxIntegrationId, isDefault: true },
+                        tracking: codeSend.tracking,
+                    },
+                    ...extra,
+                })
+
+            const pausableTenant = (): string => `sandbox-tenant-${team.id}`
+
+            beforeEach(async () => {
+                capture = jest.spyOn(posthog, 'captureTeamEvent').mockImplementation(() => {})
+                userIds = []
+                await addUser(address('member'))
+                const integration = await insertIntegration(hub.postgres, team.id, {
+                    kind: 'email',
+                    config: {
+                        provider: 'sandbox',
+                        email: 'sandbox@example.com',
+                        domain: 'example.com',
+                        name: 'Example organization via PostHog',
+                        verified: true,
+                    },
+                })
+                sandboxIntegrationId = integration.id
+                admitThrough(sandboxSender())
+            })
+
+            afterEach(async () => {
+                await hub.postgres.query(
+                    PostgresUse.COMMON_WRITE,
+                    'DELETE FROM posthog_organizationmembership WHERE user_id = ANY($1::integer[])',
+                    [userIds],
+                    'test:delete-sandbox-api-memberships'
+                )
+                await hub.postgres.query(
+                    PostgresUse.COMMON_WRITE,
+                    'DELETE FROM posthog_user WHERE id = ANY($1::integer[])',
+                    [userIds],
+                    'test:delete-sandbox-api-users'
+                )
+                await deleteKeysWithPrefix(sandboxRedis, `@posthog/workflows-sandbox-blocked/${team.id}/`)
+                await deleteKeysWithPrefix(sandboxRedis, `@posthog/workflows-sandbox-daily/{${team.organization_id}}`)
+                await hub.postgres.query(
+                    PostgresUse.COMMON_WRITE,
+                    'DELETE FROM workflows_sandboxsenderorganizationblock WHERE organization_id = $1',
+                    [team.organization_id],
+                    'test:delete-sandbox-organization-block'
+                )
+                await hub.postgres.query(
+                    PostgresUse.COMMON_WRITE,
+                    'DELETE FROM workflows_sandboxsendertenantstate WHERE tenant_name = $1',
+                    [pausableTenant()],
+                    'test:delete-sandbox-tenant-status'
+                )
+            })
+
+            it.each([
+                ['someone outside the organization', { member: false }],
+                ['a member with an unverified address', { verified: false }],
+            ])('refuses a send to %s without saying which it is', async (_desc, user) => {
+                await addUser(address('other'), user)
+
+                const res = await sandboxSend(address('other'))
+
+                expect(res.status).toEqual(400)
+                expect(res.body).toEqual({ error: 'sandbox_recipient_not_allowed' })
+                expect(mockQueueInvocations).not.toHaveBeenCalled()
+                expect(capture).toHaveBeenCalledWith(
+                    expect.objectContaining({ id: team.id }),
+                    'workflows sandbox email blocked',
+                    expect.objectContaining({ source: 'api', blocked_recipient_count: 1 })
+                )
+            })
+
+            it('queues a send to a member and leaves the daily allowance for the worker to claim', async () => {
+                admitThrough(sandboxSender({ dailyTeamCap: '1', dailyRecipientCap: '1' }))
+
+                const first = await sandboxSend(address('member'))
+                const second = await sandboxSend(address('member'))
+
+                expect([first.status, second.status]).toEqual([202, 202])
+                expect(mockQueueInvocations).toHaveBeenCalledTimes(2)
+            })
+
+            it.each([
+                ['the project', { dailyTeamCap: '1', dailyRecipientCap: '5' }, 'other-member'],
+                ['the recipient', { dailyTeamCap: '25', dailyRecipientCap: '1' }, 'member'],
+            ])('refuses a send once %s used up its daily allowance', async (_desc, caps, spentOn) => {
+                await addUser(address('other-member'))
+                const sender = sandboxSender(caps)
+                admitThrough(sender)
+                expect(await sender.claimDailyCaps(team.id, [address(spentOn)])).toMatchObject({ type: 'granted' })
+
+                const res = await sandboxSend(address('member'))
+
+                expect(res.status).toEqual(400)
+                expect(res.body).toEqual({ error: 'sandbox_limit_reached' })
+                expect(mockQueueInvocations).not.toHaveBeenCalled()
+            })
+
+            it.each([
+                [
+                    'the sandbox tenant is paused',
+                    async () => {
+                        await hub.postgres.query(
+                            PostgresUse.COMMON_WRITE,
+                            `INSERT INTO workflows_sandboxsendertenantstate (tenant_name, sending_status, synced_at)
+                             VALUES ($1, 'DISABLED', now())`,
+                            [pausableTenant()],
+                            'test:pause-sandbox-tenant'
+                        )
+                        admitThrough(sandboxSender({ tenantName: pausableTenant() }))
+                    },
+                ],
+                [
+                    'the organization is blocked',
+                    async () => {
+                        await hub.postgres.query(
+                            PostgresUse.COMMON_WRITE,
+                            `INSERT INTO workflows_sandboxsenderorganizationblock (organization_id, reason, created_at)
+                             VALUES ($1, 'Abuse report', now())`,
+                            [team.organization_id],
+                            'test:block-sandbox-organization'
+                        )
+                        await Promise.resolve()
+                    },
+                ],
+                [
+                    'the sandbox sender is switched off',
+                    async () => {
+                        admitThrough(sandboxSender({ enabled: false }))
+                        await Promise.resolve()
+                    },
+                ],
+            ])('refuses a send while %s', async (_desc, suspend) => {
+                await suspend()
+
+                const res = await sandboxSend(address('member'))
+
+                expect(res.status).toEqual(422)
+                expect(res.body).toEqual({ error: 'sending_suspended' })
+                expect(mockQueueInvocations).not.toHaveBeenCalled()
+            })
+
+            it.each([
+                [
+                    'the membership lookup',
+                    () => {
+                        const members = new OrganizationMembersService(hub.postgres)
+                        jest.spyOn(members, 'checkRecipients').mockRejectedValue(new Error('Postgres is unreachable'))
+                        admitThrough(sandboxSender(), members)
+                    },
+                ],
+                ['the daily allowance', () => admitThrough(sandboxSender({}, unreachableRedis))],
+                [
+                    'the pause state',
+                    () =>
+                        jest
+                            .spyOn(SandboxSenderStateService.prototype, 'isPaused')
+                            .mockRejectedValue(new Error('Postgres is unreachable')),
+                ],
+            ])('answers 503 and queues nothing when %s cannot be checked', async (_desc, breakCheck) => {
+                breakCheck()
+
+                const res = await sandboxSend(address('member'))
+
+                expect(res.status).toEqual(503)
+                expect(res.body).toEqual({ error: 'sandbox_check_failed' })
+                expect(mockQueueInvocations).not.toHaveBeenCalled()
+            })
+
+            it.each([
+                ['a stored cc outside the organization', { cc: 'outsider@example.com' }],
+                ['a stored bcc outside the organization', { bcc: 'Outsider <outsider@example.com>' }],
+                ['a stored cc that renders per send', { cc: '{{ person.properties.manager }}' }],
+            ])('refuses a template send with %s', async (_desc, copies) => {
+                const storedFlow = transactionalFlow('api', 'active')
+                const email = storedFlow.actions.find((action) => action.type === 'function_email')!
+                email.config = {
+                    ...email.config,
+                    inputs: { email: { value: { from: { integrationId: sandboxIntegrationId }, ...copies } } },
+                } as typeof email.config
+                hogFlow = await insertHogFlow(storedFlow)
+
+                const res = await sendAccepted(hogFlow.id, {
+                    ...body,
+                    to: address('member'),
+                    send: { tracking: { captureEngagement: false } },
+                })
+
+                expect(res.status).toEqual(400)
+                expect(res.body).toEqual({ error: 'sandbox_recipient_not_allowed' })
+                expect(mockQueueInvocations).not.toHaveBeenCalled()
+            })
+
+            it('replays a keyed send after its daily allowance is spent', async () => {
+                const sender = sandboxSender({ dailyTeamCap: '1', dailyRecipientCap: '1' })
+                admitThrough(sender)
+                const idempotency_key = `key-${new UUIDT().toString()}`
+
+                const first = await sandboxSend(address('member'), { idempotency_key })
+                expect(await sender.claimDailyCaps(team.id, [address('member')])).toMatchObject({ type: 'granted' })
+                const retry = await sandboxSend(address('member'), { idempotency_key })
+
+                expect(first.status).toEqual(202)
+                expect([retry.status, retry.body]).toEqual([
+                    202,
+                    { status: 'queued', invocation_id: first.body.invocation_id, replayed: true },
+                ])
+                expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
+            })
         })
     })
 
