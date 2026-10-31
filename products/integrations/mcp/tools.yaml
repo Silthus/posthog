@@ -75,7 +75,7 @@ tools:
             after adding DNS records until status is verified, waiting at least 10 seconds between calls. Pass
             refresh=true right after changing DNS to skip the 10 second cache. It does not change DNS or SES, and it
             does not mark the sender verified: once status is verified, call integrations-email-verify-create.
-        feature_flag: workflows-email-domain-agent-setup
+        feature_flag: workflows-email-from-code
     integrations-email-verify-create:
         operation: integrations_email_verify_create
         enabled: true
@@ -90,7 +90,7 @@ tools:
             Record that an email sender's domain is verified, by integration ID, so its senders can send. Call it once
             integrations-email-status-retrieve reports status verified. It asks SES to check the domain again and
             returns status success when SES has verified it. Needs a project admin.
-        feature_flag: workflows-email-domain-agent-setup
+        feature_flag: workflows-email-from-code
     integrations-github-repos-retrieve:
         operation: integrations_github_repos_retrieve
         enabled: true
@@ -155,7 +155,9 @@ tools:
             List all third-party integrations configured in the current project. Returns each integration's type (kind),
             display name, non-sensitive configuration, error status, and creation metadata. Common kinds include slack,
             github, hubspot, salesforce, and various ad platforms. Sensitive credentials (access tokens, secrets) are
-            never serialized.
+            never serialized. For native email senders, filter kind=email and inspect config.verified: true means
+            verified, false means unverified, and a missing flag means unknown. An empty result means no visible
+            sender; check all pages before concluding none is configured. Other raw configuration is excluded.
         response:
             include:
                 - id
@@ -164,6 +166,7 @@ tools:
                 - errors
                 - created_at
                 - created_by
+                - config.verified
     integrations-users-retrieve:
         operation: integrations_users_retrieve
         enabled: true
