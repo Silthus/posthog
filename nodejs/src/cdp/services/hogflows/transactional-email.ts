@@ -17,6 +17,7 @@ export const AcceptedSendSchema = z
                 integrationId: z.number().int(),
                 email: z.string().optional(),
                 name: z.string().optional(),
+                isDefault: z.boolean().optional(),
             })
             .readonly()
             .optional(),

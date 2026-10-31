@@ -2310,6 +2310,11 @@ describe('CDP API', () => {
                     .set({ Authorization: `Bearer ${mintToken(team.id, hogFlow.id)}` })
                     .send({ ...payload, idempotency_key: keyed.idempotency_key })
             const changedContent = { ...codeSend, content: { ...codeSend.content, subject: 'Your new code' } }
+            const defaultSenderSend = (integrationId: number) => ({
+                ...codeSend,
+                from: { integrationId, isDefault: true },
+            })
+            const otherSenderId = codeSend.from.integrationId + 3
 
             beforeEach(() => {
                 keyed = { ...body, idempotency_key: `key-${new UUIDT().toString()}` }
@@ -2341,6 +2346,30 @@ describe('CDP API', () => {
 
             it.each([
                 [
+                    'the default sender changed',
+                    { ...body, send: defaultSenderSend(codeSend.from.integrationId) },
+                    { ...body, send: defaultSenderSend(otherSenderId) },
+                ],
+                [
+                    'its named address resolved to another sender',
+                    { ...body, send: codeSend },
+                    { ...body, send: { ...codeSend, from: { ...codeSend.from, integrationId: otherSenderId } } },
+                ],
+            ])('replays a keyed accepted send after %s', async (_desc, first, retry) => {
+                const sent = await sendKeyedOn('transactional_email/send', first)
+                const replayed = await sendKeyedOn('transactional_email/send', retry)
+
+                expect(sent.status).toEqual(202)
+                expect(replayed.body).toEqual({
+                    status: 'queued',
+                    invocation_id: sent.body.invocation_id,
+                    replayed: true,
+                })
+                expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
+            })
+
+            it.each([
+                [
                     'another recipient',
                     ['transactional_email', body],
                     ['transactional_email', { ...body, to: 'someone-else@example.com' }],
@@ -2353,6 +2382,19 @@ describe('CDP API', () => {
                 [
                     'the other route',
                     ['transactional_email', body],
+                    ['transactional_email/send', { ...body, send: codeSend }],
+                ],
+                [
+                    'another named sender',
+                    ['transactional_email/send', { ...body, send: codeSend }],
+                    [
+                        'transactional_email/send',
+                        { ...body, send: { ...codeSend, from: { ...codeSend.from, email: 'alerts@example.com' } } },
+                    ],
+                ],
+                [
+                    'a named sender instead of the default one',
+                    ['transactional_email/send', { ...body, send: defaultSenderSend(codeSend.from.integrationId) }],
                     ['transactional_email/send', { ...body, send: codeSend }],
                 ],
             ] as const)(
