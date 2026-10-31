@@ -7,11 +7,13 @@ from parameterized import parameterized
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from posthog.models import ProjectSecretAPIKey, Team
+from posthog.constants import AvailableFeature
+from posthog.models import OrganizationMembership, ProjectSecretAPIKey, Team
 from posthog.models.integration import Integration
 from posthog.models.personal_api_key import hash_key_value
 from posthog.models.utils import generate_random_token_secret
 
+from products.access_control.backend.models.access_control import AccessControl
 from products.messaging.backend.models.message_template import MessageTemplate
 from products.messaging.backend.presentation.views.message_templates import (
     EMAIL_FROM_CODE_FLAG,
@@ -298,6 +300,35 @@ class TestTemplateUpload(APIBaseTest):
         response = self._psak_client(scopes, team).put(self.url, WELCOME, format="json")
 
         assert response.status_code == expected_status, response.json()
+        assert not MessageTemplate.objects.exists()
+
+    def test_refuses_a_first_upload_under_a_key_whose_workflow_the_member_cannot_edit(
+        self, post: MagicMock, _flag, _capture
+    ):
+        post.return_value = MagicMock(status_code=202, json=lambda: {"invocation_id": "invocation-1"})
+        code_send = {
+            "to": "user@example.com",
+            "distinct_id": "user-1",
+            "template_key": "welcome",
+            "subject": "Hi",
+            "html": "<p>Hi</p>",
+        }
+        sent = self.psak.post(f"/api/projects/{self.team.id}/messaging/send/email/", code_send, format="json")
+        assert sent.status_code == status.HTTP_202_ACCEPTED, sent.json()
+        key_workflow_id = post.call_args.args[0].split("/hog_flows/")[1].split("/")[0]
+        self.organization.available_product_features = [
+            {"name": AvailableFeature.ACCESS_CONTROL, "key": AvailableFeature.ACCESS_CONTROL}
+        ]
+        self.organization.save()
+        self.organization_membership.level = OrganizationMembership.Level.MEMBER
+        self.organization_membership.save()
+        AccessControl.objects.create(
+            team=self.team, resource="hog_flow", resource_id=key_workflow_id, access_level="viewer"
+        )
+
+        response = self.client.put(self.url, WELCOME, format="json")
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN, response.json()
         assert not MessageTemplate.objects.exists()
 
     @patch("posthog.rate_limit.is_rate_limit_enabled", return_value=True)

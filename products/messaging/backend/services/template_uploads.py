@@ -18,7 +18,7 @@ from products.messaging.backend.models.message_template import KEY_CONSTRAINT
 from products.messaging.backend.services.content_hash import email_content_hash, sent_hash_state
 from products.messaging.backend.services.message_templates import record_content_hash
 from products.messaging.backend.services.template_saves import WorkflowEditorCheck, save_locked_template
-from products.messaging.backend.services.transactional_email import is_transactional, make_transactional
+from products.messaging.backend.services.transactional_email import is_transactional, known_key, make_transactional
 
 SOURCE_PARTS = ("repository", "path", "ref")
 
@@ -70,6 +70,8 @@ def _upload(
     require_workflow_create: WorkflowCreateCheck,
 ) -> Uploaded:
     template = locked_template_with_key(team_id, upload.key)
+    if template is None or template.managed_by is None:
+        _require_editor_of_the_key_workflow(team_id, upload.key, require_workflow_editor)
     if template is None:
         require_workflow_create()
         return Uploaded(result=TemplateUploadResult.CREATED, template=_create(team_id, upload, user_id=user_id))
@@ -91,6 +93,12 @@ def _upload(
         require_workflow_create()
         _make_transactional(template, user_id=user_id)
     return Uploaded(result=TemplateUploadResult.UPDATED, template=template)
+
+
+def _require_editor_of_the_key_workflow(team_id: int, key: str, require_workflow_editor: WorkflowEditorCheck) -> None:
+    key_workflow = known_key(team_id, key)
+    if key_workflow is not None:
+        require_workflow_editor(key_workflow.hog_flow_id)
 
 
 def locked_template_with_key(team_id: int, key: str) -> MessageTemplate | None:
