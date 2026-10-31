@@ -24,6 +24,7 @@ import { SOURCE_PREFILL_PARAM } from '../Broadcasts/broadcastAudiencePrefill'
 import { DRAFT_SOURCE_PARAM } from '../MessageAudience/aiEmailDraft'
 import { EMAIL_PREFILL_PARAM } from '../MessageAudience/messageDrafts'
 import { batchWorkflowJobsLogic } from './batchWorkflowJobsLogic'
+import { WorkflowImportNotesBanner } from './import/WorkflowImportNotesBanner'
 import { NewWorkflowAgent } from './NewWorkflowAgent'
 import { newWorkflowLogic } from './newWorkflowLogic'
 import { WorkflowBatchOverview } from './overview/WorkflowBatchOverview'
@@ -250,6 +251,7 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
             <BindLogic logic={workflowLogic} props={workflowProps}>
                 <WorkflowSceneHeader {...props} />
                 <WorkflowEmailPauseBanner />
+                {isSavedWorkflow && <WorkflowImportNotesBanner id={props.id!} />}
                 {isSavedWorkflow && <WorkflowBroadcastMoveBanner id={props.id!} />}
                 {!isSavedWorkflow && <WorkflowAiEmailDraftStatus {...workflowProps} />}
                 <WorkflowSandboxSwitchBanner {...workflowProps} />
@@ -264,7 +266,7 @@ export function WorkflowScene(props: WorkflowSceneLogicProps): JSX.Element {
                         tabs={tabs}
                         sceneInset
                         className={clsx({
-                            'flex flex-1 flex-col [&>div]:flex [&>div]:flex-1 [&>div]:flex-col':
+                            'flex min-h-0 flex-1 flex-col [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col':
                                 activeTab === 'workflow',
                         })}
                     />
