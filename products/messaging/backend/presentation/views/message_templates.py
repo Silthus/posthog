@@ -119,6 +119,7 @@ logger = structlog.get_logger(__name__)
 @extend_schema_field(
     {
         "type": "object",
+        "additionalProperties": True,
         "properties": {
             "counters": {
                 "type": "object",
@@ -127,6 +128,7 @@ logger = structlog.get_logger(__name__)
             "schemaVersion": {"type": "integer", "description": "Design schema version, e.g. 16."},
             "body": {
                 "type": "object",
+                "additionalProperties": True,
                 "properties": {
                     "id": {"type": "string", "description": "Any unique string."},
                     "rows": {

@@ -184,9 +184,9 @@ const WorkflowsMakeEmailTemplateTransactionalSchema = () => {
     const MessagingTemplatesMakeTransactionalCreateBody = orvalSchemas.MessagingTemplatesMakeTransactionalCreateBody()
     const MessagingTemplatesMakeTransactionalCreateParams =
         orvalSchemas.MessagingTemplatesMakeTransactionalCreateParams()
-    return MessagingTemplatesMakeTransactionalCreateParams.omit({ project_id: true }).extend(
-        MessagingTemplatesMakeTransactionalCreateBody.shape
-    )
+    return MessagingTemplatesMakeTransactionalCreateParams.omit({ project_id: true })
+        .extend(MessagingTemplatesMakeTransactionalCreateBody.shape)
+        .strict()
 }
 
 const WorkflowsMakeEmailTemplateTransactionalSchemaExecute = z.strictObject({
@@ -314,9 +314,9 @@ const workflowsShowEmailTemplate = (): ToolBase<
 const WorkflowsUploadEmailTemplateSchema = () => {
     const MessagingTemplatesByKeyUpdateBody = orvalSchemas.MessagingTemplatesByKeyUpdateBody()
     const MessagingTemplatesByKeyUpdateParams = orvalSchemas.MessagingTemplatesByKeyUpdateParams()
-    return MessagingTemplatesByKeyUpdateParams.omit({ project_id: true }).extend(
-        MessagingTemplatesByKeyUpdateBody.shape
-    )
+    return MessagingTemplatesByKeyUpdateParams.omit({ project_id: true })
+        .extend(MessagingTemplatesByKeyUpdateBody.shape)
+        .strict()
 }
 
 const workflowsUploadEmailTemplate = (): ToolBase<
@@ -361,9 +361,9 @@ const workflowsUploadEmailTemplate = (): ToolBase<
 const WorkflowsUpdateEmailTemplateSchema = () => {
     const MessagingTemplatesPartialUpdateBody = orvalSchemas.MessagingTemplatesPartialUpdateBody()
     const MessagingTemplatesPartialUpdateParams = orvalSchemas.MessagingTemplatesPartialUpdateParams()
-    return MessagingTemplatesPartialUpdateParams.omit({ project_id: true }).extend(
-        MessagingTemplatesPartialUpdateBody.shape
-    )
+    return MessagingTemplatesPartialUpdateParams.omit({ project_id: true })
+        .extend(MessagingTemplatesPartialUpdateBody.shape)
+        .strict()
 }
 
 const workflowsUpdateEmailTemplate = (): ToolBase<
