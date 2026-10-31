@@ -19,6 +19,7 @@ from posthog.models.personal_api_key import hash_key_value
 from posthog.models.utils import generate_random_token_secret
 
 from products.access_control.backend.facade.testing import create_access_control
+from products.messaging.backend.facade.contracts import TemplateManagedBy
 from products.messaging.backend.models.message_category import MessageCategory, MessageCategoryType
 from products.messaging.backend.models.message_template import MessageTemplate
 from products.messaging.backend.models.transactional_email_key import TransactionalEmailKey
@@ -31,6 +32,8 @@ from products.messaging.backend.services import transactional_email
 from products.messaging.backend.services.transactional_email import TransactionalEmailStage, make_transactional
 from products.workflows.backend.facade.api import set_default_email_sender_if_unset
 from products.workflows.backend.models import HogFlow, TeamWorkflowsConfig
+
+PASSWORD_RESET_HASH = "v1:973d41bbe3fdca5c52bb951cd4b5fd7159ae630b56c8f3997cbb31afd1ea76fd"
 
 
 def _stage_counts() -> dict[str, float]:
@@ -74,6 +77,9 @@ class TestTransactionalEmail(APIBaseTest):
             or {"email": {"subject": "Reset your password", "html": "<a href='{{ variables.link }}'>Reset</a>"}},
             type="email",
         )
+
+    def _claim_by_upload(self, template: MessageTemplate) -> None:
+        MessageTemplate.objects.filter(id=template.id).update(managed_by=TemplateManagedBy.CODE)
 
     def _workflow(self, hog_flow_id) -> dict:
         response = self.client.get(f"/api/projects/{self.team.id}/hog_flows/{hog_flow_id}")
@@ -381,10 +387,11 @@ class TestTransactionalEmail(APIBaseTest):
             **fields,
         }
 
-    @parameterized.expand([("new_key", "welcome"), ("key_that_names_a_template", "password-reset")])
+    @parameterized.expand([("new_key", "welcome"), ("key_of_an_uploaded_template", "password-reset")])
     def test_a_code_send_goes_out_as_is_under_the_keys_workflow(self, mock_post, _flag, capture, _name, key):
         MessageTemplate.objects.filter(id=self.template.id).update(key="password-reset")
         self._cdp_accepts(mock_post)
+        self._claim_by_upload(self.template)
         templates_before = MessageTemplate.objects.filter(team=self.team).count()
         psak = self._psak_client(["hog_flow:write"])
 
@@ -835,6 +842,7 @@ class TestTransactionalEmailWorkflowAccess(APIBaseTest):
         self.template = MessageTemplate.objects.create(
             team=self.team,
             name="Password reset",
+            key="password-reset",
             content={"email": {"subject": "Reset your password", "html": "<p>Reset</p>"}},
             type="email",
         )
@@ -872,7 +880,9 @@ class TestTransactionalEmailWorkflowAccess(APIBaseTest):
         mock_post.assert_not_called()
 
     def test_a_member_denied_the_workflow_cannot_send_code_under_its_template_key(self, mock_post, _flag):
-        MessageTemplate.objects.filter(id=self.template.id).update(key="password-reset")
+        MessageTemplate.objects.filter(id=self.template.id).update(
+            key="password-reset", managed_by=TemplateManagedBy.CODE
+        )
 
         response = self.client.post(
             f"/api/projects/{self.team.id}/messaging/send/email/",
@@ -897,6 +907,44 @@ class TestTransactionalEmailWorkflowAccess(APIBaseTest):
         assert HogFlow.objects.filter(team=self.team).count() == workflows_before
         assert not TransactionalEmailKey.objects.for_team(self.team.id).exists()
         mock_post.assert_not_called()
+
+    @parameterized.expand(
+        [
+            ("unchanged_content", False, {"content_hash": PASSWORD_RESET_HASH}),
+            (
+                "superseded_content",
+                True,
+                {"content_hash": "v1:" + "0" * 64, "superseded_content_hashes": [PASSWORD_RESET_HASH]},
+            ),
+        ]
+    )
+    def test_a_member_denied_the_workflow_cannot_upload_to_it(
+        self, mock_post, _flag, _name, if_not_superseded, stored_hashes
+    ):
+        MessageTemplate.objects.filter(id=self.template.id).update(managed_by="code", **stored_hashes)
+
+        with patch(
+            "products.messaging.backend.presentation.views.message_templates.posthoganalytics.capture"
+        ) as capture:
+            response = self.client.put(
+                f"/api/projects/{self.team.id}/messaging_templates/by_key/password-reset/",
+                {
+                    "name": "Password reset",
+                    "subject": "Reset your password",
+                    "html": "<p>Reset</p>",
+                    "source": {"repository": "github.com/example/other"},
+                    "if_not_superseded": if_not_superseded,
+                },
+                format="json",
+            )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN, response.json()
+        self.template.refresh_from_db()
+        assert self.template.source_repository is None
+        uploaded_events = [
+            c for c in capture.call_args_list if c.kwargs["event"] == "transactional email template uploaded"
+        ]
+        assert [e.kwargs["properties"]["error_code"] for e in uploaded_events] == ["permission_denied"]
 
     @parameterized.expand([("unlinked", None), ("linked_to_a_deleted_workflow", uuid4())])
     def test_editor_access_to_one_workflow_cannot_create_another(self, mock_post, _flag, _name, linked_hog_flow_id):
