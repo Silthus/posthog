@@ -8,6 +8,7 @@ from .sandbox_sender_organization_block import SandboxSenderOrganizationBlock
 from .sandbox_sender_tenant_state import SandboxSenderTenantState
 from .team_workflows_config import TeamWorkflowsConfig
 from .workflow_idea import WorkflowIdea
+from .workflow_import import WorkflowImport
 from .workflow_proposal import WorkflowProposal
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "SandboxSenderTenantState",
     "TeamWorkflowsConfig",
     "WorkflowIdea",
+    "WorkflowImport",
     "WorkflowProposal",
 ]
