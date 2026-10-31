@@ -129,23 +129,10 @@ class TestTemplateChangeRequest(APIBaseTest):
         client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
         return client
 
-    @parameterized.expand(
-        [
-            (
-                "an_agent_sentence_is_tied_to_the_file",
-                "Make the button green.",
-                "In `emails/welcome.html`, change what this request asks for: Make the button green.",
-            ),
-            (
-                "the_completed_starter_sentence_stays_as_written",
-                "In `emails/welcome.html`, change the button color to green.",
-                "In `emails/welcome.html`, change the button color to green.",
-            ),
-        ]
-    )
     def test_starts_a_posthog_code_task_that_opens_a_pull_request_and_leaves_the_template_unchanged(
-        self, create_task, _access, _limited, _connected, _post, _flag, capture, _name, instruction, request_line
+        self, create_task, _access, _limited, _connected, _post, _flag, capture
     ):
+        instruction = "Make the button green."
         create_task.return_value = CreatedTaskDTO(task_id=TASK_ID, team_id=self.team.id)
         uploaded = self._upload(WELCOME)
         before = self._template_and_workflow(uploaded)
@@ -169,11 +156,12 @@ class TestTemplateChangeRequest(APIBaseTest):
         assert task["title"] == "Change the `welcome` email template"
         assert task["description"] == "\n\n".join(
             [
-                request_line,
+                instruction,
                 "\n".join(
                     [
                         "About this file:",
-                        "- It is the PostHog email template with the key `welcome`, in the repository "
+                        "- `emails/welcome.html` is the PostHog email template with the key `welcome`, in the "
+                        "repository "
                         "`github.com/example/app`, last uploaded from commit `3f2c1ab`.",
                         "- The file is the whole email. The subject is the first `<title>`. The inbox preview text is "
                         'the `content` of `<meta name="preheader">`. Everything in the file is the HTML that PostHog '

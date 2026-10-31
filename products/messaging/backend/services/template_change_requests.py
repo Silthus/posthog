@@ -72,12 +72,7 @@ def _title(key: str) -> str:
 
 
 def _description(prompt: TemplateChangePrompt, instruction: str) -> str:
-    request = (
-        instruction
-        if instruction.startswith(prompt.starter)
-        else f"{prompt.starter}what this request asks for: {instruction}"
-    )
-    return "\n\n".join([request, prompt.context, CHANGE_RULES])
+    return "\n\n".join([instruction, prompt.context, CHANGE_RULES])
 
 
 def _require_posthog_code(team: Team, user: User, *, from_sandbox: bool) -> None:
