@@ -721,6 +721,7 @@ class TransactionalEmailSender:
     integration_id: int
     email: str | None
     name: str | None
+    is_sandbox: bool = False
 
 
 class TransactionalEmailSenderUnavailable(Exception):

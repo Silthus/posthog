@@ -25,6 +25,7 @@ from posthog.plugins.plugin_server_api import (
 
 from products.messaging.backend.facade.contracts import (
     CodeEmail,
+    DeliveryMode,
     DeliveryUnavailable,
     IdempotencyKeyInFlight,
     IdempotencyKeyReused,
@@ -36,6 +37,10 @@ from products.messaging.backend.facade.contracts import (
     QuotaLimited,
     RecipientSuppressed,
     RecipientUnreachable,
+    SandboxCheckFailed,
+    SandboxLimitReached,
+    SandboxRecipientNotAllowed,
+    SandboxReplyToNotAllowed,
     SenderNotVerified,
     SenderUnavailable,
     SendingPaused,
@@ -57,6 +62,7 @@ from products.workflows.backend.facade.api import WorkflowNotFound, get_workflow
 from products.workflows.backend.facade.transactional_emails import (
     TransactionalEmailContent,
     TransactionalEmailContentInvalid,
+    TransactionalEmailSender,
     TransactionalEmailSenderUnavailable,
     code_send_sender,
     create_code_email_workflow,
@@ -169,6 +175,16 @@ PIPELINE_REFUSALS: dict[str, tuple[type[TransactionalEmailError], str]] = {
         "so the email would bounce. Check the address for a typo.",
     ),
     "not_sendable": (TransactionalEmailPaused, "The template's transactional email isn't active."),
+    "sandbox_recipient_not_allowed": (
+        SandboxRecipientNotAllowed,
+        "The sandbox sender only sends to verified members of your organization, so nothing was sent. "
+        "Send to a member, or verify your own domain to send to anyone.",
+    ),
+    "sandbox_limit_reached": (
+        SandboxLimitReached,
+        "The sandbox sender's daily limit for this project or recipient is used up, so nothing was sent. "
+        "Try again later, or verify your own domain to send without these limits.",
+    ),
 }
 
 IDEMPOTENCY_KEY_PATTERN = re.compile(r"[!-~]{1,255}")
@@ -524,11 +540,17 @@ def _send_payload(
 
 
 def _accepted_send(team_id: int, email: CodeEmail) -> dict[str, Any]:
+    sender = _code_send_sender(team_id, email.sender)
+    if sender.is_sandbox and email.reply_to:
+        raise SandboxReplyToNotAllowed(
+            "The sandbox sender can't set a reply-to address. "
+            "Remove `reply_to`, or verify your own domain to choose where replies go."
+        )
     accepted: dict[str, Any] = {
         "content": _without_empty(
             {"subject": email.subject, "html": email.html, "text": email.text or text_from_html(email.html)}
         ),
-        "from": _without_empty(_code_send_sender(team_id, email.sender)),
+        "from": _sender_fields(sender),
         "tracking": {"captureEngagement": email.capture_engagement},
     }
     if email.reply_to:
@@ -550,26 +572,31 @@ def _graded_version(team_id: int, hog_flow_id: UUID) -> int:
 def _accepted_template_send(team_id: int, options: TemplateSendOptions) -> dict[str, Any]:
     accepted: dict[str, Any] = {"tracking": {"captureEngagement": options.capture_engagement}}
     if options.sender:
-        accepted["from"] = _without_empty(_code_send_sender(team_id, options.sender))
+        accepted["from"] = _sender_fields(_code_send_sender(team_id, options.sender))
     if options.reply_to:
         accepted["replyTo"] = list(options.reply_to)
     return accepted
 
 
-def _code_send_sender(team_id: int, address: str | None) -> dict[str, Any]:
+def _code_send_sender(team_id: int, address: str | None) -> TransactionalEmailSender:
     name, email = parseaddr(address) if address else ("", "")
     try:
-        sender = code_send_sender(team_id=team_id, email=email or None, name=name or None)
+        return code_send_sender(team_id=team_id, email=email or None, name=name or None)
     except TransactionalEmailSenderUnavailable as e:
         if address:
             raise NamedSenderNotVerified(f"No verified sender in this project can send from `{email}`.") from e
         raise SenderNotVerified("The project has no verified default email sender.") from e
-    return {
-        "integrationId": sender.integration_id,
-        "email": sender.email,
-        "name": sender.name,
-        "isDefault": not address,
-    }
+
+
+def _sender_fields(sender: TransactionalEmailSender) -> dict[str, Any]:
+    return _without_empty(
+        {
+            "integrationId": sender.integration_id,
+            "email": sender.email,
+            "name": sender.name,
+            "isDefault": sender.email is None,
+        }
+    )
 
 
 def _without_empty(fields: dict[str, Any]) -> dict[str, Any]:
@@ -614,10 +641,20 @@ def _queue(
         )
         if refusal_code == "workflow_version_behind":
             raise WorkflowVersionBehind()
+        if refusal_code == "sandbox_check_failed":
+            raise SandboxCheckFailed()
         raise DeliveryUnavailable()
 
     body = response.json()
-    return QueuedEmail(message_id=str(body["invocation_id"]), replayed=bool(body.get("replayed", False)))
+    return QueuedEmail(
+        message_id=str(body["invocation_id"]),
+        replayed=bool(body.get("replayed", False)),
+        delivery_mode=_delivery_mode(body.get("delivery_mode")),
+    )
+
+
+def _delivery_mode(value: object) -> DeliveryMode | None:
+    return DeliveryMode(value) if value in DeliveryMode.values else None
 
 
 def _refusal_code(response: requests.Response) -> str | None:
