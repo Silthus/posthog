@@ -1111,14 +1111,22 @@ class TestTransactionalEmail(APIBaseTest):
         assert response.status_code == expected_status, response.json()
         assert self._first_code_sends(capture) == []
 
-    def test_a_first_code_send_that_fails_to_capture_leaves_it_to_a_later_send(self, mock_post, _flag, capture):
+    @parameterized.expand(
+        [
+            ("raises", {"side_effect": RuntimeError("capture is down")}),
+            ("drops_the_event", {"return_value": None}),
+        ]
+    )
+    def test_a_first_code_send_that_fails_to_capture_leaves_it_to_a_later_send(
+        self, mock_post, _flag, capture, _name, failure
+    ):
         self._cdp_accepts(mock_post)
         psak = self._sender_client("key_creator")
-        capture.side_effect = RuntimeError("capture is down")
+        capture.configure_mock(**failure)
 
         with self.captureOnCommitCallbacks(execute=True):
             failed = psak.post(self.send_email_url, self._code_send(), format="json")
-        capture.reset_mock(side_effect=True)
+        capture.reset_mock(side_effect=True, return_value=True)
         with self.captureOnCommitCallbacks(execute=True):
             later = psak.post(self.send_email_url, self._code_send(), format="json")
 

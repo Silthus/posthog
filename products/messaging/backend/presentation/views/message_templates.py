@@ -1003,16 +1003,20 @@ class TransactionalEmailSendMixin:
             logger.warning("Failed to capture the first code send", team_id=self.team_id, error=str(e))
 
     def _capture_first_code_send(self, key_creator: User, addressed_by: str) -> None:
+        queued = False
         try:
-            posthoganalytics.capture(
-                distinct_id=key_creator.distinct_id,
-                event=FIRST_CODE_SEND_EVENT,
-                properties={"team_id": self.team_id, "addressed_by": addressed_by},
-                groups=groups(self.organization, self.team),
+            queued = (
+                posthoganalytics.capture(
+                    distinct_id=key_creator.distinct_id,
+                    event=FIRST_CODE_SEND_EVENT,
+                    properties={"team_id": self.team_id, "addressed_by": addressed_by},
+                    groups=groups(self.organization, self.team),
+                )
+                is not None
             )
-        except Exception:
-            forget_first_code_send(self.team_id)
-            raise
+        finally:
+            if not queued:
+                forget_first_code_send(self.team_id)
 
     def _report_transactional_email_send(self, request: Any, properties: dict[str, Any]) -> None:
         self._capture_api_usage(request, "transactional email api send", properties)
