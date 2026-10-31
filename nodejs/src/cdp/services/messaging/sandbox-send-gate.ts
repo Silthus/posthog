@@ -15,6 +15,12 @@ export type SandboxSendRefusal =
     | 'sending_suspended'
     | 'sandbox_check_failed'
 
+export type DeliveryMode = 'own' | 'sandbox'
+
+export type SandboxSendAdmission =
+    | { deliveryMode: 'own' }
+    | { deliveryMode: 'sandbox'; refusal: SandboxSendRefusal | null }
+
 export type SandboxSendRequest = {
     teamId: number
     invocationId: string
@@ -35,18 +41,25 @@ type StoredEmailStep = z.infer<typeof StoredEmailStepSchema>
 
 const isTemplated = (copies: string): boolean => /[{}]/.test(copies)
 
-export class SandboxSendAdmission {
+export class SandboxSendGate {
     constructor(
         private sandboxSender: SandboxEmailSender,
         private organizationMembers: OrganizationMembersService,
         private integrationManager: IntegrationManagerService
     ) {}
 
-    public async refusal(request: SandboxSendRequest): Promise<SandboxSendRefusal | null> {
+    public async admit(request: SandboxSendRequest): Promise<SandboxSendAdmission> {
         const step = storedEmailStep(request.hogFlow)
         if (!(await this.sendsThroughSandbox(request, step))) {
-            return null
+            return { deliveryMode: 'own' }
         }
+        return { deliveryMode: 'sandbox', refusal: await this.refusal(request, step) }
+    }
+
+    private async refusal(
+        request: SandboxSendRequest,
+        step: StoredEmailStep | null
+    ): Promise<SandboxSendRefusal | null> {
         const suspension = await this.suspensionRefusal(request.teamId)
         if (suspension) {
             return suspension

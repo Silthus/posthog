@@ -51,7 +51,7 @@ import {
 import { OrganizationMembersService } from './services/managers/organization-members.service'
 import { SandboxSenderStateService } from './services/managers/sandbox-sender-state.service'
 import { SandboxEmailSender, SandboxEmailSenderConfig } from './services/messaging/sandbox-email-sender'
-import { SandboxSendAdmission } from './services/messaging/sandbox-send-admission'
+import { SandboxSendGate } from './services/messaging/sandbox-send-gate'
 import { BASE_REDIS_KEY, HogWatcherState } from './services/monitoring/hog-watcher.service'
 import { RateLimiterService } from './services/rate-limiter/rate-limiter.service'
 import { compileHog } from './templates/compiler'
@@ -2342,12 +2342,13 @@ describe('CDP API', () => {
                     const retry = await sendKeyedOn(route, payload)
 
                     expect(first.status).toEqual(202)
-                    expect(first.body).toMatchObject({ replayed: false })
+                    expect(first.body).toMatchObject({ replayed: false, delivery_mode: 'own' })
                     expect(retry.status).toEqual(202)
                     expect(retry.body).toEqual({
                         status: 'queued',
                         invocation_id: first.body.invocation_id,
                         replayed: true,
+                        delivery_mode: 'own',
                     })
                     expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
                     expect(emailStatusRows()).toEqual([
@@ -2376,6 +2377,7 @@ describe('CDP API', () => {
                     status: 'queued',
                     invocation_id: sent.body.invocation_id,
                     replayed: true,
+                    delivery_mode: 'own',
                 })
                 expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
             })
@@ -2546,6 +2548,7 @@ describe('CDP API', () => {
                     status: 'queued',
                     invocation_id: first.body.invocation_id,
                     replayed: true,
+                    delivery_mode: 'own',
                 })
                 expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
             })
@@ -2892,7 +2895,7 @@ describe('CDP API', () => {
                 sender: SandboxEmailSender,
                 members = new OrganizationMembersService(hub.postgres)
             ) => {
-                api['sandboxSendAdmission'] = new SandboxSendAdmission(sender, members, cdpDeps.integrationManager)
+                api['sandboxSendGate'] = new SandboxSendGate(sender, members, cdpDeps.integrationManager)
             }
             const sandboxSend = (to: string, extra: Record<string, unknown> = {}) =>
                 sendAccepted(hogFlow.id, {
@@ -2980,6 +2983,7 @@ describe('CDP API', () => {
                 const second = await sandboxSend(address('member'))
 
                 expect([first.status, second.status]).toEqual([202, 202])
+                expect([first.body.delivery_mode, second.body.delivery_mode]).toEqual(['sandbox', 'sandbox'])
                 expect(mockQueueInvocations).toHaveBeenCalledTimes(2)
             })
 
@@ -3094,19 +3098,33 @@ describe('CDP API', () => {
                 expect(mockQueueInvocations).not.toHaveBeenCalled()
             })
 
-            it('replays a keyed send after its daily allowance is spent', async () => {
+            it('replays a keyed send as it first went out after its allowance is spent and the default sender changed', async () => {
                 const sender = sandboxSender({ dailyTeamCap: '1', dailyRecipientCap: '1' })
                 admitThrough(sender)
                 const idempotency_key = `key-${new UUIDT().toString()}`
 
                 const first = await sandboxSend(address('member'), { idempotency_key })
                 expect(await sender.claimDailyCaps(team.id, [address('member')])).toMatchObject({ type: 'granted' })
-                const retry = await sandboxSend(address('member'), { idempotency_key })
+                const retry = await sendAccepted(hogFlow.id, {
+                    ...body,
+                    to: address('member'),
+                    idempotency_key,
+                    send: {
+                        content: codeSend.content,
+                        from: { integrationId: codeSend.from.integrationId, isDefault: true },
+                        tracking: codeSend.tracking,
+                    },
+                })
 
                 expect(first.status).toEqual(202)
                 expect([retry.status, retry.body]).toEqual([
                     202,
-                    { status: 'queued', invocation_id: first.body.invocation_id, replayed: true },
+                    {
+                        status: 'queued',
+                        invocation_id: first.body.invocation_id,
+                        replayed: true,
+                        delivery_mode: 'sandbox',
+                    },
                 ])
                 expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
             })
