@@ -34,7 +34,7 @@ import {
 import { HogTransformerService, createHogTransformerService } from './hog-transformations/hog-transformer.service'
 import { RerunJobManager } from './rerun/rerun-job.manager'
 import { RerunRequest } from './rerun/rerun-job.types'
-import { HogFlow, HogFlowAction } from './schema/hogflow'
+import { HogFlowAction } from './schema/hogflow'
 import { BatchExportHogFunctionService, NotFoundError, ParseError } from './services/batch-export-hog-function.service'
 import type { CyclotronV2JobProducer } from './services/cyclotron-v2'
 import { HogExecutorAsyncService, HogExecutorExecuteAsyncOptions } from './services/hog-executor-async.service'
@@ -75,6 +75,12 @@ import { EmailTrackingService } from './services/messaging/email-tracking.servic
 import { EmailValidationService } from './services/messaging/email-validation.service'
 import { EmailTrackingCodeSigner } from './services/messaging/helpers/tracking-code'
 import { RecipientTokensService } from './services/messaging/recipient-tokens.service'
+import {
+    DeliveryMode,
+    SandboxSendGate,
+    SandboxSendRefusal,
+    SandboxSendRequest,
+} from './services/messaging/sandbox-send-gate'
 import {
     HogWatcherService,
     HogWatcherState,
@@ -173,6 +179,28 @@ function parseRealtimeCohort(value: unknown): BatchResolverState['realtimeCohort
 
 const ACCEPTED_SEND_FINGERPRINT_MARKER = 'accepted_send'
 
+const SANDBOX_REFUSAL_STATUS: Record<SandboxSendRefusal, number> = {
+    sandbox_recipient_not_allowed: 400,
+    sandbox_limit_reached: 400,
+    sending_suspended: 422,
+    sandbox_check_failed: 503,
+}
+
+type TransactionalEmailAnswer = { deliveryMode: DeliveryMode }
+
+type TransactionalEmailCheck =
+    | { type: 'refused'; outcome: TransactionalEmailOutcome; status: number }
+    | { type: 'admitted'; deliveryMode: DeliveryMode }
+
+const refused = (outcome: TransactionalEmailOutcome, status: number): TransactionalEmailCheck => ({
+    type: 'refused',
+    outcome,
+    status,
+})
+
+const deliveryModeBody = (answer: TransactionalEmailAnswer | undefined): { delivery_mode?: DeliveryMode } =>
+    answer ? { delivery_mode: answer.deliveryMode } : {}
+
 const transactionalEmailFingerprint = (
     hogFlowId: string,
     { to, distinct_id, variables, send }: TransactionalEmailRequest
@@ -232,11 +260,12 @@ export class CdpApi {
     private cancelBatchJwt: ScopedServiceJwt
     private stepResumeJwt: ScopedServiceJwt
     private transactionalEmailJwt: ScopedServiceJwt
-    private transactionalEmailIdempotencyKeys: IdempotencyKeys
+    private transactionalEmailIdempotencyKeys: IdempotencyKeys<TransactionalEmailAnswer>
     private emailSuppressionService: EmailSuppressionService
     private emailValidationService: EmailValidationService
     private teamWorkflowsConfigService: TeamWorkflowsConfigService
     private emailStatusService: EmailStatusService
+    private sandboxSendGate: SandboxSendGate
     private resumeBatchJwt: ScopedServiceJwt
 
     constructor(
@@ -262,6 +291,11 @@ export class CdpApi {
         this.hogWatcherMirror = services.hogWatcherMirror
         this.invocationResultsService = services.invocationResultsService
         this.emailStatusService = services.emailStatusService
+        this.sandboxSendGate = new SandboxSendGate(
+            services.sandboxEmailSender,
+            services.organizationMembers,
+            deps.integrationManager
+        )
 
         // API-only services. The hog-transformer's monitoring service reuses the same
         // resolved outputs registry as the core CDP services — no separate construction.
@@ -320,7 +354,7 @@ export class CdpApi {
             PosthogJwtAudience.WORKFLOWS_SEND_TRANSACTIONAL_EMAIL,
             config.WORKFLOWS_TRANSACTIONAL_EMAIL_JWT_SECRET || ''
         )
-        this.transactionalEmailIdempotencyKeys = new IdempotencyKeys(
+        this.transactionalEmailIdempotencyKeys = new IdempotencyKeys<TransactionalEmailAnswer>(
             deps.idempotencyValkey ?? null,
             'transactional-email'
         )
@@ -1311,6 +1345,7 @@ export class CdpApi {
                                 status: 'queued',
                                 invocation_id: reservation.invocationId,
                                 replayed: true,
+                                ...deliveryModeBody(reservation.answer),
                             })
                         case 'in_flight':
                             return reply('idempotency_key_in_flight', 409, { error: 'idempotency_key_in_flight' })
@@ -1320,16 +1355,24 @@ export class CdpApi {
                             return reply('idempotency_unavailable', 503, { error: 'idempotency_unavailable' })
                     }
                 }
+                let deliveryMode: DeliveryMode
                 try {
                     stages.start('checks')
-                    const refusal = await this.refuseTransactionalEmail(team.id, hogFlow, to)
-                    if (refusal) {
+                    const check = await this.checkTransactionalEmail({
+                        teamId: team.id,
+                        invocationId: invocation.id,
+                        hogFlow,
+                        send,
+                        to,
+                    })
+                    if (check.type === 'refused') {
                         if (idempotencyKey) {
                             stages.start('idempotency')
                             await idempotencyKeys.release(team.id, idempotencyKey, invocation.id)
                         }
-                        return reply(refusal.outcome, refusal.status, { error: refusal.outcome })
+                        return reply(check.outcome, check.status, { error: check.outcome })
                     }
+                    deliveryMode = check.deliveryMode
                     stages.start('queue_insert')
                     this.invocationResultsService.invocationResultsRowsService.queueLifecycleRow(invocation, 'running')
                     try {
@@ -1349,7 +1392,9 @@ export class CdpApi {
                 }
                 if (idempotencyKey) {
                     stages.start('idempotency')
-                    await idempotencyKeys.markQueued(team.id, idempotencyKey, fingerprint, invocation.id)
+                    await idempotencyKeys.markQueued(team.id, idempotencyKey, fingerprint, invocation.id, {
+                        deliveryMode,
+                    })
                 }
                 stages.start('metrics_flush')
                 this.emailStatusService.queue({ teamId: team.id, messageId: invocation.id, status: 'queued' })
@@ -1364,7 +1409,12 @@ export class CdpApi {
                     await this.invocationResultsService.invocationResultsRowsService.handOffQueuedRows()
                 void produced.catch(warnTelemetryFlushFailed)
 
-                return reply('queued', 202, { status: 'queued', invocation_id: invocation.id, replayed: false })
+                return reply('queued', 202, {
+                    status: 'queued',
+                    invocation_id: invocation.id,
+                    replayed: false,
+                    delivery_mode: deliveryMode,
+                })
             } catch (e) {
                 logger.error('Error queueing transactional email', {
                     error: e instanceof Error ? e.message : String(e),
@@ -1378,32 +1428,33 @@ export class CdpApi {
     // The email worker skips a send for these reasons too, but only after the caller has its 202. Checking them
     // here tells the caller that the email will not go out. The worker keeps its checks, because the state can
     // change while the job waits on the queue.
-    private async refuseTransactionalEmail(
-        teamId: number,
-        hogFlow: HogFlow,
-        to: string
-    ): Promise<{ outcome: TransactionalEmailOutcome; status: number } | null> {
+    private async checkTransactionalEmail(request: SandboxSendRequest): Promise<TransactionalEmailCheck> {
+        const { teamId, hogFlow, to } = request
         if (hogFlow.status !== 'active') {
-            return { outcome: 'not_sendable', status: 400 }
+            return refused('not_sendable', 400)
         }
         if (await this.teamWorkflowsConfigService.getEmailSendingSuspension(teamId)) {
-            return { outcome: 'sending_suspended', status: 422 }
+            return refused('sending_suspended', 422)
         }
         if (hogFlow.email_sending_paused_at) {
-            return { outcome: 'sending_paused', status: 422 }
+            return refused('sending_paused', 422)
         }
         if (await this.emailSuppressionService.isSuppressed(teamId, to, { transactional: true })) {
-            return { outcome: 'recipient_suppressed', status: 422 }
+            return refused('recipient_suppressed', 422)
         }
         const { isLimited } = await checkHogFlowQuotaLimits(hogFlow, teamId, this.deps.quotaLimiting)
         if (isLimited) {
-            return { outcome: 'quota_limited', status: 429 }
+            return refused('quota_limited', 429)
+        }
+        const admission = await this.sandboxSendGate.admit(request)
+        if (admission.deliveryMode === 'sandbox' && admission.refusal) {
+            return refused(admission.refusal, SANDBOX_REFUSAL_STATUS[admission.refusal])
         }
         // Last, because a cache miss costs a DNS lookup. A DNS failure lets the send through.
         if (await this.emailValidationService.getRecipientSkipReason(teamId, to)) {
-            return { outcome: 'recipient_unreachable', status: 422 }
+            return refused('recipient_unreachable', 422)
         }
-        return null
+        return { type: 'admitted', deliveryMode: admission.deliveryMode }
     }
 
     private verifyScopedWorkflowJwt(

@@ -66,6 +66,9 @@ export type TransactionalEmailOutcome =
     | 'sending_paused'
     | 'recipient_suppressed'
     | 'recipient_unreachable'
+    | 'sandbox_recipient_not_allowed'
+    | 'sandbox_limit_reached'
+    | 'sandbox_check_failed'
     | 'error'
 
 export const transactionalEmailRequestsTotal = new Counter({
@@ -88,7 +91,7 @@ export type TransactionalEmailStage = (typeof TRANSACTIONAL_EMAIL_STAGES)[number
 
 export const transactionalEmailStageDurationMs = new Histogram({
     name: 'cdp_transactional_email_stage_duration_ms',
-    help: 'Milliseconds one transactional email request spends in each stage: auth (the JWT), validate (the body), load (the team and the workflow), build (the run and its idempotency fingerprint), idempotency (every Idempotency-Key call to Valkey), checks (suspension, pause, suppression, quota and MX), queue_insert (the email queue insert), metrics_flush (the hand-off of the result and status rows to the Kafka producer, without the wait for the broker), and total. A request records only the stages it reached, so a refusal shows in the stage that refused it.',
+    help: 'Milliseconds one transactional email request spends in each stage: auth (the JWT), validate (the body), load (the team and the workflow), build (the run and its idempotency fingerprint), idempotency (every Idempotency-Key call to Valkey), checks (suspension, pause, suppression, quota, the sandbox member, pause and allowance checks, and MX), queue_insert (the email queue insert), metrics_flush (the hand-off of the result and status rows to the Kafka producer, without the wait for the broker), and total. A request records only the stages it reached, so a refusal shows in the stage that refused it.',
     labelNames: ['stage'],
     buckets: [1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000],
 })
