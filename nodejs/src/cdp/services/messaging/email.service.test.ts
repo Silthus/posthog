@@ -867,6 +867,49 @@ describe('EmailService', () => {
                     )
                 })
 
+                it.each([
+                    [
+                        'the sandbox tenant is paused',
+                        async (): Promise<{ senderState?: SandboxSenderStateService }> => {
+                            await setTenantStatus('DISABLED')
+                            return {}
+                        },
+                    ],
+                    [
+                        'the pause state cannot be read',
+                        async (): Promise<{ senderState?: SandboxSenderStateService }> => {
+                            const brokenPostgres = new PostgresRouter(hub)
+                            await brokenPostgres.end()
+                            return { senderState: new SandboxSenderStateService(brokenPostgres, hub.pubSub) }
+                        },
+                    ],
+                ])('records a skipped transactional email as sending_suspended when %s', async (_case, setUp) => {
+                    const produce = jest.fn().mockResolvedValue(undefined)
+                    const emailStatusService = new EmailStatusService(
+                        { produce } as unknown as IngestionOutputs<EmailStatusOutput>,
+                        { EMAIL_STATUS_ENABLED: true }
+                    )
+                    service = createSandboxService(true, {
+                        senderSettings: { tenantName: tenantName() },
+                        ...(await setUp()),
+                    })
+                    service['emailStatusService'] = emailStatusService
+                    invocation.id = new UUIDT().toString()
+                    invocation.state.globals.event.event = TRANSACTIONAL_EMAIL_EVENT
+
+                    await service.executeSendEmail(invocation)
+                    await emailStatusService.flush()
+
+                    const rows = produce.mock.calls.map(([, message]) => parseJSON(message.value.toString()))
+                    expect(rows).toEqual([
+                        expect.objectContaining({
+                            message_id: invocation.id,
+                            status: 'failed',
+                            reason: 'sending_suspended',
+                        }),
+                    ])
+                })
+
                 it('leaves own-sender sends alone while the sandbox tenant is paused', async () => {
                     await setTenantStatus('DISABLED')
                     service = createSandboxService(true, { senderSettings: { tenantName: tenantName() } })

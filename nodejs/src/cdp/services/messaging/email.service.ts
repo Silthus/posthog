@@ -1200,7 +1200,7 @@ export class EmailService {
         if (gate === 'open') {
             return true
         }
-        this.skipSandboxSend(result, SANDBOX_PAUSE_SKIP_MESSAGES[gate])
+        this.skipSandboxSend(result, isTest, SANDBOX_PAUSE_SKIP_MESSAGES[gate], 'sending_suspended')
         await this.sandboxSender!.captureBlocked(result.invocation.teamId, isTest, gate, 0)
         return false
     }
