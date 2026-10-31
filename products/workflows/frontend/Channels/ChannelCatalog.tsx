@@ -7,9 +7,7 @@ import { TeamMembershipLevel } from 'lib/constants'
 
 import { ChannelCatalogCard } from './ChannelCatalogCard'
 import { channelCatalogLogic } from './channelCatalogLogic'
-import { CATALOG_CHANNELS } from './channelSummary'
-
-const GRID_CLASS = 'grid gap-2 grid-cols-1 @min-[44rem]/main-content:grid-cols-2 @min-[72rem]/main-content:grid-cols-3'
+import { CATALOG_CHANNELS, CATALOG_GRID_CLASS } from './channelSummary'
 
 /** Every channel a workflow can send through, with whether this project has it set up. */
 export function ChannelCatalog(): JSX.Element {
@@ -44,7 +42,7 @@ export function ChannelCatalog(): JSX.Element {
                             </LemonButton>
                         </div>
                     )}
-                    <div className={GRID_CLASS}>
+                    <div className={CATALOG_GRID_CLASS}>
                         {channels.map((channel) => (
                             <ChannelCatalogCard
                                 key={channel.kind}
@@ -62,7 +60,7 @@ export function ChannelCatalog(): JSX.Element {
                     {integrationsLoadError || "Couldn't load your channels."}
                 </LemonBanner>
             ) : (
-                <div className={GRID_CLASS}>
+                <div className={CATALOG_GRID_CLASS}>
                     {CATALOG_CHANNELS.map((kind) => (
                         <LemonSkeleton key={kind} className="h-20" />
                     ))}
