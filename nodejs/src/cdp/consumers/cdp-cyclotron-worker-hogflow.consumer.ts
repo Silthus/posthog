@@ -103,7 +103,7 @@ export class CdpCyclotronWorkerHogFlow extends CdpCyclotronWorker {
                 }
 
                 const team = await this.deps.teamManager.getTeam(item.teamId)
-                const hogFlow = await this.hogFlowManager.getHogFlow(item.functionId)
+                const hogFlow = await this.hogFlowManager.getHogFlowCheckingPrimaryOnMiss(item.functionId)
                 if (!hogFlow || !team) {
                     logger.error('⚠️', 'Error finding hog flow', {
                         id: item.functionId,

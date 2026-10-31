@@ -642,6 +642,7 @@ export class SesWebhookHandler {
             properties?: Record<string, any>
             timestamp?: string
             workflowVersion?: number
+            captureEngagement?: boolean
         }[]
         logEntries?: {
             functionId?: string
@@ -755,6 +756,7 @@ export class SesWebhookHandler {
             properties?: Record<string, any>
             timestamp?: string
             workflowVersion?: number
+            captureEngagement?: boolean
         }[] = []
         const logEntries: {
             functionId?: string
@@ -804,8 +806,17 @@ export class SesWebhookHandler {
             if (parsedCode) {
                 trackingCodeFormatCounter.inc({ format: parsedCode.format, source: 'ses' })
             }
-            const { functionId, invocationId, teamId, actionId, parentRunId, distinctId, isTest, workflowVersion } =
-                parsedCode || {}
+            const {
+                functionId,
+                invocationId,
+                teamId,
+                actionId,
+                parentRunId,
+                distinctId,
+                isTest,
+                workflowVersion,
+                captureEngagement,
+            } = parsedCode || {}
 
             if (!functionId && !invocationId) {
                 // A present but unparseable code is a different incident from a wholly absent one, so
@@ -877,6 +888,7 @@ export class SesWebhookHandler {
                     properties,
                     timestamp,
                     workflowVersion,
+                    captureEngagement,
                 })
 
                 // Per-link companion row for the workflow Metrics tab's link breakdown. Emitted only
@@ -902,6 +914,7 @@ export class SesWebhookHandler {
                         ),
                         timestamp,
                         workflowVersion,
+                        captureEngagement,
                     })
                 }
 
@@ -922,6 +935,7 @@ export class SesWebhookHandler {
                         properties,
                         timestamp,
                         workflowVersion,
+                        captureEngagement,
                     })
                 }
             }
