@@ -38,40 +38,25 @@ def list_email_summaries(team_id: int, *, limit: int) -> list[EmailTemplateSumma
     return [EmailTemplateSummary(id=id, name=name or "", subject=subject) for id, name, subject in rows]
 
 
-def _templates(team_ids: list[int] | None) -> models.QuerySet[MessageTemplate]:
+def templates_of(team_ids: list[int] | None) -> models.QuerySet[MessageTemplate]:
     queryset = MessageTemplate.objects.all()
     return queryset.filter(team_id__in=team_ids) if team_ids else queryset
 
 
 def find_ids_containing(text: str, *, team_ids: list[int] | None, template_id: str | None) -> list[UUID]:
-    queryset = _templates(team_ids)
+    queryset = templates_of(team_ids)
     if template_id:
         queryset = queryset.filter(id=template_id)
-    # The text cast stays in the WHERE clause, so the scan never returns a full copy of each content blob.
+    # The text casts stay in the WHERE clause, so the scan never returns a full copy of each content blob.
     return list(
-        queryset.annotate(_text_content=Cast("content", models.TextField()))
-        .filter(_text_content__contains=text)
+        queryset.annotate(
+            _text_content=Cast("content", models.TextField()),
+            _text_draft_content=Cast("draft_content", models.TextField()),
+        )
+        .filter(models.Q(_text_content__contains=text) | models.Q(_text_draft_content__contains=text))
         .order_by("id")
         .values_list("id", flat=True)
     )
-
-
-def rewrite_content(
-    template_id: UUID, rewrite: Callable[[Any], tuple[Any, int]], *, team_ids: list[int] | None, dry_run: bool
-) -> int:
-    if dry_run:
-        return rewrite(_templates(team_ids).get(pk=template_id).content)[1]
-
-    # Read the row again under a row lock, so a concurrent save is not overwritten with a stale blob.
-    with transaction.atomic():
-        template = _templates(team_ids).select_for_update().get(pk=template_id)
-        new_content, occurrences = rewrite(template.content)
-        if not occurrences:
-            return 0
-        template.content = new_content
-        # updated_at is auto_now, so listing it bumps it. The editor's stale-write check reads it.
-        template.save(update_fields=["content", "updated_at"])
-    return occurrences
 
 
 def _with_tags(queryset: models.QuerySet[MessageTemplate]) -> models.QuerySet[MessageTemplate]:
@@ -95,7 +80,7 @@ def category_id_for_team(team_id: int, category_id: Any) -> UUID:
     return MessageCategory.objects.get(team_id=team_id, pk=category_id).pk
 
 
-def _apply_fields(template: MessageTemplate, fields: dict[str, Any]) -> None:
+def apply_fields(template: MessageTemplate, fields: dict[str, Any]) -> None:
     for attr, value in fields.items():
         setattr(template, "message_category_id" if attr == "message_category" else attr, value)
 
@@ -105,28 +90,24 @@ def create_template(team_id: int, created_by_id: int | None, fields: dict[str, A
     tags = fields.pop("tags", None)
     with transaction.atomic():
         template = MessageTemplate(team_id=team_id, created_by_id=created_by_id)
-        _apply_fields(template, fields)
+        apply_fields(template, fields)
         template.save(force_insert=True)
         if tags:
             set_tags_on_object(tags, template)
     return template
 
 
-def update_template(team_id: int, template_id: UUID | str, fields: dict[str, Any]) -> MessageTemplate:
-    fields = dict(fields)
-    tags = fields.pop("tags", None)
+def save_tags(team_id: int, template_id: UUID | str, tags: list[str]) -> MessageTemplate:
     with transaction.atomic():
         template = team_template(team_id, template_id)
-        # The editor sends the tags with every save, so only write them when they change.
-        tags_changed = tags is not None and {tagify(tag) for tag in tags} != current_tag_names(template)
-        # Tags live on their own rows. Saving the template too would write back every column this
-        # read saw, so a tag edit would overwrite content a concurrent publish had just committed.
-        if fields:
-            _apply_fields(template, fields)
-            template.save()
-        if tags_changed:
-            replace_tags_on_object(tags, template)
+        replace_changed_tags(template, tags)
     return template
+
+
+def replace_changed_tags(template: MessageTemplate, tags: list[str] | None) -> None:
+    # The editor sends the tags with every save, so only write them when they change.
+    if tags is not None and {tagify(tag) for tag in tags} != current_tag_names(template):
+        replace_tags_on_object(tags, template)
 
 
 def save_draft(team_id: int, template_id: UUID | str, draft: dict[str, Any] | None) -> MessageTemplate:
@@ -137,12 +118,5 @@ def save_draft(team_id: int, template_id: UUID | str, draft: dict[str, Any] | No
     return team_template(team_id, template_id)
 
 
-def edit_content_locked(
-    team_id: int, template_id: UUID | str, edit: Callable[[dict[str, Any]], dict[str, Any]]
-) -> MessageTemplate:
-    with transaction.atomic():
-        # nosemgrep: idor-lookup-without-team (re-fetch of an already team-scoped template, locked for update)
-        locked = MessageTemplate.objects.select_for_update().get(pk=team_template(team_id, template_id).pk)
-        locked.content = edit(deepcopy(locked.content or {}))
-        locked.save()
-    return locked
+def edit_content(template: MessageTemplate, edit: Callable[[dict[str, Any]], dict[str, Any]]) -> None:
+    template.content = edit(deepcopy(template.content or {}))

@@ -108,6 +108,17 @@ class TestMessageTemplatesAPI(APIBaseTest):
         response = self.client.patch(url, {"tags": []}, format="json")
         assert response.json()["tags"] == []
 
+    def test_a_save_with_other_fields_writes_the_tags_too(self):
+        response = self.client.patch(
+            f"/api/projects/{self.team.id}/messaging_templates/{self.message_template.id}/",
+            {"name": "Renamed", "tags": ["growth"]},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK, response.json()
+        assert response.json()["name"] == "Renamed"
+        assert response.json()["tags"] == ["growth"]
+
     def test_rejects_a_tag_that_grows_past_the_column_limit_when_lowercased(self):
         # "\u0130" lowercases to two code points, so 128 of them fit the field but not Tag.name.
         response = self.client.patch(
