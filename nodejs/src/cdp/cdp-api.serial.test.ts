@@ -3078,6 +3078,7 @@ describe('CDP API', () => {
                 ['a stored cc outside the organization', { cc: 'outsider@example.com' }],
                 ['a stored bcc outside the organization', { bcc: 'Outsider <outsider@example.com>' }],
                 ['a stored cc that renders per send', { cc: '{{ person.properties.manager }}' }],
+                ['a stored cc that is not text', { cc: ['outsider@example.com'] }],
             ])('refuses a template send with %s', async (_desc, copies) => {
                 const storedFlow = transactionalFlow('api', 'active')
                 const email = storedFlow.actions.find((action) => action.type === 'function_email')!
