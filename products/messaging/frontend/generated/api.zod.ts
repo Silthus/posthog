@@ -22,8 +22,6 @@ export const messagingSendEmailCreateBodyDistinctIdMax = 400
 
 export const messagingSendEmailCreateBodyReplyToMax = 10
 
-export const messagingSendEmailCreateBodyCaptureEngagementDefault = true
-
 export const MessagingSendEmailCreateBody = /* @__PURE__ */ zod.object({
     to: zod.email().describe('Email address of the recipient.'),
     identifiers: zod
@@ -63,7 +61,7 @@ export const MessagingSendEmailCreateBody = /* @__PURE__ */ zod.object({
         .max(messagingSendEmailCreateBodyDistinctIdMax)
         .optional()
         .describe(
-            "Distinct ID of the recipient's person, for a send with `template_key`. The send and its engagement events are recorded against that person. Defaults to the recipient's email address."
+            "Distinct ID of the recipient's person. The send and its engagement events are recorded against that person. Defaults to `identifiers.distinct_id`, then to the recipient's email address."
         ),
     subject: zod.string().optional().describe('Subject of the email your code rendered.'),
     html: zod.string().optional().describe('HTML body of the email your code rendered.'),
@@ -78,7 +76,7 @@ export const MessagingSendEmailCreateBody = /* @__PURE__ */ zod.object({
         .describe('Addresses replies to the email your code rendered go to.'),
     capture_engagement: zod
         .boolean()
-        .default(messagingSendEmailCreateBodyCaptureEngagementDefault)
+        .optional()
         .describe(
             'Whether the engagement events (sent, delivered, opened, clicked, bounced) of the email your code rendered are captured as analytics events of the recipient. Defaults to true. A project whose admin turned engagement capture off captures nothing, whatever the send says.'
         ),
