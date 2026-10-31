@@ -551,7 +551,11 @@ describe('messageTemplateLogic', () => {
                 },
                 post: {
                     '/api/environments/:team_id/messaging_templates/': async ({ request }: { request: Request }) => {
-                        createBodies.push(await request.json())
+                        const body = await request.json()
+                        if (body.content?.email?.design === null) {
+                            return [400, { type: 'validation_error', code: 'null', attr: 'content__email__design' }]
+                        }
+                        createBodies.push(body)
                         return [201, { id: 'copy-id' }]
                     },
                 },
@@ -578,8 +582,13 @@ describe('messageTemplateLogic', () => {
                 logic.actions.duplicateTemplate()
             }).toFinishAllListeners()
 
+            const { design: _design, ...emailWithoutDesign } = CODE_MANAGED.content.email
             expect(createBodies).toEqual([
-                { name: 'Welcome (copy)', description: 'Sent after signup', content: CODE_MANAGED.content },
+                {
+                    name: 'Welcome (copy)',
+                    description: 'Sent after signup',
+                    content: { ...CODE_MANAGED.content, email: emailWithoutDesign },
+                },
             ])
         })
 
@@ -705,7 +714,11 @@ describe('messageTemplateLogic', () => {
                 },
                 post: {
                     '/api/environments/:team_id/messaging_templates/': async ({ request }: { request: Request }) => {
-                        createBodies.push(await request.json())
+                        const body = await request.json()
+                        if (body.content?.email?.design === null) {
+                            return [400, { type: 'validation_error', code: 'null', attr: 'content__email__design' }]
+                        }
+                        createBodies.push(body)
                         return [201, { id: 'copy-id' }]
                     },
                 },
@@ -801,6 +814,7 @@ describe('messageTemplateLogic', () => {
 
         it('duplicates the unsaved edits without its key, ownership, source or hash', async () => {
             await refuse(claimThenAutosave)
+            const { design: _design, ...emailWithoutDesign } = draft.email
 
             await expectLogic(logic, () => {
                 logic.actions.duplicateWithMyChanges()
@@ -810,7 +824,7 @@ describe('messageTemplateLogic', () => {
                 {
                     name: 'Welcome, edited here (copy)',
                     description: 'Sent after signup',
-                    content: { ...draft, email: { ...draft.email, subject: 'Edited subject' } },
+                    content: { ...draft, email: { ...emailWithoutDesign, subject: 'Edited subject' } },
                 },
             ])
             await expectLogic(logic).toMatchValues({ refusedEdits: null })
