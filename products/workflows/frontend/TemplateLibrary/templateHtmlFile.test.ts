@@ -31,7 +31,7 @@ const SDK_UPLOADED_FILES: { name: string; file: string; sdk: ParsedBySdk }[] = [
     },
 ]
 
-const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file: string; sdk: ParsedBySdk }[] = [
+const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file: string }[] = [
     {
         name: 'a document without a head',
         template: {
@@ -40,10 +40,6 @@ const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file
             html: '<!doctype html><html><body><p>Hi {{ variables.first_name }}</p></body></html>',
         },
         file: '<!doctype html><html><head><title>Welcome</title><meta name="preheader" content="Your account is ready"></head><body><p>Hi {{ variables.first_name }}</p></body></html>',
-        sdk: {
-            subject: 'Welcome',
-            preheader: 'Your account is ready',
-        },
     },
     {
         name: 'a head without a title or preheader',
@@ -53,16 +49,11 @@ const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file
             html: '<html><head><meta charset="utf-8"></head><body></body></html>',
         },
         file: '<html><head><title>Welcome</title><meta name="preheader" content="Your account is ready"><meta charset="utf-8"></head><body></body></html>',
-        sdk: {
-            subject: 'Welcome',
-            preheader: 'Your account is ready',
-        },
     },
     {
         name: 'a fragment without a document',
         template: { subject: 'Welcome', preheader: '', html: '<p>Hi</p>' },
         file: '<head><title>Welcome</title></head><p>Hi</p>',
-        sdk: { subject: 'Welcome' },
     },
     {
         name: 'a changed subject with characters that need escaping',
@@ -72,9 +63,6 @@ const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file
             html: '<html><head><title>Old</title></head><body></body></html>',
         },
         file: '<html><head><title>Tom &amp; Jerry &lt;3 &gt;</title></head><body></body></html>',
-        sdk: {
-            subject: 'Tom & Jerry <3 >',
-        },
     },
     {
         name: 'a changed preheader with characters that need escaping',
@@ -84,10 +72,6 @@ const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file
             html: '<html><head><title>Welcome</title><meta name="preheader" content="Old"></head><body></body></html>',
         },
         file: '<html><head><title>Welcome</title><meta name="preheader" content="Say &quot;hi&quot; &amp; more"></head><body></body></html>',
-        sdk: {
-            subject: 'Welcome',
-            preheader: 'Say "hi" & more',
-        },
     },
     {
         name: 'a blank preheader',
@@ -97,7 +81,6 @@ const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file
             html: '<html><head><title>Welcome</title><meta name="preheader" content="Old"></head><body></body></html>',
         },
         file: '<html><head><title>Welcome</title></head><body></body></html>',
-        sdk: { subject: 'Welcome' },
     },
     {
         name: 'Liquid with quotes and comparisons in the subject and preheader',
@@ -107,10 +90,6 @@ const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file
             html: '<html><head><title>Offer</title></head><body>{{ variables.body }}</body></html>',
         },
         file: '<html><head><title>{% if variables.vip %}VIP{% endif %} offer &amp; more</title><meta name="preheader" content=\'Hi {{ variables.name | default: "there" }}, it&#39;s ready\'></head><body>{{ variables.body }}</body></html>',
-        sdk: {
-            subject: '{% if variables.vip %}VIP{% endif %} offer & more',
-            preheader: 'Hi {{ variables.name | default: "there" }}, it\'s ready',
-        },
     },
     {
         name: 'a blank preheader with a second preheader tag behind the first',
@@ -120,7 +99,6 @@ const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file
             html: '<html><head><title>Welcome</title><meta name="preheader" content="Old"><meta name="preheader" content="Older"></head><body></body></html>',
         },
         file: '<html><head><title>Welcome</title></head><body></body></html>',
-        sdk: { subject: 'Welcome' },
     },
     {
         name: 'Liquid holding a character reference or a closing title tag',
@@ -130,10 +108,6 @@ const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file
             html: '<html><head><title>Old</title></head><body></body></html>',
         },
         file: '<html><head><title>{{ variables.name | default: "A &amp;amp; B&lt;/title>" }} news</title><meta name="preheader" content="Hi {{ variables.name | default: \'&amp;quot;friend&amp;quot;\' }}"></head><body></body></html>',
-        sdk: {
-            subject: '{{ variables.name | default: "A &amp; B</title>" }} news',
-            preheader: "Hi {{ variables.name | default: '&quot;friend&quot;' }}",
-        },
     },
     {
         name: 'a subject that matches the title once its whitespace collapses',
@@ -142,7 +116,6 @@ const ENCODED_TEMPLATES: { name: string; template: TemplateHtmlFileContent; file
             html: '<html><head><title>Hello world</title></head><body></body></html>',
         },
         file: '<html><head><title>Hello world</title></head><body></body></html>',
-        sdk: { subject: 'Hello world' },
     },
 ]
 
@@ -151,12 +124,10 @@ describe('templateHtmlFile', () => {
         expect(templateHtmlFile({ subject: sdk.subject, preheader: sdk.preheader, html: file })).toBe(file)
     })
 
-    it.each(ENCODED_TEMPLATES)('writes a file the SDK reads back as the template: $name', ({ template, file, sdk }) => {
+    it.each(ENCODED_TEMPLATES)('writes the template as the file the SDK reads: $name', ({ template, file }) => {
         const encoded = templateHtmlFile(template)
 
         expect(encoded).toBe(file)
-        expect(sdk.subject).toBe(template.subject.replace(/[\t\n\f\r ]+/g, ' ').trim())
-        expect(sdk.preheader).toBe(template.preheader?.trim() ? template.preheader : undefined)
         expect(templateHtmlFile({ ...template, html: encoded })).toBe(encoded)
     })
 })
