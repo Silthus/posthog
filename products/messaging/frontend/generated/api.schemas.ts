@@ -83,6 +83,11 @@ export interface SendEmailApi {
      * @pattern ^[a-zA-Z0-9_-]+$
      */
     template_key?: string
+    /**
+     * Distinct ID of the recipient's person, for a send with `template_key`. The send and its engagement events are recorded against that person. Defaults to the recipient's email address.
+     * @maxLength 400
+     */
+    distinct_id?: string
     /** Subject of the email your code rendered. */
     subject?: string
     /** HTML body of the email your code rendered. */

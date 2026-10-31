@@ -18,6 +18,8 @@ export const messagingSendEmailCreateBodyIdentifiersOneDistinctIdMax = 400
 export const messagingSendEmailCreateBodyTemplateKeyMax = 400
 
 export const messagingSendEmailCreateBodyTemplateKeyRegExp = new RegExp('^[a-zA-Z0-9_-]+$')
+export const messagingSendEmailCreateBodyDistinctIdMax = 400
+
 export const messagingSendEmailCreateBodyReplyToMax = 10
 
 export const messagingSendEmailCreateBodyCaptureEngagementDefault = true
@@ -55,6 +57,13 @@ export const MessagingSendEmailCreateBody = /* @__PURE__ */ zod.object({
         .optional()
         .describe(
             'Names an email whose content your code rendered, such as `password-reset`, so its metrics, logs and status group under it. Letters, numbers, hyphens (-) and underscores (_) only. Send it with `subject` and `html` or `text`. PostHog sends the content as is and never stores it as a template.'
+        ),
+    distinct_id: zod
+        .string()
+        .max(messagingSendEmailCreateBodyDistinctIdMax)
+        .optional()
+        .describe(
+            "Distinct ID of the recipient's person, for a send with `template_key`. The send and its engagement events are recorded against that person. Defaults to the recipient's email address."
         ),
     subject: zod.string().optional().describe('Subject of the email your code rendered.'),
     html: zod.string().optional().describe('HTML body of the email your code rendered.'),
