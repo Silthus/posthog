@@ -94,6 +94,7 @@ from products.access_control.backend.presentation.access_control import (
     UserAccessControlSerializerMixin,
 )
 from products.cdp.backend.presentation.hog_functions import (
+    COHORT_NOT_READY_CODE,
     DATA_WAREHOUSE_SOURCES,
     FLAG_GATED_TEMPLATE_IDS,
     compile_filters_expr,
@@ -673,6 +674,33 @@ _REPLAY_VISION_STEP_SCOPES = (
 )
 
 
+def _fill_default_push_title(inputs: Any, input_schema: list[dict[str, Any]] | None) -> None:
+    # The title stopped being required so silent pushes can omit it, and the inputs serializer only fills defaults
+    # for required inputs. API callers that leave it out of a visible push still get the template's default title.
+    if not isinstance(inputs, dict) or "title" in inputs:
+        return
+    delivery = inputs.get("delivery")
+    if isinstance(delivery, dict) and delivery.get("value") == "silent":
+        return
+    default = next((schema.get("default") for schema in input_schema or [] if schema.get("key") == "title"), None)
+    if default is not None:
+        inputs["title"] = {"value": default}
+
+
+def _validate_push_action(inputs: Any) -> None:
+    if not isinstance(inputs, dict):
+        return
+
+    def value(key: str) -> Any:
+        entry = inputs.get(key)
+        return entry.get("value") if isinstance(entry, dict) else None
+
+    delivery = value("delivery") or "notification"
+    title = value("title")
+    if delivery != "silent" and not (isinstance(title, str) and title.strip()):
+        raise serializers.ValidationError({"inputs": {"title": "Add a notification title."}})
+
+
 def _strip_replay_vision_code(inputs: Any) -> None:
     # A draft keeps its raw inputs when they fail validation, so client-compiled code or a Liquid template can still
     # be there. The engine would render those instead of the literal value the access checks read.
@@ -722,7 +750,7 @@ def _require_replay_vision_editor_access(request: Request | None, context: dict[
             raise serializers.ValidationError({"variables": error})
 
 
-_REPOSITORY_SHAPE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+REPOSITORY_SHAPE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
 MIN_WORKFLOW_TASK_MAX_PARALLEL_TASKS = 1
 MAX_WORKFLOW_TASK_MAX_PARALLEL_TASKS = 100
@@ -934,13 +962,18 @@ def _describe_action_errors(errors: list[Any], actions: list[dict]) -> str:
     # The many=True error list mirrors the actions list, with {} entries for valid actions. Raising it
     # as-is gets flattened by the exception handler to that first empty dict, so the client sees "{}".
     # Name each offending step instead so the error points at what to fix.
-    parts = []
+    failures = []
     for action_data, error in zip(actions, errors):
         if not error:
             continue
         message = _first_error_string(error) or "has an invalid configuration"
         name = action_data.get("name") if isinstance(action_data, dict) else None
-        parts.append(f"step '{name or 'unnamed'}': {message}")
+        failures.append((name or "unnamed", message))
+    if failures and all(getattr(message, "code", None) == COHORT_NOT_READY_CODE for _, message in failures):
+        # Nothing in the workflow needs a fix, so the message says to wait rather than to fix a step.
+        waits = " ".join(f"Step '{name}': {message}" for name, message in failures)
+        return f"Can't enable this workflow yet. {waits}"
+    parts = [f"step '{name}': {message}" for name, message in failures]
     return f"Can't enable this workflow. Fix {'; '.join(parts) or 'the invalid steps'} and try again."
 
 
@@ -1506,6 +1539,9 @@ class HogFlowActionSerializer(serializers.Serializer):
             "function_email also accepts tracking_enabled?: <bool> (default true) - when false, no open "
             "pixel is injected, links are not rewritten, and the send skips ESP-level open/click tracking, "
             "so opens and clicks are not recorded for that step (delivery/bounce/unsubscribe still are). "
+            "function_push also accepts sensitive?: <bool> (default false) - when true, the notification is "
+            "still sent but PostHog keeps no copy of its title, subtitle, body or image, and the run keeps "
+            "no variables, so it can't be rerun. "
             "Dictionary input values are template strings too — write booleans/numbers as single-expression "
             "templates ('{true}', '{42}'), which evaluate to the typed value. "
             "delay: waits a fixed span or until a per-person/-event date — set EXACTLY ONE of "
@@ -1602,7 +1638,9 @@ class HogFlowActionSerializer(serializers.Serializer):
         if not unchanged and not self._cohort_conditions_enabled():
             raise serializers.ValidationError({"type": "Cohort triggers aren't available for this organization."})
         try:
-            validate_realtime_cohorts([cohort_id], self.context["get_team"]())
+            validate_realtime_cohorts(
+                [cohort_id], self.context["get_team"](), require_ready=not self.context.get("is_draft")
+            )
         except serializers.ValidationError as error:
             raise serializers.ValidationError({"cohort_id": error.detail})
 
@@ -1696,11 +1734,14 @@ class HogFlowActionSerializer(serializers.Serializer):
                 except WorkflowTaskSkillsInvalid as e:
                     raise serializers.ValidationError({"inputs": {"skills": str(e)}})
 
-        repository = (inputs.get("repository") or {}).get("value")
-        if repository and not _REPOSITORY_SHAPE.fullmatch(repository):
+        repository_value = (inputs.get("repository") or {}).get("value") or []
+        repositories = [repository_value] if isinstance(repository_value, str) else repository_value
+        if not all(REPOSITORY_SHAPE.fullmatch(repository) for repository in repositories):
             raise serializers.ValidationError(
-                {"inputs": {"repository": "Repository must be an organization/repo name like your-org/your-repo."}}
+                {"inputs": {"repository": "Each repository must be an organization/repo name like your-org/your-repo."}}
             )
+        if len({repository.lower() for repository in repositories}) != len(repositories):
+            raise serializers.ValidationError({"inputs": {"repository": "Each repository can only be added once."}})
 
         model_value = (inputs.get("model") or {}).get("value") or {}
         model = model_value.get("model")
@@ -2144,6 +2185,8 @@ class HogFlowActionSerializer(serializers.Serializer):
             else:
                 input_schema = template.inputs_schema
                 inputs = data.get("config", {}).get("inputs", {})
+                if template_id == _FIXED_TEMPLATE_IDS["function_push"]:
+                    _fill_default_push_title(inputs, input_schema)
                 existing_emails = (self.context.get("existing_action_emails") or {}).get(data.get("id")) or []
                 input_context = {
                     **self.context,
@@ -2206,6 +2249,8 @@ class HogFlowActionSerializer(serializers.Serializer):
                     self._validate_run_scout_action()
                 if strict and template_id == _CLASSIFY_TEMPLATE_ID:
                     self._validate_classify_action(data["config"]["inputs"])
+                if strict and template_id == _FIXED_TEMPLATE_IDS["function_push"]:
+                    _validate_push_action(data["config"]["inputs"])
                 if template_id == _REPLAY_VISION_TEMPLATE_ID:
                     self._validate_replay_vision_action(data["config"].get("inputs") or {}, strict=strict)
                 if template_id == _RUN_SCOUT_TEMPLATE_ID:

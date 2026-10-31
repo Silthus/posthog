@@ -64,6 +64,18 @@ class AccountsTableAggregation(StrEnum):
     MEDIAN = "median"
 
 
+class AccountsTableCustomPropertyDisplayType(StrEnum):
+    TEXT = "text"
+    LINK = "link"
+    NUMBER = "number"
+    CURRENCY = "currency"
+    PERCENT = "percent"
+    DATE = "date"
+    DATETIME = "datetime"
+    BOOLEAN = "boolean"
+    SELECT = "select"
+
+
 class WindowDays(float, Enum):
     NUMBER_7 = 7
     NUMBER_14 = 14
@@ -237,6 +249,12 @@ class DisplayType(StrEnum):
     LINE = "line"
     BAR = "bar"
     AREA = "area"
+
+
+class ValueLabels(StrEnum):
+    AUTO = "auto"
+    SHOW = "show"
+    HIDE = "hide"
 
 
 class YAxisPosition(StrEnum):
@@ -659,6 +677,11 @@ class BIAggregation(StrEnum):
     MINIMUM = "minimum"
     MAXIMUM = "maximum"
     CUSTOM = "custom"
+
+
+class BICatalogMetricStatus(StrEnum):
+    APPROVED = "approved"
+    PROPOSED = "proposed"
 
 
 class Operator1(StrEnum):
@@ -1525,6 +1548,11 @@ class ExperimentStatsValidationFailure(StrEnum):
     NOT_ENOUGH_METRIC_DATA = "not-enough-metric-data"
 
 
+class ExperimentWarehouseNativeMathType(StrEnum):
+    TOTAL = "total"
+    SUM = "sum"
+
+
 class ExternalQueryErrorCode(StrEnum):
     PLATFORM_ACCESS_REQUIRED = "platform_access_required"
     QUERY_EXECUTION_FAILED = "query_execution_failed"
@@ -2119,6 +2147,41 @@ class MarketingAnalyticsOrderByEnum(StrEnum):
     DESC = "DESC"
 
 
+class MarketingAnalyticsRecommendationImpactDirection(StrEnum):
+    SAVE = "save"
+    GAIN = "gain"
+    INVEST = "invest"
+    KEEP = "keep"
+
+
+class MarketingAnalyticsRecommendationImpactType(StrEnum):
+    MEASURED = "measured"
+    ESTIMATED = "estimated"
+
+
+class MarketingAnalyticsRecommendationLevel(StrEnum):
+    CAMPAIGN = "campaign"
+    SEARCH_TERM = "search_term"
+
+
+class MarketingAnalyticsRecommendationRule(StrEnum):
+    BUDGET_CONSTRAINED = "budget_constrained"
+    BRAND_LEAK = "brand_leak"
+    SCALE_CAMPAIGN = "scale_campaign"
+    REVIEW_CAMPAIGN = "review_campaign"
+    POLICY_LIMITED = "policy_limited"
+    BRAND_OVERLAP = "brand_overlap"
+    CONTENT_GAP = "content_gap"
+    KEYWORD_GAP = "keyword_gap"
+    SPEND_WITHOUT_CONVERSIONS = "spend_without_conversions"
+    STRIKING_DISTANCE = "striking_distance"
+
+
+class MarketingAnalyticsRecommendationsSourceType(StrEnum):
+    GOOGLE_ADS = "GoogleAds"
+    GOOGLE_SEARCH_CONSOLE = "GoogleSearchConsole"
+
+
 class MarketingAnalyticsRetentionInterval(StrEnum):
     DAY = "day"
     WEEK = "week"
@@ -2138,6 +2201,7 @@ class MarketingAnalyticsSchemaFieldTypes(StrEnum):
 class Breakdown1(StrEnum):
     KEYWORD = "keyword"
     PAGE = "page"
+    SEARCH_TERM = "search_term"
 
 
 class Platform(StrEnum):
@@ -2419,14 +2483,17 @@ class NodeKind(StrEnum):
     MARKETING_ANALYTICS_ATTRIBUTION_PATHS_QUERY = "MarketingAnalyticsAttributionPathsQuery"
     MARKETING_ANALYTICS_RETENTION_QUERY = "MarketingAnalyticsRetentionQuery"
     MARKETING_ANALYTICS_SEARCH_QUERY = "MarketingAnalyticsSearchQuery"
+    MARKETING_ANALYTICS_RECOMMENDATIONS_QUERY = "MarketingAnalyticsRecommendationsQuery"
     EXPERIMENT_METRIC = "ExperimentMetric"
     EXPERIMENT_QUERY = "ExperimentQuery"
     EXPERIMENT_EXPOSURE_QUERY = "ExperimentExposureQuery"
     EXPERIMENT_EVENT_EXPOSURE_CONFIG = "ExperimentEventExposureConfig"
+    EXPERIMENT_WAREHOUSE_NATIVE_EXPOSURE_CONFIG = "ExperimentWarehouseNativeExposureConfig"
     EXPERIMENT_ACTORS_QUERY = "ExperimentActorsQuery"
     EXPERIMENT_TRENDS_QUERY = "ExperimentTrendsQuery"
     EXPERIMENT_FUNNELS_QUERY = "ExperimentFunnelsQuery"
     EXPERIMENT_DATA_WAREHOUSE_NODE = "ExperimentDataWarehouseNode"
+    EXPERIMENT_WAREHOUSE_NATIVE_NODE = "ExperimentWarehouseNativeNode"
     EXPERIMENT_EXPOSURE_NODE = "ExperimentExposureNode"
     DATABASE_SCHEMA_QUERY = "DatabaseSchemaQuery"
     SUGGESTED_QUESTIONS_QUERY = "SuggestedQuestionsQuery"
@@ -3010,6 +3077,16 @@ class SnapchatAdsConversionValueFields(StrEnum):
 
 class SnapchatAdsDefaultSources(StrEnum):
     SNAPCHAT = "snapchat"
+
+
+class SpanHealthStatus(StrEnum):
+    SILENT = "silent"
+    REGRESSED = "regressed"
+    DEGRADED = "degraded"
+    NEW = "new"
+    RECOVERED = "recovered"
+    IMPROVED = "improved"
+    OK = "ok"
 
 
 class SpanPropertyFilterType(StrEnum):
