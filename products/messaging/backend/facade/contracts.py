@@ -39,6 +39,7 @@ class TransactionalEmailError(Exception):
     """A send the caller has to fix before retrying. `code` is stable for API clients."""
 
     code = "invalid"
+    attr: str | None = None
 
 
 class TemplateNotSendable(TransactionalEmailError):
@@ -101,6 +102,10 @@ class RecipientUnreachable(TransactionalEmailError):
 
 class SenderNotVerified(TransactionalEmailError):
     code = "sender_not_verified"
+
+
+class NamedSenderNotVerified(SenderNotVerified):
+    attr = "from"
 
 
 class TemplateOutdated(TransactionalEmailError):

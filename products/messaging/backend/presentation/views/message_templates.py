@@ -718,6 +718,12 @@ class TransactionalEmailRejected(exceptions.APIException):
         super().__init__(detail=str(error), code=error.code)
 
 
+def _rejection(error: TransactionalEmailError) -> exceptions.APIException:
+    if error.attr:
+        return exceptions.ValidationError({error.attr: [str(error)]}, code=error.code)
+    return TransactionalEmailRejected(error)
+
+
 class TransactionalEmailUnavailable(exceptions.APIException):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     default_detail = "The email pipeline is unavailable. Try again shortly."
@@ -920,7 +926,7 @@ class TransactionalEmailSendMixin:
             outcome["outcome"] = "replayed" if queued.replayed else "queued"
         except TransactionalEmailError as e:
             outcome.update({"outcome": "rejected", "error_code": e.code})
-            raise TransactionalEmailRejected(e)
+            raise _rejection(e)
         except DeliveryUnavailable:
             outcome["outcome"] = "unavailable"
             raise unavailable() from None
