@@ -659,6 +659,35 @@ describe('EmailService', () => {
                 expect(capture).toHaveBeenCalledTimes(3)
                 expectBlockedEvent('switch_off', false, 0)
             })
+
+            it.each([
+                ['the sandbox sender is switched off', false, memberEmail, 'sending_suspended'],
+                ['the recipient is not a member', true, () => 'outside@example.com', 'recipient_unreachable'],
+            ])('records a skipped transactional email when %s', async (_case, enabled, recipient, expectedReason) => {
+                const produce = jest.fn().mockResolvedValue(undefined)
+                const emailStatusService = new EmailStatusService(
+                    { produce } as unknown as IngestionOutputs<EmailStatusOutput>,
+                    { EMAIL_STATUS_ENABLED: true }
+                )
+                service = createSandboxService(enabled)
+                service['emailStatusService'] = emailStatusService
+                invocation.id = new UUIDT().toString()
+                invocation.state.globals.event.event = TRANSACTIONAL_EMAIL_EVENT
+                invocation.queueParameters = createSandboxParams({ to: { email: recipient() } })
+
+                await service.executeSendEmail(invocation)
+                await emailStatusService.flush()
+
+                const rows = produce.mock.calls.map(([, message]) => parseJSON(message.value.toString()))
+                expect(rows).toEqual([
+                    expect.objectContaining({
+                        team_id: team.id,
+                        message_id: invocation.id,
+                        status: 'failed',
+                        reason: expectedReason,
+                    }),
+                ])
+            })
         })
         describe('integration validation', () => {
             beforeEach(async () => {

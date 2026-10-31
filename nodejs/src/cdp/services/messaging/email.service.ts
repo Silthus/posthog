@@ -24,7 +24,7 @@ import { TeamWorkflowsConfigService } from '../managers/team-workflows-config.se
 import { RateLimiterService } from '../rate-limiter/rate-limiter.service'
 import { getEmailQueuePriorityClass } from './email-priority'
 import { selectEmailSenderIntegrationId } from './email-sender-selection'
-import { EmailStatusService, isTransactionalEmailSend } from './email-status.service'
+import { EmailSkipReason, EmailStatusService, isTransactionalEmailSend } from './email-status.service'
 import { EmailSuppressionService, SuppressionCheckOptions } from './email-suppression.service'
 import {
     addTrackingToEmail,
@@ -646,12 +646,14 @@ export class EmailService {
             if (isSandbox && !isTest && !('hogFlow' in invocation)) {
                 this.skipSandboxSend(
                     result,
-                    'Skipping send: the sandbox sender is only available for workflows and test sends.'
+                    isTest,
+                    'Skipping send: the sandbox sender is only available for workflows and test sends.',
+                    'sending_suspended'
                 )
                 return result
             }
             if (isSandbox && !this.sandboxSender?.canSend) {
-                this.skipSandboxSend(result, SANDBOX_UNAVAILABLE_LOG)
+                this.skipSandboxSend(result, isTest, SANDBOX_UNAVAILABLE_LOG, 'sending_suspended')
                 await this.sandboxSender?.captureBlocked(invocation.teamId, isTest, 'switch_off', 0)
                 return result
             }
@@ -854,7 +856,7 @@ export class EmailService {
                     break
                 case 'sandbox':
                     if (await this.checkSandboxRecipients(result, recipients, isTest)) {
-                        this.skipSandboxSend(result, SANDBOX_UNAVAILABLE_LOG)
+                        this.skipSandboxSend(result, isTest, SANDBOX_UNAVAILABLE_LOG, 'sending_suspended')
                     }
                     return result
 
@@ -1085,10 +1087,13 @@ export class EmailService {
 
     private skipSandboxSend(
         result: CyclotronJobInvocationResult<CyclotronJobInvocationHogFunction>,
-        reason: string
+        isTest: boolean,
+        reason: string,
+        statusReason: EmailSkipReason
     ): void {
         createAddLogFunction(result.logs)('info', reason)
         result.emailSendResult = { status: 'skipped', reason }
+        this.emailStatusService?.queueSkippedSend(result.invocation, statusReason, isTest)
         result.skipped = true
         result.invocation.state.vmState?.stack.push({ success: false })
     }
@@ -1124,7 +1129,12 @@ export class EmailService {
             return true
         }
         const { explanation, label, guidance } = SANDBOX_RECIPIENT_BLOCK_COPY[reason]
-        this.skipSandboxSend(result, `${explanation}${label}${blockedRecipients.join(', ')}. ${guidance}`)
+        this.skipSandboxSend(
+            result,
+            isTest,
+            `${explanation}${label}${blockedRecipients.join(', ')}. ${guidance}`,
+            'recipient_unreachable'
+        )
         await this.sandboxSender?.captureBlocked(teamId, isTest, reason, blockedRecipients.length)
         return false
     }
