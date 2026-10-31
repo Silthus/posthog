@@ -18,7 +18,8 @@ from posthog.hogql.context import HogQLContext
 from posthog.hogql.parser import parse_program, parse_string_template
 from posthog.hogql.visitor import TraversingVisitor
 
-from posthog.models.integration import POSTHOG_CONNECT_KIND, SANDBOX_EMAIL_PROVIDER, Integration
+from posthog.integrations import IntegrationManager, IntegrationRecord
+from posthog.models.integration import SANDBOX_EMAIL_PROVIDER
 from posthog.models.team.team import Team
 from posthog.models.user import User
 from posthog.permissions import posthog_feature_flag_enabled
@@ -40,7 +41,8 @@ from products.cdp.backend.models.hog_functions.hog_function import (
     TYPES_WITH_JAVASCRIPT_SOURCE,
     TYPES_WITH_TRANSPILED_FILTERS,
 )
-from products.cohorts.backend.models.cohort import Cohort
+from products.cohorts.backend.models.cohort import Cohort, CohortType
+from products.cohorts.backend.realtime_state import CohortRealtimeState, has_realtime_state, resolve_realtime_readiness
 
 from common.hogvm.python.stl import STL
 from common.hogvm.python.stl.bytecode import BYTECODE_STL
@@ -50,6 +52,8 @@ logger = logging.getLogger(__name__)
 
 CORE_SUPPORTED_FUNCTIONS = {"fetch", "postHogCapture"}
 MAX_WORKFLOW_EMAIL_SENDERS = 10
+# Matches the cap the tasks API puts on a task's repositories.
+MAX_TASK_REPOSITORIES = 10
 
 # The mask the UI shows in place of a stored secret. A re-save that did not touch the secret
 # sends this back, meaning "keep the stored value". It must never be persisted as a real secret.
@@ -94,16 +98,11 @@ def _sender_integration_ids(from_value: dict) -> set[int]:
     }
 
 
-def _email_integrations(integration_ids: set[int], context: dict[str, Any]) -> dict[int, Integration | None]:
-    cache: dict[int, Integration | None] = context.setdefault("email_integration_cache", {})
+def _email_integrations(integration_ids: set[int], context: dict[str, Any]) -> dict[int, IntegrationRecord | None]:
+    cache: dict[int, IntegrationRecord | None] = context.setdefault("email_integration_cache", {})
     missing_ids = integration_ids - cache.keys()
     if missing_ids:
-        integrations = {
-            integration.id: integration
-            for integration in Integration.objects.filter(
-                team_id=context["get_team"]().id, id__in=missing_ids, kind="email"
-            )
-        }
+        integrations = IntegrationManager.email.credentials.get_many(context["get_team"]().id, missing_ids)
         cache.update({integration_id: integrations.get(integration_id) for integration_id in missing_ids})
     return cache
 
@@ -178,7 +177,7 @@ def _validate_not_posthog_connection(integration_ids: list[int], context: dict) 
     get_team = context.get("get_team")
     if get_team is None or not integration_ids:
         return
-    if Integration.objects.filter(team_id=get_team().id, id__in=integration_ids, kind=POSTHOG_CONNECT_KIND).exists():
+    if IntegrationManager.posthog.any.get_many(get_team().id, integration_ids):
         raise serializers.ValidationError(
             {"input": "A PostHog connection can't be used as a function input. Choose a different integration."}
         )
@@ -887,8 +886,17 @@ class InputsItemSerializer(serializers.Serializer):
                 raise serializers.ValidationError({"input": "Value must be a list of Integration IDs."})
             _validate_not_posthog_connection(value, self.context)
         elif item_type == "task_repository":
-            if not isinstance(value, str):
-                raise serializers.ValidationError({"input": "Value must be a repository name like your-org/your-repo."})
+            repositories = [value] if isinstance(value, str) else value
+            if (
+                not isinstance(repositories, list)
+                or not all(isinstance(v, str) for v in repositories)
+                or len(repositories) > MAX_TASK_REPOSITORIES
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "input": f"Value must be a list of up to {MAX_TASK_REPOSITORIES} repository names like your-org/your-repo."
+                    }
+                )
         elif item_type == "task_model":
             # A non-empty value means a model was chosen (an empty value returned above as "use the
             # default model"), so it must name a usable model. Otherwise the run-time consumer drops
@@ -1389,7 +1397,9 @@ class HogFunctionFiltersSerializer(serializers.Serializer):
             cohort_membership_supported = bool(self.context.get("cohort_membership_supported"))
             validated_cohort_ids: Optional[set[int]] = None
             if cohort_membership_supported:
-                validated_cohort_ids = self._validate_realtime_cohorts(data, team)
+                validated_cohort_ids = self._validate_realtime_cohorts(
+                    data, team, require_ready=not self.context.get("is_draft")
+                )
             data = compile_filters_bytecode(
                 data,
                 team,
@@ -1404,7 +1414,7 @@ class HogFunctionFiltersSerializer(serializers.Serializer):
 
         return data
 
-    def _validate_realtime_cohorts(self, data: dict, team: Team) -> set[int]:
+    def _validate_realtime_cohorts(self, data: dict, team: Team, *, require_ready: bool) -> set[int]:
         """Validate every cohort these filters reference, including inside referenced Actions.
 
         Returns the validated ids so the compiler can reject any IN COHORT operand outside them.
@@ -1416,12 +1426,33 @@ class HogFunctionFiltersSerializer(serializers.Serializer):
             for action in Action.objects.filter(id__in=action_ids, team__project_id=team.project_id, deleted=False):
                 for step in action.steps:
                     collected |= collect_property_cohort_ids(step.properties or [])
-        validate_realtime_cohorts(collected, team)
+        validate_realtime_cohorts(collected, team, require_ready=require_ready)
         return collected
 
 
-def validate_realtime_cohorts(cohort_ids: Iterable[int], team: Team) -> None:
+COHORT_NOT_READY_CODE = "cohort_not_ready"
+
+
+def _cohort_not_ready_error(cohort: Cohort) -> serializers.ValidationError:
+    readiness = resolve_realtime_readiness([cohort]).get(cohort.pk)
+    if readiness is not None and readiness.state in (CohortRealtimeState.BUILDING, CohortRealtimeState.REBUILDING):
+        percent = readiness.build.percent_complete if readiness.build is not None else None
+        progress = f" ({percent}% done)" if percent is not None else ""
+        return serializers.ValidationError(
+            f"Cohort {cohort.pk} is still calculating{progress}. Workflows can use it once it finishes.",
+            code=COHORT_NOT_READY_CODE,
+        )
+    return serializers.ValidationError(
+        f"Cohort {cohort.pk} isn't ready for realtime evaluation. "
+        f"Workflows can only use realtime cohorts that have finished calculating."
+    )
+
+
+def validate_realtime_cohorts(cohort_ids: Iterable[int], team: Team, *, require_ready: bool = True) -> None:
     """Reject any cohort without maintained cohort_membership rows, which would treat everyone as a non-member.
+
+    With `require_ready=False` a realtime cohort that is still calculating passes, so a draft can reference
+    it before its history finishes. A cohort that can never become ready is rejected either way.
 
     Error messages carry the id rather than the name: they surface to callers holding only workflow
     scopes, and a name would hand them a cohort-metadata oracle.
@@ -1438,11 +1469,11 @@ def validate_realtime_cohorts(cohort_ids: Iterable[int], team: Team) -> None:
             raise serializers.ValidationError(
                 f"Cohort {cohort_id} is a static cohort. Workflows can only use realtime cohorts."
             )
-        if not cohort.is_flag_compatible:
-            raise serializers.ValidationError(
-                f"Cohort {cohort_id} isn't ready for realtime evaluation. "
-                f"Workflows can only use realtime cohorts that have finished calculating."
-            )
+        if cohort.is_flag_compatible:
+            continue
+        can_become_ready = cohort.cohort_type == CohortType.REALTIME and has_realtime_state(cohort)
+        if require_ready or not can_become_ready:
+            raise _cohort_not_ready_error(cohort)
 
 
 class FunctionInputsSerializer(serializers.Serializer):

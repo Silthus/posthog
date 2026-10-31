@@ -6,7 +6,7 @@ import { LemonDialog } from '@posthog/lemon-ui'
 import { FEATURE_FLAGS } from 'lib/constants'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
-import { preflightLogic } from 'scenes/PreflightCheck/preflightLogic'
+import { preflightLogic } from 'lib/logic/preflightLogic'
 
 import { useMocks } from '~/mocks/jest'
 import { initKeaTests } from '~/test/init'
@@ -416,6 +416,39 @@ describe('emailTemplaterLogic', () => {
                     replyTo: 'team@example.com',
                 }),
             })
+        })
+
+        it('applying a text-only template clears the previous html body and design', async () => {
+            const onChange = jest.fn()
+            logic = emailTemplaterLogic(
+                makeProps({
+                    value: {
+                        ...DEFAULT_EMAIL_TEMPLATE,
+                        html: '<p>Hello from PostHog!</p>',
+                        design: {} as EmailTemplate['design'],
+                    },
+                    onChange,
+                })
+            )
+            logic.mount()
+
+            logic.actions.applyTemplate({
+                id: 'template-2',
+                name: 'Plain receipt',
+                content: {
+                    templating: 'liquid',
+                    email: { subject: 'Your receipt', text: 'Thanks for your order.' },
+                },
+            } as MessageTemplate)
+
+            expect(onChange).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    subject: 'Your receipt',
+                    text: 'Thanks for your order.',
+                    html: '',
+                    design: null,
+                })
+            )
         })
     })
 

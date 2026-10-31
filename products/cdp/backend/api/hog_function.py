@@ -1271,6 +1271,7 @@ class HogFunctionViewSet(
             queryset = queryset.filter(deleted=False)
 
         if self.action == "list":
+            queryset = queryset.select_related("created_by", "hog_function_template")
             search = self.request.GET.get("search")
             if search:
                 if len(search) > MAX_SEARCH_LENGTH:
