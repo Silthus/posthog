@@ -1,6 +1,8 @@
 import { Counter, Histogram } from 'prom-client'
 import { z } from 'zod'
 
+import { HogFlow } from '~/cdp/schema/hogflow'
+
 export const AcceptedSendSchema = z
     .object({
         content: z
@@ -23,10 +25,14 @@ export const AcceptedSendSchema = z
             .optional(),
         replyTo: z.array(z.string()).readonly().optional(),
         tracking: z.object({ captureEngagement: z.boolean() }).readonly(),
+        hogFlowVersion: z.number().int().positive().optional(),
     })
     .readonly()
 
 export type AcceptedSend = z.infer<typeof AcceptedSendSchema>
+
+export const predatesGradedVersion = (hogFlow: Pick<HogFlow, 'version'>, send: AcceptedSend | undefined): boolean =>
+    send?.hogFlowVersion !== undefined && hogFlow.version < send.hogFlowVersion
 
 // What Django sends to run a transactional email's workflow once.
 export const TransactionalEmailRequestSchema = z.object({
@@ -54,6 +60,7 @@ export type TransactionalEmailOutcome =
     | 'invalid_request'
     | 'not_found'
     | 'not_sendable'
+    | 'workflow_version_behind'
     | 'quota_limited'
     | 'sending_suspended'
     | 'sending_paused'
