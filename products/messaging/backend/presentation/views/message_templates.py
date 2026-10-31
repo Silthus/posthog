@@ -1677,7 +1677,7 @@ class MessagingSendViewSet(TransactionalEmailSendMixin, TeamAndOrgViewSetMixin, 
         with transactional_email_stage("workflow_access"):
             if template.transactional_hog_flow_id:
                 self._require_workflow_editor(template.transactional_hog_flow_id)
-        options = _template_send_options(request.data, data)
+        options = _template_send_options(data)
 
         def send(idempotency_key: str | None) -> QueuedEmail:
             if found.hash_state == ContentHashState.OUTDATED:
@@ -1744,12 +1744,9 @@ TEMPLATE_OUTDATED_DETAIL = (
     "PostHog doesn't hold the content `template.hash` describes, so nothing was sent. Upload the template, then send "
     "again."
 )
-TEMPLATE_SEND_OPTION_FIELDS = ("from", "reply_to", "capture_engagement")
 
 
-def _template_send_options(sent: Any, data: Mapping[str, Any]) -> TemplateSendOptions | None:
-    if not isinstance(sent, Mapping) or not any(field in sent for field in TEMPLATE_SEND_OPTION_FIELDS):
-        return None
+def _template_send_options(data: Mapping[str, Any]) -> TemplateSendOptions:
     return TemplateSendOptions(
         sender=data.get("from"),
         reply_to=tuple(data.get("reply_to", ())),

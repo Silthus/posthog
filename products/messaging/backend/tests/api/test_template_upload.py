@@ -562,7 +562,8 @@ class TestTemplateUpload(APIBaseTest):
             post.assert_not_called()
         else:
             assert [warning["code"] for warning in response.json().get("warnings", [])] == expected_warnings
-            assert post.call_args.args[0].endswith(f"/hog_flows/{hog_flow_id}/transactional_email")
+            assert post.call_args.args[0].endswith(f"/hog_flows/{hog_flow_id}/transactional_email/send")
+            assert post.call_args.kwargs["json"]["send"]["hogFlowVersion"] == 2
         assert self._template(published["id"])["content_hash"] == published["content_hash"]
         assert self._sent_email(hog_flow_id)["subject"] == "Welcome aboard, {{ variables.first_name }}"
         assert self._workflow(hog_flow_id)["version"] == 2

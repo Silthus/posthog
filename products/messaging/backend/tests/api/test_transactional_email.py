@@ -540,13 +540,25 @@ class TestTransactionalEmail(APIBaseTest):
 
     @parameterized.expand(
         [
-            ("without_a_hash", {}, "transactional_email", None, None),
-            ("with_the_current_hash", {"hash": PASSWORD_RESET_HASH}, "transactional_email", None, None),
+            (
+                "without_a_hash",
+                {},
+                "transactional_email/send",
+                {"tracking": {"captureEngagement": True}, "hogFlowVersion": 1},
+                None,
+            ),
+            (
+                "with_the_current_hash",
+                {"hash": PASSWORD_RESET_HASH},
+                "transactional_email/send",
+                {"tracking": {"captureEngagement": True}, "hogFlowVersion": 1},
+                None,
+            ),
             (
                 "with_a_superseded_hash",
                 {"hash": SUPERSEDED_HASH},
-                "transactional_email",
-                None,
+                "transactional_email/send",
+                {"tracking": {"captureEngagement": True}, "hogFlowVersion": 1},
                 [
                     {
                         "code": "template_superseded",
@@ -1035,15 +1047,12 @@ class TestTransactionalEmail(APIBaseTest):
         assert (after.message_category_id, after.content) == (None, before.content)
         assert self._workflow(self.hog_flow_id)["version"] == 1
 
-    def _keyed_with_options(self) -> dict[str, Any]:
-        return {**self._keyed(), "capture_engagement": True}
-
     @patch("products.messaging.backend.services.transactional_email.reload_hog_flows_on_workers")
     def test_a_send_after_a_save_carries_the_workflow_version_that_holds_the_saved_content(
         self, _reload, mock_post, _flag, _capture
     ):
         self._cdp_accepts(mock_post)
-        body = self._keyed_with_options()
+        body = self._keyed()
         with self.captureOnCommitCallbacks(execute=True):
             MessageTemplate.objects.filter(id=self.template.id).update(managed_by=None)
             saved = self.client.patch(
@@ -1072,9 +1081,7 @@ class TestTransactionalEmail(APIBaseTest):
     def test_a_send_the_pipeline_holds_an_older_workflow_for_asks_for_a_retry(self, mock_post, _flag, capture):
         mock_post.return_value = MagicMock(status_code=503, json=lambda: {"error": "workflow_version_behind"})
 
-        response = self._psak_client(["hog_flow:write"]).post(
-            self.send_email_url, self._keyed_with_options(), format="json"
-        )
+        response = self._psak_client(["hog_flow:write"]).post(self.send_email_url, self._keyed(), format="json")
 
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
         assert (response.json()["code"], response.json()["detail"]) == (
@@ -1095,9 +1102,7 @@ class TestTransactionalEmail(APIBaseTest):
         with patch.object(
             transactional_email, "get_workflow_version", side_effect=delete_the_workflow_then_read_its_version
         ):
-            response = self._psak_client(["hog_flow:write"]).post(
-                self.send_email_url, self._keyed_with_options(), format="json"
-            )
+            response = self._psak_client(["hog_flow:write"]).post(self.send_email_url, self._keyed(), format="json")
 
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
         assert response.json()["code"] == "delivery_unavailable"
