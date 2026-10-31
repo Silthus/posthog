@@ -2,7 +2,7 @@ import { createHash } from 'crypto'
 import { type DefaultTreeAdapterMap, defaultTreeAdapter, parse, parseFragment, serialize } from 'parse5'
 
 import { CyclotronInvocationQueueParametersEmailType } from '~/cdp/schema/cyclotron'
-import { CyclotronJobInvocationHogFlow, CyclotronJobInvocationHogFunction } from '~/cdp/types'
+import { CyclotronJobInvocationHogFunction } from '~/cdp/types'
 import { RedisV2 } from '~/common/redis/redis-v2'
 import { logger } from '~/common/utils/logger'
 import { captureTeamEvent } from '~/common/utils/posthog'
@@ -10,6 +10,7 @@ import { TeamManager } from '~/common/utils/team-manager'
 
 import { SandboxSenderStateService } from '../managers/sandbox-sender-state.service'
 import { ClaimRequest, IssuedClaim, RateLimiterService } from '../rate-limiter/rate-limiter.service'
+import { isTransactionalEmailSend } from './email-status.service'
 import { maybeAddPreheaderToEmail } from './helpers/preheader'
 
 const SECONDS_PER_DAY = 86400
@@ -105,12 +106,7 @@ export function sandboxSendSource(invocation: CyclotronJobInvocationHogFunction,
     if (isTest) {
         return 'test'
     }
-    return runsUnderApiTrigger(invocation) ? 'api' : 'workflow'
-}
-
-function runsUnderApiTrigger(invocation: CyclotronJobInvocationHogFunction): boolean {
-    const { hogFlow } = invocation as Partial<Pick<CyclotronJobInvocationHogFlow, 'hogFlow'>>
-    return hogFlow?.trigger?.type === 'api'
+    return isTransactionalEmailSend(invocation) ? 'api' : 'workflow'
 }
 
 function htmlBody(document: DefaultTreeAdapterMap['document']): DefaultTreeAdapterMap['element'] | undefined {

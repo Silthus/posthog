@@ -633,6 +633,21 @@ describe('EmailService', () => {
                 })
             })
 
+            it('records a send from the transactional email API as an api send', async () => {
+                service = createSandboxService(true)
+                invocation.queueParameters = createSandboxParams({ to: { email: memberEmail() } })
+                invocation.state.globals.event.event = TRANSACTIONAL_EMAIL_EVENT
+
+                const result = await service.executeSendEmail(invocation)
+
+                expect(result.error).toBeUndefined()
+                expect(capture).toHaveBeenCalledWith(
+                    expect.objectContaining({ id: team.id }),
+                    'workflows sandbox email sent',
+                    { recipient_count: 1, source: 'api', is_test: false }
+                )
+            })
+
             it.each(['cc', 'bcc'] as const)('delivers a quoted %s mailbox whole', async (field) => {
                 const email = `"example,colleague-${team.id}"@example.com`
                 await createMember(email)

@@ -29,15 +29,17 @@ export type SandboxSendRequest = {
     to: string
 }
 
-const StoredEmailStepSchema = z.object({
-    from: z
-        .object({ integrationId: z.number().int().nullish(), integrationIds: z.array(z.number().int()).optional() })
-        .optional(),
+const StoredSenderSchema = z.object({
+    from: z.object({ integrationId: z.number().int(), integrationIds: z.array(z.number().int()).optional() }),
+})
+
+const StoredCopiesSchema = z.object({
     cc: z.string().optional(),
     bcc: z.string().optional(),
 })
 
-type StoredEmailStep = z.infer<typeof StoredEmailStepSchema>
+type StoredSender = z.infer<typeof StoredSenderSchema>['from']
+type StoredCopies = z.infer<typeof StoredCopiesSchema>
 
 const isTemplated = (copies: string): boolean => /[{}]/.test(copies)
 
@@ -50,24 +52,24 @@ export class SandboxSendGate {
 
     public async admit(request: SandboxSendRequest): Promise<SandboxSendAdmission> {
         const step = storedEmailStep(request.hogFlow)
-        if (!(await this.sendsThroughSandbox(request, step))) {
+        if (!(await this.sendsThroughSandbox(request, storedSender(step)))) {
             return { deliveryMode: 'own' }
         }
-        return { deliveryMode: 'sandbox', refusal: await this.refusal(request, step) }
+        return { deliveryMode: 'sandbox', refusal: await this.refusal(request, storedCopies(step)) }
     }
 
     private async refusal(
         request: SandboxSendRequest,
-        step: StoredEmailStep | null
+        copies: StoredCopies | null
     ): Promise<SandboxSendRefusal | null> {
         const suspension = await this.suspensionRefusal(request.teamId)
         if (suspension) {
             return suspension
         }
-        if (!step || isTemplated(step.cc ?? '') || isTemplated(step.bcc ?? '')) {
+        if (!copies || isTemplated(copies.cc ?? '') || isTemplated(copies.bcc ?? '')) {
             return await this.refuse(request.teamId, 'sandbox_recipient_not_allowed', 'recipient_not_member', 1)
         }
-        const recipients = sandboxEnvelopeRecipients(sandboxEnvelope(request.to, step.cc, step.bcc))
+        const recipients = sandboxEnvelopeRecipients(sandboxEnvelope(request.to, copies.cc, copies.bcc))
         return (
             (await this.recipientRefusal(request.teamId, recipients)) ??
             (await this.dailyCapRefusal(request.teamId, recipients))
@@ -103,8 +105,8 @@ export class SandboxSendGate {
         }
     }
 
-    private async sendsThroughSandbox(request: SandboxSendRequest, step: StoredEmailStep | null): Promise<boolean> {
-        const sender = request.send?.from ?? storedSender(step)
+    private async sendsThroughSandbox(request: SandboxSendRequest, stored: StoredSender | null): Promise<boolean> {
+        const sender = request.send?.from ?? stored
         if (!sender) {
             return false
         }
@@ -152,14 +154,17 @@ export class SandboxSendGate {
     }
 }
 
-function storedSender(step: StoredEmailStep | null): { integrationId: number; integrationIds?: number[] } | null {
-    const integrationId = step?.from?.integrationId
-    return integrationId == null ? null : { integrationId, integrationIds: step?.from?.integrationIds }
+function storedSender(step: unknown): StoredSender | null {
+    const parsed = StoredSenderSchema.safeParse(step)
+    return parsed.success ? parsed.data.from : null
 }
 
-function storedEmailStep(hogFlow: HogFlow): StoredEmailStep | null {
-    const action = hogFlow.actions.find((candidate) => candidate.type === 'function_email')
-    const value = action?.type === 'function_email' ? action.config.inputs?.email?.value : undefined
-    const parsed = StoredEmailStepSchema.safeParse(value ?? {})
+function storedCopies(step: unknown): StoredCopies | null {
+    const parsed = StoredCopiesSchema.safeParse(step)
     return parsed.success ? parsed.data : null
+}
+
+function storedEmailStep(hogFlow: HogFlow): unknown {
+    const action = hogFlow.actions.find((candidate) => candidate.type === 'function_email')
+    return (action?.type === 'function_email' ? action.config.inputs?.email?.value : undefined) ?? {}
 }
