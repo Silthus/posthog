@@ -9,9 +9,11 @@ import { LemonDialog } from '@posthog/lemon-ui'
 
 import api from 'lib/api'
 import { ApiError } from 'lib/api-error'
+import { FEATURE_FLAGS } from 'lib/constants'
 import { dayjs } from 'lib/dayjs'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { lemonToast } from 'lib/lemon-ui/LemonToast'
+import { FeatureFlagsSet, featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { getAccessControlDisabledReason } from 'lib/utils/accessControlUtils'
 import { copyToClipboard } from 'lib/utils/copyToClipboard'
 import { deleteWithUndo } from 'lib/utils/deleteWithUndo'
@@ -33,6 +35,7 @@ import type {
 } from 'products/messaging/frontend/generated/api.schemas'
 import { messagingTemplatesRequestChangeCreateBodyInstructionMax } from 'products/messaging/frontend/generated/api.zod'
 import { resourceEditedLogic } from 'products/notifications/frontend/resourceEditedLogic'
+import { AttachedContextItem } from 'products/posthog_ai/frontend/api/types'
 import { desktopAccessRetrieve } from 'products/tasks/frontend/generated/api'
 
 import {
@@ -60,6 +63,7 @@ import {
 import { NEW_TEMPLATE } from './constants'
 import { newTemplateAgentLogic } from './newTemplateAgentLogic'
 import { omitNullDesign } from './omitNullDesign'
+import { buildCodeManagedTemplateContext } from './templateAgentContext'
 import { captureTemplateDuplicated, templateCopy } from './templateCopy'
 import { templateHtmlFile } from './templateHtmlFile'
 import { TemplateSection, templateLibraryUrl, templateSectionFor, templateUrlInSection } from './templateSection'
@@ -114,6 +118,7 @@ export interface messageTemplateLogicValues {
     integrations: IntegrationType[] | null // integrationsLogic
     aiComposerAvailable: boolean // newTemplateAgentLogic
     currentTeamIdStrict: number | string // teamLogic
+    featureFlags: FeatureFlagsSet // featureFlagLogic
     agentPrompt: string
     agentPromptEventProperties: AgentPromptEventProperties
     agentPromptOpen: boolean
@@ -122,10 +127,12 @@ export interface messageTemplateLogicValues {
     changeRunError: ChangeRunError | null
     changeSentence: string
     changeSentenceDraft: string | null
+    codeManagedAgentContext: AttachedContextItem[] | null
     copyAgentPromptDisabledReason: string | undefined
     deferredExternalEdit: ResourceEditedEvent | null
     draftOutOfDate: boolean
     draftsEnabled: boolean
+    editWithAgentAvailable: boolean
     externallyEdited: boolean
     hasDraft: boolean
     hasUnsavedChanges: boolean
@@ -694,6 +701,11 @@ export interface messageTemplateLogicMeta {
         ) => boolean
         isCodeManaged: (originalTemplate: MessageTemplate) => boolean
         templateSource: (originalTemplate: MessageTemplate) => TemplateSource | null
+        editWithAgentAvailable: (featureFlags: FeatureFlagsSet, isCodeManaged: boolean) => boolean
+        codeManagedAgentContext: (
+            editWithAgentAvailable: boolean,
+            originalTemplate: MessageTemplate
+        ) => AttachedContextItem[] | null
         changePromptStarter: (originalTemplate: MessageTemplate) => string
         changeSentence: (changeSentenceDraft: string | null, changePromptStarter: string) => string
         agentPrompt: (changeSentence: string, originalTemplate: MessageTemplate) => string
@@ -738,6 +750,8 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
             ['aiComposerAvailable'],
             integrationsLogic,
             ['integrations'],
+            featureFlagLogic,
+            ['featureFlags'],
         ],
         actions: [resourceEditedLogic, ['resourceEdited']],
     })),
@@ -1032,6 +1046,16 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
         templateSource: [
             (s) => [s.originalTemplate],
             (originalTemplate: MessageTemplate): TemplateSource | null => templateSource(originalTemplate),
+        ],
+        editWithAgentAvailable: [
+            (s) => [s.featureFlags, s.isCodeManaged],
+            (featureFlags: FeatureFlagsSet, isCodeManaged: boolean): boolean =>
+                !!featureFlags[FEATURE_FLAGS.WORKFLOWS_EMAIL_FROM_CODE] && isCodeManaged,
+        ],
+        codeManagedAgentContext: [
+            (s) => [s.editWithAgentAvailable, s.originalTemplate],
+            (editWithAgentAvailable: boolean, originalTemplate: MessageTemplate): AttachedContextItem[] | null =>
+                editWithAgentAvailable ? buildCodeManagedTemplateContext(originalTemplate) : null,
         ],
         changePromptStarter: [
             (s) => [s.originalTemplate],
