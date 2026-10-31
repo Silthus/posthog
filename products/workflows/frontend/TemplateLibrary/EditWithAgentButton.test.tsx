@@ -18,6 +18,7 @@ const CODE_MANAGED = {
     content: { templating: 'liquid', email: { subject: 'Welcome', html: '<p>Hi</p>', text: '' } },
     key: 'welcome',
     managed_by: 'code',
+    source_repository: 'github.com/example/app',
     source_path: 'emails/welcome.html',
     change_prompt_starter: 'In `emails/welcome.html`, change ',
     change_prompt_context: 'About this file:\n- It is the PostHog email template with the key `welcome`.',
@@ -29,11 +30,31 @@ describe.each([
     { name: 'QuillEditWithAgentButton', Button: QuillEditWithAgentButton },
 ])('$name', ({ Button }) => {
     beforeEach(async () => {
-        useMocks({ get: { '/api/environments/:team_id/messaging_templates/:id/': CODE_MANAGED } })
+        useMocks({
+            get: {
+                '/api/environments/:team_id/messaging_templates/:id/': CODE_MANAGED,
+                '/api/projects/:team_id/desktop/access/': { allowed: true, reason: null },
+                '/api/projects/:team_id/integrations/': { results: [{ id: 7, kind: 'github' }] },
+            },
+            post: {
+                '/api/projects/:team_id/messaging_templates/:id/request_change/': () => [
+                    400,
+                    {
+                        code: 'github_repository_not_connected',
+                        detail: "PostHog Code can't reach this template's repository.",
+                        fix: 'Connect the repository to the GitHub integration.',
+                    },
+                ],
+            },
+        })
         initKeaTests()
+        window.POSTHOG_APP_CONTEXT = {
+            ...window.POSTHOG_APP_CONTEXT,
+            resource_access_control: { hog_flow: 'editor' },
+        } as typeof window.POSTHOG_APP_CONTEXT
         const logic = messageTemplateLogic({ id: 'existing-id' })
         logic.mount()
-        await expectLogic(logic).toDispatchActions(['loadTemplateSuccess'])
+        await expectLogic(logic).toDispatchActions(['loadTemplateSuccess']).toFinishAllListeners()
         render(
             <Provider>
                 <Button id="existing-id" />
@@ -79,5 +100,17 @@ describe.each([
         await waitFor(() => expect(screen.queryByLabelText('Describe the change')).not.toBeInTheDocument())
         expect(trigger).toHaveAttribute('aria-expanded', 'false')
         expect(trigger).toHaveFocus()
+    })
+
+    it("shows PostHog Code's refusal in the open prompt", async () => {
+        const user = userEvent.setup()
+        await user.click(screen.getByText('Edit with your agent').closest('button') as HTMLButtonElement)
+        await user.keyboard(' the button to green')
+
+        await user.click(await screen.findByText('Run with PostHog Code'))
+
+        expect(await screen.findByText(/PostHog Code can't reach this template's repository\./)).toBeInTheDocument()
+        expect(screen.getByText(/Connect the repository to the GitHub integration\./)).toBeInTheDocument()
+        expect(screen.getByLabelText('Describe the change')).toBeInTheDocument()
     })
 })
