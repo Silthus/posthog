@@ -11,12 +11,14 @@ from parameterized import parameterized
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from posthog.models import ProjectSecretAPIKey
+from posthog.constants import AvailableFeature
+from posthog.models import ProjectSecretAPIKey, User
 from posthog.models.integration import Integration
 from posthog.models.oauth import OAuthAccessToken, OAuthApplication
 from posthog.models.personal_api_key import PersonalAPIKey, hash_key_value
 from posthog.models.utils import generate_random_token_personal, generate_random_token_secret
 
+from products.access_control.backend.models.access_control import AccessControl
 from products.tasks.backend.facade.access import DesktopAccessDecision, DesktopAccessResolutionError
 from products.tasks.backend.facade.contracts import CreatedTaskDTO
 from products.workflows.backend.facade.api import set_default_email_sender_if_unset
@@ -218,6 +220,28 @@ class TestTemplateChangeRequest(APIBaseTest):
         uploaded = self._upload(WELCOME)
 
         response = self._request_change(uploaded["id"], {"instruction": "Make the button green."}, make_client(self))
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN, response.json()
+        create_task.assert_not_called()
+        assert self._change_requested_events(capture) == []
+
+    def test_refuses_a_teammate_without_editor_access_to_the_template_workflow(
+        self, create_task, _access, _limited, _connected, _post, _flag, capture
+    ):
+        uploaded = self._upload(WELCOME)
+        self.organization.available_product_features = [
+            {"name": AvailableFeature.ACCESS_CONTROL, "key": AvailableFeature.ACCESS_CONTROL}
+        ]
+        self.organization.save()
+        AccessControl.objects.create(
+            team=self.team,
+            resource="hog_flow",
+            resource_id=uploaded["transactional_hog_flow_id"],
+            access_level="viewer",
+        )
+        self.client.force_login(User.objects.create_and_join(self.organization, "teammate@example.com", None))
+
+        response = self._request_change(uploaded["id"], {"instruction": "Make the button green."})
 
         assert response.status_code == status.HTTP_403_FORBIDDEN, response.json()
         create_task.assert_not_called()

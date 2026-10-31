@@ -1564,7 +1564,8 @@ class MessageTemplatesViewSet(
             ),
             403: OpenApiResponse(
                 response=TemplateErrorSerializer,
-                description="`posthog_code_not_available`, or the caller may not start PostHog Code tasks",
+                description="`posthog_code_not_available`, or the caller may not start PostHog Code tasks or edit the "
+                "template's workflow",
             ),
             404: OpenApiResponse(
                 description="The template does not exist, or sending email from code is not enabled for this project"
@@ -1584,6 +1585,8 @@ class MessageTemplatesViewSet(
         require_email_from_code(self.team)
         try:
             template = self.get_object()
+            if template.transactional_hog_flow_id:
+                self._require_workflow_editor(template.transactional_hog_flow_id)
             body = RequestTemplateChangeSerializer(data=request.data)
             if not body.is_valid():
                 refusal = self._instruction_refusal(body.errors)
