@@ -1,8 +1,15 @@
 from typing import Final, Protocol
 
-from products.messaging.backend.facade.contracts import TemplateManagedBy, TemplateManagedByCode, TemplateWriteIntent
+from products.messaging.backend.facade.contracts import (
+    TemplateChangeRefused,
+    TemplateManagedBy,
+    TemplateManagedByCode,
+    TemplateWriteIntent,
+)
+from products.messaging.backend.services.template_change_prompt import shaped_path, shaped_repository
 
-CONTENT_NEUTRAL_ACTIONS: Final = frozenset({"upload", "send", "make_transactional"})
+FILE_ACTIONS: Final = frozenset({"request_change"})
+CONTENT_NEUTRAL_ACTIONS: Final = frozenset({"upload", "send", "make_transactional", *FILE_ACTIONS})
 OPERATIONAL_FIELDS: Final = ("sensitive", "tags")
 
 
@@ -27,6 +34,8 @@ def is_release(intent: TemplateWriteIntent) -> bool:
 
 def check_write(template: OwnedTemplate, intent: TemplateWriteIntent) -> None:
     if template.managed_by != TemplateManagedBy.CODE:
+        if intent.action in FILE_ACTIONS:
+            raise not_managed_by_code()
         return
     if (
         intent.action in CONTENT_NEUTRAL_ACTIONS
@@ -37,13 +46,28 @@ def check_write(template: OwnedTemplate, intent: TemplateWriteIntent) -> None:
     raise TemplateManagedByCode(
         detail="This template is managed by code, so it can't be changed in PostHog.",
         why="Its content comes from a file in a repository. The next upload of that file replaces changes made here.",
-        fix=f"Change {_template_file(template)} and upload it again. To edit the template in PostHog instead, stop "
-        "managing it in code first: send a PATCH whose only field is `managed_by` set to `gui`.",
+        fix="When the repository is in your workspace, or you run outside PostHog Code and can check it out, edit "
+        f"{_template_file(template)} there, as the template's "
+        "`change_prompt_context` describes. It also says how the change goes live. Inside PostHog Code, such as "
+        "PostHog AI or the Slack bot, share the template's link instead: on its page, the person clicks Edit with your "
+        "agent, then Run with PostHog Code. Otherwise, ask PostHog Code to open a pull request with the change: call "
+        "the `workflows-request-email-template-change` tool, or POST an `instruction` to this template's "
+        "`request_change/` route. To edit the template in PostHog instead, stop managing it in code first: send a "
+        "PATCH whose only field is `managed_by` set to `gui`.",
+    )
+
+
+def not_managed_by_code() -> TemplateChangeRefused:
+    return TemplateChangeRefused(
+        code="template_not_managed_by_code",
+        detail="This template is not managed by code, so it has no file for PostHog Code to change.",
+        why="Only a template uploaded from a file in a repository has a file to change.",
+        fix="Edit the template in PostHog instead: in the template editor, or with a PATCH to the template.",
     )
 
 
 def _template_file(template: OwnedTemplate) -> str:
-    path, repository = template.source_path, template.source_repository
+    path, repository = shaped_path(template.source_path), shaped_repository(template.source_repository)
     if path and repository:
         return f"`{path}` in `{repository}`"
     if path:

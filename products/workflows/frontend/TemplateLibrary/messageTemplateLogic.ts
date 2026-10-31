@@ -9,9 +9,12 @@ import { LemonDialog } from '@posthog/lemon-ui'
 
 import api from 'lib/api'
 import { ApiError } from 'lib/api-error'
+import { FEATURE_FLAGS } from 'lib/constants'
 import { dayjs } from 'lib/dayjs'
 import { integrationsLogic } from 'lib/integrations/integrationsLogic'
 import { lemonToast } from 'lib/lemon-ui/LemonToast'
+import { FeatureFlagsSet, featureFlagLogic } from 'lib/logic/featureFlagLogic'
+import { getAccessControlDisabledReason } from 'lib/utils/accessControlUtils'
 import { copyToClipboard } from 'lib/utils/copyToClipboard'
 import { deleteWithUndo } from 'lib/utils/deleteWithUndo'
 import { objectsEqual } from 'lib/utils/objects'
@@ -22,12 +25,18 @@ import { urls } from 'scenes/urls'
 import {
     messagingTemplatesMakeTransactionalCreate,
     messagingTemplatesPartialUpdate,
+    messagingTemplatesRequestChangeCreate,
 } from 'products/messaging/frontend/generated/api'
 import type {
     MessageTemplateContentApi,
+    TemplateChangeRequestedApi,
+    TemplateErrorApi,
     TemplateManagedByEnumApi,
 } from 'products/messaging/frontend/generated/api.schemas'
+import { messagingTemplatesRequestChangeCreateBodyInstructionMax } from 'products/messaging/frontend/generated/api.zod'
 import { resourceEditedLogic } from 'products/notifications/frontend/resourceEditedLogic'
+import { AttachedContextItem } from 'products/posthog_ai/frontend/api/types'
+import { desktopAccessRetrieve } from 'products/tasks/frontend/generated/api'
 
 import {
     senderAddressError,
@@ -35,8 +44,14 @@ import {
     senderIntegrationFor,
 } from '../../../../frontend/src/scenes/hog-functions/email-templater/emailSenderFields'
 import type { EmailTemplate } from '../../../../frontend/src/scenes/hog-functions/email-templater/types'
-import type { HogFunctionType, ResourceEditedEvent, UserBasicType } from '../../../../frontend/src/types'
-import type { IntegrationType } from '../../../../frontend/src/types'
+import {
+    AccessControlLevel,
+    AccessControlResourceType,
+    type HogFunctionType,
+    type IntegrationType,
+    type ResourceEditedEvent,
+    type UserBasicType,
+} from '../../../../frontend/src/types'
 import { workflowLogic } from '../Workflows/workflowLogic'
 import {
     TemplateSource,
@@ -48,6 +63,7 @@ import {
 import { NEW_TEMPLATE } from './constants'
 import { newTemplateAgentLogic } from './newTemplateAgentLogic'
 import { omitNullDesign } from './omitNullDesign'
+import { buildCodeManagedTemplateContext } from './templateAgentContext'
 import { captureTemplateDuplicated, templateCopy } from './templateCopy'
 import { templateHtmlFile } from './templateHtmlFile'
 import { TemplateSection, templateLibraryUrl, templateSectionFor, templateUrlInSection } from './templateSection'
@@ -78,6 +94,20 @@ export interface AgentPromptEventProperties {
     has_repository: boolean
 }
 
+export interface ChangeRunError {
+    detail: string
+    fix: string | null
+}
+
+export const CHANGE_RUN_STARTED = "PostHog Code is working on it. It opens a pull request when it's done."
+
+function changeRunError(error: ApiError | null | undefined): ChangeRunError {
+    if (!error?.detail) {
+        return { detail: "PostHog Code couldn't start.", fix: 'Try again in a few minutes.' }
+    }
+    return { detail: error.detail, fix: (error.data as TemplateErrorApi | undefined)?.fix ?? null }
+}
+
 export interface MessageTemplateLogicProps {
     id: string
     messageId?: string | null
@@ -88,16 +118,21 @@ export interface messageTemplateLogicValues {
     integrations: IntegrationType[] | null // integrationsLogic
     aiComposerAvailable: boolean // newTemplateAgentLogic
     currentTeamIdStrict: number | string // teamLogic
+    featureFlags: FeatureFlagsSet // featureFlagLogic
     agentPrompt: string
     agentPromptEventProperties: AgentPromptEventProperties
     agentPromptOpen: boolean
     changePromptStarter: string
+    changeRun: TemplateChangeRequestedApi | null
+    changeRunError: ChangeRunError | null
     changeSentence: string
     changeSentenceDraft: string | null
+    codeManagedAgentContext: AttachedContextItem[] | null
     copyAgentPromptDisabledReason: string | undefined
     deferredExternalEdit: ResourceEditedEvent | null
     draftOutOfDate: boolean
     draftsEnabled: boolean
+    editWithAgentAvailable: boolean
     externallyEdited: boolean
     hasDraft: boolean
     hasUnsavedChanges: boolean
@@ -107,6 +142,7 @@ export interface messageTemplateLogicValues {
     isMakingTransactional: boolean
     isSavingDraft: boolean
     isSavingSensitive: boolean
+    isRequestingChangeRun: boolean
     isSyncingExternalEdit: boolean
     isTemplateSubmitting: boolean
     isTemplateValid: boolean
@@ -120,6 +156,9 @@ export interface messageTemplateLogicValues {
     refusedEdits: MessageTemplate | null
     savedDraft: TemplateContent | null
     section: TemplateSection
+    postHogCodeAvailable: boolean | null
+    postHogCodeAvailableLoading: boolean
+    runWithPostHogCodeDisabledReason: string | undefined
     showTemplateErrors: boolean
     template: MessageTemplate
     templateAllErrors: Record<string, any>
@@ -248,6 +287,21 @@ export interface messageTemplateLogicActions {
         message: HogFunctionType | null
         payload?: any
     }
+    loadPostHogCodeAvailable: () => any
+    loadPostHogCodeAvailableFailure: (
+        error: string,
+        errorObject?: any
+    ) => {
+        error: string
+        errorObject?: any
+    }
+    loadPostHogCodeAvailableSuccess: (
+        postHogCodeAvailable: boolean,
+        payload?: any
+    ) => {
+        postHogCodeAvailable: boolean
+        payload?: any
+    }
     loadTemplate: () => any
     loadTemplateFailure: (
         error: string,
@@ -286,6 +340,15 @@ export interface messageTemplateLogicActions {
     }
     replayDeferredExternalEdit: () => {
         value: true
+    }
+    requestChangeRun: (instruction: string) => {
+        instruction: string
+    }
+    requestChangeRunFailure: (error: ChangeRunError) => {
+        error: ChangeRunError
+    }
+    requestChangeRunSuccess: (changeRun: TemplateChangeRequestedApi) => {
+        changeRun: TemplateChangeRequestedApi
     }
     resetTemplate: (values?: {
         change_prompt_context?: string | null | undefined
@@ -354,6 +417,9 @@ export interface messageTemplateLogicActions {
     }
     saveTags: (tags: string[]) => {
         tags: string[]
+    }
+    runWithPostHogCode: () => {
+        value: true
     }
     saveTemplate: (template: any) => any
     saveTemplateFailure: (
@@ -635,10 +701,21 @@ export interface messageTemplateLogicMeta {
         ) => boolean
         isCodeManaged: (originalTemplate: MessageTemplate) => boolean
         templateSource: (originalTemplate: MessageTemplate) => TemplateSource | null
+        editWithAgentAvailable: (featureFlags: FeatureFlagsSet, isCodeManaged: boolean) => boolean
+        codeManagedAgentContext: (
+            editWithAgentAvailable: boolean,
+            originalTemplate: MessageTemplate
+        ) => AttachedContextItem[] | null
         changePromptStarter: (originalTemplate: MessageTemplate) => string
         changeSentence: (changeSentenceDraft: string | null, changePromptStarter: string) => string
         agentPrompt: (changeSentence: string, originalTemplate: MessageTemplate) => string
         copyAgentPromptDisabledReason: (changeSentence: string, changePromptStarter: string) => string | undefined
+        runWithPostHogCodeDisabledReason: (
+            originalTemplate: MessageTemplate,
+            integrations: any,
+            copyAgentPromptDisabledReason: string | undefined,
+            changeSentence: string
+        ) => string | undefined
         agentPromptEventProperties: (originalTemplate: MessageTemplate) => AgentPromptEventProperties
     }
 }
@@ -673,6 +750,8 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
             ['aiComposerAvailable'],
             integrationsLogic,
             ['integrations'],
+            featureFlagLogic,
+            ['featureFlags'],
         ],
         actions: [resourceEditedLogic, ['resourceEdited']],
     })),
@@ -712,6 +791,10 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
         discardChangeSentence: true,
         copyAgentPrompt: true,
         copyHtmlFile: true,
+        runWithPostHogCode: true,
+        requestChangeRun: (instruction: string) => ({ instruction }),
+        requestChangeRunSuccess: (changeRun: TemplateChangeRequestedApi) => ({ changeRun }),
+        requestChangeRunFailure: (error: ChangeRunError) => ({ error }),
     }),
     selectors({
         logicProps: [
@@ -842,6 +925,30 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
             {
                 setChangeSentence: (_, { sentence }) => sentence,
                 discardChangeSentence: () => null,
+                requestChangeRunSuccess: () => null,
+            },
+        ],
+        isRequestingChangeRun: [
+            false,
+            {
+                requestChangeRun: () => true,
+                requestChangeRunSuccess: () => false,
+                requestChangeRunFailure: () => false,
+            },
+        ],
+        changeRun: [
+            null as TemplateChangeRequestedApi | null,
+            {
+                requestChangeRunSuccess: (_, { changeRun }) => changeRun,
+            },
+        ],
+        changeRunError: [
+            null as ChangeRunError | null,
+            {
+                requestChangeRun: () => null,
+                requestChangeRunFailure: (_, { error }) => error,
+                setChangeSentence: () => null,
+                discardChangeSentence: () => null,
             },
         ],
         // Another channel (the PostHog AI agent, the API, another tab) saved this template while the form
@@ -940,6 +1047,16 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
             (s) => [s.originalTemplate],
             (originalTemplate: MessageTemplate): TemplateSource | null => templateSource(originalTemplate),
         ],
+        editWithAgentAvailable: [
+            (s) => [s.featureFlags, s.isCodeManaged],
+            (featureFlags: FeatureFlagsSet, isCodeManaged: boolean): boolean =>
+                !!featureFlags[FEATURE_FLAGS.WORKFLOWS_EMAIL_FROM_CODE] && isCodeManaged,
+        ],
+        codeManagedAgentContext: [
+            (s) => [s.editWithAgentAvailable, s.originalTemplate],
+            (editWithAgentAvailable: boolean, originalTemplate: MessageTemplate): AttachedContextItem[] | null =>
+                editWithAgentAvailable ? buildCodeManagedTemplateContext(originalTemplate) : null,
+        ],
         changePromptStarter: [
             (s) => [s.originalTemplate],
             (originalTemplate: MessageTemplate): string => originalTemplate.change_prompt_starter ?? '',
@@ -959,6 +1076,36 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
             (changeSentence: string, changePromptStarter: string): string | undefined =>
                 isChangeDescribed(changeSentence, changePromptStarter) ? undefined : 'Describe the change first',
         ],
+        runWithPostHogCodeDisabledReason: [
+            (s) => [s.originalTemplate, s.integrations, s.copyAgentPromptDisabledReason, s.changeSentence],
+            (
+                originalTemplate: MessageTemplate,
+                integrations: IntegrationType[] | null,
+                copyAgentPromptDisabledReason: string | undefined,
+                changeSentence: string
+            ): string | undefined => {
+                const accessDisabledReason = getAccessControlDisabledReason(
+                    AccessControlResourceType.Workflow,
+                    AccessControlLevel.Editor
+                )
+                if (accessDisabledReason) {
+                    return accessDisabledReason
+                }
+                if (!originalTemplate.source_repository) {
+                    return "PostHog doesn't know this template's GitHub repository"
+                }
+                if (integrations === null) {
+                    return 'Checking the GitHub connection'
+                }
+                if (!integrations.some((integration) => integration.kind === 'github')) {
+                    return 'Connect GitHub to run PostHog Code'
+                }
+                if ([...changeSentence].length > messagingTemplatesRequestChangeCreateBodyInstructionMax) {
+                    return `Shorten the change to ${messagingTemplatesRequestChangeCreateBodyInstructionMax.toLocaleString('en-US')} characters`
+                }
+                return copyAgentPromptDisabledReason
+            },
+        ],
         agentPromptEventProperties: [
             (s) => [s.originalTemplate],
             (originalTemplate: MessageTemplate): AgentPromptEventProperties => ({
@@ -968,7 +1115,7 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
             }),
         ],
     }),
-    loaders(({ props, actions }) => ({
+    loaders(({ props, actions, values }) => ({
         template: {
             loadTemplate: async () => {
                 if (!props.id || props.id === 'new') {
@@ -1004,6 +1151,18 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
             },
             releaseTemplate: () => api.messaging.updateTemplate(props.id, { managed_by: 'gui' }),
         },
+        postHogCodeAvailable: [
+            null as boolean | null,
+            {
+                loadPostHogCodeAvailable: async () => {
+                    try {
+                        return (await desktopAccessRetrieve(String(values.currentTeamIdStrict))).allowed
+                    } catch {
+                        return false
+                    }
+                },
+            },
+        ],
         message: {
             loadMessage: async () => {
                 if (!props.messageId) {
@@ -1209,6 +1368,43 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
                 `Copied. Save it as the template's file. PostHog keeps sending the current version until your app sends or uploads the file.${textPartNote}`
             )
         },
+        runWithPostHogCode: () => {
+            if (values.isRequestingChangeRun || values.runWithPostHogCodeDisabledReason) {
+                return
+            }
+            posthog.capture('message template change run requested', { template_id: props.id })
+            actions.requestChangeRun(values.changeSentence)
+        },
+        requestChangeRun: async ({ instruction }) => {
+            try {
+                actions.requestChangeRunSuccess(
+                    await messagingTemplatesRequestChangeCreate(String(values.currentTeamIdStrict), props.id, {
+                        instruction,
+                    })
+                )
+            } catch (error) {
+                const apiError = error as ApiError | undefined
+                posthog.capture('message template change run failed', {
+                    template_id: props.id,
+                    code: apiError?.code ?? null,
+                })
+                actions.requestChangeRunFailure(changeRunError(apiError))
+            }
+        },
+        requestChangeRunFailure: ({ error }) => {
+            if (!values.agentPromptOpen) {
+                lemonToast.error([error.detail, error.fix].filter(Boolean).join(' '))
+            }
+        },
+        requestChangeRunSuccess: ({ changeRun }) => {
+            actions.setAgentPromptOpen(false)
+            lemonToast.success(CHANGE_RUN_STARTED, {
+                button: {
+                    label: 'Open task',
+                    action: () => router.actions.push(urls.taskDetail(changeRun.task_id)),
+                },
+            })
+        },
         releaseTemplateSuccess: ({ template }) => {
             posthog.capture('message template released from code', { template_id: template.id })
             const { form, draft, published } = splitDraft(template)
@@ -1296,6 +1492,9 @@ export const messageTemplateLogic = kea<messageTemplateLogicType>([
             }
         },
         loadTemplateSuccess: ({ template }, _, __, previousState) => {
+            if (isCodeManagedTemplate(template) && values.postHogCodeAvailable === null) {
+                actions.loadPostHogCodeAvailable()
+            }
             if (selectors.changePromptStarter(previousState) !== values.changePromptStarter) {
                 actions.discardChangeSentence()
             }

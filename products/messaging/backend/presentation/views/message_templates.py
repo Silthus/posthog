@@ -32,10 +32,11 @@ from posthog.api.mixins import ResponseDeclaration, validated_request
 from posthog.api.routing import TeamAndOrgViewSetMixin
 from posthog.api.shared import UserBasicSerializer
 from posthog.auth import ProjectSecretAPIKeyAuthentication
-from posthog.event_usage import groups, report_user_action
+from posthog.event_usage import get_event_source, groups, report_user_action
 from posthog.integrations import IntegrationManager, IntegrationNotFound
 from posthog.models import User
 from posthog.models.tag import tagify
+from posthog.oauth_provenance import is_sandbox_origin_request
 from posthog.permissions import is_authenticated_via_project_secret_api_key
 from posthog.rate_limit import PersonalOrProjectSecretApiKeyRateThrottle, ProjectSecretApiKeyTeamRateThrottle
 
@@ -50,8 +51,9 @@ from products.messaging.backend.facade.api import (
 from products.messaging.backend.facade.contracts import (
     TEMPLATE_KEY_MAX_LENGTH,
     ContentHashState,
+    TemplateChangeRefused,
+    TemplateKeyRefused,
     TemplateManagedBy,
-    TemplateManagedByCode,
     TemplateReleasedTo,
     TemplateSource,
     TemplateUpload,
@@ -75,6 +77,7 @@ from products.messaging.backend.facade.templates import (
     is_release,
     list_templates,
     release_template,
+    request_template_change,
     save_template_content,
     save_template_draft,
     save_template_fields,
@@ -1102,6 +1105,26 @@ class UploadTemplateResponseSerializer(serializers.Serializer):
         )
 
 
+INSTRUCTION_MAX_LENGTH = 2000
+
+
+class RequestTemplateChangeSerializer(serializers.Serializer):
+    instruction = serializers.CharField(
+        max_length=INSTRUCTION_MAX_LENGTH,
+        help_text="The change to make, in the person's words, such as `Make the button green.` At most "
+        f"{INSTRUCTION_MAX_LENGTH:,} characters.",
+    )
+
+
+class TemplateChangeRequestedSerializer(serializers.Serializer):
+    task_id = serializers.UUIDField(help_text="ID of the PostHog Code task that changes the template's file.")
+    task_url = serializers.URLField(
+        help_text="Link to the task in PostHog. Share it with the person: the task opens a pull request when it is "
+        "done."
+    )
+    repository = serializers.CharField(help_text="GitHub repository the task changes, as `owner/name`.")
+
+
 TEMPLATE_KEY_PARAMETER = OpenApiParameter(
     name="key",
     type=OpenApiTypes.STR,
@@ -1111,9 +1134,11 @@ TEMPLATE_KEY_PARAMETER = OpenApiParameter(
 )
 
 
+FORBIDDEN_REFUSALS = frozenset({"immutable", "posthog_code_not_available"})
 MANAGED_BY_CODE_RESPONSE = OpenApiResponse(
     response=TemplateErrorSerializer,
-    description="The template is managed by code. `immutable`: change its file and upload it, or release it first",
+    description="The template is managed by code. `immutable`: edit its file, request a change through "
+    "`request_change/`, or release it first",
 )
 TEMPLATE_UPDATE_SCHEMA = extend_schema(
     parameters=[TEMPLATE_ID_PARAMETER], responses={200: MessageTemplateSerializer, 403: MANAGED_BY_CODE_RESPONSE}
@@ -1194,11 +1219,16 @@ class MessageTemplatesViewSet(
 
     def handle_exception(self, exc: Exception) -> Response:
         if isinstance(exc, TemplateWriteRefused):
-            managed_by_code = isinstance(exc, TemplateManagedByCode)
             refusal = TemplateRefusal(
-                code=exc.code, detail=exc.detail, attr=None if managed_by_code else "key", why=exc.why, fix=exc.fix
+                code=exc.code,
+                detail=exc.detail,
+                attr="key" if isinstance(exc, TemplateKeyRefused) else None,
+                why=exc.why,
+                fix=exc.fix,
             )
-            refused_status = status.HTTP_403_FORBIDDEN if managed_by_code else status.HTTP_400_BAD_REQUEST
+            refused_status = (
+                status.HTTP_403_FORBIDDEN if exc.code in FORBIDDEN_REFUSALS else status.HTTP_400_BAD_REQUEST
+            )
             return Response(TemplateErrorSerializer(refusal).data, status=refused_status)
         return super().handle_exception(exc)
 
@@ -1518,6 +1548,85 @@ class MessageTemplatesViewSet(
             },
             "transactional_hog_flow_id": template.transactional_hog_flow_id,
         }
+
+    @extend_schema(
+        request=RequestTemplateChangeSerializer,
+        responses={
+            201: OpenApiResponse(
+                response=TemplateChangeRequestedSerializer, description="PostHog Code started the task"
+            ),
+            400: OpenApiResponse(
+                response=TemplateErrorSerializer,
+                description="`instruction_missing` or `invalid_request` for the instruction; "
+                "`template_not_managed_by_code`, `template_repository_missing`, `template_repository_unsupported` or "
+                "`github_repository_not_connected` for the template; `posthog_code_run_failed` when the task did not "
+                "start",
+            ),
+            403: OpenApiResponse(
+                response=TemplateErrorSerializer,
+                description="`posthog_code_not_available`, or the caller may not start PostHog Code tasks",
+            ),
+            404: OpenApiResponse(
+                description="The template does not exist, or sending email from code is not enabled for this project"
+            ),
+        },
+        summary="Request a change to a template managed by code",
+        description=(
+            "Start a PostHog Code task that changes the file of a template managed by code, as `instruction` asks, "
+            "and opens a pull request in the template's GitHub repository. PostHog doesn't change the template: the "
+            "next upload of the changed file publishes it. Use it only when you can't edit the file yourself. Each "
+            "call starts another task."
+        ),
+        parameters=[TEMPLATE_ID_PARAMETER],
+    )
+    @action(detail=True, methods=["POST"], pagination_class=None, required_scopes=["hog_flow:read", "task:write"])
+    def request_change(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        require_email_from_code(self.team)
+        try:
+            template = self.get_object()
+            body = RequestTemplateChangeSerializer(data=request.data)
+            if not body.is_valid():
+                refusal = self._instruction_refusal(body.errors)
+                self._report_change_refused(refusal.code)
+                return Response(TemplateErrorSerializer(refusal).data, status=status.HTTP_400_BAD_REQUEST)
+            requested = request_template_change(
+                self.team,
+                cast(User, request.user),
+                template,
+                body.validated_data["instruction"],
+                from_sandbox=is_sandbox_origin_request(request),
+            )
+        except TemplateChangeRefused as refused:
+            self._report_change_refused(refused.code)
+            raise
+        self._report_user_action(
+            "message template change requested",
+            {"template_id": str(template.id), "surface": get_event_source(request)},
+        )
+        return Response(TemplateChangeRequestedSerializer(requested).data, status=status.HTTP_201_CREATED)
+
+    def _report_change_refused(self, code: str) -> None:
+        self._report_user_action(
+            "message template change refused",
+            {"template_id": self.kwargs["pk"], "surface": get_event_source(self.request), "code": code},
+        )
+
+    @staticmethod
+    def _instruction_refusal(errors: Any) -> TemplateRefusal:
+        missing = any(error.code in ("required", "blank", "null") for error in errors.get("instruction", []))
+        if not missing:
+            return invalid_request(
+                errors,
+                why=f"The instruction is text of at most {INSTRUCTION_MAX_LENGTH:,} characters.",
+                retry="request the change again",
+            )
+        return TemplateRefusal(
+            code="instruction_missing",
+            detail="The request has no instruction.",
+            attr="instruction",
+            why="PostHog Code needs to know what to change in the template's file.",
+            fix="Send the change in `instruction`, such as `Make the button green.`",
+        )
 
     def _report_template_upload(self, request: Any, outcome: dict[str, Any]) -> None:
         self._capture_api_usage(request, "transactional email template uploaded", outcome)

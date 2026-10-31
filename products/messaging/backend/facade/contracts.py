@@ -258,6 +258,17 @@ class TemplateKeyRefused(TemplateWriteRefused):
     pass
 
 
+class TemplateChangeRefused(TemplateWriteRefused):
+    pass
+
+
+@frozen
+class TemplateChangeRequested:
+    task_id: UUID
+    task_url: str
+    repository: str
+
+
 @frozen
 class TemplateSource:
     repository: str | None

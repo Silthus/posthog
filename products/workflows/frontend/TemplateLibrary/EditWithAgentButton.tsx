@@ -2,7 +2,7 @@ import { useActions, useValues } from 'kea'
 import { RefObject, useEffect, useRef } from 'react'
 
 import { IconCopy } from '@posthog/icons'
-import { LemonButton, LemonCollapse, LemonLabel, LemonTextArea, Popover } from '@posthog/lemon-ui'
+import { LemonBanner, LemonButton, LemonCollapse, LemonLabel, LemonTextArea, Popover } from '@posthog/lemon-ui'
 
 import { LemonMenuOverlay } from 'lib/lemon-ui/LemonMenu/LemonMenu'
 
@@ -87,8 +87,16 @@ interface AgentPromptProps extends MessageTemplateLogicProps {
 
 function AgentPrompt({ containerRef, ...props }: AgentPromptProps): JSX.Element {
     const logic = messageTemplateLogic(props)
-    const { changeSentence, agentPrompt, copyAgentPromptDisabledReason } = useValues(logic)
-    const { setChangeSentence, copyAgentPrompt } = useActions(logic)
+    const {
+        changeSentence,
+        agentPrompt,
+        copyAgentPromptDisabledReason,
+        postHogCodeAvailable,
+        runWithPostHogCodeDisabledReason,
+        isRequestingChangeRun,
+        changeRunError,
+    } = useValues(logic)
+    const { setChangeSentence, copyAgentPrompt, runWithPostHogCode } = useActions(logic)
     const sentenceRef = useRef<HTMLTextAreaElement>(null)
 
     useEffect(() => {
@@ -116,7 +124,25 @@ function AgentPrompt({ containerRef, ...props }: AgentPromptProps): JSX.Element 
                 minRows={3}
                 data-attr="message-template-change-sentence"
             />
-            <div className="flex justify-end">
+            {changeRunError && (
+                <LemonBanner type="error" className="shrink-0">
+                    <p className="m-0 break-words">{changeRunError.detail}</p>
+                    {changeRunError.fix && <p className="m-0 mt-1 break-words">{changeRunError.fix}</p>}
+                </LemonBanner>
+            )}
+            <div className="flex flex-wrap justify-end gap-2">
+                {postHogCodeAvailable && (
+                    <LemonButton
+                        data-attr="message-template-run-with-posthog-code"
+                        type="secondary"
+                        size="small"
+                        onClick={runWithPostHogCode}
+                        loading={isRequestingChangeRun}
+                        disabledReason={runWithPostHogCodeDisabledReason}
+                    >
+                        Run with PostHog Code
+                    </LemonButton>
+                )}
                 <LemonButton
                     data-attr="message-template-copy-agent-prompt"
                     type="primary"

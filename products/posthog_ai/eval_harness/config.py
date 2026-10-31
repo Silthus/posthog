@@ -83,6 +83,11 @@ class SandboxedEvalCase(BaseEvalCase):
     through Braintrust telemetry.
     """
 
+    prompt_from_seed: Callable[[dict[str, Any]], str] | None = Field(
+        default=None,
+        exclude=True,
+    )
+
 
 class AgentArtifacts(BaseModel):
     """Collected outputs from a sandboxed agent run.

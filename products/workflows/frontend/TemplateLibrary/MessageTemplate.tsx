@@ -35,6 +35,7 @@ import { WorkflowInvocations } from '../Workflows/WorkflowInvocations'
 import { workflowLogic } from '../Workflows/workflowLogic'
 import { WorkflowMetrics } from '../Workflows/WorkflowMetrics'
 import { WorkflowRevisions } from '../Workflows/WorkflowRevisions'
+import { CodeManagedNotice } from './CodeManagedNotice'
 import { CodeManagedSource } from './CodeManagedSource'
 import { CodeManagedTag } from './CodeManagedTag'
 import { EditWithAgentButton } from './EditWithAgentButton'
@@ -101,13 +102,14 @@ export function MessageTemplate(props: MessageTemplateSceneLogicProps): JSX.Elem
         isDiscardingDraft,
         isSavingSensitive,
         isCodeManaged,
+        codeManagedAgentContext,
+        editWithAgentAvailable,
         isDuplicating,
         refusedEdits,
         templateSource,
     } = useValues(logic)
     const transactionalEmailsEnabled = useFeatureFlag('WORKFLOWS_TRANSACTIONAL_EMAIL_API')
     const todayRailNav = useFeatureFlag('TODAY_RAIL_NAV')
-    const editWithAgentAvailable = useFeatureFlag('WORKFLOWS_EMAIL_FROM_CODE') && isCodeManaged
     const showTransactional = transactionalEmailsEnabled && props.id !== 'new'
 
     const { setIsSaveTemplateModalOpen } = useActions(emailTemplaterLogic)
@@ -124,10 +126,10 @@ export function MessageTemplate(props: MessageTemplateSceneLogicProps): JSX.Elem
     const showAiComposer = props.id === 'new' && aiComposerAvailable
     useSceneAgentPanel({
         sceneKey: 'email-template',
-        contextItems: showAiComposer ? agentContextItems : null,
-        headlines: NEW_TEMPLATE_AGENT_HEADLINES,
-        composer: AI_FIRST_COMPOSER_OVERRIDE,
-        active: showAiComposer,
+        contextItems: showAiComposer ? agentContextItems : codeManagedAgentContext,
+        headlines: showAiComposer ? NEW_TEMPLATE_AGENT_HEADLINES : undefined,
+        composer: showAiComposer ? AI_FIRST_COMPOSER_OVERRIDE : undefined,
+        active: showAiComposer || !!codeManagedAgentContext,
         // The composer is the page while drafting; the panel opens itself once the template exists.
         autoOpen: false,
     })
@@ -454,26 +456,7 @@ export function MessageTemplate(props: MessageTemplateSceneLogicProps): JSX.Elem
 
                 <RefusedEditsBanner {...props} />
 
-                {isCodeManaged && (
-                    <LemonBanner
-                        type="info"
-                        className="shrink-0"
-                        action={
-                            refusedEdits
-                                ? undefined
-                                : {
-                                      children: 'Duplicate',
-                                      onClick: duplicateTemplate,
-                                      loading: isDuplicating,
-                                      'data-attr': 'message-template-code-managed-duplicate',
-                                  }
-                        }
-                    >
-                        {editWithAgentAvailable
-                            ? "This template is managed by code, so it can't be changed here. To change it, edit its file, or let your coding agent do it."
-                            : "This template is managed by code, so it can't be changed here. To change it, edit the file and upload it again. To edit it here, duplicate it or stop managing it in code."}
-                    </LemonBanner>
-                )}
+                {isCodeManaged && <CodeManagedNotice {...props} editWithAgentAvailable={editWithAgentAvailable} />}
 
                 <TemplatePickerModal isOpen={templatePickerOpen} onClose={() => setTemplatePickerOpen(false)} />
                 <SendTestEmailModal {...props} isOpen={isSendTestEmailModalOpen} />
