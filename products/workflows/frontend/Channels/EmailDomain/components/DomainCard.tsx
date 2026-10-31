@@ -37,7 +37,7 @@ export function DomainCard({
             <span
                 className={clsx(
                     'shrink-0 w-6 h-6 rounded-full border-2 inline-flex items-center justify-center',
-                    selected ? 'bg-accent border-accent text-white' : 'border-primary'
+                    selected ? 'bg-accent border-accent text-primary-inverse' : 'border-primary'
                 )}
             >
                 {selected && <IconCheck />}

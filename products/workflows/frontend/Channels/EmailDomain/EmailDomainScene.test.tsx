@@ -159,7 +159,9 @@ describe('EmailDomainScene', () => {
         await flush(POLL_MS)
         expectStep(/You can send from/)
         expect(screen.getByText('Your first sender')).toBeInTheDocument()
-        expect(screen.getByText(`Send your first email from ${DOMAIN}`)).toBeInTheDocument()
+        expect(screen.getByText(/^Send your first email from/)).toHaveTextContent(
+            `Send your first email from ${DOMAIN}`
+        )
 
         typeInto('email-domain-sender-name', 'Acme Team')
         click('email-domain-save-sender-name')
@@ -332,7 +334,7 @@ describe('EmailDomainScene', () => {
         expectStep(/You can send from/)
 
         expect(screen.getByText('Your sender')).toBeInTheDocument()
-        expect(screen.getByText(`Send email from ${DOMAIN}`)).toBeInTheDocument()
+        expect(screen.getByText(/^Send email from/)).toHaveTextContent(`Send email from ${DOMAIN}`)
         expect(screen.queryByText(/first/i)).toBeNull()
     })
 

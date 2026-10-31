@@ -17,11 +17,13 @@ export function NextWorkflowCard(): JSX.Element {
                 <div className="flex flex-col gap-1 min-w-0">
                     <span className="text-xs uppercase tracking-wide text-secondary">Next</span>
                     <h2 className="m-0 text-xl font-semibold">
-                        {isFirstVerifiedSender ? 'Send your first email from' : 'Send email from'} {domain}
+                        {isFirstVerifiedSender ? 'Send your first email from' : 'Send email from'}{' '}
+                        <span className="inline-block max-w-full wrap-anywhere">{domain}</span>
                     </h2>
                     <p className="m-0 text-sm text-secondary">
                         Start a workflow, and pick <span className="font-medium">{senderName}</span>{' '}
-                        <span className="font-mono">&lt;{fromAddress}&gt;</span> as the sender in its emails.
+                        <span className="font-mono wrap-anywhere">&lt;{fromAddress}&gt;</span> as the sender in its
+                        emails.
                     </p>
                 </div>
             </div>
