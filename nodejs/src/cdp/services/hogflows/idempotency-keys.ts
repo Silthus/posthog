@@ -111,32 +111,33 @@ const sortKeys = (value: unknown): unknown => {
     return value
 }
 
-export type IdempotencyReservation =
+export type IdempotencyReservation<Answer extends object = object> =
     | { status: 'reserved' }
     // The key already queued a run for the same request.
-    | { status: 'replayed'; invocationId: string }
+    | { status: 'replayed'; invocationId: string; answer?: Answer }
     // The first request with the key has not finished queueing yet.
     | { status: 'in_flight' }
     // The key was used for a different request.
     | { status: 'conflict' }
     | { status: 'unavailable' }
 
-type StoredKey = { fingerprint: string; invocationId: string; queued: boolean }
+type StoredKey<Answer extends object> = { fingerprint: string; invocationId: string; queued: boolean; answer?: Answer }
 
-type PendingCompletion = { redisKey: string; value: StoredKey; expiresAt: number }
+type PendingCompletion<Answer extends object> = { redisKey: string; value: StoredKey<Answer>; expiresAt: number }
 
 // Keyed by run, not by Redis key. Several runs of one key can wait at once, for example a webhook
 // retry that queued without a reservation during the outage. Only the store knows which run owns
 // the key, so every run keeps its entry until its own write succeeds, loses ownership, or expires.
-const pendingCompletionKey = ({ redisKey, value }: PendingCompletion): string => `${redisKey}/${value.invocationId}`
+const pendingCompletionKey = <Answer extends object>({ redisKey, value }: PendingCompletion<Answer>): string =>
+    `${redisKey}/${value.invocationId}`
 
 /**
  * Caller-supplied idempotency keys, scoped to a team. A key reserves a run before it is queued, and
  * holds the run's id for 24 hours once it is. A queue failure releases the key, so the caller's
  * retry can queue the run.
  */
-export class IdempotencyKeys {
-    private pendingCompletions = new Map<string, PendingCompletion>()
+export class IdempotencyKeys<Answer extends object = object> {
+    private pendingCompletions = new Map<string, PendingCompletion<Answer>>()
     private draining = false
 
     constructor(
@@ -156,7 +157,7 @@ export class IdempotencyKeys {
         key: string,
         fingerprint: string,
         invocationId: string
-    ): Promise<IdempotencyReservation> {
+    ): Promise<IdempotencyReservation<Answer>> {
         const reservation = await this.reserveInStore(teamId, key, fingerprint, invocationId)
         this.count('reserve', reservation.status)
         return reservation
@@ -167,12 +168,12 @@ export class IdempotencyKeys {
         key: string,
         fingerprint: string,
         invocationId: string
-    ): Promise<IdempotencyReservation> {
+    ): Promise<IdempotencyReservation<Answer>> {
         const valkey = this.valkey
         if (!valkey) {
             return { status: 'unavailable' }
         }
-        const value: StoredKey = { fingerprint, invocationId, queued: false }
+        const value: StoredKey<Answer> = { fingerprint, invocationId, queued: false }
         let existing: string | null
         try {
             // SET ... NX GET sets the key when absent and returns the existing value when present.
@@ -196,17 +197,25 @@ export class IdempotencyKeys {
         if (existing === null) {
             return { status: 'reserved' }
         }
-        const stored = parseJSON(existing) as StoredKey
+        const stored = parseJSON(existing) as StoredKey<Answer>
         if (stored.fingerprint !== fingerprint) {
             return { status: 'conflict' }
         }
-        return stored.queued ? { status: 'replayed', invocationId: stored.invocationId } : { status: 'in_flight' }
+        return stored.queued
+            ? { status: 'replayed', invocationId: stored.invocationId, answer: stored.answer }
+            : { status: 'in_flight' }
     }
 
-    async markQueued(teamId: number, key: string, fingerprint: string, invocationId: string): Promise<void> {
-        const completion: PendingCompletion = {
+    async markQueued(
+        teamId: number,
+        key: string,
+        fingerprint: string,
+        invocationId: string,
+        answer?: Answer
+    ): Promise<void> {
+        const completion: PendingCompletion<Answer> = {
             redisKey: this.redisKey(teamId, key),
-            value: { fingerprint, invocationId, queued: true },
+            value: { fingerprint, invocationId, queued: true, answer },
             expiresAt: Date.now() + QUEUED_TTL_SECONDS * 1000,
         }
         for (let attempt = 1; attempt <= MARK_QUEUED_INLINE_ATTEMPTS; attempt++) {
@@ -225,7 +234,7 @@ export class IdempotencyKeys {
         this.retryInBackground(completion)
     }
 
-    private retryInBackground(completion: PendingCompletion): void {
+    private retryInBackground(completion: PendingCompletion<Answer>): void {
         if (this.pendingCompletions.size >= MAX_PENDING_COMPLETIONS) {
             logger.error('🔑', 'idempotency key completion dropped, too many waiting for the store', {
                 scope: this.scope,
@@ -270,7 +279,7 @@ export class IdempotencyKeys {
         return true
     }
 
-    private async writeQueued({ redisKey, value, expiresAt }: PendingCompletion): Promise<void> {
+    private async writeQueued({ redisKey, value, expiresAt }: PendingCompletion<Answer>): Promise<void> {
         const ttlSeconds = Math.ceil((expiresAt - Date.now()) / 1000)
         const written = await this.timed(
             'mark_queued',
