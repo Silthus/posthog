@@ -44,7 +44,13 @@ import {
     RecipientTokensService,
     preferencesTokenSourceForInvocation,
 } from './recipient-tokens.service'
-import { SandboxDailyCapGrant, SandboxEmailBlockReason, SandboxEmailSender } from './sandbox-email-sender'
+import {
+    SandboxDailyCapGrant,
+    SandboxEmailBlockReason,
+    SandboxEmailSender,
+    sandboxSendSource,
+} from './sandbox-email-sender'
+import { sandboxEnvelope, sandboxEnvelopeRecipients } from './sandbox-envelope'
 
 const sesThrottleResponsesTotal = new Counter({
     name: 'cdp_ses_throttle_responses_total',
@@ -408,60 +414,8 @@ export function parseAddressList(value?: string): string[] | undefined {
     return result.length > 0 ? result : undefined
 }
 
-type QuoteScan = { unquotedIndexes: number[]; balanced: boolean }
-
-function scanQuotes(text: string): QuoteScan {
-    const unquotedIndexes: number[] = []
-    let quoted = false
-    let escaped = false
-    for (let index = 0; index < text.length; index++) {
-        const character = text[index]
-        if (escaped) {
-            escaped = false
-        } else if (quoted && character === '\\') {
-            escaped = true
-        } else if (character === '"') {
-            quoted = !quoted
-        } else if (!quoted) {
-            unquotedIndexes.push(index)
-        }
-    }
-    return { unquotedIndexes, balanced: !quoted }
-}
-
-function splitOutsideQuotes(text: string): string[] {
-    const commas = scanQuotes(text).unquotedIndexes.filter((index) => text[index] === ',')
-    return [-1, ...commas].map((comma, position) => text.slice(comma + 1, commas[position] ?? text.length))
-}
-
-function angleAddress(entry: string): string | undefined {
-    const { unquotedIndexes, balanced } = scanQuotes(entry)
-    const opening = unquotedIndexes.find((index) => entry[index] === '<')
-    const closing = entry.length - 1
-    if (!balanced || opening === undefined || entry[closing] !== '>' || /[\r\n]/.test(entry)) {
-        return undefined
-    }
-    const unquotedBetween = (start: number, end: number): string =>
-        unquotedIndexes
-            .filter((index) => index >= start && index < end)
-            .map((index) => entry[index])
-            .join('')
-    const mailbox = entry.slice(opening + 1, closing).trim()
-    const isFramed = !/[>@;]/.test(unquotedBetween(0, opening)) && !/[<>]/.test(unquotedBetween(opening + 1, closing))
-    return isFramed && mailbox ? mailbox : undefined
-}
-
-// Unlike `extractEmailsFromAddressList`, this keeps quoted commas inside one entry and leaves an
-// ambiguous mailbox whole, so the member check sees exactly the addresses SES would deliver to.
-function sandboxAddressList(value?: string): string[] {
-    return splitOutsideQuotes(value ?? '')
-        .map((entry) => entry.trim())
-        .filter(Boolean)
-        .map((entry) => angleAddress(entry) ?? entry)
-}
-
 function sandboxRecipientsOf(params: CyclotronInvocationQueueParametersEmailType): string[] {
-    return [params.to.email.trim(), ...sandboxAddressList(params.cc), ...sandboxAddressList(params.bcc)]
+    return sandboxEnvelopeRecipients(sandboxEnvelope(params.to.email, params.cc, params.bcc))
 }
 
 type SandboxRecipientBlockReason = Exclude<SandboxEmailBlockReason, 'switch_off' | 'paused' | 'organization_blocked'>
@@ -687,7 +641,12 @@ export class EmailService {
                     'Skipping send: the sandbox sender is unavailable right now. Verify your own domain to keep sending.',
                     'sending_suspended'
                 )
-                await this.sandboxSender?.captureBlocked(invocation.teamId, isTest, 'switch_off', 0)
+                await this.sandboxSender?.captureBlocked(
+                    invocation.teamId,
+                    sandboxSendSource(invocation, isTest),
+                    'switch_off',
+                    0
+                )
                 return result
             }
             if (isSandbox && !(await this.passesSandboxPauseGate(result, isTest))) {
@@ -920,7 +879,11 @@ export class EmailService {
                         return result
                     }
                     await this.sendSandboxEmail(result, deliveryParams, from, isTest, queueWait, route, capGrant)
-                    await this.sandboxSender!.captureSent(invocation.teamId, isTest, deliveryRecipients.length)
+                    await this.sandboxSender!.captureSent(
+                        invocation.teamId,
+                        sandboxSendSource(invocation, isTest),
+                        deliveryRecipients.length
+                    )
                     break
                 }
 
@@ -1206,7 +1169,12 @@ export class EmailService {
         }
         if (organizationBlocked) {
             this.skipSandboxSend(result, isTest, SANDBOX_ORGANIZATION_BLOCKED_MESSAGE, 'sending_suspended')
-            await this.sandboxSender?.captureBlocked(teamId, isTest, 'organization_blocked', 0)
+            await this.sandboxSender?.captureBlocked(
+                teamId,
+                sandboxSendSource(result.invocation, isTest),
+                'organization_blocked',
+                0
+            )
             return false
         }
         if (!blockedRecipients.length) {
@@ -1225,7 +1193,12 @@ export class EmailService {
             return true
         }
         this.skipSandboxSend(result, isTest, SANDBOX_PAUSE_SKIP_MESSAGES[gate], 'sending_suspended')
-        await this.sandboxSender!.captureBlocked(result.invocation.teamId, isTest, gate, 0)
+        await this.sandboxSender!.captureBlocked(
+            result.invocation.teamId,
+            sandboxSendSource(result.invocation, isTest),
+            gate,
+            0
+        )
         return false
     }
 
@@ -1242,7 +1215,12 @@ export class EmailService {
             `${explanation}${label}${blockedRecipients.join(', ')}. ${guidance}`,
             reason === 'cap_reached' ? 'frequency_capped' : 'recipient_unreachable'
         )
-        await this.sandboxSender?.captureBlocked(result.invocation.teamId, isTest, reason, blockedRecipients.length)
+        await this.sandboxSender?.captureBlocked(
+            result.invocation.teamId,
+            sandboxSendSource(result.invocation, isTest),
+            reason,
+            blockedRecipients.length
+        )
     }
 
     private async claimSandboxDailyCaps(
@@ -1265,7 +1243,12 @@ export class EmailService {
             claim.type === 'check_failed' ? 'sending_suspended' : 'frequency_capped'
         )
         const reason = claim.type === 'check_failed' ? 'check_failed' : 'cap_reached'
-        await this.sandboxSender!.captureBlocked(result.invocation.teamId, isTest, reason, recipients.length)
+        await this.sandboxSender!.captureBlocked(
+            result.invocation.teamId,
+            sandboxSendSource(result.invocation, isTest),
+            reason,
+            recipients.length
+        )
         return null
     }
 
@@ -1366,12 +1349,13 @@ export class EmailService {
     // set, and no recipient gets an unsubscribe link: only members of the sending organization
     // receive it. CC and BCC are parsed once so the final member check covers exactly this list.
     private sandboxSesRoute(params: CyclotronInvocationQueueParametersEmailType): SesRoute {
+        const envelope = sandboxEnvelope(params.to.email, params.cc, params.bcc)
         return {
             tenantName: this.sandboxSender!.config.tenantName,
             configurationSetName: this.sandboxSender!.config.configurationSetName,
             unsubscribeHeaders: false,
-            ccAddresses: sandboxAddressList(params.cc),
-            bccAddresses: sandboxAddressList(params.bcc),
+            ccAddresses: envelope.cc,
+            bccAddresses: envelope.bcc,
         }
     }
 
