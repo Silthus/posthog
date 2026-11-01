@@ -121,6 +121,7 @@ export interface CdpCoreServices {
     outputs: CdpOutputs
     emailService: EmailService
     sandboxEmailSender: SandboxEmailSender
+    organizationMembers: OrganizationMembersService
     /** Buffers rendered-email asset rows and bulk-flushes them at the batch boundary. */
     messageAssetsService: MessageAssetsService
     /** Buffers transactional email status rows. `invocationResultsService.flush()` produces them. */
@@ -489,6 +490,7 @@ export function createCdpCoreServices(
         sandboxEmailRateLimiter,
         new SandboxSenderStateService(deps.postgres, deps.pubSub)
     )
+    const organizationMembers = new OrganizationMembersService(deps.postgres)
     const emailService = new EmailService(
         {
             sesAccessKeyId: config.SES_ACCESS_KEY_ID,
@@ -513,7 +515,7 @@ export function createCdpCoreServices(
         workflowEmailRateLimiter,
         teamEmailRateLimiter,
         sandboxEmailSender,
-        new OrganizationMembersService(deps.postgres)
+        organizationMembers
     )
     const recipientTokensService = new RecipientTokensService(config.ENCRYPTION_SALT_KEYS, config.SITE_URL)
     const hogInputsService = new HogInputsService(deps.integrationManager, recipientTokensService, deps.encryptedFields)
@@ -653,6 +655,7 @@ export function createCdpCoreServices(
         outputs,
         emailService,
         sandboxEmailSender,
+        organizationMembers,
         messageAssetsService,
         emailStatusService,
     }
