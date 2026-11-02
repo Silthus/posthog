@@ -112,6 +112,19 @@ class TemplateOutdated(TransactionalEmailError):
     code = "template_outdated"
 
 
+class SandboxRecipientNotAllowed(TransactionalEmailError):
+    code = "sandbox_recipient_not_allowed"
+
+
+class SandboxLimitReached(TransactionalEmailError):
+    code = "sandbox_limit_reached"
+
+
+class SandboxReplyToNotAllowed(TransactionalEmailError):
+    code = "invalid_request"
+    attr = "reply_to"
+
+
 @frozen
 class CodeEmail:
     key: str
@@ -138,11 +151,21 @@ class WorkflowVersionBehind(DeliveryUnavailable):
     pass
 
 
+class SandboxCheckFailed(DeliveryUnavailable):
+    pass
+
+
+class DeliveryMode(LabeledStrEnum):
+    OWN = "own", "Own sender"
+    SANDBOX = "sandbox", "Sandbox sender"
+
+
 @frozen
 class QueuedEmail:
     message_id: str
     # True when an earlier request with the same idempotency key already queued this email.
     replayed: bool = False
+    delivery_mode: DeliveryMode | None = None
 
 
 class SupabaseEmailActionType(LabeledStrEnum):
