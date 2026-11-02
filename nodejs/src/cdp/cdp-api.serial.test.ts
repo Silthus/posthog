@@ -2365,12 +2365,13 @@ describe('CDP API', () => {
                     const replayed = await sendKeyedOn(route, retry)
 
                     expect(sent.status).toEqual(202)
-                    expect(sent.body).toMatchObject({ replayed: false })
+                    expect(sent.body).toMatchObject({ replayed: false, delivery_mode: 'own' })
                     expect(replayed.status).toEqual(202)
                     expect(replayed.body).toEqual({
                         status: 'queued',
                         invocation_id: sent.body.invocation_id,
                         replayed: true,
+                        delivery_mode: 'own',
                     })
                     expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
                     expect(emailStatusRows()).toEqual([
@@ -2545,6 +2546,7 @@ describe('CDP API', () => {
                     status: 'queued',
                     invocation_id: first.body.invocation_id,
                     replayed: true,
+                    delivery_mode: 'own',
                 })
                 expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
             })
@@ -3000,6 +3002,7 @@ describe('CDP API', () => {
                 const second = await sandboxSend(address('member'))
 
                 expect([first.status, second.status]).toEqual([202, 202])
+                expect([first.body.delivery_mode, second.body.delivery_mode]).toEqual(['sandbox', 'sandbox'])
                 expect(mockQueueInvocations).toHaveBeenCalledTimes(2)
             })
 
@@ -3115,19 +3118,33 @@ describe('CDP API', () => {
                 expect(mockQueueInvocations).not.toHaveBeenCalled()
             })
 
-            it('replays a keyed send after its daily allowance is spent', async () => {
+            it('replays a keyed send as it first went out after its allowance is spent and the default sender changed', async () => {
                 const sender = sandboxSender({ dailyTeamCap: '1', dailyRecipientCap: '1' })
                 admitThrough(sender)
                 const idempotency_key = `key-${new UUIDT().toString()}`
 
                 const first = await sandboxSend(address('member'), { idempotency_key })
                 expect(await sender.claimDailyCaps(team.id, [address('member')])).toMatchObject({ type: 'granted' })
-                const retry = await sandboxSend(address('member'), { idempotency_key })
+                const retry = await sendAccepted(hogFlow.id, {
+                    ...body,
+                    to: address('member'),
+                    idempotency_key,
+                    send: {
+                        content: codeSend.content,
+                        from: { integrationId: codeSend.from.integrationId, isDefault: true },
+                        tracking: codeSend.tracking,
+                    },
+                })
 
                 expect(first.status).toEqual(202)
                 expect([retry.status, retry.body]).toEqual([
                     202,
-                    { status: 'queued', invocation_id: first.body.invocation_id, replayed: true },
+                    {
+                        status: 'queued',
+                        invocation_id: first.body.invocation_id,
+                        replayed: true,
+                        delivery_mode: 'sandbox',
+                    },
                 ])
                 expect(mockQueueInvocations).toHaveBeenCalledTimes(1)
             })
