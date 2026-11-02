@@ -2,6 +2,7 @@ import { createHash } from 'crypto'
 import { type DefaultTreeAdapterMap, defaultTreeAdapter, parse, parseFragment, serialize } from 'parse5'
 
 import { CyclotronInvocationQueueParametersEmailType } from '~/cdp/schema/cyclotron'
+import { CyclotronJobInvocationHogFunction } from '~/cdp/types'
 import { RedisV2 } from '~/common/redis/redis-v2'
 import { logger } from '~/common/utils/logger'
 import { captureTeamEvent } from '~/common/utils/posthog'
@@ -9,6 +10,7 @@ import { TeamManager } from '~/common/utils/team-manager'
 
 import { SandboxSenderStateService } from '../managers/sandbox-sender-state.service'
 import { ClaimRequest, IssuedClaim, RateLimiterService } from '../rate-limiter/rate-limiter.service'
+import { isTransactionalEmailSend } from './email-status.service'
 import { maybeAddPreheaderToEmail } from './helpers/preheader'
 
 const SECONDS_PER_DAY = 86400
@@ -82,6 +84,17 @@ function distinctAddresses(recipients: string[]): string[] {
 }
 
 const BLOCKED_EVENT_WINDOW_SECONDS = 3600
+
+export type SandboxSendSource = 'test' | 'workflow' | 'api'
+
+const BLOCKED_EVENT_WINDOW_NAMES: Record<SandboxSendSource, string> = { test: 'test', workflow: 'live', api: 'api' }
+
+export function sandboxSendSource(invocation: CyclotronJobInvocationHogFunction, isTest: boolean): SandboxSendSource {
+    if (isTest) {
+        return 'test'
+    }
+    return isTransactionalEmailSend(invocation) ? 'api' : 'workflow'
+}
 
 function htmlBody(document: DefaultTreeAdapterMap['document']): DefaultTreeAdapterMap['element'] | undefined {
     const root = document.childNodes.find(defaultTreeAdapter.isElementNode)
@@ -259,11 +272,11 @@ export class SandboxEmailSender {
         }
     }
 
-    public async captureSent(teamId: number, isTest: boolean, recipientCount: number): Promise<void> {
+    public async captureSent(teamId: number, source: SandboxSendSource, recipientCount: number): Promise<void> {
         await this.captureEvent(teamId, 'workflows sandbox email sent', {
             recipient_count: recipientCount,
-            source: isTest ? 'test' : 'workflow',
-            is_test: isTest,
+            source,
+            is_test: source === 'test',
         })
     }
 
@@ -276,15 +289,15 @@ export class SandboxEmailSender {
 
     public async captureBlocked(
         teamId: number,
-        isTest: boolean,
+        source: SandboxSendSource,
         reason: SandboxEmailBlockReason,
         blockedRecipientCount: number
     ): Promise<void> {
         await this.captureEvent(
             teamId,
             'workflows sandbox email blocked',
-            { reason, blocked_recipient_count: blockedRecipientCount, is_test: isTest },
-            () => this.isFirstBlockInWindow(teamId, isTest, reason)
+            { reason, blocked_recipient_count: blockedRecipientCount, is_test: source === 'test', source },
+            () => this.isFirstBlockInWindow(teamId, source, reason)
         )
     }
 
@@ -309,14 +322,14 @@ export class SandboxEmailSender {
 
     private async isFirstBlockInWindow(
         teamId: number,
-        isTest: boolean,
+        source: SandboxSendSource,
         reason: SandboxEmailBlockReason
     ): Promise<boolean> {
         const firstBlock = await this.blockedEventRedis.useClient(
             { name: 'sandbox-blocked-event', timeout: 1000 },
             (client) =>
                 client.set(
-                    `@posthog/workflows-sandbox-blocked/${teamId}/${reason}/${isTest ? 'test' : 'live'}`,
+                    `@posthog/workflows-sandbox-blocked/${teamId}/${reason}/${BLOCKED_EVENT_WINDOW_NAMES[source]}`,
                     '1',
                     'EX',
                     BLOCKED_EVENT_WINDOW_SECONDS,
