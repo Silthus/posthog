@@ -1,0 +1,294 @@
+{
+    "rows": [
+        {
+            "modules": [
+                {
+                    "id": "caller",
+                    "name": "API caller",
+                    "note": "SDK, MCP tool, HTTP with a project secret key",
+                    "external": true,
+                    "seam": []
+                },
+                {
+                    "id": "ch",
+                    "name": "ClickHouse",
+                    "note": "email_status table, via Kafka",
+                    "external": true,
+                    "seam": []
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "dj",
+                    "name": "Messaging API (Django)",
+                    "note": "holds the flag; no cyclotron access",
+                    "flex": 1.4,
+                    "seam": [
+                        {
+                            "name": "POST send/email +scheduled_at",
+                            "change": "changed"
+                        },
+                        {
+                            "name": "GET emails/{id}",
+                            "change": "changed"
+                        },
+                        {
+                            "name": "GET emails/?status=scheduled",
+                            "change": "added"
+                        },
+                        {
+                            "name": "POST emails/{id}/cancel/",
+                            "change": "added"
+                        },
+                        {
+                            "name": "PATCH emails/{id}/",
+                            "change": "added"
+                        }
+                    ]
+                },
+                {
+                    "id": "read",
+                    "name": "Email status read",
+                    "note": "transactional_email_status.py",
+                    "used": 1,
+                    "seam": [
+                        {
+                            "name": "get_email_status",
+                            "change": "changed",
+                            "q": "Q4"
+                        },
+                        "queued_at"
+                    ]
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "cdp",
+                    "name": "cdp-api transactional routes",
+                    "note": "JWT pinned to team + workflow",
+                    "flex": 1.4,
+                    "seam": [
+                        {
+                            "name": "transactional_email/send",
+                            "change": "changed"
+                        },
+                        {
+                            "name": "\u2026/emails/:id/cancel",
+                            "change": "added"
+                        },
+                        {
+                            "name": "\u2026/emails/:id/reschedule",
+                            "change": "added"
+                        },
+                        {
+                            "name": "\u2026/emails/scheduled",
+                            "change": "added",
+                            "q": "Q3"
+                        }
+                    ]
+                },
+                {
+                    "id": "status",
+                    "name": "EmailStatusService (Node)",
+                    "note": "best-effort writer",
+                    "used": 5,
+                    "seam": [
+                        {
+                            "name": "queue",
+                            "change": "changed"
+                        },
+                        "queueInvocationResults",
+                        "flush"
+                    ]
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "sched",
+                    "name": "Scheduled emails (Node)",
+                    "note": "accept, cancel, move, list",
+                    "change": "added",
+                    "q": "Q5",
+                    "seam": [
+                        {
+                            "name": "accept",
+                            "change": "added"
+                        },
+                        {
+                            "name": "cancel",
+                            "change": "added"
+                        },
+                        {
+                            "name": "reschedule",
+                            "change": "added"
+                        },
+                        {
+                            "name": "list",
+                            "change": "added",
+                            "q": "Q3"
+                        }
+                    ],
+                    "flex": 1.4
+                },
+                {
+                    "id": "worker",
+                    "name": "Email worker",
+                    "note": "CyclotronV2Worker, polls one queue",
+                    "used": 3,
+                    "seam": [
+                        "dequeue",
+                        "job.reschedule",
+                        "job.cancel",
+                        {
+                            "name": "promoteDue",
+                            "change": "added",
+                            "q": "Q2"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "mgr",
+                    "name": "CyclotronV2Manager",
+                    "note": "producer side of cyclotron_jobs",
+                    "used": 3,
+                    "flex": 1.4,
+                    "seam": [
+                        "createJob",
+                        "bulkCreateJobs",
+                        "cancelJobs",
+                        "rescheduleParkedJobs",
+                        {
+                            "name": "cancelScheduled",
+                            "change": "added",
+                            "q": "Q2"
+                        },
+                        {
+                            "name": "rescheduleScheduled",
+                            "change": "added",
+                            "q": "Q2"
+                        },
+                        {
+                            "name": "listScheduled",
+                            "change": "added",
+                            "q": "Q3"
+                        }
+                    ]
+                },
+                {
+                    "id": "ses",
+                    "name": "SES",
+                    "note": "sends at the send time",
+                    "external": true,
+                    "seam": []
+                }
+            ]
+        }
+    ],
+    "wires": [
+        {
+            "from": "caller",
+            "to": "dj-seam",
+            "label": "send, get, list, cancel, update",
+            "labelAt": 0.5
+        },
+        {
+            "from": "dj",
+            "to": "read-seam",
+            "fromSide": "right",
+            "toSide": "left"
+        },
+        {
+            "from": "read",
+            "to": "ch",
+            "fromSide": "top",
+            "toSide": "bottom",
+            "label": "argMax by version",
+            "labelAt": 0.5
+        },
+        {
+            "from": "dj",
+            "to": "cdp-seam",
+            "label": "plugin_server_api, JWT",
+            "labelAt": 0.5
+        },
+        {
+            "from": "cdp",
+            "to": "sched-seam",
+            "change": "added",
+            "q": "Q5"
+        },
+        {
+            "from": "sched",
+            "to": "status",
+            "fromSide": "top",
+            "fromAt": 0.9,
+            "toSide": "bottom",
+            "toAt": 0.2,
+            "change": "added",
+            "label": "scheduled, canceled",
+            "labelAt": 0.5,
+            "labelAlign": "start",
+            "labelOffset": [6, 0]
+        },
+        {
+            "from": "status",
+            "to": "ch",
+            "fromSide": "right",
+            "toSide": "right",
+            "toAt": 0.7,
+            "bend": 24
+        },
+        {
+            "from": "sched",
+            "to": "mgr-seam",
+            "change": "added",
+            "label": "guarded row ops",
+            "labelAt": 0.5
+        },
+        {
+            "from": "worker",
+            "to": "status",
+            "fromSide": "top",
+            "toSide": "bottom",
+            "toAt": 0.7,
+            "label": "sent, failed",
+            "labelAt": 0.5
+        },
+        {
+            "from": "worker",
+            "to": "ses",
+            "label": "at send time",
+            "labelAt": 0.5
+        }
+    ],
+    "untouched": [
+        {
+            "name": "HogFlowSchedule",
+            "seam": ["dispatch due schedules"],
+            "note": "batch and schedule triggers only"
+        },
+        {
+            "name": "Batch resolver",
+            "seam": ["countInFlightJobs", "resumeParkedBatchResolver"]
+        },
+        {
+            "name": "Rerun",
+            "seam": ["createJob overwriteExisting"]
+        },
+        {
+            "name": "Workflow worker",
+            "seam": ["delay, wait steps"],
+            "note": "rescheduleParkedJobs sweeps by action_id"
+        }
+    ]
+}
