@@ -54,6 +54,19 @@ export type SandboxDailyCapClaim =
     | { type: 'recipient_cap_reached'; addresses: string[] }
     | { type: 'check_failed' }
 
+type DailyCapBuckets = { limiter: RateLimiterService; buckets: ClaimRequest[]; addresses: string[] }
+
+type SandboxDailyCapDenial = { type: 'project_cap_reached' } | { type: 'recipient_cap_reached'; addresses: string[] }
+
+export type SandboxDailyCapPeek = { type: 'available' } | SandboxDailyCapDenial | { type: 'check_failed' }
+
+function dailyCapDenial({ addresses }: DailyCapBuckets, deniedIndexes: number[]): SandboxDailyCapDenial {
+    if (deniedIndexes.includes(0)) {
+        return { type: 'project_cap_reached' }
+    }
+    return { type: 'recipient_cap_reached', addresses: deniedIndexes.map((index) => addresses[index - 1]) }
+}
+
 function dailyBucket(key: string, requested: number, capacity: number): ClaimRequest {
     return { key, requested, capacity, refillPerSecond: capacity / SECONDS_PER_DAY, ttlSeconds: DAILY_CAP_TTL_SECONDS }
 }
@@ -212,15 +225,39 @@ export class SandboxEmailSender {
     }
 
     public async claimDailyCaps(teamId: number, recipients: string[]): Promise<SandboxDailyCapClaim> {
+        const caps = await this.dailyCapBuckets(teamId, recipients)
+        if (!caps) {
+            return { type: 'check_failed' }
+        }
+        const claim = await caps.limiter.claimAllOrNothing(caps.buckets)
+        if (claim.granted) {
+            return { type: 'granted', claim, buckets: caps.buckets }
+        }
+        return claim.deniedIndexes === null ? { type: 'check_failed' } : dailyCapDenial(caps, claim.deniedIndexes)
+    }
+
+    public async peekDailyCaps(teamId: number, recipients: string[]): Promise<SandboxDailyCapPeek> {
+        const caps = await this.dailyCapBuckets(teamId, recipients)
+        if (!caps) {
+            return { type: 'check_failed' }
+        }
+        const peek = await caps.limiter.peekAllOrNothing(caps.buckets)
+        if (!peek) {
+            return { type: 'check_failed' }
+        }
+        return peek.deniedIndexes.length ? dailyCapDenial(caps, peek.deniedIndexes) : { type: 'available' }
+    }
+
+    private async dailyCapBuckets(teamId: number, recipients: string[]): Promise<DailyCapBuckets | null> {
         const dailyTeamCap = parseDailyCap(this.config.dailyTeamCap)
         const dailyRecipientCap = parseDailyCap(this.config.dailyRecipientCap)
         if (!this.dailyCapLimiter || dailyTeamCap === null || dailyRecipientCap === null) {
             logger.error('Sandbox email daily caps are not configured correctly', { teamId })
-            return { type: 'check_failed' }
+            return null
         }
         const team = await this.teamManager.getTeam(teamId)
         if (!team) {
-            return { type: 'check_failed' }
+            return null
         }
         const prefix = dailyCapKeyPrefix(team.organization_id)
         const addresses = distinctAddresses(recipients)
@@ -230,17 +267,7 @@ export class SandboxEmailSender {
                 dailyBucket(`${prefix}/recipient/${addressDigest(address)}`, 1, dailyRecipientCap)
             ),
         ]
-        const claim = await this.dailyCapLimiter.claimAllOrNothing(buckets)
-        if (claim.granted) {
-            return { type: 'granted', claim, buckets }
-        }
-        if (claim.deniedIndexes === null) {
-            return { type: 'check_failed' }
-        }
-        if (claim.deniedIndexes.includes(0)) {
-            return { type: 'project_cap_reached' }
-        }
-        return { type: 'recipient_cap_reached', addresses: claim.deniedIndexes.map((index) => addresses[index - 1]) }
+        return { limiter: this.dailyCapLimiter, buckets, addresses }
     }
 
     public async returnDailyCaps(grant: SandboxDailyCapGrant): Promise<void> {

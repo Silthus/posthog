@@ -300,6 +300,31 @@ redis.call('SET', claimKey, cjson.encode(granted), 'NX', 'PX', replayTtlMs)
 return granted
 `
 
+const PEEK_ALL_OR_NOTHING_LUA = `
+local time = redis.call('TIME')
+local now = tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000)
+local denied = {0}
+for i = 1, #KEYS do
+    local offset = (i - 1) * 3
+    local requested = tonumber(ARGV[offset + 1])
+    local capacity = tonumber(ARGV[offset + 2])
+    local refillPerSecond = tonumber(ARGV[offset + 3])
+    local existing = redis.call('hmget', KEYS[i], 'ts', 'pool')
+    local avail = capacity
+    if existing[1] ~= false and existing[2] ~= false then
+        local elapsedMs = math.max(0, now - tonumber(existing[1]))
+        avail = math.min(capacity, tonumber(existing[2]) + (elapsedMs / 1000.0) * refillPerSecond)
+    end
+    if avail < requested then
+        table.insert(denied, i)
+    end
+end
+if #denied > 1 then
+    return denied
+end
+return {1}
+`
+
 // ioredis can replay unanswered commands, so returns need deduplication and an expiry.
 const RETURN_CLAIM_LUA = `
 local time = redis.call('TIME')
@@ -444,6 +469,38 @@ export class RateLimiterService {
             return { granted: 0, retryAfterMs: null, reserved: false }
         } finally {
             endTimer()
+        }
+    }
+
+    public async peekAllOrNothing(buckets: ClaimRequest[]): Promise<{ deniedIndexes: number[] } | null> {
+        const keys = buckets.map((bucket) => bucket.key)
+        try {
+            const result = await this.valkey.useClient(
+                { name: `rate-limiter:${this.config.name}:peekAllOrNothing`, timeout: 1000 },
+                (client) =>
+                    client.eval(
+                        PEEK_ALL_OR_NOTHING_LUA,
+                        buckets.length,
+                        ...keys,
+                        ...buckets.flatMap((bucket) =>
+                            [bucket.requested, bucket.capacity, bucket.refillPerSecond].map(String)
+                        )
+                    )
+            )
+            if (Array.isArray(result) && result.length === 1 && result[0] === 1) {
+                return { deniedIndexes: [] }
+            }
+            if (Array.isArray(result) && result[0] === 0 && result.length > 1) {
+                return { deniedIndexes: result.slice(1).map((index) => Number(index) - 1) }
+            }
+            logger.warn('🪙', `RateLimiterService(${this.config.name}) peek returned invalid result`, {
+                keys,
+                raw: result,
+            })
+            return null
+        } catch (err) {
+            logger.warn('🪙', `RateLimiterService(${this.config.name}) peek threw`, { keys, error: String(err) })
+            return null
         }
     }
 
