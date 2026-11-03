@@ -1,0 +1,38 @@
+sequenceDiagram
+    autonumber
+    actor C as API caller
+    participant D as Django
+    participant S as Transactional sends
+    participant K as Idempotency keys
+    participant J as Adapter, manager
+    participant T as Run history, status rows
+    participant W as Worker
+    C->>D: POST send/email, scheduled_at, Idempotency-Key
+    Note right of D: flag gates, send throttles,<br/>parse scheduled_at
+    D->>S: send route, JWT team + workflow
+    S->>K: reserve(key, fingerprint)
+    alt key already queued
+        K-->>S: first message id, accepted time
+        opt the accepted time is set
+            S->>T: status row scheduled again
+        end
+        S-->>C: 202 as first answered, replayed
+    else key reserved
+        Note right of S: time rules: at or before now is a send now,<br/>after created + 30 days is 400 too_far.<br/>Then the refusal checks.
+        alt a rule or a check fails
+            S->>K: release(key)
+            S-->>C: 4xx
+        else all pass
+            S->>T: run row running
+            S->>J: queueInvocations, scheduled = send time
+            Note right of J: email queue, available,<br/>transition_count 0
+            S->>K: markQueued with the accepted time
+            S->>T: status row scheduled or queued, flush
+            S-->>C: 202 scheduled or queued, message_id
+        end
+    end
+    Note over J,W: waits until scheduled <= now
+    W->>J: fairDequeueJobs, SKIP LOCKED
+    Note right of J: running, transition_count 1
+    Note left of W: send-time checks: workflow active,<br/>suspended, paused, suppressed, sender
+    W->>T: sent, or failed with a reason
