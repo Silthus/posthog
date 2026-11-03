@@ -1,0 +1,533 @@
+{
+    "rows": [
+        {
+            "modules": [
+                {
+                    "id": "caller",
+                    "name": "API caller",
+                    "note": "SDK, MCP tool, HTTP with a project secret key",
+                    "external": true,
+                    "seam": []
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "views",
+                    "name": "Messaging views (Django)",
+                    "note": "HTTP shells",
+                    "flex": 1.5,
+                    "seam": [
+                        {
+                            "name": "POST send +scheduled_at",
+                            "change": "changed"
+                        },
+                        "GET emails/{id}",
+                        {
+                            "name": "GET emails/?status=scheduled",
+                            "change": "added"
+                        },
+                        {
+                            "name": "POST emails/{id}/cancel/",
+                            "change": "added"
+                        },
+                        {
+                            "name": "PATCH emails/{id}/",
+                            "change": "added"
+                        }
+                    ],
+                    "chips": [
+                        {
+                            "id": "v-status",
+                            "text": "MessagingEmailsViewSet"
+                        },
+                        {
+                            "id": "v-tpl",
+                            "text": "MessageTemplateViewSet.send"
+                        },
+                        {
+                            "id": "v-gate",
+                            "text": "flag gates: status view reaches in, 1 symbol, 1 file",
+                            "change": "removed",
+                            "wide": true
+                        },
+                        {
+                            "id": "v-order",
+                            "text": "lock + workflow sync ordering",
+                            "change": "removed",
+                            "followUp": true
+                        }
+                    ]
+                },
+                {
+                    "id": "policy",
+                    "name": "API access policy (Django)",
+                    "note": "flags and throttles, below the views",
+                    "change": "added",
+                    "q": "Q2",
+                    "seam": [
+                        {
+                            "name": "require_transactional_email_api",
+                            "change": "added"
+                        },
+                        {
+                            "name": "require_scheduled_sends",
+                            "change": "added"
+                        },
+                        {
+                            "name": "transactional_email_throttles",
+                            "change": "added"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "svc",
+                    "name": "Transactional email facade (Django)",
+                    "note": "facade + service",
+                    "used": 20,
+                    "flex": 2.2,
+                    "seam": [
+                        {
+                            "name": "send_code_email",
+                            "change": "changed"
+                        },
+                        {
+                            "name": "get_email_status",
+                            "change": "changed"
+                        },
+                        {
+                            "name": "list_scheduled",
+                            "change": "added"
+                        },
+                        {
+                            "name": "cancel_email",
+                            "change": "added"
+                        },
+                        {
+                            "name": "reschedule_email",
+                            "change": "added"
+                        },
+                        {
+                            "name": "update_template",
+                            "change": "changed",
+                            "followUp": true,
+                            "q": "Q3"
+                        }
+                    ],
+                    "chips": [
+                        {
+                            "id": "s-pipe",
+                            "text": "plugin_server_api calls"
+                        },
+                        {
+                            "id": "s-read",
+                            "text": "status read: argMax, id-age gate",
+                            "change": "changed"
+                        },
+                        {
+                            "id": "s-sync",
+                            "text": "template + workflow save, one transaction",
+                            "change": "added",
+                            "followUp": true,
+                            "q": "Q3"
+                        }
+                    ]
+                },
+                {
+                    "id": "ch",
+                    "name": "ClickHouse",
+                    "note": "email_status table",
+                    "external": true,
+                    "seam": []
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "cdp",
+                    "name": "cdp-api transactional routes",
+                    "note": "JWT pinned to team + workflow",
+                    "used": 1,
+                    "flex": 1.3,
+                    "seam": [
+                        {
+                            "name": "…/send",
+                            "change": "changed"
+                        },
+                        {
+                            "name": "…/emails/:id/cancel",
+                            "change": "added"
+                        },
+                        {
+                            "name": "…/emails/:id/reschedule",
+                            "change": "added"
+                        },
+                        {
+                            "name": "…/emails/scheduled",
+                            "change": "added"
+                        }
+                    ],
+                    "chips": [
+                        {
+                            "id": "c-http",
+                            "text": "HTTP translation"
+                        },
+                        {
+                            "id": "c-orch",
+                            "text": "idempotency, insert, sinks",
+                            "change": "removed"
+                        }
+                    ]
+                },
+                {
+                    "id": "status",
+                    "name": "EmailStatusService (Node)",
+                    "note": "best-effort writer",
+                    "used": 5,
+                    "seam": [
+                        {
+                            "name": "queue",
+                            "change": "changed"
+                        },
+                        "queueInvocationResults",
+                        "flush"
+                    ],
+                    "chips": [
+                        {
+                            "id": "st-rank",
+                            "text": "STATUS_RANK",
+                            "change": "changed"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "sends",
+                    "name": "Transactional sends (Node)",
+                    "todayName": "",
+                    "note": "accept, cancel, reschedule, list",
+                    "change": "added",
+                    "flex": 1.3,
+                    "seam": [
+                        {
+                            "name": "accept",
+                            "change": "added"
+                        },
+                        {
+                            "name": "cancel",
+                            "change": "added"
+                        },
+                        {
+                            "name": "reschedule",
+                            "change": "added"
+                        },
+                        {
+                            "name": "list",
+                            "change": "added"
+                        }
+                    ],
+                    "chips": [
+                        {
+                            "id": "x-idem",
+                            "text": "idempotency",
+                            "change": "added"
+                        },
+                        {
+                            "id": "x-life",
+                            "text": "run history: open, close",
+                            "change": "added"
+                        },
+                        {
+                            "id": "x-q4",
+                            "text": "one path for now and later",
+                            "change": "added",
+                            "q": "Q4"
+                        }
+                    ]
+                },
+                {
+                    "id": "worker",
+                    "name": "Email worker",
+                    "note": "polls the email queue",
+                    "used": 3,
+                    "seam": ["dequeue", "job.reschedule", "job.cancel"],
+                    "chips": [
+                        {
+                            "id": "w-cancel",
+                            "text": "cancel check on claimed row"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "mgr",
+                    "name": "CyclotronV2Manager",
+                    "note": "owns cyclotron_jobs rules",
+                    "used": 3,
+                    "flex": 1.3,
+                    "seam": [
+                        "bulkCreateJobs",
+                        "cancelJobs",
+                        {
+                            "name": "cancelUnclaimed",
+                            "change": "added"
+                        },
+                        {
+                            "name": "rescheduleUnclaimed",
+                            "change": "added"
+                        },
+                        {
+                            "name": "listUnclaimed",
+                            "change": "added"
+                        }
+                    ],
+                    "chips": [
+                        {
+                            "id": "m-guard",
+                            "text": "available AND transition_count = 0",
+                            "change": "added"
+                        },
+                        {
+                            "id": "m-idx",
+                            "text": "partial index (team_id, scheduled, id)",
+                            "change": "added"
+                        }
+                    ]
+                },
+                {
+                    "id": "adapter",
+                    "name": "PostgresV2 adapter",
+                    "note": "invocation ↔ job",
+                    "used": 3,
+                    "seam": ["queueInvocations", "dequeue"],
+                    "chips": [
+                        {
+                            "id": "a-enc",
+                            "text": "invocationToV2JobInit",
+                            "change": "removed"
+                        },
+                        {
+                            "id": "a-dec",
+                            "text": "v2JobToInvocation",
+                            "change": "removed"
+                        },
+                        {
+                            "id": "a-cyc",
+                            "text": "adapter → barrel → janitor",
+                            "cycle": true,
+                            "change": "removed"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "codec",
+                    "name": "Job codec (Node)",
+                    "note": "below manager, adapter and janitor",
+                    "change": "added",
+                    "q": "Q1",
+                    "seam": [
+                        {
+                            "name": "encodeJob",
+                            "change": "added"
+                        },
+                        {
+                            "name": "decodeJob",
+                            "change": "added"
+                        }
+                    ],
+                    "flex": 1.3
+                },
+                {
+                    "id": "batch",
+                    "name": "Batch resolver",
+                    "note": "encodes",
+                    "seam": []
+                },
+                {
+                    "id": "janitor",
+                    "name": "Janitor",
+                    "note": "decodes",
+                    "seam": []
+                }
+            ]
+        }
+    ],
+    "wires": [
+        {
+            "from": "caller",
+            "to": "views-seam",
+            "label": "send, get, list, cancel, update",
+            "labelAt": 0.5
+        },
+        {
+            "from": "views",
+            "to": "policy-seam",
+            "fromSide": "right",
+            "toSide": "left",
+            "change": "added",
+            "q": "Q2"
+        },
+        {
+            "from": "views",
+            "to": "svc-seam"
+        },
+        {
+            "from": "s-read",
+            "to": "ch",
+            "fromSide": "right",
+            "toSide": "left"
+        },
+        {
+            "from": "svc",
+            "to": "cdp-seam",
+            "label": "JWT",
+            "labelAt": 0.5
+        },
+        {
+            "from": "cdp",
+            "to": "sends-seam",
+            "change": "added"
+        },
+        {
+            "from": "sends",
+            "to": "status",
+            "fromSide": "top",
+            "fromAt": 0.9,
+            "toSide": "bottom",
+            "toAt": 0.2,
+            "change": "added",
+            "label": "scheduled, canceled",
+            "labelAt": 0.5,
+            "labelAlign": "start",
+            "labelOffset": [6, 0]
+        },
+        {
+            "from": "status",
+            "to": "ch",
+            "fromSide": "top",
+            "fromAt": 0.8,
+            "toSide": "bottom"
+        },
+        {
+            "from": "worker",
+            "to": "status",
+            "fromSide": "top",
+            "toSide": "bottom",
+            "toAt": 0.7
+        },
+        {
+            "from": "sends",
+            "to": "mgr-seam",
+            "change": "added",
+            "label": "guarded row ops",
+            "labelAt": 0.5
+        },
+        {
+            "from": "sends",
+            "to": "adapter-seam",
+            "fromSide": "bottom",
+            "fromAt": 0.9,
+            "toSide": "top",
+            "toAt": 0.2,
+            "change": "added"
+        },
+        {
+            "from": "adapter",
+            "to": "codec-seam",
+            "fromSide": "bottom",
+            "toSide": "top",
+            "toAt": 0.85,
+            "change": "added",
+            "q": "Q1",
+            "fromAt": 0.08
+        },
+        {
+            "from": "mgr",
+            "to": "codec-seam",
+            "fromSide": "bottom",
+            "toSide": "top",
+            "toAt": 0.4,
+            "change": "added",
+            "q": "Q1",
+            "fromAt": 0.4
+        },
+        {
+            "from": "batch",
+            "to": "a-enc",
+            "kind": "leak",
+            "change": "removed",
+            "fromSide": "top",
+            "toSide": "bottom",
+            "label": "1 symbol, 1 file",
+            "labelAt": 0.5,
+            "crossAt": 0.3,
+            "labelOffset": [0, 0]
+        },
+        {
+            "from": "janitor",
+            "to": "a-dec",
+            "kind": "leak",
+            "change": "removed",
+            "fromSide": "top",
+            "toSide": "bottom",
+            "crossAt": 0.3,
+            "label": "1 symbol, 1 file",
+            "labelAt": 0.5
+        },
+        {
+            "from": "batch",
+            "to": "codec",
+            "fromSide": "left",
+            "toSide": "right",
+            "change": "added",
+            "q": "Q1"
+        },
+        {
+            "from": "janitor",
+            "to": "codec",
+            "fromSide": "bottom",
+            "toSide": "bottom",
+            "change": "added",
+            "q": "Q1",
+            "bend": 30,
+            "toAt": 0.8
+        }
+    ],
+    "untouched": [
+        {
+            "name": "HogFlowSchedule",
+            "seam": ["dispatch due schedules"],
+            "note": "batch and schedule triggers only"
+        },
+        {
+            "name": "Subscription matcher",
+            "seam": ["wake parked waits"],
+            "note": "selects wait steps only"
+        },
+        {
+            "name": "Rerun",
+            "seam": ["createJob overwriteExisting"]
+        },
+        {
+            "name": "Workflow worker",
+            "seam": ["delay, wait steps"],
+            "note": "rescheduleParkedJobs sweeps by action_id"
+        }
+    ]
+}
