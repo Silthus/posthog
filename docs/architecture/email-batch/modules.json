@@ -1,0 +1,276 @@
+{
+    "rows": [
+        {
+            "modules": [
+                {
+                    "id": "caller",
+                    "name": "Server code with a project secret key",
+                    "note": "posthog-node, posthog-python: emails.batch(emails)",
+                    "external": true,
+                    "seam": []
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "api",
+                    "name": "Send API (Django)",
+                    "note": "MessagingSendViewSet, project secret key only",
+                    "change": "changed",
+                    "flex": 1.4,
+                    "seam": [
+                        "POST send/email/",
+                        {
+                            "name": "POST send/email_batch/",
+                            "change": "added"
+                        }
+                    ],
+                    "chips": [
+                        {
+                            "id": "api-batch",
+                            "text": "batch serializer: ≤ 100, sizes, duplicate keys",
+                            "change": "added",
+                            "wide": true
+                        },
+                        {
+                            "id": "api-results",
+                            "text": "ordered results in a 200",
+                            "change": "added"
+                        },
+                        {
+                            "id": "api-usage",
+                            "text": "usage event per email",
+                            "change": "changed"
+                        },
+                        {
+                            "id": "api-access",
+                            "text": "access check: 3 reads, then a no-op",
+                            "change": "removed"
+                        }
+                    ]
+                },
+                {
+                    "id": "throttle",
+                    "name": "Send throttles",
+                    "note": "posthog/rate_limit.py; N units or none",
+                    "used": 123,
+                    "change": "changed",
+                    "seam": [
+                        "allow_request",
+                        {
+                            "name": "take_units(n)",
+                            "change": "added"
+                        }
+                    ],
+                    "chips": [
+                        {
+                            "text": "4 send throttles"
+                        },
+                        {
+                            "text": "switch, bypass, fail-open"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "svc",
+                    "name": "Transactional email (Django)",
+                    "note": "messaging facade + service",
+                    "used": 20,
+                    "change": "changed",
+                    "flex": 1.6,
+                    "seam": [
+                        {
+                            "name": "prepare(team_id, emails)",
+                            "change": "added"
+                        },
+                        {
+                            "name": "submit(team_id, prepared)",
+                            "change": "added"
+                        },
+                        {
+                            "name": "send_code_email",
+                            "change": "removed"
+                        },
+                        {
+                            "name": "send_transactional_email",
+                            "change": "removed"
+                        },
+                        {
+                            "name": "require_code_email_access",
+                            "change": "removed"
+                        }
+                    ],
+                    "chips": [
+                        {
+                            "id": "svc-cache",
+                            "text": "prepare: all DB work, once per template, key, sender",
+                            "change": "added",
+                            "wide": true
+                        },
+                        {
+                            "id": "svc-resolve",
+                            "text": "workflow and sender resolution"
+                        },
+                        {
+                            "id": "svc-pool",
+                            "text": "submit: 10 calls at a time, no DB",
+                            "change": "added"
+                        },
+                        {
+                            "id": "svc-deadline",
+                            "text": "no new call after 20 s",
+                            "change": "added"
+                        },
+                        {
+                            "id": "svc-metrics",
+                            "text": "batch metrics",
+                            "change": "changed"
+                        }
+                    ]
+                },
+                {
+                    "id": "client",
+                    "name": "CDP client",
+                    "note": "plugin_server_api.py; shared Session, pool of 10",
+                    "used": 2,
+                    "seam": ["send_*_transactional_email"]
+                }
+            ]
+        },
+        {
+            "modules": [
+                {
+                    "id": "cdp",
+                    "name": "cdp-api single-send routes",
+                    "note": "unchanged: 1 call per email",
+                    "external": true,
+                    "flex": 1.3,
+                    "seam": ["hog_flows/:id/transactional_email", "…/transactional_email/send"]
+                },
+                {
+                    "id": "batchroute",
+                    "name": "Email batch route (B)",
+                    "note": "built when the metrics ask for it",
+                    "change": "added",
+                    "followUp": true,
+                    "seam": ["transactional_email/batch"],
+                    "chips": [
+                        {
+                            "text": "acceptMany"
+                        },
+                        {
+                            "text": "JWT with a workflow set"
+                        },
+                        {
+                            "text": "1 INSERT"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "wires": [
+        {
+            "from": "caller",
+            "to": "api-seam",
+            "toAt": 0.5,
+            "change": "added",
+            "label": "1 call, ≤ 100 emails",
+            "labelAlign": "start",
+            "labelOffset": [8, 0]
+        },
+        {
+            "from": "api",
+            "fromSide": "right",
+            "fromAt": 0.5,
+            "to": "throttle",
+            "toSide": "left",
+            "toAt": 0.5,
+            "change": "added"
+        },
+        {
+            "from": "api",
+            "to": "svc-seam",
+            "fromAt": 0.3,
+            "toAt": 0.3,
+            "change": "added",
+            "label": "N emails",
+            "labelAlign": "start",
+            "labelOffset": [8, 0]
+        },
+        {
+            "from": "svc",
+            "fromSide": "right",
+            "fromAt": 0.15,
+            "to": "client",
+            "toSide": "left",
+            "toAt": 0.5,
+            "change": "changed"
+        },
+        {
+            "from": "client",
+            "fromAt": 0.3,
+            "to": "cdp-seam",
+            "toAt": 0.8,
+            "label": "N calls, N JWTs",
+            "labelAlign": "start",
+            "labelOffset": [12, 0],
+            "labelAt": 0.85
+        },
+        {
+            "from": "client",
+            "fromAt": 0.7,
+            "to": "batchroute-seam",
+            "toAt": 0.5,
+            "change": "added",
+            "followUp": true,
+            "label": "1 call",
+            "labelAlign": "start",
+            "labelOffset": [8, 0],
+            "labelAt": 0.7
+        }
+    ],
+    "untouched": [
+        {
+            "name": "Internal auth",
+            "seam": ["ScopedServiceJwt", "verifyScopedWorkflowJwt"],
+            "note": "one workflow per token"
+        },
+        {
+            "name": "Idempotency store",
+            "seam": ["reserve", "markQueued", "release"]
+        },
+        {
+            "name": "Email queue",
+            "seam": ["queueInvocations"],
+            "note": "1 INSERT per email"
+        },
+        {
+            "name": "Email worker → SES",
+            "seam": [],
+            "note": "sees N single sends"
+        },
+        {
+            "name": "Status read",
+            "seam": ["GET messaging/emails/{id}/"]
+        },
+        {
+            "name": "Workflows sender and key resolution",
+            "seam": ["code_send_sender", "create_code_email_workflow"]
+        },
+        {
+            "name": "Broadcast run",
+            "seam": ["HogFlowBatchJob"],
+            "note": "not the email batch"
+        },
+        {
+            "name": "Refusal checks",
+            "seam": ["isSuppressed", "getRecipientSkipReason", "checkHogFlowQuotaLimits"]
+        }
+    ]
+}

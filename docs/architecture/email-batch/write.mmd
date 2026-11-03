@@ -1,0 +1,27 @@
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant V as Send API
+    participant T as Throttles
+    participant S as Transactional email
+    participant CDP as cdp-api
+    C->>V: POST send/email_batch/
+    Note over V,S: auth, then the flag for each email form
+    Note over V,S: shape: ≤ 100, 8 MiB, 128 KiB each, duplicate keys
+    V->>T: take_units(N)
+    alt over the limit
+        T-->>V: refused, nothing taken
+        V-->>C: 429, Retry-After
+    end
+    V->>S: prepare(team_id, emails)
+    Note over S,CDP: DB reads once per template, key, sender
+    S-->>V: Prepared or EmailError
+    Note over V,S: an EmailError fills its slot
+    V->>S: submit(team_id, prepared)
+    loop 10 at a time
+        S->>CDP: single send
+        CDP-->>S: 202 or a refusal
+    end
+    S-->>V: results in order
+    Note over V,S: usage event per email
+    V-->>C: 200 results

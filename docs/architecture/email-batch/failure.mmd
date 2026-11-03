@@ -1,0 +1,20 @@
+sequenceDiagram
+    autonumber
+    participant C as Caller (SDK)
+    participant S as submit
+    participant CDP as cdp-api
+    participant K as Keys
+    C->>S: 100 prepared emails
+    loop rounds of 10, cdp-api slow
+        S->>CDP: emails 1 to 10
+        CDP->>K: reserve
+        CDP-->>S: 202 for 1 to 9
+        Note over S,K: email 10 times out at 10 s: outcome unknown
+    end
+    Note over C,S: at 20 s, unstarted emails are never sent
+    S-->>C: 200: message_ids, 503 for the rest
+    C->>S: retry the 503s, same keys
+    S->>CDP: email 10, same key
+    CDP->>K: already queued
+    CDP-->>S: replayed
+    S-->>C: 200: same message_id for 10
