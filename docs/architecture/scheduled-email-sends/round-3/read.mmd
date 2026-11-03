@@ -1,0 +1,23 @@
+sequenceDiagram
+    autonumber
+    actor C as API caller
+    participant D as Django
+    participant CH as ClickHouse
+    participant S as Transactional sends
+    participant J as Manager, codec
+    C->>D: GET emails/?status=scheduled
+    Note right of D: flag gates, read throttles
+    D->>S: list route, JWT team only
+    S->>J: listUnclaimed(team, cursor, limit)
+    Note right of J: index (team_id, scheduled, id) where<br/>email, available, transition_count 0.<br/>Filter: scheduled > now()
+    J-->>S: id, scheduled, state
+    S->>J: decodeJobState(state)
+    S-->>C: message_id, to, scheduled_at, cursor
+    C->>D: GET emails/{id}
+    Note right of D: id-age gate 60 days
+    D->>CH: argMax(status) for message_id
+    alt Q4 no row yet
+        D-->>C: 404
+    else a row
+        D-->>C: 200 status, no send time
+    end

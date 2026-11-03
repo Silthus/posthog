@@ -1,0 +1,30 @@
+sequenceDiagram
+    autonumber
+    actor C as API caller
+    participant S as Transactional sends
+    participant M as Manager
+    participant W as Worker
+    participant T as Run history, status rows
+    C->>S: POST emails/{id}/cancel/, JWT team only
+    S->>M: cancelUnclaimed(team, id)
+    Note right of M: UPDATE status = canceled,<br/>last_transition = now()<br/>WHERE available AND<br/>transition_count = 0,<br/>no SKIP LOCKED
+    alt the worker claimed it first
+        W->>M: fairDequeueJobs holds the row lock
+        Note right of M: the UPDATE waits, re-checks<br/>the row, matches nothing
+        M-->>S: claimed
+        S-->>C: 409 already_sending
+    else the cancel locked it first
+        Note over M,W: SKIP LOCKED passes over the row
+        M-->>S: canceled, with state
+        Note right of S: decodeJobState,<br/>hogFlow: { id: functionId }
+        S->>T: run row canceled, status row canceled, flush
+        Note right of S: canceled and triggered<br/>metrics, log
+        S-->>C: 200 canceled
+    else Q3 a quick retry after a crash before the rows
+        M-->>S: already_canceled, with state
+        S->>T: run row canceled, status row canceled, flush
+        S-->>C: 200 canceled
+    else wrong team, no such job, or the janitor deleted it
+        M-->>S: not_found
+        S-->>C: 404
+    end
