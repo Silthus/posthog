@@ -48,9 +48,9 @@ def require_email_from_code(team: Team) -> None: ...  # moved, unchanged
 def require_email_status_read(team: Team) -> None: ...  # moved, unchanged
 def require_scheduled_sends(team: Team) -> None: ...  # added; raises a 400 on scheduled_at
 def transactional_email_throttles() -> list[BaseThrottle]: ...  # moved, unchanged; the send routes use it
-def transactional_email_read_throttles() -> list[BaseThrottle]: ...  # added; the four read throttles that
 
-# MessagingEmailsViewSet.get_throttles builds today, for retrieve and list
+# added; the four read throttles that MessagingEmailsViewSet.get_throttles builds today, for retrieve and list
+def transactional_email_read_throttles() -> list[BaseThrottle]: ...
 
 # --- Facade: products/messaging/backend/facade ------------------------------------------------------------
 class EmailDeliveryStatus(LabeledStrEnum):
